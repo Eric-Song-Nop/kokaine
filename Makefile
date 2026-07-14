@@ -1,0 +1,30 @@
+HOMEBREW_KOKA := $(firstword $(wildcard /opt/homebrew/opt/koka/bin/koka /usr/local/opt/koka/bin/koka))
+KOKA ?= $(if $(HOMEBREW_KOKA),$(HOMEBREW_KOKA),koka)
+UV ?= uv
+
+KOKA_FLAGS := -j1 -i./src
+
+.PHONY: test test-native test-all build-counter browser-install test-browser serve
+
+test: test-native
+
+test-native:
+	$(KOKA) $(KOKA_FLAGS) -e test/smoke.kk
+	$(KOKA) $(KOKA_FLAGS) -e test/reactive.kk
+	$(KOKA) $(KOKA_FLAGS) -e test/html.kk
+
+build-counter:
+	mkdir -p dist
+	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
+		--buildname=counter examples/counter.kk
+
+browser-install:
+	$(UV) run --with playwright python -m playwright install chromium
+
+test-browser: build-counter
+	$(UV) run --with playwright python test/browser_counter.py
+
+test-all: test-native test-browser
+
+serve: build-counter
+	python3 -m http.server 4173 --bind 127.0.0.1
