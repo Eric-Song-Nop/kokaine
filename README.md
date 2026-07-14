@@ -16,11 +16,11 @@ the graph after `main` returns.
 Ordinary signal libraries hide a mutable dependency collector behind every
 getter. Kokaine makes the capabilities visible in inferred effect rows:
 
-| Capability | Operation | Handler responsibility |
-| --- | --- | --- |
-| `signal-read` | `count.get` | Return the value and, when tracking, record the dynamic edge. |
-| `signal-write` | `count.set(1)` | Commit atomically, invalidate subscribers, and schedule propagation. |
-| `html<e>` | `text`, `div`, `region` | Collect emitted nodes into a backend-neutral `view<e>`. |
+| Capability     | Operation               | Handler responsibility                                               |
+| -------------- | ----------------------- | -------------------------------------------------------------------- |
+| `signal-read`  | `count.get`             | Return the value and, when tracking, record the dynamic edge.        |
+| `signal-write` | `count.set(1)`          | Commit atomically, invalidate subscribers, and schedule propagation. |
+| `html<e>`      | `text`, `div`, `region` | Collect emitted nodes into a backend-neutral `view<e>`.              |
 
 This split has practical consequences. A memo calculator accepts
 `signal-read` but not `signal-write`; an effect separates its tracked function
