@@ -4,7 +4,7 @@ UV ?= uv
 
 KOKA_FLAGS := -j1 -i./src
 
-.PHONY: test test-native test-all test-wasm build-counter browser-install test-browser serve
+.PHONY: test test-native test-all test-wasm build-counter build-browser-fixtures browser-install test-browser serve
 
 test: test-native
 
@@ -17,6 +17,8 @@ build-counter:
 	mkdir -p dist
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
 		--buildname=counter examples/counter.kk
+
+build-browser-fixtures: build-counter
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
 		--buildname=dom-errors test/dom-errors.kk
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
@@ -25,7 +27,7 @@ build-counter:
 browser-install:
 	$(UV) run --with playwright python -m playwright install chromium
 
-test-browser: build-counter
+test-browser: build-browser-fixtures
 	$(UV) run --with playwright python test/browser_counter.py
 
 test-wasm:
