@@ -87,7 +87,10 @@ pub fun main()
               text("−")
             )
             button([class("control control--reset"),kind("button"),
-                    on-click(fn(_) count.set(0))],fn()
+                    on("click",fn(ev)
+                      prevent-default(ev)
+                      count.set(0)
+                    )],fn()
               text("ZERO")
             )
             button([class("control control--step"),kind("button"),

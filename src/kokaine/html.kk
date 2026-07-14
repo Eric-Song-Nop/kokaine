@@ -23,7 +23,10 @@ pub value struct event(
   original : any
 )
 
-pub alias callback<e> = (ev : event) -> <signal-read,signal-write,pure|e> ()
+// `ui` is fixed instead of part of `e`: the DOM root already owns one `ui`
+// capability, so a full handler can call prevent-default or another browser
+// primitive without inferring an invalid duplicate `<ui,ui>` row.
+pub alias callback<e> = (ev : event) -> <signal-read,signal-write,ui,pure|e> ()
 
 pub type property-value
   String-property(value : string)
@@ -196,7 +199,7 @@ pub fun on(name : string, action : callback<e>) : attribute<e>
 pub fun on-write(name : string,
                  action : (event) -> signal-write ()) : attribute<e>
   Listener(name,fn(ev)
-    mask<signal-read>{ mask<exn>{ mask<div>{ action(ev) } } }
+    mask<signal-read>{ mask<ui>{ mask<exn>{ mask<div>{ action(ev) } } } }
   )
 
 pub fun id(value : string) : attribute<e>

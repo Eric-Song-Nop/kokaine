@@ -200,7 +200,7 @@ fun invoke-event(root : root<<ui|e>>, action : callback<e>, value : raw-event)
   with catch fn(problem)
     dom-report-error("uncaught Kokaine event exception: " ++ problem.show)
   val captured = snapshot(value)
-  dispatch(root,fn() mask<ui>{ action(captured) })
+  dispatch(root,fn() action(captured))
 
 
 // --------------------------------------------------------------------------

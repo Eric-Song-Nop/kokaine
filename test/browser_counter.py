@@ -102,7 +102,17 @@ with serve_project():
         expect(operator).to_have_value("Ada")
         expect(desktop.locator("#greeting")).to_have_text("Signal received, Ada.")
 
-        desktop.get_by_role("button", name="ZERO").click()
+        default_was_prevented = desktop.get_by_role("button", name="ZERO").evaluate(
+            """button => {
+                const event = new MouseEvent('click', {
+                    bubbles: true,
+                    cancelable: true
+                });
+                const dispatched = button.dispatchEvent(event);
+                return event.defaultPrevented && !dispatched;
+            }"""
+        )
+        assert default_was_prevented, "the full callback lost its UI capability"
         expect(reading).to_have_text("0")
         expect(status).to_contain_text("System at rest")
         assert_no_horizontal_overflow(desktop)
