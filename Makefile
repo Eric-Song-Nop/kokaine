@@ -4,7 +4,7 @@ UV ?= uv
 
 KOKA_FLAGS := -j1 -i./src
 
-.PHONY: test test-native test-all build-counter browser-install test-browser serve
+.PHONY: test test-native test-all test-wasm build-counter browser-install test-browser serve
 
 test: test-native
 
@@ -24,7 +24,10 @@ browser-install:
 test-browser: build-counter
 	$(UV) run --with playwright python test/browser_counter.py
 
-test-all: test-native test-browser
+test-wasm:
+	./support/wasmweb-proof/run.sh test
+
+test-all: test-native test-browser test-wasm
 
 serve: build-counter
 	python3 -m http.server 4173 --bind 127.0.0.1
