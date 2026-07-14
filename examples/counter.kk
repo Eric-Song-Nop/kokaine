@@ -89,7 +89,7 @@ pub fun main()
             button([class("control control--reset"),kind("button"),
                     on("click",fn(ev)
                       prevent-default(ev)
-                      count.set(0)
+                      if count.get == 0 then () else count.set(0)
                     )],fn()
               text("ZERO")
             )

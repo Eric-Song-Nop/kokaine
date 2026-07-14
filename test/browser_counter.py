@@ -61,6 +61,74 @@ with serve_project():
         desktop.goto(BASE_URL)
         desktop.wait_for_load_state("networkidle")
 
+        translated_error = desktop.evaluate(
+            """async () => {
+                await import('/dist/test_dom_dash_errors__main.mjs');
+                return globalThis.__kokaineDomErrorResult;
+            }"""
+        )
+        assert translated_error == "translated", (
+            "a raw DOMException escaped the Koka exn boundary"
+        )
+
+        desktop.evaluate(
+            """() => {
+                const host = document.createElement('div');
+                host.id = 'lifecycle-root';
+                document.body.append(host);
+            }"""
+        )
+        desktop.evaluate(
+            """async () => {
+                await import('/dist/test_dom_dash_lifecycle__main.mjs');
+            }"""
+        )
+
+        lifecycle_count = desktop.locator("#lifecycle-count")
+        old_branch = desktop.locator("#old-branch").element_handle()
+        desktop.locator("#old-branch").click()
+        expect(lifecycle_count).to_have_text("1")
+        assert desktop.evaluate("__kokaineLifecycle.read()") == 1
+
+        desktop.locator("#branch-toggle").click()
+        expect(desktop.locator("#new-branch")).to_be_visible()
+        old_branch.evaluate(
+            "node => node.dispatchEvent(new MouseEvent('click'))"
+        )
+        assert desktop.evaluate("__kokaineLifecycle.read()") == 1, (
+            "a detached region listener remained active"
+        )
+        expect(lifecycle_count).to_have_text("1")
+
+        new_branch = desktop.locator("#new-branch").element_handle()
+        count_node = lifecycle_count.element_handle()
+        desktop.locator("#new-branch").click()
+        expect(lifecycle_count).to_have_text("2")
+        assert desktop.evaluate("__kokaineLifecycle.read()") == 2
+
+        desktop.evaluate(
+            """() => {
+                __kokaineLifecycle.dispose();
+                __kokaineLifecycle.dispose();
+            }"""
+        )
+        expect(desktop.locator("#lifecycle-root")).to_be_empty()
+
+        desktop.evaluate("__kokaineLifecycle.bump()")
+        assert desktop.evaluate("__kokaineLifecycle.read()") == 3
+        assert count_node.text_content() == "2", (
+            "a live binding updated after unmount"
+        )
+        old_branch.evaluate(
+            "node => node.dispatchEvent(new MouseEvent('click'))"
+        )
+        new_branch.evaluate(
+            "node => node.dispatchEvent(new MouseEvent('click'))"
+        )
+        assert desktop.evaluate("__kokaineLifecycle.read()") == 3, (
+            "an owned listener survived unmount"
+        )
+
         reading = desktop.locator(".reading__number")
         square = desktop.locator(".reading__derived strong").nth(0)
         parity = desktop.locator(".reading__derived strong").nth(1)
@@ -132,4 +200,6 @@ with serve_project():
 
         assert not page_errors, "browser exceptions:\n" + "\n".join(page_errors)
         assert not console_errors, "browser console errors:\n" + "\n".join(console_errors)
-        print("browser: counter propagation and responsive layout passed")
+        print(
+            "browser: propagation, DOM safety, lifecycle, and responsive layout passed"
+        )

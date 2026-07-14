@@ -17,6 +17,10 @@ build-counter:
 	mkdir -p dist
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
 		--buildname=counter examples/counter.kk
+	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
+		--buildname=dom-errors test/dom-errors.kk
+	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
+		--buildname=dom-lifecycle test/dom-lifecycle.kk
 
 browser-install:
 	$(UV) run --with playwright python -m playwright install chromium

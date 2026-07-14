@@ -41,6 +41,21 @@ extern any-is-null(value : any) : bool
 extern any-node(value : any) : node
   js inline "#1"
 
+// JavaScript DOM APIs throw native exceptions, which do not automatically
+// become Koka's `exn` effect. Keep raw exceptions inside this tiny result box
+// and rethrow them through Koka so handler/finally state is always restored.
+extern dom-attempt-raw(action : () -> ui a) : ui any
+  js inline "(function(){ try { return { ok:true, value:(#1)() }; } catch(error) { return { ok:false, message:String(error && error.message != null ? error.message : error) }; } })()"
+
+extern dom-attempt-ok(result : any) : bool
+  js inline "!!(#1).ok"
+
+extern dom-attempt-value(result : any) : a
+  js inline "(#1).value"
+
+extern dom-attempt-message(result : any) : string
+  js inline "String((#1).message)"
+
 extern dom-create-element(name : string) : ui element
   js inline "document.createElement(#1)"
 
@@ -129,7 +144,7 @@ extern dom-report-error(message : string) : ui ()
 // --------------------------------------------------------------------------
 
 pub fun query(selector : string) : <ui,exn> node
-  val result = query-raw(selector)
+  val result = dom-attempt{ query-raw(selector) }
   if result.any-is-null
   then throw("DOM selector did not match: " ++ selector)
   else any-node(result)
@@ -137,16 +152,22 @@ pub fun query(selector : string) : <ui,exn> node
 pub fun body() : <ui,exn> node
   query("body")
 
-pub fun prevent-default(value : event) : ui ()
-  event-prevent-default(value.original)
+pub fun prevent-default(value : event) : <ui,exn> ()
+  dom-attempt{ event-prevent-default(value.original) }
 
-pub fun stop-propagation(value : event) : ui ()
-  event-stop-propagation(value.original)
+pub fun stop-propagation(value : event) : <ui,exn> ()
+  dom-attempt{ event-stop-propagation(value.original) }
 
 
 // --------------------------------------------------------------------------
 // Exact-row adapters
 // --------------------------------------------------------------------------
+
+fun dom-attempt(action : () -> ui a) : <ui,exn> a
+  val result = dom-attempt-raw(action)
+  if dom-attempt-ok(result)
+  then dom-attempt-value(result)
+  else throw("browser DOM exception: " ++ dom-attempt-message(result))
 
 fun tracked(read : () -> signal-read a) : <signal-read,pure> a
   mask<exn>{ mask<div>{ read() } }
@@ -154,43 +175,46 @@ fun tracked(read : () -> signal-read a) : <signal-read,pure> a
 fun constant-track() : <signal-read,pure> ()
   mask<signal-read>{ mask<exn>{ mask<div>{ () } } }
 
-fun reactive-ui(action : () -> ui a) : <signal-write,pure,ui|e> a
-  mask<signal-write>{ mask<exn>{ mask<div>{ action() } } }
-
 fun reactive-ui-exn(action : () -> <ui,exn> a)
                     : <signal-write,pure,ui|e> a
   mask<signal-write>{ mask<div>{ action() } }
 
-fun insert(parent : node, before : maybe<node>, child : node) : ui ()
+fun insert(parent : node, before : maybe<node>, child : node) : <ui,exn> ()
   match before
-    Nothing -> dom-append(parent,child)
-    Just(anchor) -> dom-insert-before(parent,child,anchor)
+    Nothing -> dom-attempt{ dom-append(parent,child) }
+    Just(anchor) -> dom-attempt{ dom-insert-before(parent,child,anchor) }
 
-fun insert-html(parent : node, before : maybe<node>, content : string) : ui ()
+fun insert-html(parent : node, before : maybe<node>, content : string)
+                : <ui,exn> ()
   match before
-    Nothing -> dom-append-html(parent,content)
-    Just(anchor) -> dom-insert-html-before(parent,anchor,content)
+    Nothing -> dom-attempt{ dom-append-html(parent,content) }
+    Just(anchor) ->
+      dom-attempt{ dom-insert-html-before(parent,anchor,content) }
 
 fun set-attribute(value : element, name : string,
                   content : maybe<string>) : <ui,exn> ()
   if !name.is-valid-attribute-name
   then throw("invalid HTML attribute name: " ++ name)
   else match content
-         Nothing -> dom-remove-attribute(value,name)
-         Just(text) -> dom-set-attribute(value,name,text)
+         Nothing -> dom-attempt{ dom-remove-attribute(value,name) }
+         Just(text) -> dom-attempt{ dom-set-attribute(value,name,text) }
 
 fun set-property(value : element, name : string,
                  content : property-value) : <ui,exn> ()
   if !name.is-valid-property-name
   then throw("invalid or markup-writing DOM property: " ++ name)
   else match content
-         String-property(text) -> dom-set-string-property(value,name,text)
-         Bool-property(flag) -> dom-set-bool-property(value,name,flag)
-         Int-property(number) -> dom-set-int-property(value,name,number.show)
+         String-property(text) ->
+           dom-attempt{ dom-set-string-property(value,name,text) }
+         Bool-property(flag) ->
+           dom-attempt{ dom-set-bool-property(value,name,flag) }
+         Int-property(number) ->
+           dom-attempt{ dom-set-int-property(value,name,number.show) }
 
-fun snapshot(value : raw-event) : ui event
-  Event(raw-event-value(value),raw-event-checked(value),raw-event-key(value),
-        raw-event-any(value))
+fun snapshot(value : raw-event) : <ui,exn> event
+  dom-attempt fn()
+    Event(raw-event-value(value),raw-event-checked(value),raw-event-key(value),
+          raw-event-any(value))
 
 fun invoke-event(root : root<<ui|e>>, action : callback<e>, value : raw-event)
                 : <ui,div|e> ()
@@ -228,11 +252,14 @@ fun mount-attribute(root : root<<ui|e>>, target : element,
     Listener(name,action) ->
       if !name.is-valid-event-name then throw("invalid DOM event name: " ++ name)
       else
-        val listener = dom-listen(target,name,fn(value)
-          invoke-event(root,action,value)
-        )
+        val listener = dom-attempt fn()
+          dom-listen(target,name,fn(value)
+            invoke-event(root,action,value)
+          )
         on-cleanup(root,fn()
-          reactive-ui{ dom-unlisten(target,name,listener) }
+          reactive-ui-exn{
+            dom-attempt{ dom-unlisten(target,name,listener) }
+          }
         )
 
 fun mount-view(root : root<<ui|e>>, parent : node,
@@ -240,19 +267,21 @@ fun mount-view(root : root<<ui|e>>, parent : node,
               : <signal-write,ui,pure|e> ()
   match tree
     Empty -> ()
-    Text(content) -> insert(parent,before,dom-create-text(content))
+    Text(content) ->
+      val target = dom-attempt{ dom-create-text(content) }
+      insert(parent,before,target)
     Live-text(read) ->
-      val target = dom-create-text("")
+      val target = dom-attempt{ dom-create-text("") }
       insert(parent,before,target)
       val dispose = create-effect(root,fn() tracked(read),fn(value)
-        reactive-ui{ dom-set-text(target,value) }
+        reactive-ui-exn{ dom-attempt{ dom-set-text(target,value) } }
       )
       ()
     Element(name,attributes,children) ->
       if !name.is-valid-element-name
       then throw("invalid HTML element name: " ++ name)
       else
-        val target = dom-create-element(name)
+        val target = dom-attempt{ dom-create-element(name) }
         attributes.foreach fn(attribute)
           mount-attribute(root,target,attribute)
         children.foreach fn(child)
@@ -261,13 +290,15 @@ fun mount-view(root : root<<ui|e>>, parent : node,
     Fragment(children) ->
       children.foreach fn(child) mount-view(root,parent,before,child)
     Region(read) ->
-      val first = dom-create-comment("kokaine:region")
-      val last = dom-create-comment("/kokaine:region")
+      val first = dom-attempt{ dom-create-comment("kokaine:region") }
+      val last = dom-attempt{ dom-create-comment("/kokaine:region") }
       insert(parent,before,first)
       insert(parent,before,last)
       val dispose = create-effect(root,fn() tracked(read),fn(next)
         on-cleanup(root,fn()
-          reactive-ui{ dom-clear-between(first,last) }
+          reactive-ui-exn{
+            dom-attempt{ dom-clear-between(first,last) }
+          }
         )
         mount-view(root,parent,Just(last),next)
       )
@@ -279,12 +310,14 @@ pub fun mount(root : root<<ui|e>>, parent : node, tree : view<e>)
   update(root)
     batch(root)
       create-effect(root,constant-track,fn(_)
-        val first = dom-create-comment("kokaine:mount")
-        val last = dom-create-comment("/kokaine:mount")
-        dom-append(parent,first)
-        dom-append(parent,last)
+        val first = dom-attempt{ dom-create-comment("kokaine:mount") }
+        val last = dom-attempt{ dom-create-comment("/kokaine:mount") }
+        dom-attempt{ dom-append(parent,first) }
+        dom-attempt{ dom-append(parent,last) }
         on-cleanup(root,fn()
-          reactive-ui{ dom-remove-range(first,last) }
+          reactive-ui-exn{
+            dom-attempt{ dom-remove-range(first,last) }
+          }
         )
         mount-view(root,parent,Just(last),tree)
       )
