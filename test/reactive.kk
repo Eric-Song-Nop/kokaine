@@ -247,6 +247,195 @@ fun test-exception-restoration()
   root.dispose()
 
 
+// --------------------------------------------------------------------------
+// Regression cases from independent scheduler and capability review
+// --------------------------------------------------------------------------
+
+fun test-transitive-pending()
+  val (root,(source,leaf)) = create-root fn(root)
+    val source = signal(root,1)
+    val mid = memo(root,0,fn(_) source.get * 2)
+    val leaf = memo(root,0,fn(_) mid.get * 2)
+    (source,leaf)
+
+  val observed = dispatch(root)
+    batch(root)
+      source.set(2)
+      leaf.get
+  observed.check-int(8,"pulling a transitive memo settles stale ancestors")
+  root.dispose()
+
+fun test-dynamic-rank-change()
+  val (root,(source,toggle,consumer)) = create-root fn(root)
+    val source = signal(root,1)
+    val toggle = signal(root,0)
+    val mid = memo(root,0,fn(_) source.get * 2)
+    val leaf = memo(root,0,fn(_) mid.get)
+    val consumer = memo(root,0,fn(previous)
+      if toggle.get == 0 then 0 else previous + leaf.get
+    )
+    (source,toggle,consumer)
+
+  update(root)
+    batch(root)
+      // The consumer was rank one before this update and is queued before the
+      // previously unrelated deep chain. Pull settling must discover the new
+      // dependency before committing `previous + leaf`.
+      toggle.set(1)
+      source.set(2)
+  sample(root){ consumer.get }.check-int(4,
+    "dynamic rank changes observe one atomic epoch")
+  root.dispose()
+
+fun test-late-registration()
+  val seen : ref<global,int> = ref(0)
+  val seen-double : ref<global,int> = ref(0)
+  val (root,source) = create-root fn(root) signal(root,7)
+
+  val stop = update(root)
+    create-effect(root,fn() source.get,fn(value) seen := value)
+  (!seen).check-int(7,"late effect runs before registration returns")
+
+  val (double,stop-double) = update(root)
+    batch(root)
+      val double = memo(root,0,fn(_) source.get * 2)
+      val stop-double = create-effect(root,fn() double.get,
+        fn(value) seen-double := value)
+      (double,stop-double)
+  (!seen-double).check-int(14,"late memo and effect initialize coherently")
+  sample(root){ double.get }.check-int(14,"late memo remains readable")
+  stop-double()
+  stop()
+  root.dispose()
+
+fun mutate-total(root : root<total>, source : signal<int>, value : int)
+                : <pure> ()
+  update(root){ source.set(value) }
+
+fun read-total(root : root<total>, source : signal<int>) : <pure> int
+  sample(root){ source.get }
+
+fun test-nested-handler-containment()
+  val built : (root<total>,signal<int>) = create-root fn(root)
+    signal(root,0)
+  val (root,source) = built
+  val failed : error<memo<int>> = mask<exn>{
+    error/try fn()
+      update(root)
+        memo(root,0,fn(_)
+          // This helper discharges :signal-write itself. Runtime phase checks
+          // still reject it while the memo is collecting dependencies.
+          mutate-total(root,source,7)
+          source.get
+        )
+  }
+  if failed.is-error then () else throw("nested handler write was accepted")
+  val unchanged = sample(root){ source.get }
+  if unchanged == 0 then () else throw("rejected memo write was committed")
+  root.dispose()
+
+fun test-apply-is-untracked()
+  val built : (root<total>,(signal<int>,signal<int>,signal<int>)) =
+    create-root fn(root)
+      val tracked = signal(root,0)
+      val apply-only = signal(root,2)
+      val output = signal(root,0)
+      val stop = create-effect(root,fn() tracked.get,fn(_)
+        output.set(read-total(root,apply-only))
+      )
+      (tracked,apply-only,output)
+  val (root,(tracked,apply-only,output)) = built
+
+  update(root){ apply-only.set(3) }
+  val first = sample(root){ output.get }
+  if first == 2 then () else throw("apply sample became a dependency")
+  update(root){ tracked.set(1) }
+  val second = sample(root){ output.get }
+  if second == 3 then () else throw("apply did not sample the latest value")
+  root.dispose()
+
+fun test-cleanup-failure-recovery()
+  val events : ref<global,list<string>> = ref([])
+  val (root,value) = create-root fn(root)
+    val value = signal(root,0)
+    val stop = create-effect(root,fn() value.get,fn(current)
+      events.push("run" ++ current.show)
+      on-cleanup(root,fn()
+        events.push("clean" ++ current.show)
+        if current == 0 then throw("intentional cleanup failure") else ()
+      )
+    )
+    value
+
+  val failed : error<()> = mask<exn>{
+    error/try fn() update(root){ value.set(1) }
+  }
+  check(failed.is-error,"cleanup failure escapes the triggering update")
+  update(root){ value.set(2) }
+  (!events).check-strings(["run2","clean0","run0"],
+    "cleanup failure leaves the observer retryable")
+  root.dispose()
+
+fun test-memo-error-state()
+  val (root,(source,broken)) = create-root fn(root)
+    val source = signal(root,0)
+    val broken = memo(root,42,fn(_)
+      val value = source.get
+      if value == 1 then throw("memo failed")
+      elif value == 0 then 42
+      else value
+    )
+    (source,broken)
+
+  val update-failed : error<()> = mask<exn>{
+    error/try fn() update(root){ source.set(1) }
+  }
+  check(update-failed.is-error,"memo exception escapes propagation")
+  val read-failed : error<int> = mask<exn>{
+    error/try fn() sample(root){ broken.get }
+  }
+  check(read-failed.is-error,"failed memo never exposes its stale cache")
+  update(root){ source.set(2) }
+  sample(root){ broken.get }.check-int(2,"invalidated memo recovers after failure")
+  root.dispose()
+
+fun test-disposal-isolation()
+  val runs : ref<global,int> = ref(0)
+  val (root,_) = create-root fn(root)
+    val source = signal(root,0)
+    val trigger = signal(root,0)
+    val first = create-effect(root,fn() source.get,fn(_)
+      runs := !runs + 1
+    )
+    val second = create-effect(root,fn() trigger.get,fn(_)
+      on-cleanup(root,fn() source.set(1))
+    )
+    ()
+
+  (!runs).check-int(1,"effect initialized before disposal")
+  root.dispose()
+  (!runs).check-int(1,"cleanup writes cannot rerun sibling effects")
+
+fun churn(source : signal<int>, derived : memo<int>, count : int)
+          : <signal-read,signal-write,pure> ()
+  if count <= 0 then () else
+    source.set(count)
+    val current = derived.get
+    churn(source,derived,count - 1)
+
+fun test-lazy-queue-coherence()
+  val (root,(source,derived)) = create-root fn(root)
+    val source = signal(root,0)
+    val derived = memo(root,0,fn(_) source.get)
+    (source,derived)
+  dispatch(root)
+    batch(root)
+      churn(source,derived,10002)
+  sample(root){ derived.get }.check-int(1,
+    "lazy settling removes queue tombstones")
+  root.dispose()
+
+
 pub fun main()
   test-signals-and-memos()
   test-dynamic-dependencies()
@@ -256,4 +445,13 @@ pub fun main()
   test-owned-child()
   test-non-reentrant-write()
   test-exception-restoration()
+  test-transitive-pending()
+  test-dynamic-rank-change()
+  test-late-registration()
+  test-nested-handler-containment()
+  test-apply-is-untracked()
+  test-cleanup-failure-recovery()
+  test-memo-error-state()
+  test-disposal-isolation()
+  test-lazy-queue-coherence()
   println("reactive: " ++ (!checks).show ++ " checks passed")
