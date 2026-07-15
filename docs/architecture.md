@@ -88,25 +88,30 @@ a local list of subscription closures. A tracked observer generation owns one
 `wake-token`; its first read of a source installs a local link and captures a
 version/producer checkpoint. Repeated reads reuse that checkpoint.
 
-The token carries four pieces of state:
+The token carries five pieces of state:
 
 - `live`, which closes the generation;
 - `fired`, which makes several invalidations resume it once;
+- an owner-generation capability, which links an owned observer to the exact
+  parent continuation generation that created it and shares that generation's
+  dependency checkpoints; the capability also carries a transient validation
+  latch so an ownership/checkpoint cycle fails explicitly instead of recursing;
 - cancellation closures, which eagerly remove all source links on restart or
   disposal;
 - dependency checkpoints, which recursively validate a clean memo before its
   cached value is returned.
 
-A memo's `producer-state` contains only `live`, `dirty`, and `running` latches
-plus the checkpoint cell shared with its last generation. It contains no wake
-closure and therefore cannot retain the typed root or observer when an
-externally held memo outlives its owner.
+A memo's `producer-state` contains only `live`, `dirty`, and `running` latches,
+the captured owner-generation cell, and the checkpoint cell shared with its
+last generation. It contains no wake closure and therefore cannot retain the
+typed root or observer when an externally held memo outlives its owner.
 
 An observer contains only its continuation process, scheduling latches,
-capture token, owned children and cleanup callbacks. Scheduler queues and
-ownership scopes contain direct observer handles. Roots are separated by an
-opaque capability key. The root has no source or observer registry, integer
-identity, subscriber ID lists, rank, or reverse observer-to-source list.
+capture token, captured owner generation, owned children and cleanup callbacks.
+Scheduler queues and ownership scopes contain direct observer handles. Roots
+are separated by an opaque capability key. The root has no source or observer
+registry, integer identity, subscriber ID lists, rank, or reverse
+observer-to-source list.
 
 Persistent identities use private `ref<global,_>` cells because DOM and WASM
 callbacks outlive the lexical call to `main`. The state effect is discharged
@@ -145,9 +150,10 @@ retained only as a recovery seed: if abortive host control exits the round
 before a successor can be published, the restoring frame queues the observer
 and the next scheduler step reifies a fresh process. Publishing the next
 parked generation before rethrowing an ordinary action failure preserves retry
-semantics without using that fallback. Disposal clears the seed and explicitly
-finalizes raw parked contexts before running user cleanups and unlinking the
-observer.
+semantics without using that fallback. The failed round's token is then
+canceled before the observer is requeued, so partially created children cannot
+run ahead of the retry. Disposal clears the seed and explicitly finalizes raw
+parked contexts before running user cleanups and unlinking the observer.
 
 This recovery rule covers abortive/final control. It does not make a host
 resumption safe to retain outside an observer round: the root's flush and
@@ -166,8 +172,9 @@ the rejected alternatives.
 When a source changes:
 
 1. An unequal source commit stores the value, increments its version, and fires
-   each live source-local token. A token's `fired` latch creates at most one
-   scheduler action even when the generation read several changed sources.
+   each live source-local token whose complete owner-generation chain remains
+   current. A token's `fired` latch creates at most one scheduler action even
+   when the generation read several changed sources.
 2. Only direct subscribers become dirty. A memo becoming dirty does not
    speculatively dirty or execute its downstream consumers.
 3. Before returning a memo cache, the read handler recursively validates the
@@ -180,9 +187,14 @@ When a source changes:
 5. An unequal memo commit increments its version and fires downstream tokens.
    An equal commit changes neither; even a stateful `memo(previous)` downstream
    remains asleep.
-6. The global flush drains derivations before user effects. Before each resume,
-   the old token cancels all links; new control flow captures exactly the
-   source-local links and checkpoints encountered by the next generation.
+6. The global flush drains derivations before user effects. Before an owned
+   observer runs, its owner-generation chain recursively settles captured memo
+   checkpoints; this exposes a latent parent invalidation even if the child is
+   earlier in the rank-free queue. A generation that has then fired or been
+   canceled is stale and is never resumed; its owner rerun disposes it. Before
+   each valid resume, the old token cancels all links, and new control flow
+   captures exactly the source-local links and checkpoints encountered by the
+   next generation.
 
 This keeps a diamond coherent without rank. If a join is selected before one
 branch, checkpoint validation pulls that exact branch first; an equal branch
@@ -226,14 +238,26 @@ guard, suppresses token firing, and clears both work queues and ownership
 scopes in a `finally` frame. Disposal is idempotent; creating a signal or
 observer in a dead root is an error.
 
-An observer failure restores capture/ownership context and queues a retry. An
-action failure keeps the source-local links already captured by that attempt;
-a cleanup failure has already canceled the prior generation but leaves a
-direct retry ticket. A failed memo never becomes clean with its old cache.
-Cleanup failure is exhaustive: later listener and DOM range cleanup still runs
-before the original exception escapes. A cleanup may dispose its own observer;
-the scheduler checks `live` again before resuming. Registration under a dead
-current owner is rejected instead of creating an orphan observer.
+Each child also captures the parent's current generation capability. If a
+batch invalidates both, the parent's `fired` latch makes the old child's ticket
+stale immediately, independent of source write order or queue insertion order.
+The same check follows the capability chain through arbitrary ownership depth;
+it first settles the owner's captured memo checkpoints, then rejects an
+externally retained memo from a stale owner generation rather than pulling it.
+Cleanup-created work belongs to the replacement generation. If the owner's
+next tracked round reads that same owned producer, however, ownership and data
+checkpoints form a cycle. The runtime detects re-entrant generation validation
+and rejects it before either side publishes; a direct owner invalidation can
+then retire the cyclic child and recover normally.
+
+An observer failure restores capture/ownership context, cancels the incomplete
+generation, and queues a retry. A cleanup failure has already canceled the
+prior generation but leaves a direct retry ticket. A failed memo never becomes
+clean with its old cache. Cleanup failure is exhaustive: later listener and DOM
+range cleanup still runs before the original exception escapes. A cleanup may
+dispose its own observer; the scheduler checks `live` again before resuming.
+Registration under a dead current owner is rejected instead of creating an
+orphan observer.
 
 ## DOM interpretation
 

@@ -12,7 +12,8 @@ Kokaine now uses one reactive execution model:
 > capability directly to each source and record a version checkpoint for the
 > captured read. A raw control effect parks the observer process between
 > generations. Source-local wake capabilities, continuation-owned checkpoints,
-> direct queues, and exact producer pull provide incremental propagation.
+> captured owner-generation scopes, direct queues, and exact producer pull
+> provide incremental propagation.
 
 The previous centralized dependency graph has been removed. There is no
 root-wide source or observer registry, integer node identity, observer-to-source
@@ -122,8 +123,15 @@ dependency-stamp
   source version cell and version observed by one read
   optional effect-erased producer state for recursive validation
 
+owner-generation
+  live and fired latches shared with one wake token
+  transient validation latch for controlled ownership/checkpoint-cycle rejection
+  optional parent generation captured when an owned observer is created
+  shared dependency checkpoints of the owning continuation generation
+
 wake-token
   live and fired latches
+  this token's owner-generation capability
   cancellation closures for this generation's subscriptions
   this generation's dependency checkpoints
   direct observer wake closure
@@ -131,6 +139,7 @@ wake-token
 observer
   live / dirty / queued / running latches
   current wake token
+  captured owner-generation capability
   checkpoint cell shared with its producer state
   parked one-shot observer process
   direct children, cleanups, and unlink closure
@@ -144,10 +153,15 @@ single link and checkpoint. Links from different sources can still fire the
 same token, whose `fired` latch queues the observer once.
 
 `producer-state` is not a graph node. It contains only effect-erased `live`,
-`dirty`, and `running` latches plus the checkpoint cell of the last successful
-producer generation. It does not retain the root, typed observer, or a wake
-closure. The runtime reaches an observer only through a source subscription or
-its direct queue handle.
+`dirty`, and `running` latches, the captured owner-generation cell, and the
+checkpoint cell of the last successful producer generation. It does not retain
+the root, typed observer, or a wake closure. The runtime reaches an observer
+only through a source subscription or its direct queue handle.
+
+An owner-generation link is likewise not a data dependency. Each generation
+has at most one parent, fixed when its observer is created; reads never add or
+change these links. The chain is only a lifetime proof that the continuation
+scope which created an owned observer is still current.
 
 ### Removed representation
 
@@ -177,9 +191,11 @@ observer loop can publish its next parked context.
 ### 1. Start a generation
 
 Before an observer round, the runtime cancels its previous token and removes
-the token's source links. It tears down the previous owned generation, creates
-a fresh one-shot wake token, installs it as the current tracking capability,
-and resumes exactly one parked observer context.
+the token's source links. It creates and publishes a fresh one-shot token as
+the replacement lifetime scope, tears down the previous owned generation,
+installs the token as the current tracking capability, and resumes exactly one
+parked observer context. Publishing before teardown lets cleanup code register
+work only into the replacement scope.
 
 The `signal-read` handler first settles a memo source if necessary, then
 subscribes the current token when the read is tracked and appends a checkpoint
@@ -191,7 +207,8 @@ tracking before running its `apply` function.
 
 A raw signal write compares old and new values. An equal write stops. A real
 change commits the cell, increments the source version, and fires the active
-subscriptions stored by that source. The token's one-shot `fired` latch turns
+subscriptions stored by that source. A token fires only while its complete
+owner-generation chain is live and unfired. Its one-shot `fired` latch turns
 any number of links or writes in the same generation into one queued observer.
 
 A memo follows the same publication rule: only an unequal commit increments
@@ -203,7 +220,18 @@ actually read publishes a different value.
 
 Derivation and user-effect queues contain direct handles and use their
 `queued` latches for deduplication. Flush always drains derivations before user
-effects, but derivations have no topological order.
+effects, but derivations have no topological order. A ticket whose captured
+owner generation has fired or been canceled is stale and is discarded. Before
+that decision, the scheduler recursively validates the owner's captured memo
+checkpoints, so a latent parent invalidation becomes visible even when a child
+derivation appears earlier in the rank-free queue. The owner's pending rerun
+will dispose the stale observer before constructing its replacement scope.
+
+Generation validation is guarded against re-entry. A parent round that tracks
+a producer created by its own replacement cleanup would otherwise create an
+owner-to-checkpoint-to-owned-work cycle; the runtime rejects this composition
+before calculation or publication and leaves direct owner invalidation able to
+retire the cyclic scope.
 
 On a memo read, `settle-producer` validates the checkpoints captured by the
 producer's last generation even if that producer is still marked clean. For
@@ -235,7 +263,8 @@ Nested batches increment a root depth latch. Writes still commit and fire
 tokens, but ordinary flushing waits for the outermost `leave-batch`. A memo
 read inside a batch uses the same recursive checkpoint validation and exact
 producer pull, so it observes the latest transitive value without globally
-flushing user effects.
+flushing user effects. A memo retained from an already invalidated owner scope
+is rejected rather than executing stale owned work before the owner refresh.
 
 ### 5. Failure, cancellation, and disposal
 
@@ -243,13 +272,16 @@ flushing user effects.
 one context, executes one complete action, and captures the next context only
 after the round and its inner finalizers. The next process is published before
 an action error is rethrown, so the dirty observer can retry with a fresh
-generation.
+generation. Before that retry is queued, the failed partial generation's token
+is canceled, making any children created before the error immediately stale.
 
 Cancellation marks a token dead before running its cancellation closures.
 Disposal first marks the complete directly owned subtree dead, then cancels
 tokens, finalizes every parked raw context, runs cleanups, and unlinks handles.
 Consequently a cleanup write cannot revive a sibling, and every retained
-`rcontext` is consumed by either `resume` or `finalize`.
+`rcontext` is consumed by either `resume` or `finalize`. Unlinking also clears
+the captured owner generation so an externally retained disposer does not keep
+an ancestor scope alive.
 
 ## Correctness invariants
 
@@ -270,13 +302,17 @@ Consequently a cleanup write cannot revive a sibling, and every retained
    reruns a clean downstream `memo(previous)` generation.
 6. **Tracking is scoped.** Only reads in `track` attach the current token.
    Reads in `apply`, cleanup code, or `untrack` do not become dependencies.
-7. **Failure leaves retryable state.** An incomplete round is dirty and
-   scheduled again, while the failed raw context is never resumed twice.
-8. **Every context has one terminal action.** A parked `rcontext` is resumed
+7. **Ownership is generation-scoped.** A child runs only while every captured
+   owner generation remains live and unfired. Parent invalidation therefore
+   retires stale child work independently of batch write or queue order.
+8. **Failure leaves retryable state.** An incomplete round is dirty and
+   scheduled again after its partial generation is canceled, while the failed
+   raw context is never resumed twice.
+9. **Every context has one terminal action.** A parked `rcontext` is resumed
    once or finalized once; cancellation does not duplicate resource cleanup.
-9. **Death precedes cleanup writes.** The owned subtree and its tokens become
+10. **Death precedes cleanup writes.** The owned subtree and its tokens become
    inert before cleanup callbacks execute.
-10. **Root capability containment remains strict.** Reads, writes, batches,
+11. **Root capability containment remains strict.** Reads, writes, batches,
     and registration reject the wrong or disposed root independently of the
     propagation representation.
 
@@ -287,17 +323,19 @@ gate. The individual evidence is:
 
 | Property | Test or command | Evidence required |
 | --- | --- | --- |
-| No legacy graph machinery | `test/no_dependency_graph.py` | Forbids registries, node IDs, reverse edge lists, ranks, ranked insertion, graph lookup, producer wake closures, speculative downstream invalidation, and arbitrary sibling draining; requires source versions, token-owned checkpoints, raw resume/finalize, recursive validation, and exact producer pull. |
+| No legacy graph machinery | `test/no_dependency_graph.py` | Forbids registries, node IDs, reverse edge lists, ranks, ranked insertion, graph lookup, producer wake closures, speculative downstream invalidation, and arbitrary sibling draining; requires source versions, token-owned checkpoints, owner-generation capabilities, raw resume/finalize, recursive validation, and exact producer pull. |
 | Raw one-shot lifecycle | `test/continuation.kk` | Lazy bootstrap, one-step resume, retry after failure, fresh dynamic handlers, and explicit finalization. |
 | Source isolation and generation deduplication | `test-captured-incrementality` | Independent fan-out does not rerun, duplicate reads wake once, and batched fan-in applies once. |
 | Dynamic dependencies and tracking scope | `test-dynamic-dependencies`, `test-untrack`, `test-apply-is-untracked` | Old branches are canceled; untracked/apply reads install no wake link. |
 | Equality cutoff and coherent diamonds | signals/memos, `test-generation-checkpoint-equality`, and `test-diamond` | Equal results do not publish or rerun a stateful downstream `memo(previous)`; a converging diamond exposes one complete value. |
 | Rank-free exact pull | `test-transitive-batch-freshness`, `test-dynamic-depth-atomicity`, `test-targeted-producer-pull` | Dirty ancestors settle on demand, a dependency-depth change remains atomic, and pulling one producer never executes an unrelated queued sibling. |
-| Queue boundedness and stack behavior | `test-continuation-churn-coherence` | 10,002 batched set/read steps complete and leave the final memo coherent. |
+| Combined continuation edge cases | `test/reactive-advanced.kk` | 105 checks compose a deep dynamic diamond, batch-local exact pull beside a failing sibling, stateful `previous` with duplicate fan-in, deep failure retry, failed-parent disposal, both parent/child write orders, a three-level ownership scope, rejected stale owned-memo pull, changed/equal lazy parent checkpoints, owner-validation failure retry without ticket loss, controlled owner/checkpoint-cycle recovery, guarded preflight pulls, and both queue orders of a 10,000-child stale ownership fan-out. |
+| Deterministic differential stress | `test/reactive-stress.kk` | A fixed Park--Miller schedule compares raw sources, derived values, calculator runs, and effect applications against a pure reference model for 1,200 mixed transactions (18,016 assertions). Counters are checked before any derived sample can repair queued work. |
+| Queue boundedness and stack behavior | `test-continuation-churn-coherence`, `test-large-stale-owner-fanout-is-stack-safe` | 10,002 batched set/read steps remain coherent; exact pull through a 10,000-child queue and tail-recursive retirement of 10,000 stale tickets complete without running retired children. |
 | Failure and containment | exception, memo-error, cleanup-failure, clean-read-isolation, nested-handler, and final-control regressions in `test/reactive.kk` | Errors escape without exposing stale cache state; a clean read does not flush unrelated retry work; retry and runtime phase checks remain intact. |
-| Ownership and disposal | cleanup, owned-child, self-disposal, dead-owner, and disposal-isolation regressions | Descendants and contexts are finalized once; cleanup writes do not revive dead work. |
-| Native aggregate | `make test-native` | Smoke, continuation, 55 reactive checks, HTML checks, and the structural no-graph assertion pass. |
-| Browser lifetime | `make test-browser` | `jsweb` counter events, DOM exception translation, detached listeners, and idempotent unmount pass. |
+| Ownership and disposal | cleanup, owned-child, self-disposal, dead-owner, disposal-isolation, and owner-generation regressions | Descendants and contexts are finalized once; cleanup writes do not revive dead work; an invalid parent scope cannot publish a stale child effect regardless of write order. |
+| Native aggregate | `make test-native` | Smoke, continuation, 55 baseline reactive checks, 105 advanced checks, 18,016 stress assertions, HTML checks, and the structural no-graph assertion pass. |
+| Browser lifetime | `make test-browser` | `jsweb` handles a 700-event counter burst, a 32-round branch churn after the initial replacement, detached-node replay, 64 post-disposal source updates, DOM exception translation, repeated no-op reset stability, unsafe-looking text, and the 780/781 px responsive boundary. |
 | Retained callback ABI | `make test-wasm` | The `wasmweb` proof safely re-enters after `main` and releases retained callbacks. |
 | Report integrity | `make test-report` | Report JavaScript parses and its required interactive structure remains valid. |
 
@@ -318,6 +356,15 @@ gate. The individual evidence is:
 - A source subscription strongly reaches its wake closure until cancellation.
   Eager cancellation and disposal are therefore lifetime requirements, not
   optional cleanup optimizations.
+- Scheduling an owned observer validates a linear chain of captured
+  owner-generation capabilities and any dirty memo checkpoints on that chain.
+  Each layer rechecks its complete ancestor chain after effectful checkpoint
+  settlement, so worst-case scope-only work is quadratic in ownership depth;
+  checkpoint work follows only the owning generations' captured producer paths.
+  Unlinking clears the child-side capability reference. A composition in which
+  an owner tracks work created by its own cleanup is deliberately rejected as
+  a checkpoint cycle; supporting it would require a transient multi-producer
+  settlement stack rather than a single-candidate exemption.
 - Raw continuations can capture more stack state than plain thunks. Native,
   `jsweb`, and `wasmweb` allocation and retention costs must continue to be
   measured independently.

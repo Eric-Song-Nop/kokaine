@@ -27,6 +27,8 @@ forbidden = {
 required = {
     "source-subscribers": "source-local subscriptions",
     "wake-token": "one-shot captured generations",
+    "owner-generation": "captured ownership-generation capabilities",
+    "validate-owner-generation": "stale owned-work checkpoint gate",
     "token-cancellations": "capture-owned cancellation",
     "observer-suspend": "control-effect observer process",
     "rcontext.resume": "raw continuation resume",

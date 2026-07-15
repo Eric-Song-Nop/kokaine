@@ -45,6 +45,30 @@ def assert_no_horizontal_overflow(page) -> None:
     ), "the responsive layout overflows the viewport"
 
 
+def assert_counter_state(page, value: int) -> None:
+    """Assert every public projection of the counter's current value."""
+    parity = "EVEN" if value % 2 == 0 else "ODD"
+    phase = (
+        "System at rest"
+        if value == 0
+        else "Positive phase"
+        if value > 0
+        else "Negative phase"
+    )
+    expect(page.locator(".reading__number")).to_have_text(str(value))
+    expect(page.locator(".reading__derived strong").nth(0)).to_have_text(
+        str(value * value)
+    )
+    expect(page.locator(".reading__derived strong").nth(1)).to_have_text(parity)
+    expect(page.locator(".status p")).to_contain_text(phase)
+    expect(page.locator(".reading")).to_have_class(
+        f"reading reading--{parity.lower()}"
+    )
+    expect(page.locator(".reading")).to_have_attribute(
+        "style", f"--level: {abs(value) % 9}"
+    )
+
+
 with serve_project() as origin:
     base_url = f"{origin}/examples/counter/"
     with sync_playwright() as playwright:
@@ -103,10 +127,40 @@ with serve_project() as origin:
         expect(lifecycle_count).to_have_text("1")
 
         new_branch = desktop.locator("#new-branch").element_handle()
-        count_node = lifecycle_count.element_handle()
         desktop.locator("#new-branch").click()
         expect(lifecycle_count).to_have_text("2")
         assert desktop.evaluate("__kokaineLifecycle.read()") == 2
+
+        stale_branches = [old_branch]
+        for _ in range(32):
+            current = desktop.locator("#old-branch, #new-branch").element_handle()
+            current_id = current.get_attribute("id")
+            stale_branches.append(current)
+            desktop.locator("#branch-toggle").click()
+            next_id = "new-branch" if current_id == "old-branch" else "old-branch"
+            expect(desktop.locator(f"#{next_id}")).to_be_visible()
+            assert not current.evaluate("node => node.isConnected"), (
+                "a replaced branch remained connected"
+            )
+
+        for stale in stale_branches:
+            stale.evaluate(
+                """node => node.dispatchEvent(new MouseEvent('click', {
+                    bubbles: true,
+                    cancelable: true
+                }))"""
+            )
+        assert desktop.evaluate("__kokaineLifecycle.read()") == 2, (
+            "a detached branch listener remained active after churn"
+        )
+        expect(lifecycle_count).to_have_text("2")
+
+        connected_branch = desktop.locator("#old-branch, #new-branch")
+        connected_branch.click()
+        expect(lifecycle_count).to_have_text("3")
+        assert desktop.evaluate("__kokaineLifecycle.read()") == 3
+        retained_branch = connected_branch.element_handle()
+        count_node = lifecycle_count.element_handle()
 
         desktop.evaluate(
             """() => {
@@ -116,31 +170,27 @@ with serve_project() as origin:
         )
         expect(desktop.locator("#lifecycle-root")).to_be_empty()
 
-        desktop.evaluate("__kokaineLifecycle.bump()")
-        assert desktop.evaluate("__kokaineLifecycle.read()") == 3
-        assert count_node.text_content() == "2", (
+        desktop.evaluate(
+            """() => {
+                for (let index = 0; index < 64; index += 1) {
+                    __kokaineLifecycle.bump();
+                }
+            }"""
+        )
+        assert desktop.evaluate("__kokaineLifecycle.read()") == 67
+        assert count_node.text_content() == "3", (
             "a live binding updated after unmount"
         )
-        old_branch.evaluate(
-            "node => node.dispatchEvent(new MouseEvent('click'))"
-        )
-        new_branch.evaluate(
-            "node => node.dispatchEvent(new MouseEvent('click'))"
-        )
-        assert desktop.evaluate("__kokaineLifecycle.read()") == 3, (
+        for stale in [*stale_branches, new_branch, retained_branch]:
+            stale.evaluate(
+                "node => node.dispatchEvent(new MouseEvent('click', {bubbles: true}))"
+            )
+        assert desktop.evaluate("__kokaineLifecycle.read()") == 67, (
             "an owned listener survived unmount"
         )
 
         reading = desktop.locator(".reading__number")
-        square = desktop.locator(".reading__derived strong").nth(0)
-        parity = desktop.locator(".reading__derived strong").nth(1)
-        status = desktop.locator(".status p")
-        panel = desktop.locator(".reading")
-
-        expect(reading).to_have_text("0")
-        expect(square).to_have_text("0")
-        expect(parity).to_have_text("EVEN")
-        expect(status).to_contain_text("System at rest")
+        assert_counter_state(desktop, 0)
 
         increase = desktop.get_by_role("button", name="Increase value")
         decrease = desktop.get_by_role("button", name="Decrease value")
@@ -151,28 +201,15 @@ with serve_project() as origin:
                 "click handler did not propagate; "
                 f"page errors={page_errors!r}, console errors={console_errors!r}"
             )
-        expect(reading).to_have_text("2")
-        expect(square).to_have_text("4")
-        expect(parity).to_have_text("EVEN")
-        expect(status).to_contain_text("Positive phase")
-        expect(panel).to_have_class("reading reading--even")
-        expect(panel).to_have_attribute("style", "--level: 2")
+        assert_counter_state(desktop, 2)
 
         decrease.click()
         decrease.click()
         decrease.click()
-        expect(reading).to_have_text("-1")
-        expect(square).to_have_text("1")
-        expect(parity).to_have_text("ODD")
-        expect(status).to_contain_text("Negative phase")
-        expect(panel).to_have_class("reading reading--odd")
+        assert_counter_state(desktop, -1)
 
-        operator = desktop.get_by_label("OPERATOR")
-        operator.fill("Ada")
-        expect(operator).to_have_value("Ada")
-        expect(desktop.locator("#greeting")).to_have_text("Signal received, Ada.")
-
-        default_was_prevented = desktop.get_by_role("button", name="ZERO").evaluate(
+        zero = desktop.get_by_role("button", name="ZERO")
+        default_was_prevented = zero.evaluate(
             """button => {
                 const event = new MouseEvent('click', {
                     bubbles: true,
@@ -183,8 +220,81 @@ with serve_project() as origin:
             }"""
         )
         assert default_was_prevented, "the full callback lost its UI capability"
-        expect(reading).to_have_text("0")
-        expect(status).to_contain_text("System at rest")
+        assert_counter_state(desktop, 0)
+
+        desktop.evaluate(
+            """() => {
+                const increase = document.querySelector(
+                    '[aria-label="Increase value"]'
+                );
+                const decrease = document.querySelector(
+                    '[aria-label="Decrease value"]'
+                );
+                for (let index = 0; index < 700; index += 1) {
+                    const target = index % 7 < 4 ? increase : decrease;
+                    target.dispatchEvent(new MouseEvent('click', {
+                        bubbles: true,
+                        cancelable: true
+                    }));
+                }
+            }"""
+        )
+        assert_counter_state(desktop, 100)
+
+        desktop.evaluate(
+            """() => {
+                const decrease = document.querySelector(
+                    '[aria-label="Decrease value"]'
+                );
+                const increase = document.querySelector(
+                    '[aria-label="Increase value"]'
+                );
+                for (let index = 0; index < 143; index += 1) {
+                    decrease.dispatchEvent(new MouseEvent('click', {bubbles: true}));
+                }
+                for (let index = 0; index < 31; index += 1) {
+                    increase.dispatchEvent(new MouseEvent('click', {bubbles: true}));
+                }
+            }"""
+        )
+        assert_counter_state(desktop, -12)
+
+        operator = desktop.get_by_label("OPERATOR")
+        unsafe_name = "Ada <effect> & 李 λ"
+        operator.fill("")
+        operator.fill(unsafe_name)
+        expect(operator).to_have_value(unsafe_name)
+        expect(desktop.locator("#greeting")).to_have_text(
+            f"Signal received, {unsafe_name}."
+        )
+        assert desktop.locator("#greeting").evaluate(
+            "node => node.childElementCount"
+        ) == 0, "an operator name was interpreted as HTML"
+        increase.click()
+        assert_counter_state(desktop, -11)
+        expect(desktop.locator("#greeting")).to_have_text(
+            f"Signal received, {unsafe_name}."
+        )
+
+        zero.click()
+        assert_counter_state(desktop, 0)
+        stable_status = desktop.locator(".status p").element_handle()
+        reset_results = zero.evaluate(
+            """button => Array.from({length: 50}, () => {
+                const event = new MouseEvent('click', {
+                    bubbles: true,
+                    cancelable: true
+                });
+                const dispatched = button.dispatchEvent(event);
+                return event.defaultPrevented && !dispatched;
+            })"""
+        )
+        assert all(reset_results), "a repeated ZERO event lost preventDefault"
+        assert stable_status.evaluate("node => node.isConnected"), (
+            "no-op reset callbacks rebuilt a stable reactive region"
+        )
+        assert stable_status.text_content().startswith("System at rest")
+        assert_counter_state(desktop, 0)
         assert_no_horizontal_overflow(desktop)
 
         ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
@@ -192,9 +302,53 @@ with serve_project() as origin:
 
         mobile = browser.new_page(viewport={"width": 375, "height": 812})
         mobile.on("pageerror", lambda error: page_errors.append(str(error)))
+        mobile.on(
+            "console",
+            lambda message: console_errors.append(message.text)
+            if message.type == "error"
+            else None,
+        )
         mobile.goto(base_url)
         mobile.wait_for_load_state("networkidle")
-        expect(mobile.locator(".reading__number")).to_have_text("0")
+        assert_counter_state(mobile, 0)
+        mobile.evaluate(
+            """() => {
+                const increase = document.querySelector(
+                    '[aria-label="Increase value"]'
+                );
+                const decrease = document.querySelector(
+                    '[aria-label="Decrease value"]'
+                );
+                for (let index = 0; index < 13; index += 1) {
+                    increase.dispatchEvent(new MouseEvent('click', {bubbles: true}));
+                }
+                for (let index = 0; index < 29; index += 1) {
+                    decrease.dispatchEvent(new MouseEvent('click', {bubbles: true}));
+                }
+            }"""
+        )
+        assert_counter_state(mobile, -16)
+        mobile.get_by_label("OPERATOR").fill("移动 λ")
+        expect(mobile.locator("#greeting")).to_have_text("Signal received, 移动 λ.")
+        assert_no_horizontal_overflow(mobile)
+
+        mobile.set_viewport_size({"width": 780, "height": 1000})
+        narrow_reading = mobile.locator(".reading").bounding_box()
+        narrow_controls = mobile.locator(".controls").bounding_box()
+        assert narrow_controls["y"] >= (
+            narrow_reading["y"] + narrow_reading["height"] - 2
+        ), "the 780px layout did not stack its controls"
+
+        mobile.set_viewport_size({"width": 781, "height": 1000})
+        wide_reading = mobile.locator(".reading").bounding_box()
+        wide_controls = mobile.locator(".controls").bounding_box()
+        assert wide_controls["x"] >= (
+            wide_reading["x"] + wide_reading["width"] - 2
+        ), "the 781px layout did not restore its two-column console"
+
+        mobile.set_viewport_size({"width": 375, "height": 812})
+        mobile.get_by_role("button", name="ZERO").click()
+        assert_counter_state(mobile, 0)
         assert_no_horizontal_overflow(mobile)
         mobile.screenshot(path=ARTIFACT_DIR / "counter-mobile.png", full_page=True)
 
@@ -203,5 +357,6 @@ with serve_project() as origin:
         assert not page_errors, "browser exceptions:\n" + "\n".join(page_errors)
         assert not console_errors, "browser console errors:\n" + "\n".join(console_errors)
         print(
-            "browser: propagation, DOM safety, lifecycle, and responsive layout passed"
+            "browser: burst propagation, DOM safety, lifecycle churn, disposal, "
+            "and responsive layout passed"
         )

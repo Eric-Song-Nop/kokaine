@@ -3,8 +3,9 @@
 
   There is deliberately no root-wide dependency graph. Tracked reads install
   source-local subscriptions to the current one-shot wake token. The token
-  owns cancellation for that captured generation, while direct observer
-  handles form only scheduler and ownership scopes.
+  owns cancellation for that captured generation; captured owner-generation
+  capabilities retire stale child work, while direct observer handles form
+  only scheduler and ownership scopes.
 --------------------------------------------------------------------------*/
 module kokaine/reactive
 
@@ -18,6 +19,19 @@ type observer-kind
 abstract type root-key
   Root-key(root-key-cell : ref<global,bool>)
 
+// An owned observer captures the exact continuation generation that created
+// it, including that generation's checkpoint cell. The parent link is a linear
+// lifetime scope, not a reactive dependency: reads never add owner links, and
+// every generation has at most one parent.
+abstract type owner-generation
+  Owner-generation(
+    generation-live   : ref<global,bool>,
+    generation-fired  : ref<global,bool>,
+    generation-validating : ref<global,bool>,
+    generation-parent : maybe<owner-generation>,
+    generation-dependencies : ref<global,list<dependency-stamp>>
+  )
+
 
 // --------------------------------------------------------------------------
 // Source-local continuation trace
@@ -29,13 +43,15 @@ abstract type source-subscription
     subscription-wake : () -> ()
   )
 
-// A memo source carries only effect-erased latches and its continuation-owned
-// dependency checkpoints. It never retains the root or typed observer.
+// A memo source carries only effect-erased latches, its captured owner scope,
+// and continuation-owned dependency checkpoints. It never retains the root or
+// typed observer.
 abstract type producer-state
   Producer-state(
     producer-live         : ref<global,bool>,
     producer-dirty        : ref<global,bool>,
     producer-running      : ref<global,bool>,
+    producer-owner-generation : ref<global,maybe<owner-generation>>,
     producer-dependencies : ref<global,list<dependency-stamp>>
   )
 
@@ -92,13 +108,15 @@ pub alias disposer<e> = () -> <pure|e> ()
 // Continuation processes and direct scheduler state
 // --------------------------------------------------------------------------
 
-// One token represents one captured dependency generation. Every read in the
-// generation subscribes this same token; fired is the one-shot scheduling
-// latch, and cancellations eagerly remove source-local links on restart.
+// One token represents one captured dependency and ownership generation.
+// Every read in the generation subscribes this same token; fired is the
+// one-shot scheduling latch, and cancellations eagerly remove source-local
+// links on restart.
 abstract type wake-token
   Wake-token(
     token-live          : ref<global,bool>,
     token-fired         : ref<global,bool>,
+    token-generation    : owner-generation,
     token-cancellations : ref<global,list<() -> ()>>,
     token-dependencies  : ref<global,list<dependency-stamp>>,
     token-wake          : () -> ()
@@ -127,6 +145,7 @@ abstract type observer<e::E>
     observer-running   : ref<global,bool>,
     observer-token     : ref<global,maybe<wake-token>>,
     observer-dependencies : ref<global,list<dependency-stamp>>,
+    observer-owner-generation : ref<global,maybe<owner-generation>>,
     observer-children  : ref<global,list<observer<e>>>,
     observer-cleanups  : ref<global,list<() -> <signal-write,pure|e> ()>>,
     observer-unlink    : ref<global,maybe<() -> ()>>,
@@ -165,6 +184,19 @@ fun load(cell : ref<global,a>) : a
 fun store(cell : ref<global,a>, value : a) : ()
   unsafe-total { cell := value }
 
+fun generation-active-loop(generation : owner-generation) : <div> bool
+  if !load(generation.generation-live) ||
+     load(generation.generation-fired)
+  then False
+  else match generation.generation-parent
+    Nothing -> True
+    Just(parent) -> generation-active-loop(parent)
+
+fun generation-active(generation : owner-generation) : bool
+  // Owner generations are created only by linking a new child scope to an
+  // already existing ancestor, so this chain is finite and acyclic.
+  pretend-no-div{ generation-active-loop(generation) }
+
 // --------------------------------------------------------------------------
 // Source-local subscriptions and captured cancellation
 // --------------------------------------------------------------------------
@@ -177,7 +209,7 @@ fun compact-subscriptions(subscriptions : list<source-subscription>)
   subscriptions.filter(subscription-active)
 
 fun fire-token(token : wake-token) : ()
-  if !load(token.token-live) || load(token.token-fired) then () else
+  if !generation-active(token.token-generation) then () else
     store(token.token-fired,True)
     val wake = token.token-wake
     wake()
@@ -274,24 +306,42 @@ fun queue-observer(root : root<e>, observer : observer<e>) : ()
     enqueue-observer(root,observer)
 
 fun new-wake-token(root : root<e>, observer : observer<e>) : wake-token
-  Wake-token(cell(True),cell(False),cell([]),
-             observer.observer-dependencies,
+  val live = cell(True)
+  val fired = cell(False)
+  val generation = Owner-generation(
+    live,fired,cell(False),load(observer.observer-owner-generation),
+    observer.observer-dependencies
+  )
+  Wake-token(live,fired,generation,cell([]),observer.observer-dependencies,
              fn() queue-observer(root,observer))
 
 // Producer pulls select their exact direct handle by the private dirty latch.
 // Pointer identity here is an opaque queue ticket, not a node ID or registry.
-fun extract-observer(observers : list<observer<e>>,
-                     target : ref<global,bool>)
-                    : <div> (maybe<observer<e>>,list<observer<e>>)
+fun restore-skipped-observers(skipped : list<observer<e>>,
+                              remaining : list<observer<e>>)
+                             : <div> list<observer<e>>
+  match skipped
+    Nil -> remaining
+    Cons(observer,rest) ->
+      restore-skipped-observers(rest,Cons(observer,remaining))
+
+fun extract-observer-loop(observers : list<observer<e>>,
+                          target : ref<global,bool>,
+                          skipped : list<observer<e>>)
+                         : <div> (maybe<observer<e>>,list<observer<e>>)
   match observers
-    Nil -> (Nothing,[])
+    Nil -> (Nothing,restore-skipped-observers(skipped,[]))
     Cons(observer,rest) ->
       if unsafe-ptr-eq(observer.observer-dirty,target) then
         store(observer.observer-queued,False)
-        (Just(observer),rest)
+        (Just(observer),restore-skipped-observers(skipped,rest))
       else
-        val (found,remaining) = extract-observer(rest,target)
-        (found,Cons(observer,remaining))
+        extract-observer-loop(rest,target,Cons(observer,skipped))
+
+fun extract-observer(observers : list<observer<e>>,
+                     target : ref<global,bool>)
+                    : <div> (maybe<observer<e>>,list<observer<e>>)
+  extract-observer-loop(observers,target,[])
 
 fun take-queued-observer(queue : ref<global,list<observer<e>>>,
                          target : ref<global,bool>)
@@ -300,39 +350,66 @@ fun take-queued-observer(queue : ref<global,list<observer<e>>>,
   store(queue,remaining)
   found
 
-fun pop-queued(queue : ref<global,list<observer<e>>>)
-              : <div> maybe<observer<e>>
+fun pop-queued(root : root<e>, queue : ref<global,list<observer<e>>>)
+              : <div,exn|e> maybe<observer<e>>
   match load(queue)
     Nil -> Nothing
     Cons(observer,rest) ->
       store(queue,rest)
       store(observer.observer-queued,False)
-      if load(observer.observer-live) && load(observer.observer-dirty)
-      then Just(observer)
-      else pop-queued(queue)
+      if !load(observer.observer-live) || !load(observer.observer-dirty)
+      then pop-queued(root,queue)
+      else
+        val completed = cell(False)
+        val active = finally(
+          fn() {
+            // Owner checkpoint settlement can fail. Preserve the candidate's
+            // direct ticket so a later retry cannot lose dirty work.
+            if load(completed) || !load(observer.observer-live) ||
+               !load(observer.observer-dirty)
+            then ()
+            else enqueue-observer(root,observer)
+          },
+          fn()
+            val current = validate-owner-generation(
+              root,load(observer.observer-owner-generation)
+            )
+            store(completed,True)
+            current
+        )
+        // Leave the failure-preserving finally frame before skipping a stale
+        // ticket. This keeps large retired ownership fan-outs tail recursive.
+        // The pending owner rerun owns disposal of each stale observer.
+        if active then Just(observer) else pop-queued(root,queue)
 
 
 // --------------------------------------------------------------------------
 // Direct ownership scopes and disposal
 // --------------------------------------------------------------------------
 
-fun add-child(root : root<e>, observer : observer<e>) : ()
+fun add-child(root : root<e>, observer : observer<e>) : exn ()
   match load(root.root-current-owner)
     Nothing ->
+      store(observer.observer-owner-generation,Nothing)
       store(root.root-children,
-            Cons(observer,compact-observers(load(root.root-children))))
+            Cons(observer,load(root.root-children)))
       store(observer.observer-unlink,Just(fn()
         store(root.root-children,
               compact-observers(load(root.root-children)))
       ))
     Just(owner) ->
       if !load(owner.observer-live) then () else
-        store(owner.observer-children,
-              Cons(observer,compact-observers(load(owner.observer-children))))
-        store(observer.observer-unlink,Just(fn()
-          store(owner.observer-children,
-                compact-observers(load(owner.observer-children)))
-        ))
+        match load(owner.observer-token)
+          Nothing -> throw("reactive owner has no active generation")
+          Just(token) ->
+            store(observer.observer-owner-generation,
+                  Just(token.token-generation))
+            store(owner.observer-children,
+                  Cons(observer,load(owner.observer-children)))
+            store(observer.observer-unlink,Just(fn()
+              store(owner.observer-children,
+                    compact-observers(load(owner.observer-children)))
+            ))
 
 fun run-cleanups(cleanups : list<() -> <signal-write,pure|e> ()>)
                  : <signal-write,pure|e> ()
@@ -392,6 +469,7 @@ fun unlink-observers(observers : list<observer<e>>) : <div> ()
     Cons(observer,rest) ->
       val unlink = load(observer.observer-unlink)
       store(observer.observer-unlink,Nothing)
+      store(observer.observer-owner-generation,Nothing)
       match unlink
         Just(action) -> action()
         Nothing -> ()
@@ -538,12 +616,44 @@ fun settle-observer(root : root<e>, observer : observer<e>) : <pure|e> ()
     then throw("reactive observer recursively re-entered")
   else run-observer(root,observer)
 
-fun check-producer(producer : producer-state) : exn ()
+fun check-producer(root : root<e>, producer : producer-state) : <div,exn|e> ()
   if !load(producer.producer-live)
   then throw("memo producer was disposed")
   elif load(producer.producer-running)
   then throw("memo producer recursively read its own output")
+  elif !validate-owner-generation(
+          root,load(producer.producer-owner-generation))
+  then throw("memo producer belonged to an invalidated owner generation")
   else ()
+
+// Validate every ancestor scope before owned work runs. A parent's tracked
+// memo may still be dirty without having committed and fired the parent token;
+// exact checkpoint settlement makes that latent invalidation visible first.
+fun validate-owner-generation(root : root<e>,
+                              captured : maybe<owner-generation>)
+                             : <div,exn|e> bool
+  match captured
+    Nothing -> True
+    Just(generation) ->
+      if !generation-active(generation) then False else
+        if load(generation.generation-validating)
+        then throw("owner generation recursively depended on owned work")
+        else finally(
+          fn() store(generation.generation-validating,False),
+          fn()
+            // Cleanup may create work under the replacement token before the
+            // owner's next track runs. If that track then depends on the same
+            // owned producer, validating the producer would re-enter this
+            // scope. Reject that ownership/checkpoint cycle explicitly.
+            store(generation.generation-validating,True)
+            val parent-active = validate-owner-generation(
+              root,generation.generation-parent
+            )
+            if !parent-active then False else
+              validate-dependencies(root,generation.generation-fired,
+                                    load(generation.generation-dependencies))
+              generation-active(generation)
+        )
 
 // Validate the checkpoints captured by one clean producer generation. A memo
 // dependency is settled recursively; if its version changes, its source-local
@@ -569,11 +679,14 @@ fun validate-dependencies(root : root<e>, target : ref<global,bool>,
 // here can create false recursive-read failures in a perfectly acyclic DAG.
 fun settle-producer(root : root<e>, producer : producer-state)
                    : <div,exn|e> bool
-  check-producer(producer)
+  check-producer(root,producer)
   if !load(producer.producer-dirty) then
     validate-dependencies(root,producer.producer-dirty,
                           load(producer.producer-dependencies))
   else ()
+  // Settling the producer's own checkpoints can also invalidate an ancestor
+  // ownership generation. Recheck before extracting the direct queue ticket.
+  check-producer(root,producer)
   if !load(producer.producer-dirty) then False else
     match take-queued-observer(root.root-derive-queue,
                                producer.producer-dirty)
@@ -590,29 +703,58 @@ fun settle-source(root : root<e>, source : source<a>) : <pure|e> ()
   match source.source-producer
     Nothing -> ()
     Just(producer) ->
-      check-producer(producer)
       val outer = !load(root.root-is-flushing)
       if outer then store(root.root-is-flushing,True) else ()
       val pulled = finally(
         fn() if outer then store(root.root-is-flushing,False) else (),
-        fn() settle-producer(root,producer)
+        fn()
+          // Owner validation is effectful: it can exact-settle a captured
+          // memo. Establish the flush guard before the first such check so a
+          // nested commit cannot re-enter the scheduler through this pull.
+          check-producer(root,producer)
+          val current = settle-producer(root,producer)
+          check-producer(root,producer)
+          if load(producer.producer-dirty)
+          then throw("memo producer did not settle")
+          else current
       )
       if outer && pulled then flush(root) else ()
-      check-producer(producer)
-      if load(producer.producer-dirty)
-      then throw("memo producer did not settle")
-      else ()
 
 fun flush-loop(root : root<e>) : <div,exn|e> ()
-  match pop-queued(root.root-derive-queue)
+  match pop-queued(root,root.root-derive-queue)
     Just(observer) ->
       settle-observer(root,observer)
       flush-loop(root)
     Nothing ->
-      match pop-queued(root.root-effect-queue)
+      match pop-queued(root,root.root-effect-queue)
         Just(observer) ->
-          settle-observer(root,observer)
-          flush-loop(root)
+          // Owner validation while selecting an effect can settle a lazy memo
+          // and enqueue derivations. Recheck the phase barrier before the
+          // effect publishes, while preserving its direct ticket on failure.
+          val completed = cell(False)
+          val next-derivation = finally(
+            fn() {
+              if load(completed) || !load(observer.observer-live) ||
+                 !load(observer.observer-dirty)
+              then ()
+              else enqueue-observer(root,observer)
+            },
+            fn()
+              val current = pop-queued(root,root.root-derive-queue)
+              store(completed,True)
+              current
+          )
+          // Exit the ticket-preserving finalizer before continuing the flush,
+          // so repeated effect/derivation phase changes do not retain one
+          // finalizer frame per scheduler round.
+          match next-derivation
+            Just(derivation) ->
+              enqueue-observer(root,observer)
+              settle-observer(root,derivation)
+              flush-loop(root)
+            Nothing ->
+              settle-observer(root,observer)
+              flush-loop(root)
         Nothing -> ()
 
 fun flush(root : root<e>) : <div,exn|e> ()
@@ -643,15 +785,22 @@ fun run-observer(root : root<e>, observer : observer<e>) : <div,exn|e> ()
         store(root.root-current-owner,previous-owner)
         store(observer.observer-running,False)
         if load(succeeded) || !load(observer.observer-live) then ()
-        else queue-observer(root,observer)
+        else
+          // A failed partial generation may already own children. Canceling
+          // its capability makes every such child stale before retry.
+          cancel-observer-token(observer)
+          queue-observer(root,observer)
       },
       fn()
         cancel-observer-token(observer)
+        // Publish this round's lifetime capability before reset cleanup. A
+        // cleanup is allowed to register work into the replacement scope, but
+        // it must never attach to the generation being retired.
+        val token = new-wake-token(root,observer)
+        store(observer.observer-token,Just(token))
         dispatch(root,fn() mask<signal-read>{ reset-owned(root,observer) })
         if !load(observer.observer-live) then ()
         else
-          val token = new-wake-token(root,observer)
-          store(observer.observer-token,Just(token))
           store(root.root-current-token,Just(token))
           dispatch(root,fn() advance-observer(observer))
           store(succeeded,True)
@@ -859,7 +1008,8 @@ pub fun untrack(action : () -> <signal-read,pure|e> a)
 fun blank-observer(root : root<e>, kind : observer-kind) : observer<e>
   Observer(
     kind,cell(True),cell(True),cell(False),cell(False),cell(Nothing),
-    cell([]),cell([]),cell([]),cell(Nothing),cell(Nothing),cell(Nothing)
+    cell([]),cell(Nothing),cell([]),cell([]),
+    cell(Nothing),cell(Nothing),cell(Nothing)
   )
 
 fun register-observer(root : root<e>, kind : observer-kind,
@@ -880,6 +1030,7 @@ fun memo-by-inner(root : root<e>, initial : a,
     observer.observer-live,
     observer.observer-dirty,
     observer.observer-running,
+    observer.observer-owner-generation,
     observer.observer-dependencies
   )
   val source = new-source(root,initial,equals,Just(producer))

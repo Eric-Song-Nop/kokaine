@@ -70,7 +70,12 @@ survives higher-order code.
 - Nested batches delay propagation while making the latest source values
   immediately readable.
 - Effects own nested effects, cleanup callbacks, DOM listeners, and regions.
-  Disposal is exhaustive, idempotent, and isolated from cleanup writes.
+  Each child captures the exact parent continuation generation that created
+  it, so a parent refresh retires stale child work independently of batch write
+  order. Disposal is exhaustive, idempotent, and isolated from cleanup writes.
+- Owner/checkpoint cycles are rejected before publication. In particular, an
+  owner cannot track a memo created by its own replacement cleanup; a direct
+  owner invalidation can still retire that scope and recover the root.
 - Memo failures retry instead of exposing a stale cached value.
 - Text and attributes are escaped in SSR. Inline `on*`, `srcdoc`, and
   markup-writing DOM properties are rejected; raw markup requires the explicit
@@ -174,10 +179,12 @@ src/kokaine/ssr.kk       escaped deterministic string renderer
 src/kokaine/dom.kk       jsweb DOM interpreter and asynchronous event boundary
 examples/counter.kk      responsive interactive example
 test/reactive.kk         scheduler, error, disposal, and containment invariants
+test/reactive-advanced.kk  deep diamonds, owner gates/cycles, 10k stale fan-out
+test/reactive-stress.kk  fixed-seed differential sources, values, and run counts
 test/continuation.kk     raw resume, failure retry, and finalize semantics
 test/no_dependency_graph.py  structural assertion that graph machinery is gone
 test/html.kk             builder, liveness, escaping, and validation checks
-test/browser_counter.py  browser events, host safety, lifecycle, responsive UI
+test/browser_counter.py  event bursts, lifecycle churn, disposal, responsive UI
 test/dom-errors.kk       raw DOM exception translation fixture
 test/dom-lifecycle.kk    detached-listener and idempotent-unmount fixture
 support/wasmweb-proof/   retained-callback Emscripten ABI proof
