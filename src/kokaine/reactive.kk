@@ -24,6 +24,12 @@ fun load(value : ref<global,a>) : a
 fun store(target : ref<global,a>, value : a) : ()
   unsafe-total { target := value }
 
+fun lift-div(action : () -> e a) : <div|e> a
+  mask<div>{ action() }
+
+fun lift-exn(action : () -> e a) : <exn|e> a
+  mask<exn>{ action() }
+
 abstract type root-key
   Root-key(identity : ref<global,bool>)
 
@@ -90,6 +96,7 @@ type trace-kind
   Effect-trace
 
 type capture-state
+  Capture-draft
   Capture-live
   Capture-pending
   Capture-running
@@ -103,9 +110,16 @@ abstract type trace<e::E>
     trace-state      : ref<global,capture-state>,
     trace-parent     : maybe<trace<e>>,
     trace-child      : ref<global,trace<e>>,
-    trace-resume     : () -> <div,exn|e> trace<e>,
+    trace-resume     : () -> <div,exn|e> built-trace<e>,
     trace-finalize   : () -> <div,exn|e> (),
-    trace-unlink     : () -> ()
+    trace-unlink     : () -> (),
+    trace-stale      : () -> bool
+  )
+
+abstract type built-trace<e::E>
+  Built-trace(
+    built-root    : trace<e>,
+    built-publish : () -> <div|e> error<()>
   )
 
 abstract type fiber<e::E>
@@ -118,7 +132,7 @@ abstract type work<e::E>
   Resume-work(resume-trace : trace<e>)
   Bootstrap-work(
     bootstrap-live : ref<global,bool>,
-    bootstrap-run  : () -> <div,exn|e> ()
+    bootstrap-run  : () -> <div|e> error<()>
   )
 
 abstract type root<e::E>
@@ -127,6 +141,7 @@ abstract type root<e::E>
     root-derive-queue : ref<global,list<work<e>>>,
     root-effect-queue : ref<global,list<work<e>>>,
     root-current      : ref<global,maybe<trace<e>>>,
+    root-draft        : ref<global,maybe<ref<global,list<trace<e>>>>>,
     root-fibers       : ref<global,list<fiber<e>>>,
     root-batch-depth  : ref<global,int>,
     root-flushing     : ref<global,bool>,
@@ -142,12 +157,12 @@ abstract type root<e::E>
 fun trace-state-of(current : trace<e>) : capture-state
   match current
     Trace-end -> Capture-dead
-    Trace-read(_,state,_,_,_,_,_) -> load(state)
+    Trace-read(_,state,_,_,_,_,_,_) -> load(state)
 
 fun trace-parent-of(current : trace<e>) : maybe<trace<e>>
   match current
     Trace-end -> Nothing
-    Trace-read(_,_,parent,_,_,_,_) -> parent
+    Trace-read(_,_,parent,_,_,_,_,_) -> parent
 
 fun trace-active(current : trace<e>) : bool
   match current.trace-state-of
@@ -188,6 +203,7 @@ fun pending-ancestor-loop(parent : maybe<trace<e>>) : <div> bool
         Capture-pending -> True
         Capture-running -> True
         Capture-dead -> False
+        Capture-draft -> pending-ancestor-loop(current.trace-parent-of)
         Capture-live -> pending-ancestor-loop(current.trace-parent-of)
         Capture-spent -> pending-ancestor-loop(current.trace-parent-of)
 
@@ -197,7 +213,7 @@ fun pending-ancestor(parent : maybe<trace<e>>) : bool
 fun enqueue-trace(root : root<e>, current : trace<e>) : ()
   match current
     Trace-end -> ()
-    Trace-read(kind,state,_,_,_,_,_) ->
+    Trace-read(kind,state,_,_,_,_,_,_) ->
       match load(state)
         Capture-live ->
           store(state,Capture-pending)
@@ -235,7 +251,7 @@ fun collect-retirement(current : trace<e>)
                       : <div> list<() -> <div,exn|e> ()>
   match current
     Trace-end -> []
-    Trace-read(_,state,_,child,_,finalize,unlink) ->
+    Trace-read(_,state,_,child,_,finalize,unlink,_) ->
       match load(state)
         Capture-dead -> []
         _ ->
@@ -255,6 +271,56 @@ fun run-finalizers(finalizers : list<() -> <div,exn|e> ()>)
 fun retire-trace(current : trace<e>) : <div,exn|e> ()
   val finalizers = pretend-no-div{ collect-retirement(current) }
   run-finalizers(finalizers)
+
+fun retire-drafts(values : list<trace<e>>) : <div,exn|e> ()
+  match values
+    Nil -> ()
+    Cons(current,rest) ->
+      finally(fn() retire-drafts(rest),fn() retire-trace(current))
+
+fun retire-trace-now(current : trace<e>) : <exn|e> ()
+  pretend-no-div{ retire-trace(current) }
+
+fun retire-drafts-now(values : list<trace<e>>) : <exn|e> ()
+  pretend-no-div{ retire-drafts(values) }
+
+fun try-retire-trace(current : trace<e>) : e error<()>
+  error/try(fn() retire-trace-now(current))
+
+fun try-retire-drafts(values : list<trace<e>>) : e error<()>
+  error/try(fn() retire-drafts-now(values))
+
+fun record-draft(root : root<e>, current : trace<e>) : exn ()
+  match load(root.root-draft)
+    Nothing -> throw("continuation node created outside a draft transaction")
+    Just(values) -> store(values,Cons(current,load(values)))
+
+fun attempt-build(root : root<e>,
+                  action : () -> <div,exn|e> built-trace<e>)
+                 : <div|e> (error<built-trace<e>>,list<trace<e>>)
+  val drafts = cell([])
+  val previous = load(root.root-draft)
+  val result = finally(
+    fn() store(root.root-draft,previous),
+    fn()
+      store(root.root-draft,Just(drafts))
+      error/try(action)
+  )
+  (result,load(drafts))
+
+fun activate-trace-loop(root : root<e>, current : trace<e>) : <div> ()
+  match current
+    Trace-end -> ()
+    Trace-read(_,state,_,child,_,_,_,stale) ->
+      match load(state)
+        Capture-draft ->
+          store(state,Capture-live)
+          activate-trace-loop(root,load(child))
+          if stale() then enqueue-trace(root,current) else ()
+        _ -> ()
+
+fun activate-trace(root : root<e>, current : trace<e>) : ()
+  pretend-no-div{ activate-trace-loop(root,current) }
 
 fun with-current(root : root<e>, current : trace<e>,
                  action : () -> <div,exn|e> a) : <div,exn|e> a
@@ -285,6 +351,7 @@ fun work-stale(current : work<e>) : bool
     Resume-work(capture) ->
       match capture.trace-state-of
         Capture-dead -> True
+        Capture-draft -> True
         Capture-live -> True
         Capture-spent -> True
         _ -> False
@@ -314,55 +381,67 @@ fun queue-work(root : root<e>, kind : trace-kind, current : work<e>) : ()
             Cons(current,load(root.root-effect-queue)))
 
 fun resume-capture(root : root<e>, current : trace<e>)
-                   : <div,exn|e> ()
-  match current
-    Trace-end -> ()
-    Trace-read(_,state,_,child,resume,_,_) ->
-      match load(state)
-        Capture-pending ->
-          store(state,Capture-running)
-          val completed = cell(False)
-          finally(
-            fn()
-              if load(completed) then
-                match load(state)
-                  Capture-running -> store(state,Capture-live)
-                  _ -> ()
-              else
+                   : <div|e> error<()>
+  lift-div(fn()
+    match current
+      Trace-end -> Ok(())
+      Trace-read(_,state,_,child,resume,_,_,_) ->
+        match load(state)
+          Capture-pending ->
+            store(state,Capture-running)
+            val (attempt,drafts) = pretend-no-div{
+              attempt-build(root,fn() with-current(root,current,resume))
+            }
+            match attempt
+              Error(failure) ->
                 match load(state)
                   Capture-running -> enqueue-trace(root,current)
                   _ -> ()
-            ,
-            fn()
-              val old = load(child)
-              store(child,Trace-end)
-              retire-trace(old)
-              val next = with-current(root,current,resume)
-              store(child,next)
-              store(completed,True)
-          )
-        _ -> ()
+                val _ = try-retire-drafts(drafts)
+                Error(failure)
+              Ok(built) ->
+                val publish = built.built-publish
+                val publication = pretend-no-div{ publish() }
+                match publication
+                  Error(failure) ->
+                    match load(state)
+                      Capture-running -> enqueue-trace(root,current)
+                      _ -> ()
+                    val _ = try-retire-drafts(drafts)
+                    Error(failure)
+                  Ok(_) ->
+                    val old = load(child)
+                    store(child,built.built-root)
+                    activate-trace(root,built.built-root)
+                    match load(state)
+                      Capture-running -> store(state,Capture-live)
+                      _ -> ()
+                    try-retire-trace(old)
+          _ -> Ok(())
+  )
 
-fun run-work(root : root<e>, current : work<e>) : <div,exn|e> ()
+fun run-work(root : root<e>, current : work<e>) : <div|e> error<()>
   match current
     Resume-work(capture) -> resume-capture(root,capture)
-    Bootstrap-work(live,run) -> if load(live) then run() else ()
+    Bootstrap-work(live,run) -> if load(live) then run() else Ok(())
 
-fun drain-loop(root : root<e>) : <div,exn|e> ()
+fun drain-loop(root : root<e>) : <div|e> error<()>
   val (derivation,derive-rest) = take-work(load(root.root-derive-queue))
   store(root.root-derive-queue,derive-rest)
   match derivation
     Just(current) ->
-      run-work(root,current)
-      drain-loop(root)
+      match run-work(root,current)
+        Error(failure) -> Error(failure)
+        Ok(_) -> drain-loop(root)
     Nothing ->
       val (effect-work,effect-rest) = take-work(load(root.root-effect-queue))
       store(root.root-effect-queue,effect-rest)
       match effect-work
         Just(current) ->
-          run-work(root,current)
-          drain-loop(root)
-        Nothing -> ()
+          match run-work(root,current)
+            Error(failure) -> Error(failure)
+            Ok(_) -> drain-loop(root)
+        Nothing -> Ok(())
 
 fun flush(root : root<e>) : <div,exn|e> ()
   if load(root.root-disposed) || load(root.root-disposing) ||
@@ -370,7 +449,13 @@ fun flush(root : root<e>) : <div,exn|e> ()
   then ()
   else
     store(root.root-flushing,True)
-    finally(fn() store(root.root-flushing,False),fn() drain-loop(root))
+    val result = lift-exn(fn()
+      finally(
+        fn() store(root.root-flushing,False),
+        fn() drain-loop(root)
+      )
+    )
+    result.untry
 
 
 // --------------------------------------------------------------------------
@@ -396,7 +481,7 @@ fun new-source(root : root<e>, value : a, equals : (a,a) -> bool) : source<a>
 
 fun interpret-write(root : root<e>,
                     action : () -> <signal-write,pure|e> a)
-                   : <pure|e> a
+                   : <div,exn|e> a
   with handler
     fun write-source(source,value)
       check-root(root,source.source-root)
@@ -461,38 +546,48 @@ pub fun dispatch(root : root<e>,
 fun reify-trace(root : root<e>, kind : trace-kind,
                 track : () -> <signal-read,pure> a,
                 publish : (value : a) -> <signal-write,pure|e> ())
-               : <div,exn|e> trace<e>
+               : <div,exn|e> built-trace<e>
   with handler
-    return(value) -> {
-      interpret-write(root,fn() publish(value))
-      Trace-end
-    }
-    raw ctl read-source(source,tracked) -> {
-      check-root(root,source.source-root)
-      if !tracked then rcontext.resume(load(source.source-cell)) else
-        val state = cell(Capture-live)
-        val child = cell(Trace-end)
-        val unlink = fn()
-          store(source.source-captures,
-                compact-captures(load(source.source-captures)))
-        val current = Trace-read(
-          kind,
-          state,
-          load(root.root-current),
-          child,
-          fn() rcontext.resume(load(source.source-cell)),
-          fn() {
-            val _ = rcontext.finalize(Trace-end)
-            ()
-          },
-          unlink
-        )
-        store(source.source-captures,
-              Cons(pack-capture(root,current),load(source.source-captures)))
-        store(child,with-current(root,current,
-          fn() rcontext.resume(load(source.source-cell))))
-        current
-    }
+        return(value) -> {
+          Built-trace(
+            Trace-end,
+            fn() error/try(fn()
+              interpret-write(root,fn() publish(value))
+            )
+          )
+        }
+        raw ctl read-source(source,tracked) -> {
+          check-root(root,source.source-root)
+          if !tracked then rcontext.resume(load(source.source-cell)) else
+            val version = load(source.source-version)
+            val state = cell(Capture-draft)
+            val child = cell(Trace-end)
+            val unlink = fn()
+              store(source.source-captures,
+                    compact-captures(load(source.source-captures)))
+            val current = Trace-read(
+              kind,
+              state,
+              load(root.root-current),
+              child,
+              fn() rcontext.resume(load(source.source-cell)),
+              fn() {
+                val _ = rcontext.finalize(
+                  Built-trace(Trace-end,fn() lift-div(fn() Ok(())))
+                )
+                ()
+              },
+              unlink,
+              fn() load(source.source-version) != version
+            )
+            record-draft(root,current)
+            store(source.source-captures,
+                  Cons(pack-capture(root,current),load(source.source-captures)))
+            val nested = with-current(root,current,
+              fn() rcontext.resume(load(source.source-cell)))
+            store(child,nested.built-root)
+            Built-trace(current,nested.built-publish)
+        }
   track()
 
 
@@ -502,7 +597,7 @@ fun reify-trace(root : root<e>, kind : trace-kind,
 
 fun fresh-root() : root<e>
   Root(
-    Root-key(cell(True)),cell([]),cell([]),cell(Nothing),cell([]),
+    Root-key(cell(True)),cell([]),cell([]),cell(Nothing),cell(Nothing),cell([]),
     cell(0),cell(False),cell(False),cell(False)
   )
 
@@ -542,6 +637,7 @@ pub fun root/dispose(root : root<e>) : <exn|e> ()
         store(root.root-derive-queue,[])
         store(root.root-effect-queue,[])
         store(root.root-current,Nothing)
+        store(root.root-draft,Nothing)
         store(root.root-fibers,[])
       },
       fn()
@@ -621,13 +717,33 @@ fun create-effect-inner(root : root<e>,
   val captured = cell(Trace-end)
   val current = Fiber(live,captured)
   register-fiber(root,current)
-  val bootstrap = Bootstrap-work(live,fn()
-    if !load(live) then () else
-      val next = reify-trace(root,Effect-trace,fn()
-        track()
-      ,apply)
-      store(captured,next)
-  )
+  val bootstrap = Bootstrap-work(live,fn() lift-div(fn()
+    if !load(live) then Ok(()) else
+      val (attempt,drafts) = pretend-no-div{
+        attempt-build(root,fn()
+          reify-trace(root,Effect-trace,track,apply)
+        )
+      }
+      match attempt
+        Error(failure) ->
+          store(live,False)
+          unregister-fiber(root,current)
+          val _ = try-retire-drafts(drafts)
+          Error(failure)
+        Ok(built) ->
+          val publish = built.built-publish
+          val publication = pretend-no-div{ publish() }
+          match publication
+            Error(failure) ->
+              store(live,False)
+              unregister-fiber(root,current)
+              val _ = try-retire-drafts(drafts)
+              Error(failure)
+            Ok(_) ->
+              store(captured,built.built-root)
+              activate-trace(root,built.built-root)
+              Ok(())
+  ))
   queue-work(root,Effect-trace,bootstrap)
   request-flush(root.root-key)
   fn() pretend-no-div{

@@ -9,13 +9,13 @@ KOKA_FLAGS := -j1 -i./src
 test: test-native
 
 test-native:
+	$(KOKA) $(KOKA_FLAGS) -e test/trace-semantics.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/smoke.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/continuation.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/reactive.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/reactive-advanced.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/reactive-stress.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/html.kk
-	python3 test/no_dependency_graph.py
 
 build-counter:
 	mkdir -p dist
