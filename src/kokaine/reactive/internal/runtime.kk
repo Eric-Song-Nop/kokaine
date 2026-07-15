@@ -47,10 +47,11 @@ pub fun create-root(action : (root<e>) -> <signal-write,pure|e> a)
 
 pub fun root/dispose(root : root<e>) : <exn|e> ()
   if load(root.root-disposed) || load(root.root-disposing) then ()
-  elif load(root.root-flushing) ||
+  elif load(root.root-batch-depth) > 0 ||
+       load(root.root-flushing) ||
        load(root.root-effect-plane.plane-current).is-just ||
        load(root.root-derive-plane.plane-current).is-just
-    then throw("cannot dispose a reactive root during a computation")
+    then throw("cannot dispose a reactive root during a computation or batch")
   else pretend-no-div{
     store(root.root-disposing,True)
     store(root.root-token,Scope-dead)

@@ -20,6 +20,7 @@ test-native:
 	$(KOKA) $(KOKA_FLAGS) -e test/smoke.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/continuation.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/final-control-rollback.kk
+	$(KOKA) $(KOKA_FLAGS) -e test/continuation-reentry.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/reactive.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/reactive-advanced.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/reactive-stress.kk

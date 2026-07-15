@@ -2,8 +2,8 @@
   Fine-grained browser DOM adapter for Koka's `jsweb` backend.
 
   Browser values are one-field wrappers around `any`; these erase to the raw
-  JavaScript object. Every persistent listener and DOM range is attached to the
-  reactive owner tree and is therefore removed by ordinary observer cleanup.
+  JavaScript object. Every persistent listener and DOM range is attached to
+  the continuation generation which created it and retires with that extent.
 --------------------------------------------------------------------------*/
 module kokaine/dom
 
@@ -110,7 +110,7 @@ extern dom-insert-html-before(parent : node, before : node,
   js inline "(function(){ var t=document.createElement('template'); t.innerHTML=#3; (#1).insertBefore(t.content,#2); })()"
 
 extern dom-listen(value : element, name : string,
-                  action : raw-event -> <ui,div|e> ()) : ui dom-listener
+                  action : raw-event -> <ui|e> ()) : ui dom-listener
   js inline "(function(){ var f=function(ev){ return (#3)(ev); }; (#1).addEventListener(#2,f); return f; })()"
 
 extern dom-unlisten(value : element, name : string,
@@ -216,15 +216,18 @@ fun snapshot(value : raw-event) : <ui,exn> event
     Event(raw-event-value(value),raw-event-checked(value),raw-event-key(value),
           raw-event-any(value))
 
-fun invoke-event(root : root<<ui|e>>, action : callback<e>, value : raw-event)
-                : <ui,div|e> ()
+fun invoke-event(root : root<<ui|e>>, portal : reentry<<ui|e>>,
+                 action : callback<e>, value : raw-event)
+                : <ui|e> ()
   // A browser event runs after `main` has returned, so its dynamic exception
   // stack is fresh. Install the boundary before `dispatch` performs even its
   // root validity check; otherwise an asynchronous throw has no Koka handler.
   with catch fn(problem)
     dom-report-error("uncaught Kokaine event exception: " ++ problem.show)
   val captured = snapshot(value)
-  dispatch(root,fn() action(captured))
+  // Re-entry itself is an atomic turn: callback-created children join the
+  // registering continuation extent before writes are allowed to settle.
+  reenter(portal,fn() action(captured))
 
 
 // --------------------------------------------------------------------------
@@ -252,9 +255,10 @@ fun mount-attribute(root : root<<ui|e>>, target : element,
     Listener(name,action) ->
       if !name.is-valid-event-name then throw("invalid DOM event name: " ++ name)
       else
+        val portal = capture-reentry(root)
         val listener = dom-attempt fn()
           dom-listen(target,name,fn(value)
-            invoke-event(root,action,value)
+            invoke-event(root,portal,action,value)
           )
         on-cleanup(root,fn()
           reactive-ui-exn{
@@ -306,7 +310,7 @@ fun mount-view(root : root<<ui|e>>, parent : node,
     Raw-html(content) -> insert-html(parent,before,trusted-content(content))
 
 pub fun mount(root : root<<ui|e>>, parent : node, tree : view<e>)
-             : <ui,pure|e> disposer<<ui|e>>
+             : <ui,exn|e> disposer<<ui|e>>
   update(root)
     batch(root)
       create-effect(root,constant-track,fn(_)
@@ -322,5 +326,5 @@ pub fun mount(root : root<<ui|e>>, parent : node, tree : view<e>)
         mount-view(root,parent,Just(last),tree)
       )
 
-pub fun unmount(dispose : disposer<<ui|e>>) : <ui,pure|e> ()
+pub fun unmount(dispose : disposer<<ui|e>>) : <ui,exn|e> ()
   dispose()

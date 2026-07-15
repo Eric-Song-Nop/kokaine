@@ -115,9 +115,16 @@ with serve_project() as origin:
         desktop.locator("#old-branch").click()
         expect(lifecycle_count).to_have_text("1")
         assert desktop.evaluate("__kokaineLifecycle.read()") == 1
+        assert desktop.evaluate("__kokaineLifecycle.childRuns()") == 1, (
+            "event-created child did not bootstrap"
+        )
+        assert desktop.evaluate("__kokaineLifecycle.childCleanups()") == 0
 
         desktop.locator("#branch-toggle").click()
         expect(desktop.locator("#new-branch")).to_be_visible()
+        assert desktop.evaluate("__kokaineLifecycle.childCleanups()") == 1, (
+            "event-created child escaped its registering continuation branch"
+        )
         old_branch.evaluate(
             "node => node.dispatchEvent(new MouseEvent('click'))"
         )
@@ -130,6 +137,9 @@ with serve_project() as origin:
         desktop.locator("#new-branch").click()
         expect(lifecycle_count).to_have_text("2")
         assert desktop.evaluate("__kokaineLifecycle.read()") == 2
+        assert desktop.evaluate("__kokaineLifecycle.childRuns()") == 1, (
+            "a retired event-created child reacted to a later source write"
+        )
 
         stale_branches = [old_branch]
         for _ in range(32):
@@ -188,6 +198,8 @@ with serve_project() as origin:
         assert desktop.evaluate("__kokaineLifecycle.read()") == 67, (
             "an owned listener survived unmount"
         )
+        assert desktop.evaluate("__kokaineLifecycle.childRuns()") == 1
+        assert desktop.evaluate("__kokaineLifecycle.childCleanups()") == 1
 
         reading = desktop.locator(".reading__number")
         assert_counter_state(desktop, 0)
