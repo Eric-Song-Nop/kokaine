@@ -6,11 +6,10 @@ effects, batching, and ownership are expressed with Koka's algebraic effects;
 the browser layer uses an effect-handled Koka DSL instead of JSX or a virtual
 DOM.
 
-The implementation targets Koka 3.2.3. The source-local continuation trace,
-one-shot observer scheduler, and HTML vocabulary are backend-neutral; the
-complete browser renderer targets `jsweb`, and a small `wasmweb` bridge proves
-that retained Koka callbacks can safely re-enter the runtime after `main`
-returns.
+The implementation targets Koka 3.2.3. Its source-local continuation index,
+two-plane scheduler, and HTML vocabulary are backend-neutral. The complete
+browser renderer targets `jsweb`; a smaller `wasmweb` proof separately verifies
+the retained-callback ABI used to cross an asynchronous host boundary.
 
 ## Interactive report
 
@@ -32,11 +31,11 @@ static integrity checks with `make test-report`.
 Ordinary signal libraries hide a mutable dependency collector behind every
 getter. Kokaine makes the capabilities visible in inferred effect rows:
 
-| Capability     | Operation               | Handler responsibility                                               |
-| -------------- | ----------------------- | -------------------------------------------------------------------- |
-| `signal-read`  | `count.get`             | Validate its producer, then attach a wake token and version checkpoint. |
-| `signal-write` | `count.set(1)`          | Commit atomically, fire source-local wake capabilities, and flush.    |
-| `html<e>`      | `text`, `div`, `region` | Collect emitted nodes into a backend-neutral `view<e>`.               |
+| Capability     | Operation               | Handler responsibility                                                  |
+| -------------- | ----------------------- | ----------------------------------------------------------------------- |
+| `signal-read`  | `count.get`             | Validate its producer and capture the exact synchronous read suffix.    |
+| `signal-write` | `count.set(1)`          | Commit, invalidate source-indexed continuation capabilities, and flush. |
+| `html<e>`      | `text`, `div`, `region` | Collect emitted nodes into a backend-neutral `view<e>`.                  |
 
 This split has practical consequences. A memo calculator accepts
 `signal-read` but not `signal-write`; an effect separates its tracked function
@@ -47,41 +46,41 @@ survives higher-order code.
 
 ## Current guarantees
 
-- Dynamic source subscriptions are rebuilt for every observer generation;
-  the previous token eagerly cancels its old-branch links.
-- Observer rounds are driven by one-shot raw resumptions; action failures
-  publish the next retry continuation, and disposal explicitly finalizes
-  parked contexts.
-- Abortive host control leaves an observer retryable through a retained
-  recovery action. A resumptive or multi-shot host continuation must not
-  escape an observer round; that remains outside the supported runtime model.
-- There is no centralized dependency graph, node registry, topological rank,
-  observer reverse-edge list, or `Pending`/`Stale` propagation state.
-- Derivations settle before user effects. A memo read recursively validates
-  its generation checkpoints and extracts only the exact dirty producer, so
-  rank-free diamonds and dynamic depth changes do not mix old and new values
-  or execute an unrelated queued sibling.
-- Only an unequal signal or memo commit increments its source version and
-  fires wake tokens. An equal intermediate leaves a clean downstream
-  `memo(previous)` generation untouched.
-- Direct-handle queues deduplicate observer work, and each generation's
-  one-shot token deduplicates duplicate source wakeups; lazy validation follows
-  only the producer checkpoints required by the requested value.
-- Nested batches delay propagation while making the latest source values
-  immediately readable.
-- Effects own nested effects, cleanup callbacks, DOM listeners, and regions.
-  Each child captures the exact parent continuation generation that created
-  it, so a parent refresh retires stale child work independently of batch write
-  order. Disposal is exhaustive, idempotent, and isolated from cleanup writes.
-- Owner/checkpoint cycles are rejected before publication. In particular, an
-  owner cannot track a memo created by its own replacement cleanup; a direct
-  owner invalidation can still retire that scope and recover the root.
-- Memo failures retry instead of exposing a stale cached value.
+- A tracked synchronous `get` uses `raw ctl` to capture the continuation after
+  that exact read. Invalidation resumes that suffix; code before the read is not
+  replayed.
+- Each source indexes rank-2 packages containing the actual execution plane,
+  target trace, and owning read trace. There are no subscriber wake closures,
+  retained calculation actions, or old-style Observer dependency graph.
+- Scheduler tickets contain either an actual trace resumption or a one-shot
+  bootstrap scope. The bootstrap slot is cleared before its initial calculation
+  runs; a producer never retains `calculate` as a recovery fallback.
+- `Capture-pending` and `Capture-running` are lifecycle states of resumptions,
+  not dirty flags paired with a separately retained action. A write while a K
+  is running marks that same capability for a later turn.
+- Pure derivations run on `plane<total>`; user effects run on `plane<e>`. A
+  synchronous memo read can therefore settle only the required producer chain
+  without erasing an ambient user effect row or draining unrelated work.
+- Stateful `memo(previous)` values retain an entry continuation that receives
+  the latest successfully committed value. It does not subscribe the memo to
+  its own output source.
+- Unequal commits advance the source version and invalidate its indexed
+  continuations. Equality cuts propagation before downstream work is scheduled.
+- Replacement generations are built as drafts. Failure or abortive final
+  control retires unpublished continuations and structural children while the
+  committed source value and pending retry K remain explicit.
+- Continuation frames own nested effects, derivations, cleanup callbacks, DOM
+  listeners, and regions. Replacing a generation retires that complete extent;
+  root disposal is exhaustive and idempotent.
+- Nested batches delay settling while making newly committed source values
+  immediately readable. Host re-entry is also one atomic batched turn.
+- Browser listeners capture a typed `reentry<e>` containing their registering
+  generation's root, gate, and frame. Re-entry restores that structural context
+  and rejects a retired generation, so callback-created reactive work cannot
+  escape to the root.
 - Text and attributes are escaped in SSR. Inline `on*`, `srcdoc`, and
   markup-writing DOM properties are rejected; raw markup requires the explicit
-  `unsafe-trusted-html` boundary.
-- Native JavaScript DOM exceptions are translated to Koka `exn` before they
-  cross a reactive handler or cleanup frame.
+  `unsafe-trusted-html` boundary. Native DOM exceptions become Koka `exn`.
 
 ## Quick start
 
@@ -157,6 +156,9 @@ For deterministic snapshots or server output, replace the DOM import with
   `apply` do not silently become dependencies.
 - `on-cleanup` attaches work to the current owner. A returned disposer removes
   the complete owned subtree.
+- `capture-reentry` and `reenter` let a host callback re-enter the exact
+  continuation generation that registered it. They restore Kokaine's reactive
+  structure, not arbitrary lexical effect handlers.
 - `view`, common tag helpers, live text/attributes/properties, `region`, and
   typed listeners form the HTML DSL.
 - `mount`/`unmount` interpret a view into DOM ranges; `render` safely interprets
@@ -166,28 +168,38 @@ See [the architecture notes](docs/architecture.md) for the scheduler, handler,
 browser re-entry, and WebAssembly design.
 
 The [continuation runtime decision record](docs/continuation-runtime-plan.md)
-records the research, capability assessment, and invariants behind the removal
-of the centralized graph in favor of source-local, continuation-indexed wake
-traces.
+records the capability assessment and invariants behind replacing the Observer
+runtime with source-local indexes of actual continuation capabilities.
 
 ## Project layout
 
 ```text
-src/kokaine/reactive.kk  source-local trace, continuation scheduler, ownership
-src/kokaine/html.kk      backend-neutral view values and handled HTML DSL
-src/kokaine/ssr.kk       escaped deterministic string renderer
-src/kokaine/dom.kk       jsweb DOM interpreter and asynchronous event boundary
-examples/counter.kk      responsive interactive example
-test/reactive.kk         scheduler, error, disposal, and containment invariants
-test/reactive-advanced.kk  deep diamonds, owner gates/cycles, 10k stale fan-out
-test/reactive-stress.kk  fixed-seed differential sources, values, and run counts
-test/continuation.kk     raw resume, failure retry, and finalize semantics
-test/no_dependency_graph.py  structural assertion that graph machinery is gone
-test/html.kk             builder, liveness, escaping, and validation checks
-test/browser_counter.py  event bursts, lifecycle churn, disposal, responsive UI
-test/dom-errors.kk       raw DOM exception translation fixture
-test/dom-lifecycle.kk    detached-listener and idempotent-unmount fixture
-support/wasmweb-proof/   retained-callback Emscripten ABI proof
+src/kokaine/reactive.kk                    opaque public facade
+src/kokaine/reactive/effects.kk            signal read/write effect operations
+src/kokaine/reactive/internal/model.kk     traces, planes, scopes, and capabilities
+src/kokaine/reactive/internal/capture.kk   exact read-suffix reification
+src/kokaine/reactive/internal/lifetime.kk  draft transactions and finalization
+src/kokaine/reactive/internal/scheduler.kk invalidation, queues, targeted settle
+src/kokaine/reactive/internal/handlers.kk  signal interpreters and dispatch
+src/kokaine/reactive/internal/reentry.kk   batched structural host re-entry
+src/kokaine/reactive/internal/runtime.kk   roots and high-level reactive values
+src/kokaine/reactive/internal/bridge.kk    names used by the public facade
+src/kokaine/html.kk                        handled backend-neutral view DSL
+src/kokaine/dom.kk                         jsweb renderer and event boundary
+src/kokaine/ssr.kk                         escaped deterministic string renderer
+test/trace-semantics.kk                    exact suffix and branching semantics
+test/structural-scopes.kk                  ownership and cleanup generations
+test/targeted-settle*.kk                   isolated and transitive memo settling
+test/execution-planes.kk                   pure/effect plane behavior
+test/stateful-entry-gates.kk               memo(previous) entry semantics
+test/entry-targeted-settle.kk              entry routing and recovery canaries
+test/final-control-rollback.kk              abandoned generation rollback
+test/continuation-reentry.kk               callback-created ownership and staleness
+test/reactive*.kk                          compatibility, advanced, and stress suites
+test/html.kk                               builder, escaping, and validation checks
+test/dom-lifecycle.kk                      listener, region, and re-entry fixture
+test/browser_counter.py                    browser events, churn, and disposal
+support/wasmweb-proof/                     retained-callback Emscripten ABI proof
 ```
 
 ## Scope
@@ -197,11 +209,13 @@ or a complete WASM DOM renderer. The current `region` primitive intentionally
 replaces its owned range; it is the correct building block for conditional
 structure, not an optimized list diff.
 
-Browser callbacks run after the lexical handlers around `main` have gone out
-of scope. Kokaine therefore reinstalls its signal and exception handlers on
-every event. If a callback uses another user-defined algebraic effect, handle
-that effect inside the callback (or install a fresh application runner at the
-event boundary); do not rely on a handler that surrounded the original mount.
+Browser event delivery still begins with an ordinary host callback; it does not
+resume a parked event continuation. `reentry<e>` is
+**continuation-derived structural re-entry**: it restores Kokaine's signal
+handlers, continuation gate, and owning frame, then executes the callback as a
+batched turn. It does not reconstruct arbitrary user-defined handlers that
+lexically surrounded `mount` and have since returned. Handle such effects
+inside the callback, or install a fresh application runner at the host boundary.
 
 ## Design references
 
