@@ -38,7 +38,7 @@ fun same-root(left : root-key, right : root-key) : bool
 
 
 // --------------------------------------------------------------------------
-// Source-local existential capabilities for exact read continuations
+// Source-local existential capabilities for continuation targets
 // --------------------------------------------------------------------------
 
 // Rank-2 packaging erases only the ambient effect row. Unlike a callback,
@@ -46,7 +46,7 @@ fun same-root(left : root-key, right : root-key) : bool
 // operation: hand that typed pair to a polymorphic consumer.
 abstract type packed-capture
   Packed-capture(
-    run-packed : forall<r> (forall<e::E> (root<e>,trace<e>) -> r) -> r
+    run-packed : forall<r> (forall<e::E> (root<e>,trace<e>,trace<e>) -> r) -> r
   )
 
 abstract type source<a>
@@ -63,8 +63,17 @@ abstract type source<a>
 // Public effects and values
 // --------------------------------------------------------------------------
 
+// `Track-read` captures the exact suffix. `State-entry-read` is the explicit
+// state injection gate used by scans: dependencies below it target the gate's
+// actual resumption while retaining their own read node as the ownership
+// guard. `Sample-read` is the untracked override.
+type read-mode
+  Track-read
+  Sample-read
+  State-entry-read
+
 pub effect signal-read
-  ctl read-source(source : source<a>, tracked : bool) : a
+  ctl read-source(source : source<a>, mode : read-mode) : a
 
 pub effect signal-write
   fun write-source(source : source<a>, value : a) : ()
@@ -110,12 +119,21 @@ abstract div type trace<e::E>
     trace-kind       : trace-kind,
     trace-state      : ref<global,capture-state>,
     trace-parent     : maybe<trace<e>>,
+    trace-entry      : maybe<trace<e>>,
     trace-child      : ref<global,trace<e>>,
     trace-frame      : ref<global,frame<e>>,
     trace-resume     : (frame<e>) -> <div,exn|e> built-trace<e>,
     trace-finalize   : () -> <div,exn|e> (),
     trace-unlink     : () -> (),
     trace-stale      : () -> bool
+  )
+  Trace-entry(
+    entry-state      : ref<global,capture-state>,
+    entry-parent     : maybe<trace<e>>,
+    entry-child      : ref<global,trace<e>>,
+    entry-frame      : ref<global,frame<e>>,
+    entry-resume     : (frame<e>) -> <div,exn|e> built-trace<e>,
+    entry-finalize   : () -> <div,exn|e> ()
   )
 
 abstract type built-trace<e::E>
@@ -166,6 +184,7 @@ abstract type root<e::E>
     root-derive-queue : ref<global,list<work<e>>>,
     root-effect-queue : ref<global,list<work<e>>>,
     root-current      : ref<global,maybe<trace<e>>>,
+    root-current-entry: ref<global,maybe<trace<e>>>,
     root-current-frame: ref<global,frame<e>>,
     root-draft        : ref<global,maybe<ref<global,list<trace<e>>>>>,
     root-token        : ref<global,scope-state>,
@@ -184,28 +203,35 @@ abstract type root<e::E>
 fun trace-state-of(current : trace<e>) : capture-state
   match current
     Trace-end -> Capture-dead
-    Trace-read(_,state,_,_,_,_,_,_,_) -> load(state)
+    Trace-read(_,state,_,_,_,_,_,_,_,_) -> load(state)
+    Trace-entry(state,_,_,_,_,_) -> load(state)
 
 fun trace-parent-of(current : trace<e>) : maybe<trace<e>>
   match current
     Trace-end -> Nothing
-    Trace-read(_,_,parent,_,_,_,_,_,_) -> parent
+    Trace-read(_,_,parent,_,_,_,_,_,_,_) -> parent
+    Trace-entry(_,parent,_,_,_,_) -> parent
 
 fun trace-active(current : trace<e>) : bool
   match current.trace-state-of
     Capture-dead -> False
     _ -> True
 
-fun pack-capture(root : root<e>, current : trace<e>) : packed-capture
-  Packed-capture(fn(consume) consume(root,current))
+fun pack-capture(root : root<e>, target : trace<e>, owner : trace<e>)
+                : packed-capture
+  Packed-capture(fn(consume) consume(root,target,owner))
 
 fun packed-active(packed : packed-capture) : bool
   match packed
-    Packed-capture(run) -> run(fn(_,current)
-      match current.trace-state-of
+    Packed-capture(run) -> run(fn(_,target,owner)
+      match owner.trace-state-of
         Capture-dead -> False
         Capture-spent -> False
-        _ -> True
+        _ ->
+          match target.trace-state-of
+            Capture-dead -> False
+            Capture-spent -> False
+            _ -> True
     )
 
 fun compact-captures(values : list<packed-capture>) : list<packed-capture>
@@ -214,7 +240,12 @@ fun compact-captures(values : list<packed-capture>) : list<packed-capture>
 fun cut-capture(packed : packed-capture) : ()
   match packed
     Packed-capture(run) ->
-      run(fn(root,current) enqueue-trace(root,current))
+      run(fn(root,target,owner)
+        match owner.trace-state-of
+          Capture-dead -> ()
+          Capture-spent -> ()
+          _ -> enqueue-trace(root,target)
+      )
 
 fun pending-ancestor-loop(parent : maybe<trace<e>>) : <div> bool
   match parent
@@ -234,7 +265,7 @@ fun pending-ancestor(parent : maybe<trace<e>>) : bool
 fun enqueue-trace(root : root<e>, current : trace<e>) : ()
   match current
     Trace-end -> ()
-    Trace-read(kind,state,_,_,_,_,_,_,_) ->
+    Trace-read(kind,state,_,_,_,_,_,_,_,_) ->
       match load(state)
         Capture-live ->
           store(state,Capture-pending)
@@ -257,6 +288,17 @@ fun enqueue-trace(root : root<e>, current : trace<e>) : ()
               store(root.root-effect-queue,
                     Cons(Resume-work(current),load(root.root-effect-queue)))
         _ -> ()
+    Trace-entry(state,_,_,_,_,_) ->
+      match load(state)
+        Capture-live ->
+          store(state,Capture-pending)
+          store(root.root-derive-queue,
+                Cons(Resume-work(current),load(root.root-derive-queue)))
+        Capture-running ->
+          store(state,Capture-pending)
+          store(root.root-derive-queue,
+                Cons(Resume-work(current),load(root.root-derive-queue)))
+        _ -> ()
 
 fun notify-source(source : source<a>) : ()
   val active = compact-captures(load(source.source-captures))
@@ -272,7 +314,7 @@ fun collect-retirement(current : trace<e>)
                       : <div> list<() -> <div,exn|e> ()>
   match current
     Trace-end -> []
-    Trace-read(_,state,_,child,current-frame-slot,_,finalize,unlink,_) ->
+    Trace-read(_,state,_,_,child,current-frame-slot,_,finalize,unlink,_) ->
       match load(state)
         Capture-dead -> []
         _ ->
@@ -280,6 +322,19 @@ fun collect-retirement(current : trace<e>)
           store(state,Capture-dead)
           store(current-frame.frame-token,Scope-branch-dead)
           unlink()
+          val nested = load(child)
+          store(child,Trace-end)
+          val structural = load(current-frame.frame-owned)
+          store(current-frame.frame-owned,Owned-end)
+          collect-retirement(nested) ++
+          collect-owned(structural) ++ [finalize]
+    Trace-entry(state,_,child,current-frame-slot,_,finalize) ->
+      match load(state)
+        Capture-dead -> []
+        _ ->
+          val current-frame = load(current-frame-slot)
+          store(state,Capture-dead)
+          store(current-frame.frame-token,Scope-branch-dead)
           val nested = load(child)
           store(child,Trace-end)
           val structural = load(current-frame.frame-owned)
@@ -385,14 +440,26 @@ fun attempt-build(root : root<e>,
 fun activate-trace-loop(root : root<e>, current : trace<e>) : <div> ()
   match current
     Trace-end -> ()
-    Trace-read(_,state,_,child,current-frame-slot,_,_,_,stale) ->
+    Trace-read(_,state,_,entry,child,current-frame-slot,_,_,_,stale) ->
       match load(state)
         Capture-draft ->
           val current-frame = load(current-frame-slot)
           store(state,Capture-live)
           store(current-frame.frame-token,Scope-live)
           activate-trace-loop(root,load(child))
-          if stale() then enqueue-trace(root,current) else ()
+          if stale() then
+            match entry
+              Nothing -> enqueue-trace(root,current)
+              Just(target) -> enqueue-trace(root,target)
+          else ()
+        _ -> ()
+    Trace-entry(state,_,child,current-frame-slot,_,_) ->
+      match load(state)
+        Capture-draft ->
+          val current-frame = load(current-frame-slot)
+          store(state,Capture-live)
+          store(current-frame.frame-token,Scope-live)
+          activate-trace-loop(root,load(child))
         _ -> ()
 
 fun activate-trace(root : root<e>, current : trace<e>) : ()
@@ -421,6 +488,19 @@ fun with-context(root : root<e>, current : maybe<trace<e>>,
     fn()
       store(root.root-current,current)
       with-frame(root,current-frame,action)
+  )
+
+// Entry targeting is a dynamic capability, deliberately separate from the
+// structural trace parent. Structural scopes inherit `root-current` for
+// lifetime gating, but never inherit a surrounding scan's entry target.
+fun with-entry(root : root<e>, current : maybe<trace<e>>,
+               action : () -> <div,exn|e> a) : <div,exn|e> a
+  val previous = load(root.root-current-entry)
+  finally(
+    fn() store(root.root-current-entry,previous),
+    fn()
+      store(root.root-current-entry,current)
+      action()
   )
 
 
@@ -469,13 +549,20 @@ fun take-work(values : list<work<e>>)
   pretend-no-div{ take-work-loop(values,[]) }
 
 fun queue-work(root : root<e>, kind : trace-kind, current : work<e>) : ()
+  // Bootstraps preserve declaration order so producers settle before later
+  // dependent scans. Resumptions remain a LIFO frontier: the outermost
+  // invalidated continuation supersedes queued descendants.
+  val enqueue = fn(values)
+    match current
+      Bootstrap-work(_,_) -> values ++ [current]
+      Resume-work(_) -> Cons(current,values)
   match kind
     Derivation-trace ->
       store(root.root-derive-queue,
-            Cons(current,load(root.root-derive-queue)))
+            enqueue(load(root.root-derive-queue)))
     Effect-trace ->
       store(root.root-effect-queue,
-            Cons(current,load(root.root-effect-queue)))
+            enqueue(load(root.root-effect-queue)))
 
 fun abandon-draft-frame(current : frame<e>, drafts : list<trace<e>>) : e ()
   store(current.frame-token,Scope-branch-dead)
@@ -485,86 +572,96 @@ fun abandon-draft-frame(current : frame<e>, drafts : list<trace<e>>) : e ()
   val _ = try-retire-owned(structural)
   ()
 
-fun resume-capture(root : root<e>, current : trace<e>)
-                   : <div|e> error<()>
+fun resume-node(root : root<e>, current : trace<e>,
+                state : ref<global,capture-state>,
+                child : ref<global,trace<e>>,
+                current-frame-slot : ref<global,frame<e>>,
+                resume : (frame<e>) -> <div,exn|e> built-trace<e>)
+               : <div|e> error<()>
   lift-div(fn()
-    match current
-      Trace-end -> Ok(())
-      Trace-read(_,state,_,child,current-frame-slot,resume,_,_,_) ->
-        match load(state)
-          Capture-pending ->
-            store(state,Capture-running)
-            val old-frame = load(current-frame-slot)
-            val draft-owned = cell(Owned-end)
-            val draft-frame = Frame(cell(Scope-starting),draft-owned)
-            val resume-draft = fn() resume(draft-frame)
-            val (attempt,drafts) = pretend-no-div{
-              attempt-build(root,{
-                with-current(root,current,draft-frame,resume-draft)
-              })
+    match load(state)
+      Capture-pending ->
+        store(state,Capture-running)
+        val old-frame = load(current-frame-slot)
+        val draft-owned = cell(Owned-end)
+        val draft-frame = Frame(cell(Scope-starting),draft-owned)
+        val resume-draft = fn() resume(draft-frame)
+        val (attempt,drafts) = pretend-no-div{
+          attempt-build(root,{
+            with-current(root,current,draft-frame,resume-draft)
+          })
+        }
+        match attempt
+          Error(failure) ->
+            match load(state)
+              Capture-running -> enqueue-trace(root,current)
+              _ -> ()
+            abandon-draft-frame(draft-frame,drafts)
+            Error(failure)
+          Ok(built) ->
+            val publish = built.built-publish
+            // The previous suffix generation is structurally dead before
+            // the replacement apply runs. Cleanups can write, but every
+            // descendant continuation and bootstrap has already been cut.
+            val old = load(child)
+            store(child,Trace-end)
+            store(old-frame.frame-token,Scope-branch-dead)
+            // From this point onward self-disposal must see and kill the
+            // in-flight generation, never the already detached one.
+            store(current-frame-slot,draft-frame)
+            val old-owned = load(old-frame.frame-owned)
+            store(old-frame.frame-owned,Owned-end)
+            val retirement = pretend-no-div{
+              collect-retirement(old) ++ collect-owned(old-owned)
             }
-            match attempt
+            val retired = pretend-no-div{
+              error/try(fn() run-finalizers(retirement))
+            }
+            match retired
               Error(failure) ->
                 match load(state)
                   Capture-running -> enqueue-trace(root,current)
                   _ -> ()
                 abandon-draft-frame(draft-frame,drafts)
                 Error(failure)
-              Ok(built) ->
-                val publish = built.built-publish
-                // The previous suffix generation is structurally dead before
-                // the replacement apply runs. Cleanups can write, but every
-                // descendant continuation and bootstrap has already been cut.
-                val old = load(child)
-                store(child,Trace-end)
-                store(old-frame.frame-token,Scope-branch-dead)
-                // From this point onward self-disposal must see and kill the
-                // in-flight generation, never the already detached one.
-                store(current-frame-slot,draft-frame)
-                val old-owned = load(old-frame.frame-owned)
-                store(old-frame.frame-owned,Owned-end)
-                val retirement = pretend-no-div{
-                  collect-retirement(old) ++ collect-owned(old-owned)
-                }
-                val retired = pretend-no-div{
-                  error/try(fn() run-finalizers(retirement))
-                }
-                match retired
-                  Error(failure) ->
-                    match load(state)
-                      Capture-running -> enqueue-trace(root,current)
-                      _ -> ()
+              Ok(_) ->
+                match load(state)
+                  Capture-dead ->
                     abandon-draft-frame(draft-frame,drafts)
-                    Error(failure)
-                  Ok(_) ->
-                    match load(state)
-                      Capture-dead ->
+                    Ok(())
+                  _ ->
+                    val publication = pretend-no-div{ publish() }
+                    match publication
+                      Error(failure) ->
+                        match load(state)
+                          Capture-running -> enqueue-trace(root,current)
+                          _ -> ()
                         abandon-draft-frame(draft-frame,drafts)
-                        Ok(())
-                      _ ->
-                        val publication = pretend-no-div{ publish() }
-                        match publication
-                          Error(failure) ->
-                            match load(state)
-                              Capture-running -> enqueue-trace(root,current)
-                              _ -> ()
+                        Error(failure)
+                      Ok(_) ->
+                        match load(state)
+                          Capture-dead ->
                             abandon-draft-frame(draft-frame,drafts)
-                            Error(failure)
-                          Ok(_) ->
+                            Ok(())
+                          _ ->
+                            store(child,built.built-root)
+                            activate-trace(root,built.built-root)
+                            store(draft-frame.frame-token,Scope-live)
                             match load(state)
-                              Capture-dead ->
-                                abandon-draft-frame(draft-frame,drafts)
-                                Ok(())
-                              _ ->
-                                store(child,built.built-root)
-                                activate-trace(root,built.built-root)
-                                store(draft-frame.frame-token,Scope-live)
-                                match load(state)
-                                  Capture-running -> store(state,Capture-live)
-                                  _ -> ()
-                                Ok(())
-          _ -> Ok(())
+                              Capture-running -> store(state,Capture-live)
+                              _ -> ()
+                            Ok(())
+      _ -> Ok(())
   )
+
+fun resume-capture(root : root<e>, current : trace<e>)
+                   : <div|e> error<()>
+  match current
+    Trace-end -> Ok(())
+    Trace-read(_,state,_,_,child,current-frame-slot,resume,_,_,_) ->
+      resume-node(root,current,state,child,current-frame-slot,resume)
+    Trace-entry(state,_,child,current-frame-slot,resume,_) ->
+      resume-node(root,current,state,child,current-frame-slot,resume)
 
 fun run-work(root : root<e>, current : work<e>) : <div|e> error<()>
   match current
@@ -720,47 +817,92 @@ fun reify-trace(root : root<e>, kind : trace-kind,
           Built-trace(
             Trace-end,
             fn() error/try(fn()
-              with-context(root,checkpoint,terminal,
-                fn() interpret-write(root,fn() publish(value)))
+              with-entry(root,Nothing,fn()
+                with-context(root,checkpoint,terminal,
+                  fn() interpret-write(root,fn() publish(value)))
+              )
             )
           )
         }
-        raw ctl read-source(source,tracked) -> {
+        raw ctl read-source(source,mode) -> {
           check-root(root,source.source-root)
-          if !tracked then rcontext.resume(load(source.source-cell)) else
-            val version = load(source.source-version)
-            val state = cell(Capture-draft)
-            val child = cell(Trace-end)
-            val token = cell(Scope-starting)
-            val owned = cell(Owned-end)
-            val current-frame = Frame(token,owned)
-            val current-frame-slot = cell(current-frame)
-            val unlink = fn()
+          match mode
+            Sample-read -> rcontext.resume(load(source.source-cell))
+            State-entry-read ->
+              val state = cell(Capture-draft)
+              val child = cell(Trace-end)
+              val token = cell(Scope-starting)
+              val owned = cell(Owned-end)
+              val current-frame = Frame(token,owned)
+              val current-frame-slot = cell(current-frame)
+              val self = cell(Trace-end)
+              val current = Trace-entry(
+                state,
+                load(root.root-current),
+                child,
+                current-frame-slot,
+                fn(_) with-entry(root,Just(load(self)),fn()
+                  rcontext.resume(load(source.source-cell))
+                ),
+                fn() {
+                  val _ = rcontext.finalize(
+                    Built-trace(Trace-end,fn() lift-div(fn() Ok(())))
+                  )
+                  ()
+                }
+              )
+              store(self,current)
+              record-draft(root,current)
+              val nested = with-entry(root,Just(current),fn()
+                with-current(root,current,current-frame,
+                  fn() rcontext.resume(load(source.source-cell)))
+              )
+              store(child,nested.built-root)
+              Built-trace(current,nested.built-publish)
+            Track-read ->
+              val version = load(source.source-version)
+              val entry = load(root.root-current-entry)
+              val state = cell(Capture-draft)
+              val child = cell(Trace-end)
+              val token = cell(Scope-starting)
+              val owned = cell(Owned-end)
+              val current-frame = Frame(token,owned)
+              val current-frame-slot = cell(current-frame)
+              val unlink = fn()
+                store(source.source-captures,
+                      compact-captures(load(source.source-captures)))
+              val current = Trace-read(
+                kind,
+                state,
+                load(root.root-current),
+                entry,
+                child,
+                current-frame-slot,
+                fn(_) with-entry(root,entry,fn()
+                  rcontext.resume(load(source.source-cell))
+                ),
+                fn() {
+                  val _ = rcontext.finalize(
+                    Built-trace(Trace-end,fn() lift-div(fn() Ok(())))
+                  )
+                  ()
+                },
+                unlink,
+                fn() load(source.source-version) != version
+              )
+              record-draft(root,current)
+              val target = match entry
+                Nothing -> current
+                Just(gate) -> gate
               store(source.source-captures,
-                    compact-captures(load(source.source-captures)))
-            val current = Trace-read(
-              kind,
-              state,
-              load(root.root-current),
-              child,
-              current-frame-slot,
-              fn(_) rcontext.resume(load(source.source-cell)),
-              fn() {
-                val _ = rcontext.finalize(
-                  Built-trace(Trace-end,fn() lift-div(fn() Ok(())))
-                )
-                ()
-              },
-              unlink,
-              fn() load(source.source-version) != version
-            )
-            record-draft(root,current)
-            store(source.source-captures,
-                  Cons(pack-capture(root,current),load(source.source-captures)))
-            val nested = with-current(root,current,current-frame,
-              fn() rcontext.resume(load(source.source-cell)))
-            store(child,nested.built-root)
-            Built-trace(current,nested.built-publish)
+                    Cons(pack-capture(root,target,current),
+                         load(source.source-captures)))
+              val nested = with-entry(root,entry,fn()
+                with-current(root,current,current-frame,
+                  fn() rcontext.resume(load(source.source-cell)))
+              )
+              store(child,nested.built-root)
+              Built-trace(current,nested.built-publish)
         }
   track()
 
@@ -774,8 +916,9 @@ fun fresh-root() : root<e>
   val owned = cell(Owned-end)
   val current-frame = cell(Frame(token,owned))
   Root(
-    Root-key(cell(True)),cell([]),cell([]),cell(Nothing),current-frame,
-    cell(Nothing),token,owned,cell(0),cell(False),cell(False),cell(False)
+    Root-key(cell(True)),cell([]),cell([]),cell(Nothing),cell(Nothing),
+    current-frame,cell(Nothing),token,owned,
+    cell(0),cell(False),cell(False),cell(False)
   )
 
 pub fun create-root(action : (root<e>) -> <signal-write,pure|e> a)
@@ -802,6 +945,7 @@ pub fun root/dispose(root : root<e>) : <exn|e> ()
         store(root.root-derive-queue,[])
         store(root.root-effect-queue,[])
         store(root.root-current,Nothing)
+        store(root.root-current-entry,Nothing)
         store(root.root-draft,Nothing)
         store(root.root-owned,Owned-end)
       },
@@ -841,7 +985,7 @@ pub fun signal-always(root : root<e>, initial : a) : exn signal<a>
   signal-by(root,initial,fn(_,_) False)
 
 pub fun signal/get(signal : signal<a>) : signal-read a
-  read-source(signal.signal-source,True)
+  read-source(signal.signal-source,Track-read)
 
 pub fun signal/set(signal : signal<a>, value : a) : signal-write ()
   write-source(signal.signal-source,value)
@@ -860,7 +1004,7 @@ pub fun batch(root : root<e>, action : () -> <signal-write,pure|e1> a)
 pub fun untrack(action : () -> <signal-read,pure|e> a)
                : <signal-read,pure|e> a
   with override fun read-source(source,_)
-    read-source(source,False)
+    read-source(source,Sample-read)
   action()
 
 
@@ -886,8 +1030,10 @@ fun create-trace-inner(root : root<e>, kind : trace-kind,
         val scope-frame = Frame(state,structural-prefix)
         val (attempt,drafts) = pretend-no-div{
           attempt-build(root,fn()
-            with-context(root,current.scope-parent,scope-frame,
-              fn() reify-trace(root,kind,track,apply))
+            with-entry(root,Nothing,fn()
+              with-context(root,current.scope-parent,scope-frame,
+                fn() reify-trace(root,kind,track,apply))
+            )
           )
         }
         match attempt
@@ -951,8 +1097,35 @@ pub fun derive-always(root : root<e>, initial : a,
                      : <signal-write,pure> memo<a>
   derive-by(root,initial,calculate,fn(_,_) False)
 
+fun memo-by-inner(root : root<e>, initial : a,
+                  calculate : (previous : a) -> <signal-read,pure> a,
+                  equals : (a,a) -> bool) : <signal-write,pure> memo<a>
+  check-registration(root)
+  val source = new-source(root,initial,equals)
+  // `calculate` is consumed by bootstrap. The long-lived capability is the
+  // raw continuation captured at `State-entry-read`, not a retained action.
+  val disposer = create-trace-inner(root,Derivation-trace,
+    fn() calculate(read-source(source,State-entry-read)),
+    fn(value) commit-source(source,value))
+  Memo(source)
+
+pub fun memo-by(root : root<e>, initial : a,
+                calculate : (previous : a) -> <signal-read,pure> a,
+                equals : (a,a) -> bool) : <signal-write,pure> memo<a>
+  memo-by-inner(root,initial,calculate,equals)
+
+pub fun memo(root : root<e>, initial : a,
+             calculate : (previous : a) -> <signal-read,pure> a,
+             ?(==) : (a,a) -> bool) : <signal-write,pure> memo<a>
+  memo-by(root,initial,calculate,(==))
+
+pub fun memo-always(root : root<e>, initial : a,
+                    calculate : (previous : a) -> <signal-read,pure> a)
+                   : <signal-write,pure> memo<a>
+  memo-by(root,initial,calculate,fn(_,_) False)
+
 pub fun memo/get(memo : memo<a>) : signal-read a
-  read-source(memo.memo-source,True)
+  read-source(memo.memo-source,Track-read)
 
 pub fun create-effect(root : root<e>,
                       track : () -> <signal-read,pure> a,
