@@ -1,94 +1,68 @@
 /*--------------------------------------------------------------------------
-  Kokaine: an effect-typed, continuation-indexed reactive runtime.
+  Kokaine: continuation-trace reactive runtime.
 
-  There is deliberately no root-wide dependency graph. Tracked reads install
-  source-local subscriptions to the current one-shot wake token. The token
-  owns cancellation for that captured generation; captured owner-generation
-  capabilities retire stale child work, while direct observer handles form
-  only scheduler and ownership scopes.
+  A tracked read captures the raw suffix at that exact read. Sources retain
+  the captured root + continuation node through a Church-encoded existential;
+  there is no retained action, wake callback, observer, or dependency graph.
 --------------------------------------------------------------------------*/
 module kokaine/reactive
 
 import std/core/unsafe
 import std/core/undiv
 
-type observer-kind
-  Derivation
-  User-effect
+
+// --------------------------------------------------------------------------
+// Persistent cells and root identity
+// --------------------------------------------------------------------------
+
+fun cell(value : a) : ref<global,a>
+  unsafe-total { ref(value) }
+
+fun load(value : ref<global,a>) : a
+  unsafe-total { !value }
+
+fun store(target : ref<global,a>, value : a) : ()
+  unsafe-total { target := value }
 
 abstract type root-key
-  Root-key(root-key-cell : ref<global,bool>)
+  Root-key(identity : ref<global,bool>)
 
-// An owned observer captures the exact continuation generation that created
-// it, including that generation's checkpoint cell. The parent link is a linear
-// lifetime scope, not a reactive dependency: reads never add owner links, and
-// every generation has at most one parent.
-abstract type owner-generation
-  Owner-generation(
-    generation-live   : ref<global,bool>,
-    generation-fired  : ref<global,bool>,
-    generation-validating : ref<global,bool>,
-    generation-parent : maybe<owner-generation>,
-    generation-dependencies : ref<global,list<dependency-stamp>>
-  )
+fun same-root(left : root-key, right : root-key) : bool
+  unsafe-ptr-eq(left.identity,right.identity)
 
 
 // --------------------------------------------------------------------------
-// Source-local continuation trace
+// Source-local existential capabilities for exact read continuations
 // --------------------------------------------------------------------------
 
-abstract type source-subscription
-  Source-subscription(
-    subscription-live : ref<global,bool>,
-    subscription-wake : () -> ()
+// Rank-2 packaging erases only the ambient effect row. Unlike a callback,
+// this value contains the actual root and continuation node and permits one
+// operation: hand that typed pair to a polymorphic consumer.
+abstract type packed-capture
+  Packed-capture(
+    run-packed : forall<r> (forall<e::E> (root<e>,trace<e>) -> r) -> r
   )
 
-// A memo source carries only effect-erased latches, its captured owner scope,
-// and continuation-owned dependency checkpoints. It never retains the root or
-// typed observer.
-abstract type producer-state
-  Producer-state(
-    producer-live         : ref<global,bool>,
-    producer-dirty        : ref<global,bool>,
-    producer-running      : ref<global,bool>,
-    producer-owner-generation : ref<global,maybe<owner-generation>>,
-    producer-dependencies : ref<global,list<dependency-stamp>>
-  )
-
-// A checkpoint records the version returned by one tracked read and, for a
-// memo, the effect-erased producer needed to validate that version lazily.
-// This is a generation trace, not a root registry or an observer edge table.
-abstract type dependency-stamp
-  Dependency-stamp(
-    stamp-version  : ref<global,int>,
-    stamp-observed : int,
-    stamp-producer : maybe<producer-state>
-  )
-
-// Sources retain their subscribers directly. There are no source IDs, source
-// registry, reverse observer edge list, or graph lookup.
 abstract type source<a>
   Source(
-    source-root        : root-key,
-    source-cell        : ref<global,a>,
-    source-equals      : (a,a) -> bool,
-    source-version     : ref<global,int>,
-    source-subscribers : ref<global,list<source-subscription>>,
-    source-producer    : maybe<producer-state>
+    source-root     : root-key,
+    source-cell     : ref<global,a>,
+    source-equals   : (a,a) -> bool,
+    source-version  : ref<global,int>,
+    source-captures : ref<global,list<packed-capture>>
   )
 
 
 // --------------------------------------------------------------------------
-// Public capabilities and values
+// Public effects and values
 // --------------------------------------------------------------------------
 
 pub effect signal-read
-  fun read-source(source : source<a>, tracked : bool) : a
+  ctl read-source(source : source<a>, tracked : bool) : a
 
 pub effect signal-write
   fun write-source(source : source<a>, value : a) : ()
   fun modify-source(source : source<a>, update : a -> a) : ()
-  fun commit-source(source : source<a>, value : a) : ()
   fun enter-batch(key : root-key) : ()
   fun leave-batch(key : root-key) : ()
   fun request-flush(key : root-key) : ()
@@ -96,719 +70,328 @@ pub effect signal-write
 pub alias reactive = <signal-read,signal-write>
 
 abstract value type signal<a>
-  Signal(source : source<a>)
+  Signal(signal-source : source<a>)
 
+// Filled in by the derivation layer below. Keeping the public type here lets
+// downstream modules compile against one stable surface while the trace core
+// remains the only execution mechanism.
 abstract value type memo<a>
-  Memo(source : source<a>)
+  Memo(memo-source : source<a>)
 
-pub alias disposer<e> = () -> <pure|e> ()
+pub alias disposer<e> = () -> <exn|e> ()
 
 
 // --------------------------------------------------------------------------
-// Continuation processes and direct scheduler state
+// Captured execution trace
 // --------------------------------------------------------------------------
 
-// One token represents one captured dependency and ownership generation.
-// Every read in the generation subscribes this same token; fired is the
-// one-shot scheduling latch, and cancellations eagerly remove source-local
-// links on restart.
-abstract type wake-token
-  Wake-token(
-    token-live          : ref<global,bool>,
-    token-fired         : ref<global,bool>,
-    token-generation    : owner-generation,
-    token-cancellations : ref<global,list<() -> ()>>,
-    token-dependencies  : ref<global,list<dependency-stamp>>,
-    token-wake          : () -> ()
+type trace-kind
+  Derivation-trace
+  Effect-trace
+
+type capture-state
+  Capture-live
+  Capture-pending
+  Capture-running
+  Capture-spent
+  Capture-dead
+
+abstract type trace<e::E>
+  Trace-end
+  Trace-read(
+    trace-kind       : trace-kind,
+    trace-state      : ref<global,capture-state>,
+    trace-parent     : maybe<trace<e>>,
+    trace-child      : ref<global,trace<e>>,
+    trace-resume     : () -> <div,exn|e> trace<e>,
+    trace-finalize   : () -> <div,exn|e> (),
+    trace-unlink     : () -> ()
   )
 
-effect observer-suspend
-  ctl suspend-observer(outcome : error<()>) : ()
-
-abstract type observer-process<e::E>
-  Observer-process-done
-  Observer-process-paused(
-    process-outcome  : error<()>,
-    process-resume   : () -> <signal-read,signal-write,pure|e> observer-process<e>,
-    process-finalize : () -> <signal-read,signal-write,pure|e> observer-process<e>
+abstract type fiber<e::E>
+  Fiber(
+    fiber-live  : ref<global,bool>,
+    fiber-trace : ref<global,trace<e>>
   )
 
-// These latches are scheduler state, not a dependency graph: live controls
-// lifetime, dirty/queued implement one-shot work scheduling, and running
-// detects recursive producer pulls.
-abstract type observer<e::E>
-  Observer(
-    observer-kind      : observer-kind,
-    observer-live      : ref<global,bool>,
-    observer-dirty     : ref<global,bool>,
-    observer-queued    : ref<global,bool>,
-    observer-running   : ref<global,bool>,
-    observer-token     : ref<global,maybe<wake-token>>,
-    observer-dependencies : ref<global,list<dependency-stamp>>,
-    observer-owner-generation : ref<global,maybe<owner-generation>>,
-    observer-children  : ref<global,list<observer<e>>>,
-    observer-cleanups  : ref<global,list<() -> <signal-write,pure|e> ()>>,
-    observer-unlink    : ref<global,maybe<() -> ()>>,
-    observer-action    : ref<global,maybe<() -> <signal-read,signal-write,pure|e> ()>>,
-    observer-process   : ref<global,maybe<observer-process<e>>>
+abstract type work<e::E>
+  Resume-work(resume-trace : trace<e>)
+  Bootstrap-work(
+    bootstrap-live : ref<global,bool>,
+    bootstrap-run  : () -> <div,exn|e> ()
   )
 
-// Queues contain direct handles. The root has no source or observer registry,
-// no integer node identities, no ranks, and no Pending propagation state.
 abstract type root<e::E>
   Root(
-    root-key             : root-key,
-    root-derive-queue    : ref<global,list<observer<e>>>,
-    root-effect-queue    : ref<global,list<observer<e>>>,
-    root-batch-depth     : ref<global,int>,
-    root-is-flushing     : ref<global,bool>,
-    root-current-token   : ref<global,maybe<wake-token>>,
-    root-current-owner   : ref<global,maybe<observer<e>>>,
-    root-children        : ref<global,list<observer<e>>>,
-    root-cleanups        : ref<global,list<() -> <signal-write,pure|e> ()>>,
-    root-disposing       : ref<global,bool>,
-    root-disposed        : ref<global,bool>
+    root-key          : root-key,
+    root-derive-queue : ref<global,list<work<e>>>,
+    root-effect-queue : ref<global,list<work<e>>>,
+    root-current      : ref<global,maybe<trace<e>>>,
+    root-fibers       : ref<global,list<fiber<e>>>,
+    root-batch-depth  : ref<global,int>,
+    root-flushing     : ref<global,bool>,
+    root-disposing    : ref<global,bool>,
+    root-disposed     : ref<global,bool>
   )
 
 
 // --------------------------------------------------------------------------
-// Encapsulated persistent cells
+// Trace inspection and source invalidation
 // --------------------------------------------------------------------------
 
-fun cell(value : a) : ref<global,a>
-  unsafe-total { ref(value) }
-
-fun load(cell : ref<global,a>) : a
-  unsafe-total { !cell }
-
-fun store(cell : ref<global,a>, value : a) : ()
-  unsafe-total { cell := value }
-
-fun generation-active-loop(generation : owner-generation) : <div> bool
-  if !load(generation.generation-live) ||
-     load(generation.generation-fired)
-  then False
-  else match generation.generation-parent
-    Nothing -> True
-    Just(parent) -> generation-active-loop(parent)
-
-fun generation-active(generation : owner-generation) : bool
-  // Owner generations are created only by linking a new child scope to an
-  // already existing ancestor, so this chain is finite and acyclic.
-  pretend-no-div{ generation-active-loop(generation) }
-
-// --------------------------------------------------------------------------
-// Source-local subscriptions and captured cancellation
-// --------------------------------------------------------------------------
-
-fun subscription-active(subscription : source-subscription) : bool
-  load(subscription.subscription-live)
-
-fun compact-subscriptions(subscriptions : list<source-subscription>)
-                         : list<source-subscription>
-  subscriptions.filter(subscription-active)
-
-fun fire-token(token : wake-token) : ()
-  if !generation-active(token.token-generation) then () else
-    store(token.token-fired,True)
-    val wake = token.token-wake
-    wake()
-
-fun has-dependency(dependencies : list<dependency-stamp>,
-                   version : ref<global,int>) : bool
-  match dependencies
-    Nil -> False
-    Cons(stamp,rest) ->
-      unsafe-ptr-eq(stamp.stamp-version,version) ||
-      has-dependency(rest,version)
-
-fun subscribe-source(token : wake-token, source : source<a>, observed : int) : ()
-  if !load(token.token-live) ||
-     has-dependency(load(token.token-dependencies),source.source-version)
-  then () else
-    val link-live = cell(True)
-    val subscription = Source-subscription(
-      link-live,
-      fn() fire-token(token)
-    )
-    store(source.source-subscribers,
-          Cons(subscription,load(source.source-subscribers)))
-    val cancel = fn()
-      store(link-live,False)
-      store(source.source-subscribers,
-            compact-subscriptions(load(source.source-subscribers)))
-    store(token.token-cancellations,
-          Cons(cancel,load(token.token-cancellations)))
-    store(token.token-dependencies,
-          Cons(Dependency-stamp(source.source-version,
-                                observed,
-                                source.source-producer),
-               load(token.token-dependencies)))
-
-fun run-cancellations(cancellations : list<() -> ()>) : <div> ()
-  match cancellations
-    Nil -> ()
-    Cons(cancel,rest) ->
-      cancel()
-      run-cancellations(rest)
-
-fun cancel-token(token : wake-token) : <div> ()
-  store(token.token-live,False)
-  val cancellations = load(token.token-cancellations)
-  store(token.token-cancellations,[])
-  store(token.token-dependencies,[])
-  run-cancellations(cancellations)
-
-fun cancel-observer-token(observer : observer<e>) : <div> ()
-  val current = load(observer.observer-token)
-  store(observer.observer-token,Nothing)
+fun trace-state-of(current : trace<e>) : capture-state
   match current
-    Nothing -> ()
-    Just(token) -> cancel-token(token)
+    Trace-end -> Capture-dead
+    Trace-read(_,state,_,_,_,_,_) -> load(state)
 
-fun notify-source(root : root<e>, source : source<a>) : <div> ()
-  if load(root.root-disposing) || load(root.root-disposed) then () else
-    val active = compact-subscriptions(load(source.source-subscribers))
-    store(source.source-subscribers,active)
-    active.foreach fn(subscription)
-      val wake = subscription.subscription-wake
-      wake()
+fun trace-parent-of(current : trace<e>) : maybe<trace<e>>
+  match current
+    Trace-end -> Nothing
+    Trace-read(_,_,parent,_,_,_,_) -> parent
 
-fun new-source(root : root<e>, value : a, equals : (a,a) -> bool,
-               producer : maybe<producer-state>) : source<a>
-  Source(root.root-key,value.cell,equals,cell(0),cell([]),producer)
+fun trace-active(current : trace<e>) : bool
+  match current.trace-state-of
+    Capture-dead -> False
+    _ -> True
 
+fun fiber-active(current : fiber<e>) : bool
+  load(current.fiber-live)
 
-// --------------------------------------------------------------------------
-// Direct work queues
-// --------------------------------------------------------------------------
+fun compact-fibers(values : list<fiber<e>>) : list<fiber<e>>
+  values.filter(fiber-active)
 
-fun observer-alive(observer : observer<e>) : bool
-  load(observer.observer-live)
+fun pack-capture(root : root<e>, current : trace<e>) : packed-capture
+  Packed-capture(fn(consume) consume(root,current))
 
-fun compact-observers(observers : list<observer<e>>) : list<observer<e>>
-  observers.filter(observer-alive)
-
-fun enqueue-observer(root : root<e>, observer : observer<e>) : ()
-  if !load(observer.observer-live) || load(observer.observer-queued) then () else
-    store(observer.observer-queued,True)
-    match observer.observer-kind
-      Derivation ->
-        store(root.root-derive-queue,
-              Cons(observer,load(root.root-derive-queue)))
-      User-effect ->
-        store(root.root-effect-queue,
-              Cons(observer,load(root.root-effect-queue)))
-
-fun queue-observer(root : root<e>, observer : observer<e>) : ()
-  if !load(observer.observer-live) then () else
-    store(observer.observer-dirty,True)
-    enqueue-observer(root,observer)
-
-fun new-wake-token(root : root<e>, observer : observer<e>) : wake-token
-  val live = cell(True)
-  val fired = cell(False)
-  val generation = Owner-generation(
-    live,fired,cell(False),load(observer.observer-owner-generation),
-    observer.observer-dependencies
-  )
-  Wake-token(live,fired,generation,cell([]),observer.observer-dependencies,
-             fn() queue-observer(root,observer))
-
-// Producer pulls select their exact direct handle by the private dirty latch.
-// Pointer identity here is an opaque queue ticket, not a node ID or registry.
-fun restore-skipped-observers(skipped : list<observer<e>>,
-                              remaining : list<observer<e>>)
-                             : <div> list<observer<e>>
-  match skipped
-    Nil -> remaining
-    Cons(observer,rest) ->
-      restore-skipped-observers(rest,Cons(observer,remaining))
-
-fun extract-observer-loop(observers : list<observer<e>>,
-                          target : ref<global,bool>,
-                          skipped : list<observer<e>>)
-                         : <div> (maybe<observer<e>>,list<observer<e>>)
-  match observers
-    Nil -> (Nothing,restore-skipped-observers(skipped,[]))
-    Cons(observer,rest) ->
-      if unsafe-ptr-eq(observer.observer-dirty,target) then
-        store(observer.observer-queued,False)
-        (Just(observer),restore-skipped-observers(skipped,rest))
-      else
-        extract-observer-loop(rest,target,Cons(observer,skipped))
-
-fun extract-observer(observers : list<observer<e>>,
-                     target : ref<global,bool>)
-                    : <div> (maybe<observer<e>>,list<observer<e>>)
-  extract-observer-loop(observers,target,[])
-
-fun take-queued-observer(queue : ref<global,list<observer<e>>>,
-                         target : ref<global,bool>)
-                        : <div> maybe<observer<e>>
-  val (found,remaining) = extract-observer(load(queue),target)
-  store(queue,remaining)
-  found
-
-fun pop-queued(root : root<e>, queue : ref<global,list<observer<e>>>)
-              : <div,exn|e> maybe<observer<e>>
-  match load(queue)
-    Nil -> Nothing
-    Cons(observer,rest) ->
-      store(queue,rest)
-      store(observer.observer-queued,False)
-      if !load(observer.observer-live) || !load(observer.observer-dirty)
-      then pop-queued(root,queue)
-      else
-        val completed = cell(False)
-        val active = finally(
-          fn() {
-            // Owner checkpoint settlement can fail. Preserve the candidate's
-            // direct ticket so a later retry cannot lose dirty work.
-            if load(completed) || !load(observer.observer-live) ||
-               !load(observer.observer-dirty)
-            then ()
-            else enqueue-observer(root,observer)
-          },
-          fn()
-            val current = validate-owner-generation(
-              root,load(observer.observer-owner-generation)
-            )
-            store(completed,True)
-            current
-        )
-        // Leave the failure-preserving finally frame before skipping a stale
-        // ticket. This keeps large retired ownership fan-outs tail recursive.
-        // The pending owner rerun owns disposal of each stale observer.
-        if active then Just(observer) else pop-queued(root,queue)
-
-
-// --------------------------------------------------------------------------
-// Direct ownership scopes and disposal
-// --------------------------------------------------------------------------
-
-fun add-child(root : root<e>, observer : observer<e>) : exn ()
-  match load(root.root-current-owner)
-    Nothing ->
-      store(observer.observer-owner-generation,Nothing)
-      store(root.root-children,
-            Cons(observer,load(root.root-children)))
-      store(observer.observer-unlink,Just(fn()
-        store(root.root-children,
-              compact-observers(load(root.root-children)))
-      ))
-    Just(owner) ->
-      if !load(owner.observer-live) then () else
-        match load(owner.observer-token)
-          Nothing -> throw("reactive owner has no active generation")
-          Just(token) ->
-            store(observer.observer-owner-generation,
-                  Just(token.token-generation))
-            store(owner.observer-children,
-                  Cons(observer,load(owner.observer-children)))
-            store(observer.observer-unlink,Just(fn()
-              store(owner.observer-children,
-                    compact-observers(load(owner.observer-children)))
-            ))
-
-fun run-cleanups(cleanups : list<() -> <signal-write,pure|e> ()>)
-                 : <signal-write,pure|e> ()
-  match cleanups
-    Nil -> ()
-    Cons(cleanup,rest) ->
-      finally(fn() run-cleanups(rest),cleanup)
-
-fun collect-owned(pending : list<observer<e>>,
-                  ordered : list<observer<e>>) : <div> list<observer<e>>
-  match pending
-    Nil -> ordered
-    Cons(current,rest) ->
-      if !load(current.observer-live)
-      then collect-owned(rest,ordered)
-      else
-        store(current.observer-live,False)
-        store(current.observer-dirty,False)
-        store(current.observer-queued,False)
-        val children = load(current.observer-children)
-        store(current.observer-children,[])
-        val next = children.foldl(rest,fn(acc,child) Cons(child,acc))
-        collect-owned(next,Cons(current,ordered))
-
-fun cancel-observer-tokens(observers : list<observer<e>>) : <div> ()
-  match observers
-    Nil -> ()
-    Cons(observer,rest) ->
-      cancel-observer-token(observer)
-      cancel-observer-tokens(rest)
-
-fun clean-observers(observers : list<observer<e>>)
-                    : <signal-write,pure|e> ()
-  match observers
-    Nil -> ()
-    Cons(observer,rest) ->
-      val cleanups = load(observer.observer-cleanups)
-      store(observer.observer-cleanups,[])
-      finally(fn() clean-observers(rest),fn() run-cleanups(cleanups))
-
-fun finalize-observer-processes(root : root<e>,
-                                observers : list<observer<e>>)
-                               : <signal-write,pure|e> ()
-  match observers
-    Nil -> ()
-    Cons(observer,rest) ->
-      finally(
-        fn() finalize-observer-processes(root,rest),
-        fn()
-          mask<signal-write>
-            dispatch(root,fn() finalize-observer-process(observer))
-      )
-
-fun unlink-observers(observers : list<observer<e>>) : <div> ()
-  match observers
-    Nil -> ()
-    Cons(observer,rest) ->
-      val unlink = load(observer.observer-unlink)
-      store(observer.observer-unlink,Nothing)
-      store(observer.observer-owner-generation,Nothing)
-      match unlink
-        Just(action) -> action()
-        Nothing -> ()
-      unlink-observers(rest)
-
-fun dispose-collected(root : root<e>, observers : list<observer<e>>)
-                      : <signal-write,pure|e> ()
-  cancel-observer-tokens(observers)
-  finally(
-    fn() unlink-observers(observers),
-    fn()
-      finally(
-        fn() clean-observers(observers),
-        fn() finalize-observer-processes(root,observers)
-      )
-  )
-
-fun dispose-observers(root : root<e>, observers : list<observer<e>>)
-                     : <signal-write,pure|e> ()
-  val ordered = pretend-no-div{ collect-owned(observers,[]) }
-  dispose-collected(root,ordered)
-
-fun dispose-observer-inner(root : root<e>, observer : observer<e>)
-                          : <signal-write,pure|e> ()
-  dispose-observers(root,[observer])
-
-fun reset-owned(root : root<e>, observer : observer<e>)
-                : <signal-write,pure|e> ()
-  val children = load(observer.observer-children)
-  store(observer.observer-children,[])
-  val cleanups = load(observer.observer-cleanups)
-  store(observer.observer-cleanups,[])
-  finally(fn() run-cleanups(cleanups),
-          fn() dispose-observers(root,children))
-
-
-// --------------------------------------------------------------------------
-// Continuation-backed observer processes
-// --------------------------------------------------------------------------
-
-fun suspend-observer-context(outcome : error<()>)
-                            : <observer-suspend,signal-read,signal-write,pure|e> ()
-  mask<signal-read>
-    mask<signal-write>
-      mask<exn>
-        mask<div>{ suspend-observer(outcome) }
-
-fun attempt-observer(action : () -> <signal-read,signal-write,pure|e> ())
-                    : <observer-suspend,signal-read,signal-write,pure|e> error<()>
-  mask<observer-suspend>{ mask<exn>{ error/try(action) } }
-
-fun observer-cycle(action : () -> <signal-read,signal-write,pure|e> ())
-                  : <observer-suspend,signal-read,signal-write,pure|e> ()
-  val outcome = attempt-observer(action)
-  suspend-observer-context(outcome)
-  observer-cycle(action)
-
-fun reify-observer(action : () -> <signal-read,signal-write,pure|e> ())
-                  : <signal-read,signal-write,pure|e> observer-process<e>
-  with raw ctl suspend-observer(outcome)
-    Observer-process-paused(
-      outcome,
-      fn() rcontext.resume(()),
-      fn() rcontext.finalize(Observer-process-done)
+fun packed-active(packed : packed-capture) : bool
+  match packed
+    Packed-capture(run) -> run(fn(_,current)
+      match current.trace-state-of
+        Capture-dead -> False
+        Capture-spent -> False
+        _ -> True
     )
-  suspend-observer-context(Ok(()))
-  observer-cycle(action)
-  Observer-process-done
 
-fun advance-observer(observer : observer<e>)
-                    : <signal-read,signal-write,pure|e> ()
-  val process = match load(observer.observer-process)
-                  Just(current) -> current
-                  Nothing ->
-                    match load(observer.observer-action)
-                      Nothing -> throw("reactive observer has no continuation")
-                      Just(action) ->
-                        val initial = reify-observer(action)
-                        store(observer.observer-process,Just(initial))
-                        initial
-  match process
-    Observer-process-done ->
-      throw("reactive observer continuation terminated")
-    Observer-process-paused(_,resume-process,_) ->
-      store(observer.observer-process,Nothing)
-      val next = resume-process()
-      if !load(observer.observer-live)
-      then finalize-process(next)
-      else store(observer.observer-process,Just(next))
-      match next
-        Observer-process-done ->
-          if !load(observer.observer-live) then ()
-          else throw("reactive observer continuation terminated")
-        Observer-process-paused(outcome,_,_) -> outcome.untry
+fun compact-captures(values : list<packed-capture>) : list<packed-capture>
+  values.filter(packed-active)
 
-fun finalize-process(process : observer-process<e>)
-                    : <signal-read,signal-write,pure|e> ()
-  match process
-    Observer-process-done -> ()
-    Observer-process-paused(_,_,finalize-current) ->
-      val finalized = finalize-current()
-      ()
+fun cut-capture(packed : packed-capture) : ()
+  match packed
+    Packed-capture(run) ->
+      run(fn(root,current) enqueue-trace(root,current))
 
-fun finalize-observer-process(observer : observer<e>)
-                             : <signal-read,signal-write,pure|e> ()
-  val process = load(observer.observer-process)
-  store(observer.observer-action,Nothing)
-  store(observer.observer-process,Nothing)
-  match process
-    Nothing -> ()
-    Just(current) -> finalize-process(current)
+fun pending-ancestor-loop(parent : maybe<trace<e>>) : <div> bool
+  match parent
+    Nothing -> False
+    Just(current) ->
+      match current.trace-state-of
+        Capture-pending -> True
+        Capture-running -> True
+        Capture-dead -> False
+        Capture-live -> pending-ancestor-loop(current.trace-parent-of)
+        Capture-spent -> pending-ancestor-loop(current.trace-parent-of)
+
+fun pending-ancestor(parent : maybe<trace<e>>) : bool
+  pretend-no-div{ pending-ancestor-loop(parent) }
+
+fun enqueue-trace(root : root<e>, current : trace<e>) : ()
+  match current
+    Trace-end -> ()
+    Trace-read(kind,state,_,_,_,_,_) ->
+      match load(state)
+        Capture-live ->
+          store(state,Capture-pending)
+          match kind
+            Derivation-trace ->
+              store(root.root-derive-queue,
+                    Cons(Resume-work(current),load(root.root-derive-queue)))
+            Effect-trace ->
+              store(root.root-effect-queue,
+                    Cons(Resume-work(current),load(root.root-effect-queue)))
+        Capture-running ->
+          // A write from the currently resumed suffix schedules a later turn;
+          // the running continuation is never entered recursively.
+          store(state,Capture-pending)
+          match kind
+            Derivation-trace ->
+              store(root.root-derive-queue,
+                    Cons(Resume-work(current),load(root.root-derive-queue)))
+            Effect-trace ->
+              store(root.root-effect-queue,
+                    Cons(Resume-work(current),load(root.root-effect-queue)))
+        _ -> ()
+
+fun notify-source(source : source<a>) : ()
+  val active = compact-captures(load(source.source-captures))
+  store(source.source-captures,active)
+  active.foreach(cut-capture)
 
 
 // --------------------------------------------------------------------------
-// Pull settlement and continuation scheduler
+// Structured trace retirement
 // --------------------------------------------------------------------------
 
-fun same-root(left : root-key, right : root-key) : bool
-  unsafe-ptr-eq(left.root-key-cell,right.root-key-cell)
+fun collect-retirement(current : trace<e>)
+                      : <div> list<() -> <div,exn|e> ()>
+  match current
+    Trace-end -> []
+    Trace-read(_,state,_,child,_,finalize,unlink) ->
+      match load(state)
+        Capture-dead -> []
+        _ ->
+          store(state,Capture-dead)
+          unlink()
+          val nested = load(child)
+          store(child,Trace-end)
+          collect-retirement(nested) ++ [finalize]
+
+fun run-finalizers(finalizers : list<() -> <div,exn|e> ()>)
+                  : <div,exn|e> ()
+  match finalizers
+    Nil -> ()
+    Cons(finalize,rest) ->
+      finally(fn() run-finalizers(rest),finalize)
+
+fun retire-trace(current : trace<e>) : <div,exn|e> ()
+  val finalizers = pretend-no-div{ collect-retirement(current) }
+  run-finalizers(finalizers)
+
+fun with-current(root : root<e>, current : trace<e>,
+                 action : () -> <div,exn|e> a) : <div,exn|e> a
+  val previous = load(root.root-current)
+  finally(
+    fn() store(root.root-current,previous),
+    fn()
+      store(root.root-current,Just(current))
+      action()
+  )
+
+
+// --------------------------------------------------------------------------
+// Frontier scheduling
+// --------------------------------------------------------------------------
+
+fun work-runnable(current : work<e>) : bool
+  match current
+    Bootstrap-work(live,_) -> load(live)
+    Resume-work(capture) ->
+      match capture.trace-state-of
+        Capture-pending -> !pending-ancestor(capture.trace-parent-of)
+        _ -> False
+
+fun work-stale(current : work<e>) : bool
+  match current
+    Bootstrap-work(live,_) -> !load(live)
+    Resume-work(capture) ->
+      match capture.trace-state-of
+        Capture-dead -> True
+        Capture-live -> True
+        Capture-spent -> True
+        _ -> False
+
+fun take-work-loop(values : list<work<e>>, skipped : list<work<e>>)
+                  : <div> (maybe<work<e>>,list<work<e>>)
+  match values
+    Nil -> (Nothing,skipped.reverse)
+    Cons(current,rest) ->
+      if current.work-runnable
+      then (Just(current),skipped.reverse ++ rest)
+      elif current.work-stale
+      then take-work-loop(rest,skipped)
+      else take-work-loop(rest,Cons(current,skipped))
+
+fun take-work(values : list<work<e>>)
+             : (maybe<work<e>>,list<work<e>>)
+  pretend-no-div{ take-work-loop(values,[]) }
+
+fun queue-work(root : root<e>, kind : trace-kind, current : work<e>) : ()
+  match kind
+    Derivation-trace ->
+      store(root.root-derive-queue,
+            Cons(current,load(root.root-derive-queue)))
+    Effect-trace ->
+      store(root.root-effect-queue,
+            Cons(current,load(root.root-effect-queue)))
+
+fun resume-capture(root : root<e>, current : trace<e>)
+                   : <div,exn|e> ()
+  match current
+    Trace-end -> ()
+    Trace-read(_,state,_,child,resume,_,_) ->
+      match load(state)
+        Capture-pending ->
+          store(state,Capture-running)
+          val completed = cell(False)
+          finally(
+            fn()
+              if load(completed) then
+                match load(state)
+                  Capture-running -> store(state,Capture-live)
+                  _ -> ()
+              else
+                match load(state)
+                  Capture-running -> enqueue-trace(root,current)
+                  _ -> ()
+            ,
+            fn()
+              val old = load(child)
+              store(child,Trace-end)
+              retire-trace(old)
+              val next = with-current(root,current,resume)
+              store(child,next)
+              store(completed,True)
+          )
+        _ -> ()
+
+fun run-work(root : root<e>, current : work<e>) : <div,exn|e> ()
+  match current
+    Resume-work(capture) -> resume-capture(root,capture)
+    Bootstrap-work(live,run) -> if load(live) then run() else ()
+
+fun drain-loop(root : root<e>) : <div,exn|e> ()
+  val (derivation,derive-rest) = take-work(load(root.root-derive-queue))
+  store(root.root-derive-queue,derive-rest)
+  match derivation
+    Just(current) ->
+      run-work(root,current)
+      drain-loop(root)
+    Nothing ->
+      val (effect-work,effect-rest) = take-work(load(root.root-effect-queue))
+      store(root.root-effect-queue,effect-rest)
+      match effect-work
+        Just(current) ->
+          run-work(root,current)
+          drain-loop(root)
+        Nothing -> ()
+
+fun flush(root : root<e>) : <div,exn|e> ()
+  if load(root.root-disposed) || load(root.root-disposing) ||
+     load(root.root-flushing) || load(root.root-batch-depth) > 0
+  then ()
+  else
+    store(root.root-flushing,True)
+    finally(fn() store(root.root-flushing,False),fn() drain-loop(root))
+
+
+// --------------------------------------------------------------------------
+// Root and source validation
+// --------------------------------------------------------------------------
 
 fun check-root(root : root<e>, key : root-key) : exn ()
   if same-root(root.root-key,key) && !load(root.root-disposed) then ()
   else throw("signal used outside its live reactive root")
 
-fun check-public-write(root : root<e>) : exn ()
-  match load(root.root-current-token)
-    Nothing -> ()
-    Just(_) -> throw("signal write attempted during dependency tracking")
-
 fun check-registration(root : root<e>) : exn ()
   if load(root.root-disposed) || load(root.root-disposing)
   then throw("reactive value created in a disposed root")
-  else
-    check-public-write(root)
-    match load(root.root-current-owner)
-      Nothing -> ()
-      Just(owner) ->
-        if load(owner.observer-live) then ()
-        else throw("reactive value created under a disposed owner")
-
-fun settle-observer(root : root<e>, observer : observer<e>) : <pure|e> ()
-  if !load(observer.observer-live) || !load(observer.observer-dirty) then ()
-  elif load(observer.observer-running)
-    then throw("reactive observer recursively re-entered")
-  else run-observer(root,observer)
-
-fun check-producer(root : root<e>, producer : producer-state) : <div,exn|e> ()
-  if !load(producer.producer-live)
-  then throw("memo producer was disposed")
-  elif load(producer.producer-running)
-  then throw("memo producer recursively read its own output")
-  elif !validate-owner-generation(
-          root,load(producer.producer-owner-generation))
-  then throw("memo producer belonged to an invalidated owner generation")
   else ()
 
-// Validate every ancestor scope before owned work runs. A parent's tracked
-// memo may still be dirty without having committed and fired the parent token;
-// exact checkpoint settlement makes that latent invalidation visible first.
-fun validate-owner-generation(root : root<e>,
-                              captured : maybe<owner-generation>)
-                             : <div,exn|e> bool
-  match captured
-    Nothing -> True
-    Just(generation) ->
-      if !generation-active(generation) then False else
-        if load(generation.generation-validating)
-        then throw("owner generation recursively depended on owned work")
-        else finally(
-          fn() store(generation.generation-validating,False),
-          fn()
-            // Cleanup may create work under the replacement token before the
-            // owner's next track runs. If that track then depends on the same
-            // owned producer, validating the producer would re-enter this
-            // scope. Reject that ownership/checkpoint cycle explicitly.
-            store(generation.generation-validating,True)
-            val parent-active = validate-owner-generation(
-              root,generation.generation-parent
-            )
-            if !parent-active then False else
-              validate-dependencies(root,generation.generation-fired,
-                                    load(generation.generation-dependencies))
-              generation-active(generation)
-        )
-
-// Validate the checkpoints captured by one clean producer generation. A memo
-// dependency is settled recursively; if its version changes, its source-local
-// subscription fires the current producer token. An unchanged memo therefore
-// leaves the downstream calculation completely untouched.
-fun validate-dependencies(root : root<e>, target : ref<global,bool>,
-                          dependencies : list<dependency-stamp>)
-                         : <div,exn|e> ()
-  if load(target) then () else match dependencies
-    Nil -> ()
-    Cons(stamp,rest) ->
-      match stamp.stamp-producer
-        Nothing -> ()
-        Just(producer) ->
-          val pulled = settle-producer(root,producer)
-          ()
-      if load(stamp.stamp-version) != stamp.stamp-observed &&
-         !load(target)
-      then throw("dependency checkpoint changed without waking its continuation")
-      else validate-dependencies(root,target,rest)
-
-// Pull exactly the requested producer. Running arbitrary derivation siblings
-// here can create false recursive-read failures in a perfectly acyclic DAG.
-fun settle-producer(root : root<e>, producer : producer-state)
-                   : <div,exn|e> bool
-  check-producer(root,producer)
-  if !load(producer.producer-dirty) then
-    validate-dependencies(root,producer.producer-dirty,
-                          load(producer.producer-dependencies))
-  else ()
-  // Settling the producer's own checkpoints can also invalidate an ancestor
-  // ownership generation. Recheck before extracting the direct queue ticket.
-  check-producer(root,producer)
-  if !load(producer.producer-dirty) then False else
-    match take-queued-observer(root.root-derive-queue,
-                               producer.producer-dirty)
-      Nothing -> throw("memo producer was dirty without its direct queue ticket")
-      Just(observer) ->
-        settle-observer(root,observer)
-        if load(producer.producer-dirty)
-        then
-          val pulled-again = settle-producer(root,producer)
-          True
-        else True
-
-fun settle-source(root : root<e>, source : source<a>) : <pure|e> ()
-  match source.source-producer
-    Nothing -> ()
-    Just(producer) ->
-      val outer = !load(root.root-is-flushing)
-      if outer then store(root.root-is-flushing,True) else ()
-      val pulled = finally(
-        fn() if outer then store(root.root-is-flushing,False) else (),
-        fn()
-          // Owner validation is effectful: it can exact-settle a captured
-          // memo. Establish the flush guard before the first such check so a
-          // nested commit cannot re-enter the scheduler through this pull.
-          check-producer(root,producer)
-          val current = settle-producer(root,producer)
-          check-producer(root,producer)
-          if load(producer.producer-dirty)
-          then throw("memo producer did not settle")
-          else current
-      )
-      if outer && pulled then flush(root) else ()
-
-fun flush-loop(root : root<e>) : <div,exn|e> ()
-  match pop-queued(root,root.root-derive-queue)
-    Just(observer) ->
-      settle-observer(root,observer)
-      flush-loop(root)
-    Nothing ->
-      match pop-queued(root,root.root-effect-queue)
-        Just(observer) ->
-          // Owner validation while selecting an effect can settle a lazy memo
-          // and enqueue derivations. Recheck the phase barrier before the
-          // effect publishes, while preserving its direct ticket on failure.
-          val completed = cell(False)
-          val next-derivation = finally(
-            fn() {
-              if load(completed) || !load(observer.observer-live) ||
-                 !load(observer.observer-dirty)
-              then ()
-              else enqueue-observer(root,observer)
-            },
-            fn()
-              val current = pop-queued(root,root.root-derive-queue)
-              store(completed,True)
-              current
-          )
-          // Exit the ticket-preserving finalizer before continuing the flush,
-          // so repeated effect/derivation phase changes do not retain one
-          // finalizer frame per scheduler round.
-          match next-derivation
-            Just(derivation) ->
-              enqueue-observer(root,observer)
-              settle-observer(root,derivation)
-              flush-loop(root)
-            Nothing ->
-              settle-observer(root,observer)
-              flush-loop(root)
-        Nothing -> ()
-
-fun flush(root : root<e>) : <div,exn|e> ()
-  if load(root.root-disposed) || load(root.root-disposing) ||
-     load(root.root-is-flushing) || load(root.root-batch-depth) > 0
-  then ()
-  else
-    store(root.root-is-flushing,True)
-    finally(fn() store(root.root-is-flushing,False),
-            fn() flush-loop(root))
-
-fun run-observer(root : root<e>, observer : observer<e>) : <div,exn|e> ()
-  if !load(observer.observer-live) then ()
-  elif load(observer.observer-running)
-    then throw("reactive observer run recursively re-entered")
-  else
-    store(observer.observer-queued,False)
-    store(observer.observer-running,True)
-    store(observer.observer-dirty,False)
-    val previous-token = load(root.root-current-token)
-    val previous-owner = load(root.root-current-owner)
-    val succeeded = cell(False)
-    store(root.root-current-token,Nothing)
-    store(root.root-current-owner,Just(observer))
-    finally(
-      fn() {
-        store(root.root-current-token,previous-token)
-        store(root.root-current-owner,previous-owner)
-        store(observer.observer-running,False)
-        if load(succeeded) || !load(observer.observer-live) then ()
-        else
-          // A failed partial generation may already own children. Canceling
-          // its capability makes every such child stale before retry.
-          cancel-observer-token(observer)
-          queue-observer(root,observer)
-      },
-      fn()
-        cancel-observer-token(observer)
-        // Publish this round's lifetime capability before reset cleanup. A
-        // cleanup is allowed to register work into the replacement scope, but
-        // it must never attach to the generation being retired.
-        val token = new-wake-token(root,observer)
-        store(observer.observer-token,Just(token))
-        dispatch(root,fn() mask<signal-read>{ reset-owned(root,observer) })
-        if !load(observer.observer-live) then ()
-        else
-          store(root.root-current-token,Just(token))
-          dispatch(root,fn() advance-observer(observer))
-          store(succeeded,True)
-    )
+fun new-source(root : root<e>, value : a, equals : (a,a) -> bool) : source<a>
+  Source(root.root-key,cell(value),equals,cell(0),cell([]))
 
 
 // --------------------------------------------------------------------------
-// Effect interpreters
+// Write and sample interpreters
 // --------------------------------------------------------------------------
 
 fun interpret-write(root : root<e>,
@@ -816,18 +399,16 @@ fun interpret-write(root : root<e>,
                    : <pure|e> a
   with handler
     fun write-source(source,value)
-      check-public-write(root)
       check-root(root,source.source-root)
       val previous = load(source.source-cell)
       val equal = source.source-equals
       if equal(previous,value) then () else
         store(source.source-cell,value)
         store(source.source-version,load(source.source-version) + 1)
-        notify-source(root,source)
+        notify-source(source)
         flush(root)
 
     fun modify-source(source,update)
-      check-public-write(root)
       check-root(root,source.source-root)
       val previous = load(source.source-cell)
       val value = update(previous)
@@ -835,65 +416,84 @@ fun interpret-write(root : root<e>,
       if equal(previous,value) then () else
         store(source.source-cell,value)
         store(source.source-version,load(source.source-version) + 1)
-        notify-source(root,source)
-        flush(root)
-
-    fun commit-source(source,value)
-      check-root(root,source.source-root)
-      val previous = load(source.source-cell)
-      val equal = source.source-equals
-      if equal(previous,value) then () else
-        store(source.source-cell,value)
-        store(source.source-version,load(source.source-version) + 1)
-        notify-source(root,source)
+        notify-source(source)
         flush(root)
 
     fun enter-batch(key)
       mask<div>
-        check-public-write(root)
         check-root(root,key)
         store(root.root-batch-depth,load(root.root-batch-depth) + 1)
 
     fun leave-batch(key)
-      check-public-write(root)
       check-root(root,key)
       val depth = load(root.root-batch-depth)
-      if depth <= 0 then throw("unbalanced reactive batch") else
+      if depth <= 0 then mask<div>{ throw("unbalanced reactive batch") } else
         store(root.root-batch-depth,depth - 1)
         flush(root)
 
     fun request-flush(key)
-      check-public-write(root)
       check-root(root,key)
       flush(root)
 
   action()
 
-fun interpret-read(root : root<e>,
-                   action : () -> <signal-read,signal-write,pure|e> a)
-                  : <signal-write,pure|e> a
-  with fun read-source(source,tracked)
-    mask<signal-write>
-      check-root(root,source.source-root)
-      settle-source(root,source)
-      val value = load(source.source-cell)
-      val version = load(source.source-version)
-      if tracked then
-        match load(root.root-current-token)
-          Nothing -> ()
-          Just(token) -> subscribe-source(token,source,version)
-      else ()
-      value
-
+fun sample-action(root : root<e>,
+                  action : () -> <signal-read,signal-write,pure|e> a)
+                 : <signal-write,div,exn|e> a
+  with raw ctl read-source(source,_)
+    check-root(root,source.source-root)
+    rcontext.resume(load(source.source-cell))
   action()
 
 pub fun dispatch(root : root<e>,
                  action : () -> <signal-read,signal-write,pure|e> a)
-                : <pure|e> a
+                : <exn|e> a
   check-root(root,root.root-key)
-  interpret-write(root)
-    interpret-read(root)
-      action()
+  pretend-no-div{
+    interpret-write(root,fn() sample-action(root,action))
+  }
+
+
+// --------------------------------------------------------------------------
+// Reifying exact read suffixes
+// --------------------------------------------------------------------------
+
+fun reify-trace(root : root<e>, kind : trace-kind,
+                track : () -> <signal-read,pure> a,
+                publish : (value : a) -> <signal-write,pure|e> ())
+               : <div,exn|e> trace<e>
+  with handler
+    return(value) -> {
+      interpret-write(root,fn() publish(value))
+      Trace-end
+    }
+    raw ctl read-source(source,tracked) -> {
+      check-root(root,source.source-root)
+      if !tracked then rcontext.resume(load(source.source-cell)) else
+        val state = cell(Capture-live)
+        val child = cell(Trace-end)
+        val unlink = fn()
+          store(source.source-captures,
+                compact-captures(load(source.source-captures)))
+        val current = Trace-read(
+          kind,
+          state,
+          load(root.root-current),
+          child,
+          fn() rcontext.resume(load(source.source-cell)),
+          fn() {
+            val _ = rcontext.finalize(Trace-end)
+            ()
+          },
+          unlink
+        )
+        store(source.source-captures,
+              Cons(pack-capture(root,current),load(source.source-captures)))
+        store(child,with-current(root,current,
+          fn() rcontext.resume(load(source.source-cell))))
+        current
+    }
+  track()
 
 
 // --------------------------------------------------------------------------
@@ -902,26 +502,38 @@ pub fun dispatch(root : root<e>,
 
 fun fresh-root() : root<e>
   Root(
-    Root-key(cell(True)),cell([]),cell([]),cell(0),cell(False),
-    cell(Nothing),cell(Nothing),cell([]),cell([]),cell(False),cell(False)
+    Root-key(cell(True)),cell([]),cell([]),cell(Nothing),cell([]),
+    cell(0),cell(False),cell(False),cell(False)
   )
 
 pub fun create-root(action : (root<e>) -> <signal-write,pure|e> a)
-                   : <pure|e> (root<e>,a)
+                   : <exn|e> (root<e>,a)
   val root = fresh-root()
-  val result = dispatch(root)
-    enter-batch(root.root-key)
-    finally(
-      fn() leave-batch(root.root-key),
-      fn() mask<signal-read>{ action(root) }
-    )
-  (root,result)
+  pretend-no-div{
+    val result = interpret-write(root)
+      enter-batch(root.root-key)
+      finally(fn() leave-batch(root.root-key),fn() action(root))
+    (root,result)
+  }
 
-pub fun root/dispose(root : root<e>) : <pure|e> ()
+fun dispose-fiber(current : fiber<e>) : <div,exn|e> ()
+  if !load(current.fiber-live) then () else
+    store(current.fiber-live,False)
+    val captured = load(current.fiber-trace)
+    store(current.fiber-trace,Trace-end)
+    retire-trace(captured)
+
+fun dispose-fibers(values : list<fiber<e>>) : <div,exn|e> ()
+  match values
+    Nil -> ()
+    Cons(current,rest) ->
+      finally(fn() dispose-fibers(rest),fn() dispose-fiber(current))
+
+pub fun root/dispose(root : root<e>) : <exn|e> ()
   if load(root.root-disposed) || load(root.root-disposing) then ()
-  elif load(root.root-is-flushing) || load(root.root-current-token).is-just
+  elif load(root.root-flushing) || load(root.root-current).is-just
     then throw("cannot dispose a reactive root during a computation")
-  else
+  else pretend-no-div{
     store(root.root-disposing,True)
     finally(
       fn() {
@@ -929,35 +541,24 @@ pub fun root/dispose(root : root<e>) : <pure|e> ()
         store(root.root-disposing,False)
         store(root.root-derive-queue,[])
         store(root.root-effect-queue,[])
-        store(root.root-current-token,Nothing)
-        store(root.root-current-owner,Nothing)
-        store(root.root-children,[])
-        store(root.root-cleanups,[])
+        store(root.root-current,Nothing)
+        store(root.root-fibers,[])
       },
       fn()
-        dispatch(root)
-          mask<signal-read>
-            val children = load(root.root-children)
-            store(root.root-children,[])
-            finally(
-              fn() {
-                val cleanups = load(root.root-cleanups)
-                store(root.root-cleanups,[])
-                run-cleanups(cleanups)
-              },
-              fn() dispose-observers(root,children)
-            )
+        val values = load(root.root-fibers)
+        dispose-fibers(values)
     )
+  }
 
 pub fun root/is-disposed(root : root<e>) : bool
   load(root.root-disposed)
 
 pub fun update(root : root<e>, action : () -> <signal-write,pure|e> a)
-              : <pure|e> a
+              : <exn|e> a
   dispatch(root,fn() mask<signal-read>{ action() })
 
 pub fun sample(root : root<e>, action : () -> <signal-read,pure|e> a)
-              : <pure|e> a
+              : <exn|e> a
   dispatch(root,fn() mask<signal-write>{ action() })
 
 
@@ -968,7 +569,7 @@ pub fun sample(root : root<e>, action : () -> <signal-read,pure|e> a)
 pub fun signal-by(root : root<e>, initial : a,
                   equals : (a,a) -> bool) : exn signal<a>
   check-registration(root)
-  Signal(new-source(root,initial,equals,Nothing))
+  Signal(new-source(root,initial,equals))
 
 pub fun signal(root : root<e>, initial : a,
                ?(==) : (a,a) -> bool) : exn signal<a>
@@ -978,13 +579,13 @@ pub fun signal-always(root : root<e>, initial : a) : exn signal<a>
   signal-by(root,initial,fn(_,_) False)
 
 pub fun signal/get(signal : signal<a>) : signal-read a
-  read-source(signal.source,True)
+  read-source(signal.signal-source,True)
 
 pub fun signal/set(signal : signal<a>, value : a) : signal-write ()
-  write-source(signal.source,value)
+  write-source(signal.signal-source,value)
 
 pub fun signal/modify(signal : signal<a>, update : a -> a) : signal-write ()
-  modify-source(signal.source,update)
+  modify-source(signal.signal-source,update)
 
 pub fun signal/update(signal : signal<a>, update : a -> a) : signal-write ()
   signal.modify(update)
@@ -1002,96 +603,41 @@ pub fun untrack(action : () -> <signal-read,pure|e> a)
 
 
 // --------------------------------------------------------------------------
-// Memos and effects
+// Continuation-backed effects
 // --------------------------------------------------------------------------
 
-fun blank-observer(root : root<e>, kind : observer-kind) : observer<e>
-  Observer(
-    kind,cell(True),cell(True),cell(False),cell(False),cell(Nothing),
-    cell([]),cell(Nothing),cell([]),cell([]),
-    cell(Nothing),cell(Nothing),cell(Nothing)
-  )
+fun register-fiber(root : root<e>, current : fiber<e>) : ()
+  store(root.root-fibers,Cons(current,load(root.root-fibers)))
 
-fun register-observer(root : root<e>, kind : observer-kind,
-                      action : () -> <signal-read,signal-write,pure|e> ())
-                     : exn observer<e>
-  val observer = blank-observer(root,kind)
-  store(observer.observer-action,Just(action))
-  add-child(root,observer)
-  observer
-
-fun memo-by-inner(root : root<e>, initial : a,
-                  calculate : (previous : a) -> <signal-read,pure> a,
-                  equals : (a,a) -> bool) : <signal-write,pure> memo<a>
-  check-registration(root)
-  val observer = blank-observer(root,Derivation)
-  add-child(root,observer)
-  val producer = Producer-state(
-    observer.observer-live,
-    observer.observer-dirty,
-    observer.observer-running,
-    observer.observer-owner-generation,
-    observer.observer-dependencies
-  )
-  val source = new-source(root,initial,equals,Just(producer))
-  store(observer.observer-action,Just(fn()
-    val previous = load(source.source-cell)
-    val value = calculate(previous)
-    commit-source(source,value)
-  ))
-  queue-observer(root,observer)
-  request-flush(root.root-key)
-  Memo(source)
-
-pub fun memo-by(root : root<e>, initial : a,
-                calculate : (previous : a) -> <signal-read,pure> a,
-                equals : (a,a) -> bool) : <signal-write,pure> memo<a>
-  memo-by-inner(root,initial,calculate,equals)
-
-pub fun memo(root : root<e>, initial : a,
-             calculate : (previous : a) -> <signal-read,pure> a,
-             ?(==) : (a,a) -> bool) : <signal-write,pure> memo<a>
-  memo-by(root,initial,calculate,(==))
-
-pub fun memo-always(root : root<e>, initial : a,
-                    calculate : (previous : a) -> <signal-read,pure> a)
-                   : <signal-write,pure> memo<a>
-  memo-by(root,initial,calculate,fn(_,_) False)
-
-pub fun memo/get(memo : memo<a>) : signal-read a
-  read-source(memo.source,True)
+fun unregister-fiber(root : root<e>, current : fiber<e>) : ()
+  store(root.root-fibers,compact-fibers(load(root.root-fibers)))
 
 fun create-effect-inner(root : root<e>,
                         track : () -> <signal-read,pure> a,
                         apply : (value : a) -> <signal-write,pure|e> ())
                        : <signal-write,pure> disposer<e>
   check-registration(root)
-  val observer = register-observer(root,User-effect,
-    fn()
-      val value = track()
-      store(root.root-current-token,Nothing)
-      mask<signal-read>{ apply(value) }
+  val live = cell(True)
+  val captured = cell(Trace-end)
+  val current = Fiber(live,captured)
+  register-fiber(root,current)
+  val bootstrap = Bootstrap-work(live,fn()
+    if !load(live) then () else
+      val next = reify-trace(root,Effect-trace,fn()
+        track()
+      ,apply)
+      store(captured,next)
   )
-  queue-observer(root,observer)
+  queue-work(root,Effect-trace,bootstrap)
   request-flush(root.root-key)
-  fn() dispatch(root,fn()
-    mask<signal-read>{ dispose-observer-inner(root,observer) }
-  )
+  fn() pretend-no-div{
+    if !load(live) then () else
+      dispose-fiber(current)
+      unregister-fiber(root,current)
+  }
 
 pub fun create-effect(root : root<e>,
                       track : () -> <signal-read,pure> a,
                       apply : (value : a) -> <signal-write,pure|e> ())
                      : <signal-write,pure> disposer<e>
   create-effect-inner(root,track,apply)
-
-pub fun on-cleanup(root : root<e>,
-                   cleanup : () -> <signal-write,pure|e> ()) : exn ()
-  check-registration(root)
-  match load(root.root-current-owner)
-    Nothing ->
-      store(root.root-cleanups,Cons(cleanup,load(root.root-cleanups)))
-    Just(owner) ->
-      if !load(owner.observer-live)
-      then throw("cleanup registered under a disposed owner")
-      else store(owner.observer-cleanups,
-                 Cons(cleanup,load(owner.observer-cleanups)))
