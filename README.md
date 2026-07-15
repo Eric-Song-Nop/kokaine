@@ -11,6 +11,21 @@ are backend-neutral, the complete browser renderer targets `jsweb`, and a
 small `wasmweb` bridge proves that retained Koka callbacks can safely re-enter
 the graph after `main` returns.
 
+## Interactive report
+
+The Chinese report [代数效应如何驱动增量 UI](docs/algebraic-effects-ui-report/index.html)
+explains the runtime from a UI engineer's perspective. It includes executable
+dependency graphs, scheduler stepping, batching and ownership experiments, a
+React/Vue/Solid comparison, and the real Koka counter demo.
+
+```sh
+make serve-report
+```
+
+Then open
+`http://127.0.0.1:4173/docs/algebraic-effects-ui-report/`. Run the report's
+static integrity checks with `make test-report`.
+
 ## Why algebraic effects
 
 Ordinary signal libraries hide a mutable dependency collector behind every

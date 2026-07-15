@@ -4,7 +4,7 @@ UV ?= uv
 
 KOKA_FLAGS := -j1 -i./src
 
-.PHONY: test test-native test-all test-wasm build-counter build-browser-fixtures browser-install test-browser serve
+.PHONY: test test-native test-all test-wasm test-report build-counter build-browser-fixtures browser-install test-browser serve serve-report
 
 test: test-native
 
@@ -33,7 +33,15 @@ test-browser: build-browser-fixtures
 test-wasm:
 	./support/wasmweb-proof/run.sh test
 
-test-all: test-native test-browser test-wasm
+test-report:
+	node --check docs/algebraic-effects-ui-report/report.js
+	python3 test/report_html.py
+
+test-all: test-native test-browser test-wasm test-report
 
 serve: build-counter
+	python3 -m http.server 4173 --bind 127.0.0.1
+
+serve-report: build-counter
+	@echo "Kokaine report: http://127.0.0.1:4173/docs/algebraic-effects-ui-report/"
 	python3 -m http.server 4173 --bind 127.0.0.1
