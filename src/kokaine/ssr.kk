@@ -106,5 +106,5 @@ fun render-view(node : view<e>) : <signal-read,pure> string
       if safe-name.is-void-element then opening
       else opening ++ render-children(children) ++ "</" ++ safe-name ++ ">"
 
-pub fun render(root : root<e>, node : view<e>) : <pure|e> string
+pub fun render(root : root<e>, node : view<e>) : <exn|e> string
   sample(root,fn() render-view(node))

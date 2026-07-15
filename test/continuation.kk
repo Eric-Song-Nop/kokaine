@@ -1,6 +1,6 @@
 /*--------------------------------------------------------------------------
   Characterization checks for the raw resumptions used by the reactive
-  observer scheduler. These intentionally test Koka's control semantics in
+  reactive scheduler. These intentionally test Koka's control semantics in
   isolation from the dependency tracker.
 --------------------------------------------------------------------------*/
 module continuation

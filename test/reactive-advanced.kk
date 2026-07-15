@@ -363,7 +363,7 @@ fun test-failed-parent-disposes-unstarted-child()
 
   update(root){ child-source.set(11) }
   hidden-load(child-tracks).check-int(0,
-    "disposed child leaves no subscription to its source")
+    "disposed child leaves no continuation capability on its source")
   hidden-load(child-applies).check-int(0,
     "disposed child stays silent after later source writes")
   root.dispose()
@@ -631,7 +631,8 @@ fun test-owner-validation-failure-preserves-child-ticket()
 
 
 // --------------------------------------------------------------------------
-// Recursive owner checkpoints fail explicitly and leave the root recoverable
+// Cleanup runs in a retired structural frame. Registration there must fail
+// explicitly, leave no orphan producer, and keep the Pending parent K usable.
 // --------------------------------------------------------------------------
 
 fun test-owner-checkpoint-cycle-is-controlled()
@@ -640,7 +641,7 @@ fun test-owner-checkpoint-cycle-is-controlled()
   val child-runs = hidden-cell(0)
   val parent-runs = hidden-cell(0)
 
-  val (root,(epoch,payload)) = create-root fn(root)
+  val (root,(epoch,_payload)) = create-root fn(root)
     val epoch = signal(root,0)
     val payload = signal(root,10)
     val stop-parent = create-effect(root,fn()
@@ -662,35 +663,30 @@ fun test-owner-checkpoint-cycle-is-controlled()
     )
     (epoch,payload)
 
-  update(root){ epoch.set(1) }
-  hidden-load(parent-runs).check-int(2,
-    "cleanup-created memo becomes a tracked owner checkpoint")
-  hidden-load(child-runs).check-int(1,
-    "cleanup-created owned memo initializes exactly once")
-
-  val failed : error<()> = mask<exn>{
-    error/try fn() update(root){ payload.set(11) }
+  val rejected : error<()> = mask<exn>{
+    error/try fn() update(root){ epoch.set(1) }
   }
-  check(failed.is-error,
-    "an owner/owned checkpoint cycle is rejected instead of recursing")
-  hidden-load(child-runs).check-int(1,
-    "cycle detection precedes stale owned memo calculation")
-  hidden-load(parent-runs).check-int(2,
-    "cycle detection publishes no partial parent generation")
+  check(rejected.is-error,
+    "registration from a retired cleanup frame is rejected")
+  hidden-load(parent-runs).check-int(1,
+    "rejected cleanup publishes no partial parent generation")
+  hidden-load(child-runs).check-int(0,
+    "rejected cleanup starts no orphan memo producer")
+  check(hidden-load(slot).is-nothing,
+    "rejected cleanup exposes no orphan memo capability")
 
-  // Stop recreating the unsupported owner/owned cycle, then invalidate the
-  // owner directly. Its next continuation generation no longer reads a child.
+  // Disable the invalid cleanup action. The same retained Pending parent
+  // continuation consumes the latest committed source value and recovers.
   hidden-store(allow-cleanup-spawn,False)
   update(root){ epoch.set(2) }
-  hidden-load(parent-runs).check-int(3,
-    "direct owner invalidation recovers after checkpoint-cycle rejection")
-  hidden-load(child-runs).check-int(1,
-    "recovery does not rerun the rejected owned memo")
+  hidden-load(parent-runs).check-int(2,
+    "pending parent continuation recovers after cleanup rejection")
+  hidden-load(child-runs).check-int(0,
+    "recovery cannot revive the rejected producer")
 
-  // Root disposal runs the current cleanup with registration still disabled.
   root.dispose()
   check(root.is-disposed,
-    "checkpoint-cycle recovery still leaves the root disposable")
+    "cleanup rejection still leaves the root disposable")
 
 
 // --------------------------------------------------------------------------
@@ -738,8 +734,8 @@ fun test-owner-preflight-pull-does-not-reenter-flush()
     "owner preflight commit cannot re-enter an upstream producer frame")
 
   update(root){ trigger.set(2) }
-  hidden-load(track-runs).check-int(2,
-    "queued parent generation recovers after guarded owner preflight")
+  hidden-load(track-runs).check-int(1,
+    "queued parent resumes after its read without replaying the track prefix")
   sample(root){ require-owned-memo(slot).get }.check-int(2,
     "recovery publishes a readable replacement owned memo")
   root.dispose()

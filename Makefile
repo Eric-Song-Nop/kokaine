@@ -11,10 +11,15 @@ test: test-native
 test-native:
 	$(KOKA) $(KOKA_FLAGS) -e test/trace-semantics.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/structural-scopes.kk
+	$(KOKA) $(KOKA_FLAGS) -e test/targeted-settle.kk
+	$(KOKA) $(KOKA_FLAGS) -e test/targeted-settle-canary.kk
+	$(KOKA) $(KOKA_FLAGS) -e test/execution-planes.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/stateful-entry-gates.kk
+	$(KOKA) $(KOKA_FLAGS) -e test/entry-targeted-settle.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/entry-structural.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/smoke.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/continuation.kk
+	$(KOKA) $(KOKA_FLAGS) -e test/final-control-rollback.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/reactive.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/reactive-advanced.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/reactive-stress.kk

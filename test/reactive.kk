@@ -3,7 +3,7 @@ module reactive
 import kokaine/reactive
 import std/core/unsafe
 
-effect ctl abort-observer-round() : ()
+effect ctl abort-continuation-turn() : ()
 
 
 // --------------------------------------------------------------------------
@@ -40,15 +40,15 @@ fun hidden-load(cell : ref<global,a>) : a
 fun hidden-store(cell : ref<global,a>, value : a) : ()
   unsafe-total { cell := value }
 
-fun completes-observer-round(action : () -> <abort-observer-round,pure|e> bool)
-                            : <pure|e> bool
-  with final ctl abort-observer-round() False
+fun completes-continuation-turn(action : () -> <abort-continuation-turn,pure|e> bool)
+                                : <pure|e> bool
+  with final ctl abort-continuation-turn() False
   action()
 
-fun require-observer-round(action : () -> <abort-observer-round,pure|e> a)
-                          : <div,exn|e> a
-  with final ctl abort-observer-round()
-    throw("unexpected observer round abort")
+fun require-continuation-turn(action : () -> <abort-continuation-turn,pure|e> a)
+                              : <div,exn|e> a
+  with final ctl abort-continuation-turn()
+    throw("unexpected continuation turn abort")
   action()
 
 
@@ -75,10 +75,10 @@ fun test-signals-and-memos()
   (!seen).check-ints([1],"equal signal write is ignored")
 
   update(root){ count.set(3) }
-  (!seen).check-ints([1],"equal memo output prunes its observer")
+  (!seen).check-ints([1],"equal memo output prunes its consumer")
 
   update(root){ count.set(4) }
-  (!seen).check-ints([0,1],"changed memo output reaches observer")
+  (!seen).check-ints([0,1],"changed memo output reaches its consumer")
 
   update(root)
     batch(root)
@@ -147,48 +147,66 @@ fun test-untrack()
   root.dispose()
 
 fun test-captured-incrementality()
-  val left-tracks = hidden-cell(0)
-  val right-tracks = hidden-cell(0)
-  val fanin-tracks = hidden-cell(0)
+  val left-prefixes = hidden-cell(0)
+  val left-suffixes = hidden-cell(0)
+  val right-prefixes = hidden-cell(0)
+  val right-suffixes = hidden-cell(0)
+  val fanin-prefixes = hidden-cell(0)
+  val fanin-suffixes = hidden-cell(0)
   val fanin-applies = hidden-cell(0)
 
   val (root,(left,right)) = create-root fn(root)
     val left = signal(root,0)
     val right = signal(root,0)
     val stop-left = create-effect(root,fn()
-      hidden-store(left-tracks,hidden-load(left-tracks) + 1)
-      left.get
+      hidden-store(left-prefixes,hidden-load(left-prefixes) + 1)
+      val value = left.get
+      hidden-store(left-suffixes,hidden-load(left-suffixes) + 1)
+      value
     ,fn(_) ())
     val stop-right = create-effect(root,fn()
-      hidden-store(right-tracks,hidden-load(right-tracks) + 1)
-      right.get
+      hidden-store(right-prefixes,hidden-load(right-prefixes) + 1)
+      val value = right.get
+      hidden-store(right-suffixes,hidden-load(right-suffixes) + 1)
+      value
     ,fn(_) ())
     val stop-fanin = create-effect(root,fn()
-      hidden-store(fanin-tracks,hidden-load(fanin-tracks) + 1)
-      // Duplicate reads deliberately revisit the same source. The generation
-      // must reuse one local link, and its fired latch must resume only once.
-      left.get + left.get + right.get
+      hidden-store(fanin-prefixes,hidden-load(fanin-prefixes) + 1)
+      // Duplicate reads deliberately revisit the same source. One epoch must
+      // resume the exact suffix once, without replaying this prefix.
+      val value = left.get + left.get + right.get
+      hidden-store(fanin-suffixes,hidden-load(fanin-suffixes) + 1)
+      value
     ,fn(_)
       hidden-store(fanin-applies,hidden-load(fanin-applies) + 1)
     )
     (left,right)
 
   update(root){ left.set(1) }
-  hidden-load(left-tracks).check-int(2,
-    "source-local capture reruns its own fan-out branch")
-  hidden-load(right-tracks).check-int(1,
-    "source-local capture isolates unrelated fan-out branches")
-  hidden-load(fanin-tracks).check-int(2,
-    "duplicate reads fire one captured generation")
+  hidden-load(left-prefixes).check-int(1,
+    "source-local capture does not replay the left prefix")
+  hidden-load(left-suffixes).check-int(2,
+    "source-local capture resumes the left suffix")
+  hidden-load(right-prefixes).check-int(1,
+    "source-local capture isolates the unrelated right prefix")
+  hidden-load(right-suffixes).check-int(1,
+    "source-local capture isolates the unrelated right suffix")
+  hidden-load(fanin-prefixes).check-int(1,
+    "duplicate reads do not replay the fan-in prefix")
+  hidden-load(fanin-suffixes).check-int(2,
+    "duplicate reads resume one captured generation")
 
   update(root)
     batch(root)
       left.set(2)
       right.set(1)
-  hidden-load(left-tracks).check-int(3,"left branch advances once per batch")
-  hidden-load(right-tracks).check-int(2,"right branch advances once per batch")
-  hidden-load(fanin-tracks).check-int(3,
-    "fan-in resumes once when several sources invalidate")
+  hidden-load(left-prefixes).check-int(1,"left prefix remains one-shot")
+  hidden-load(right-prefixes).check-int(1,"right prefix remains one-shot")
+  hidden-load(fanin-prefixes).check-int(1,"fan-in prefix remains one-shot")
+  hidden-load(left-suffixes).check-int(3,"left suffix advances once per batch")
+  hidden-load(right-suffixes).check-int(2,"right suffix advances once per batch")
+  hidden-load(fanin-suffixes).check-int(3,
+    "fan-in suffix resumes once when several sources invalidate")
   hidden-load(fanin-applies).check-int(3,
     "fan-in publishes one complete value per generation")
   root.dispose()
@@ -304,9 +322,9 @@ fun test-self-disposal()
   stop()
   root.dispose()
   if hidden-load(runs) == 2 then ()
-  else throw("self-disposed observer published another runnable process")
+  else throw("self-disposed continuation published another runnable process")
   if hidden-load(cleanups) == 2 then ()
-  else throw("self-disposal did not clean both observer generations")
+  else throw("self-disposal did not clean both continuation generations")
 
 fun test-cleanup-self-disposal()
   val runs = hidden-cell(0)
@@ -333,7 +351,7 @@ fun test-cleanup-self-disposal()
   update(root){ source.set(2) }
   root.dispose()
   if hidden-load(runs) == 1 then ()
-  else throw("cleanup self-disposal resumed a finalized observer")
+  else throw("cleanup self-disposal resumed a finalized continuation")
   if hidden-load(cleanups) == 1 then ()
   else throw("cleanup self-disposal ran cleanup more than once")
 
@@ -372,32 +390,32 @@ fun test-disposed-owner-rejects-registration()
 fun test-final-control-recovery()
   val runs = hidden-cell(0)
 
-  val built : (root<<abort-observer-round>>,signal<int>) =
-    require-observer-round fn()
+  val built =
+    require-continuation-turn fn()
       create-root fn(root)
         val source = signal(root,0)
         val stop = create-effect(root,fn() source.get,fn(value)
           hidden-store(runs,hidden-load(runs) + 1)
-          if value == 1 then abort-observer-round() else ()
+          if value == 1 then abort-continuation-turn() else ()
         )
         source
   val (root,source) = built
 
-  val completed = completes-observer-round fn()
+  val completed = completes-continuation-turn fn()
     update(root){ source.set(1) }
     True
   if completed then
-    throw("final control did not abort the observer round")
+    throw("final control did not abort the continuation turn")
   else ()
 
-  val recovered = completes-observer-round fn()
+  val recovered = completes-continuation-turn fn()
     update(root){ source.set(2) }
     True
   if recovered then ()
   else throw("final control unexpectedly aborted the recovery round")
   if hidden-load(runs) == 3 then ()
-  else throw("observer did not recover after final control abort")
-  val disposed = completes-observer-round fn()
+  else throw("continuation did not recover after final control abort")
+  val disposed = completes-continuation-turn fn()
     root.dispose()
     True
   if disposed && root.is-disposed then ()
@@ -579,29 +597,33 @@ fun test-late-registration()
   root.dispose()
 
 fun mutate-total(root : root<total>, source : signal<int>, value : int)
-                : <pure> ()
+                : exn ()
   update(root){ source.set(value) }
 
-fun read-total(root : root<total>, source : signal<int>) : <pure> int
+fun read-total(root : root<total>, source : signal<int>) : exn int
   sample(root){ source.get }
 
-fun test-nested-handler-containment()
+fun test-nested-handler-coherence()
   val built : (root<total>,signal<int>) = create-root fn(root)
     signal(root,0)
   val (root,source) = built
-  val failed : error<memo<int>> = mask<exn>{
-    error/try fn()
-      update(root)
-        memo(root,0,fn(_)
-          // This helper discharges :signal-write itself. Runtime phase checks
-          // still reject it while the memo is collecting dependencies.
-          mutate-total(root,source,7)
-          source.get
-        )
-  }
-  if failed.is-error then () else throw("nested handler write was accepted")
-  val unchanged = sample(root){ source.get }
-  if unchanged == 0 then () else throw("rejected memo write was committed")
+  val derived = update(root)
+    derive(root,0,fn()
+      // This handled write is part of the one-shot prefix. The tracked read
+      // below captures only its suffix, so later invalidation cannot replay it.
+      mutate-total(root,source,7)
+      source.get
+    )
+  val initial-source = sample(root){ source.get }
+  if initial-source == 7 then ()
+  else throw("nested write did not commit before the first capture")
+  val initial-derived = sample(root){ derived.get }
+  if initial-derived == 7 then ()
+  else throw("nested handler bootstrap published an incoherent value")
+  update(root){ source.set(8) }
+  val next-derived = sample(root){ derived.get }
+  if next-derived == 8 then ()
+  else throw("resuming the suffix replayed its handled-write prefix")
   root.dispose()
 
 fun test-apply-is-untracked()
@@ -643,7 +665,7 @@ fun test-cleanup-failure-recovery()
   check(failed.is-error,"cleanup failure escapes the triggering update")
   update(root){ value.set(2) }
   (!events).check-strings(["run2","clean0","run0"],
-    "cleanup failure leaves the observer retryable")
+    "cleanup failure leaves the continuation retryable")
   root.dispose()
 
 fun test-memo-error-state()
@@ -726,7 +748,7 @@ pub fun main()
   test-generation-checkpoint-equality()
   test-clean-read-failure-isolation()
   test-late-registration()
-  test-nested-handler-containment()
+  test-nested-handler-coherence()
   test-apply-is-untracked()
   test-cleanup-failure-recovery()
   test-memo-error-state()

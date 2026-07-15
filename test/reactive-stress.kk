@@ -10,6 +10,7 @@ module reactive-stress
 
 import kokaine/reactive
 import std/core/unsafe
+import std/core/undiv
 
 val checks : ref<global,int> = unsafe-total { ref(0) }
 
@@ -36,6 +37,14 @@ fun check-bool(actual : bool, expected : bool, label : string)
 
 fun step-label(step : int, field : string) : string
   "step " ++ step.show ++ " / " ++ field
+
+fun nonzero-mod(value : int, divisor : int) : int
+  // Every call site uses a static nonzero divisor; discharge the primitive
+  // division effect so it does not pollute the transaction model's row.
+  pretend-no-div{ value % divisor }
+
+fun widen-div(action : () -> <exn|e> a) : <div,exn|e> a
+  mask<div>{ action() }
 
 
 // --------------------------------------------------------------------------
@@ -73,7 +82,8 @@ fun advance-model(model : reference-model,
                  then calculated-selected
                  else model.model-selected
   val selected-commit = selected-dirty && selected != model.model-selected
-  val bucket = if selected-commit then selected % 5 else model.model-bucket
+  val bucket = if selected-commit then nonzero-mod(selected,5)
+               else model.model-bucket
   val bucket-commit = selected-commit && bucket != model.model-bucket
   val joined = if selected-commit then selected * 5 else model.model-joined
 
@@ -139,7 +149,7 @@ fun create-stress-fixture()
     )
     val bucket = memo(root,0,fn(_)
       hidden-store(bucket-runs,hidden-load(bucket-runs) + 1)
-      selected.get % 5
+      nonzero-mod(selected.get,5)
     )
     val left = memo(root,0,fn(_)
       hidden-store(left-runs,hidden-load(left-runs) + 1)
@@ -216,16 +226,16 @@ fun verify-fixture(fixture : stress-fixture,
 // --------------------------------------------------------------------------
 
 fun next-seed(seed : int) : int
-  (seed * 48271) % 2147483647
+  nonzero-mod(seed * 48271,2147483647)
 
 fun stress-loop(fixture : stress-fixture, model : reference-model,
                 seed : int, step : int, remaining : int)
                : <div,exn> reference-model
   if remaining <= 0 then model else
     val seed1 = next-seed(seed)
-    val value = seed1 % 97
-    val kind = step % 8
-    val next-model = match kind
+    val value = nonzero-mod(seed1,97)
+    val kind = nonzero-mod(step,8)
+    val next-model = widen-div(fn() match kind
       0 ->
         // Equal write to the active branch: no token should fire.
         update(fixture.fixture-root)
@@ -257,8 +267,8 @@ fun stress-loop(fixture : stress-fixture, model : reference-model,
           advance-model(model,model.model-x,final-value,model.model-choose,
                         False,True,False)
       3 ->
-        // Two effective writes collapse into one observer generation.
-        val final-value = (value + 1) % 97
+        // Two effective writes collapse into one continuation generation.
+        val final-value = nonzero-mod(value + 1,97)
         if model.model-choose then
           update(fixture.fixture-root)
             batch(fixture.fixture-root)
@@ -307,9 +317,9 @@ fun stress-loop(fixture : stress-fixture, model : reference-model,
                         value != model.model-x,False,True)
       6 ->
         // Three-source fan-in with a possibly unchanged final branch selector.
-        val final-x = (value + 3) % 97
-        val final-y = (value * 2 + 1) % 97
-        val final-choose = value % 2 == 0
+        val final-x = nonzero-mod(value + 3,97)
+        val final-y = nonzero-mod(value * 2 + 1,97)
+        val final-choose = nonzero-mod(value,2) == 0
         update(fixture.fixture-root)
           batch(fixture.fixture-root)
             fixture.fixture-x.set(final-x)
@@ -321,7 +331,7 @@ fun stress-loop(fixture : stress-fixture, model : reference-model,
                       final-choose != model.model-choose)
       _ ->
         // A deterministic single write keeps the schedule non-periodic.
-        match seed1 % 3
+        match nonzero-mod(seed1,3)
           0 ->
             update(fixture.fixture-root){ fixture.fixture-x.set(value) }
             advance-model(model,value,model.model-y,model.model-choose,
@@ -331,12 +341,13 @@ fun stress-loop(fixture : stress-fixture, model : reference-model,
             advance-model(model,model.model-x,value,model.model-choose,
                           False,value != model.model-y,False)
           _ ->
-            val final-choose = value % 2 == 0
+            val final-choose = nonzero-mod(value,2) == 0
             update(fixture.fixture-root){
               fixture.fixture-choose.set(final-choose)
             }
             advance-model(model,model.model-x,model.model-y,final-choose,
                           False,False,final-choose != model.model-choose)
+    )
 
     verify-fixture(fixture,next-model,step)
     stress-loop(fixture,next-model,seed1,step + 1,remaining - 1)
@@ -351,6 +362,7 @@ pub fun main()
   )
   verify-fixture(fixture,initial,0)
   val final-model = stress-loop(fixture,initial,17,1,1200)
-  check-int(sample(fixture.fixture-root){ fixture.fixture-joined.get },
-            final-model.model-joined,"final fixture/reference invariant")
-  fixture.fixture-root.dispose()
+  widen-div fn()
+    check-int(sample(fixture.fixture-root){ fixture.fixture-joined.get },
+              final-model.model-joined,"final fixture/reference invariant")
+    fixture.fixture-root.dispose()
