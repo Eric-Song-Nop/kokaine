@@ -3,6 +3,8 @@ module reactive
 import kokaine/reactive
 import std/core/unsafe
 
+effect ctl abort-observer-round() : ()
+
 
 // --------------------------------------------------------------------------
 // Tiny dependency-free test harness
@@ -28,6 +30,26 @@ fun check-strings(actual : list<string>, expected : list<string>, label : string
 
 fun push(cell : ref<global,list<a>>, value : a)
   cell := Cons(value,!cell)
+
+fun hidden-cell(value : a) : ref<global,a>
+  unsafe-total { ref(value) }
+
+fun hidden-load(cell : ref<global,a>) : a
+  unsafe-total { !cell }
+
+fun hidden-store(cell : ref<global,a>, value : a) : ()
+  unsafe-total { cell := value }
+
+fun completes-observer-round(action : () -> <abort-observer-round,pure|e> bool)
+                            : <pure|e> bool
+  with final ctl abort-observer-round() False
+  action()
+
+fun require-observer-round(action : () -> <abort-observer-round,pure|e> a)
+                          : <div,exn|e> a
+  with final ctl abort-observer-round()
+    throw("unexpected observer round abort")
+  action()
 
 
 // --------------------------------------------------------------------------
@@ -124,6 +146,53 @@ fun test-untrack()
   (!seen).check-ints([22,11],"later tracked run samples latest untracked value")
   root.dispose()
 
+fun test-captured-incrementality()
+  val left-tracks = hidden-cell(0)
+  val right-tracks = hidden-cell(0)
+  val fanin-tracks = hidden-cell(0)
+  val fanin-applies = hidden-cell(0)
+
+  val (root,(left,right)) = create-root fn(root)
+    val left = signal(root,0)
+    val right = signal(root,0)
+    val stop-left = create-effect(root,fn()
+      hidden-store(left-tracks,hidden-load(left-tracks) + 1)
+      left.get
+    ,fn(_) ())
+    val stop-right = create-effect(root,fn()
+      hidden-store(right-tracks,hidden-load(right-tracks) + 1)
+      right.get
+    ,fn(_) ())
+    val stop-fanin = create-effect(root,fn()
+      hidden-store(fanin-tracks,hidden-load(fanin-tracks) + 1)
+      // Duplicate reads deliberately revisit the same source. The generation
+      // must reuse one local link, and its fired latch must resume only once.
+      left.get + left.get + right.get
+    ,fn(_)
+      hidden-store(fanin-applies,hidden-load(fanin-applies) + 1)
+    )
+    (left,right)
+
+  update(root){ left.set(1) }
+  hidden-load(left-tracks).check-int(2,
+    "source-local capture reruns its own fan-out branch")
+  hidden-load(right-tracks).check-int(1,
+    "source-local capture isolates unrelated fan-out branches")
+  hidden-load(fanin-tracks).check-int(2,
+    "duplicate reads fire one captured generation")
+
+  update(root)
+    batch(root)
+      left.set(2)
+      right.set(1)
+  hidden-load(left-tracks).check-int(3,"left branch advances once per batch")
+  hidden-load(right-tracks).check-int(2,"right branch advances once per batch")
+  hidden-load(fanin-tracks).check-int(3,
+    "fan-in resumes once when several sources invalidate")
+  hidden-load(fanin-applies).check-int(3,
+    "fan-in publishes one complete value per generation")
+  root.dispose()
+
 
 // --------------------------------------------------------------------------
 // Glitch freedom through a converging diamond
@@ -207,6 +276,133 @@ fun test-owned-child()
   )
   root.dispose()
 
+fun test-self-disposal()
+  val runs = hidden-cell(0)
+  val cleanups = hidden-cell(0)
+  val stop-cell : ref<global,maybe<disposer<total>>> = hidden-cell(Nothing)
+
+  val built : (root<total>,(signal<int>,disposer<total>)) =
+    create-root fn(root)
+      val source = signal(root,0)
+      val stop = create-effect(root,fn() source.get,fn(value)
+        hidden-store(runs,hidden-load(runs) + 1)
+        on-cleanup(root,fn()
+          hidden-store(cleanups,hidden-load(cleanups) + 1)
+        )
+        if value == 1 then
+          match hidden-load(stop-cell)
+            Just(dispose) -> dispose()
+            Nothing -> ()
+        else ()
+      )
+      (source,stop)
+  val (root,(source,stop)) = built
+  hidden-store(stop-cell,Just(stop))
+
+  update(root){ source.set(1) }
+  update(root){ source.set(2) }
+  stop()
+  root.dispose()
+  if hidden-load(runs) == 2 then ()
+  else throw("self-disposed observer published another runnable process")
+  if hidden-load(cleanups) == 2 then ()
+  else throw("self-disposal did not clean both observer generations")
+
+fun test-cleanup-self-disposal()
+  val runs = hidden-cell(0)
+  val cleanups = hidden-cell(0)
+  val stop-cell : ref<global,maybe<disposer<total>>> = hidden-cell(Nothing)
+
+  val built : (root<total>,signal<int>) =
+    create-root fn(root)
+      val source = signal(root,0)
+      val stop = create-effect(root,fn() source.get,fn(_)
+        hidden-store(runs,hidden-load(runs) + 1)
+        on-cleanup(root,fn()
+          hidden-store(cleanups,hidden-load(cleanups) + 1)
+          match hidden-load(stop-cell)
+            Just(dispose) -> dispose()
+            Nothing -> ()
+        )
+      )
+      hidden-store(stop-cell,Just(stop))
+      source
+  val (root,source) = built
+
+  update(root){ source.set(1) }
+  update(root){ source.set(2) }
+  root.dispose()
+  if hidden-load(runs) == 1 then ()
+  else throw("cleanup self-disposal resumed a finalized observer")
+  if hidden-load(cleanups) == 1 then ()
+  else throw("cleanup self-disposal ran cleanup more than once")
+
+fun test-disposed-owner-rejects-registration()
+  val child-runs = hidden-cell(0)
+  val stop-cell : ref<global,maybe<disposer<total>>> = hidden-cell(Nothing)
+
+  val built : (root<total>,signal<int>) =
+    create-root fn(root)
+      val source = signal(root,0)
+      val stop = create-effect(root,fn() source.get,fn(value)
+        if value == 1 then
+          match hidden-load(stop-cell)
+            Just(dispose) -> dispose()
+            Nothing -> ()
+          val orphan = create-effect(root,fn() source.get,fn(_)
+            hidden-store(child-runs,hidden-load(child-runs) + 1)
+          )
+          ()
+        else ()
+      )
+      hidden-store(stop-cell,Just(stop))
+      source
+  val (root,source) = built
+
+  val failed : error<()> = mask<exn>{
+    error/try fn() update(root){ source.set(1) }
+  }
+  if failed.is-error then ()
+  else throw("registration under a disposed owner was accepted")
+  update(root){ source.set(2) }
+  root.dispose()
+  if hidden-load(child-runs) == 0 then ()
+  else throw("registration under a disposed owner leaked a child")
+
+fun test-final-control-recovery()
+  val runs = hidden-cell(0)
+
+  val built : (root<<abort-observer-round>>,signal<int>) =
+    require-observer-round fn()
+      create-root fn(root)
+        val source = signal(root,0)
+        val stop = create-effect(root,fn() source.get,fn(value)
+          hidden-store(runs,hidden-load(runs) + 1)
+          if value == 1 then abort-observer-round() else ()
+        )
+        source
+  val (root,source) = built
+
+  val completed = completes-observer-round fn()
+    update(root){ source.set(1) }
+    True
+  if completed then
+    throw("final control did not abort the observer round")
+  else ()
+
+  val recovered = completes-observer-round fn()
+    update(root){ source.set(2) }
+    True
+  if recovered then ()
+  else throw("final control unexpectedly aborted the recovery round")
+  if hidden-load(runs) == 3 then ()
+  else throw("observer did not recover after final control abort")
+  val disposed = completes-observer-round fn()
+    root.dispose()
+    True
+  if disposed && root.is-disposed then ()
+  else throw("final control recovery left the root undisposed")
+
 
 // --------------------------------------------------------------------------
 // Non-reentrant writes and exception-state restoration
@@ -251,7 +447,7 @@ fun test-exception-restoration()
 // Regression cases from independent scheduler and capability review
 // --------------------------------------------------------------------------
 
-fun test-transitive-pending()
+fun test-transitive-batch-freshness()
   val (root,(source,leaf)) = create-root fn(root)
     val source = signal(root,1)
     val mid = memo(root,0,fn(_) source.get * 2)
@@ -262,10 +458,10 @@ fun test-transitive-pending()
     batch(root)
       source.set(2)
       leaf.get
-  observed.check-int(8,"pulling a transitive memo settles stale ancestors")
+  observed.check-int(8,"pulling a transitive memo settles dirty ancestors")
   root.dispose()
 
-fun test-dynamic-rank-change()
+fun test-dynamic-depth-atomicity()
   val (root,(source,toggle,consumer)) = create-root fn(root)
     val source = signal(root,1)
     val toggle = signal(root,0)
@@ -278,13 +474,87 @@ fun test-dynamic-rank-change()
 
   update(root)
     batch(root)
-      // The consumer was rank one before this update and is queued before the
-      // previously unrelated deep chain. Pull settling must discover the new
-      // dependency before committing `previous + leaf`.
+      // The consumer was previously independent from the deep chain and can be
+      // selected before it. Pull settlement must discover the new dependency
+      // before committing `previous + leaf`.
       toggle.set(1)
       source.set(2)
   sample(root){ consumer.get }.check-int(4,
-    "dynamic rank changes observe one atomic epoch")
+    "dynamic depth changes observe one atomic epoch")
+  root.dispose()
+
+fun test-targeted-producer-pull()
+  val (root,(x,y,toggle,combined)) = create-root fn(root)
+    val x = signal(root,0)
+    val y = signal(root,0)
+    val toggle = signal(root,False)
+    val branch = memo(root,0,fn(_) x.get)
+    val selected = memo(root,0,fn(_)
+      if toggle.get then branch.get else 0
+    )
+    val combined = memo(root,0,fn(_) selected.get + y.get)
+    (x,y,toggle,combined)
+
+  update(root)
+    batch(root)
+      // This creates the queue order selected, combined, branch. Pulling the
+      // branch from selected must extract that exact producer instead of
+      // running the unrelated combined sibling and reporting a false cycle.
+      x.set(1)
+      y.set(1)
+      toggle.set(True)
+  sample(root){ combined.get }.check-int(2,
+    "targeted producer pull preserves an acyclic dynamic dependency")
+  root.dispose()
+
+fun test-generation-checkpoint-equality()
+  val downstream-runs = hidden-cell(0)
+  val (root,(count,accumulated)) = create-root fn(root)
+    val count = signal(root,1)
+    val parity = memo(root,0,fn(_) count.get % 2)
+    val accumulated = memo(root,0,fn(previous)
+      val current = parity.get
+      hidden-store(downstream-runs,hidden-load(downstream-runs) + 1)
+      previous + current
+    )
+    (count,accumulated)
+
+  hidden-load(downstream-runs).check-int(1,
+    "downstream memo captures one initial generation")
+  val observed = dispatch(root)
+    batch(root)
+      count.set(3)
+      accumulated.get
+  observed.check-int(1,
+    "checkpoint validation returns the cached value after equal commit")
+  hidden-load(downstream-runs).check-int(1,
+    "equal upstream memo does not execute a stateful downstream memo")
+  root.dispose()
+
+fun test-clean-read-failure-isolation()
+  val failing-runs = hidden-cell(0)
+  val (root,(trigger,stable)) = create-root fn(root)
+    val trigger = signal(root,0)
+    val failing = memo(root,0,fn(_)
+      hidden-store(failing-runs,hidden-load(failing-runs) + 1)
+      val value = trigger.get
+      if value == 1 then throw("intentional unrelated memo failure")
+      else value
+    )
+    val stable-source = signal(root,7)
+    val stable = memo(root,0,fn(_) stable-source.get * 2)
+    (trigger,stable)
+
+  val failed : error<()> = mask<exn>{
+    error/try fn() update(root){ trigger.set(1) }
+  }
+  check(failed.is-error,"unrelated memo failure remains queued for retry")
+  hidden-load(failing-runs).check-int(2,
+    "failing memo ran initially and once for the failed update")
+  sample(root){ stable.get }.check-int(14,
+    "reading a clean memo does not flush unrelated failed work")
+  hidden-load(failing-runs).check-int(2,
+    "clean memo validation leaves unrelated retry work untouched")
   root.dispose()
 
 fun test-late-registration()
@@ -423,7 +693,7 @@ fun churn(source : signal<int>, derived : memo<int>, count : int)
     val current = derived.get
     churn(source,derived,count - 1)
 
-fun test-lazy-queue-coherence()
+fun test-continuation-churn-coherence()
   val (root,(source,derived)) = create-root fn(root)
     val source = signal(root,0)
     val derived = memo(root,0,fn(_) source.get)
@@ -440,18 +710,26 @@ pub fun main()
   test-signals-and-memos()
   test-dynamic-dependencies()
   test-untrack()
+  test-captured-incrementality()
   test-diamond()
   test-cleanup()
   test-owned-child()
+  test-self-disposal()
+  test-cleanup-self-disposal()
+  test-disposed-owner-rejects-registration()
+  test-final-control-recovery()
   test-non-reentrant-write()
   test-exception-restoration()
-  test-transitive-pending()
-  test-dynamic-rank-change()
+  test-transitive-batch-freshness()
+  test-dynamic-depth-atomicity()
+  test-targeted-producer-pull()
+  test-generation-checkpoint-equality()
+  test-clean-read-failure-isolation()
   test-late-registration()
   test-nested-handler-containment()
   test-apply-is-untracked()
   test-cleanup-failure-recovery()
   test-memo-error-state()
   test-disposal-isolation()
-  test-lazy-queue-coherence()
+  test-continuation-churn-coherence()
   println("reactive: " ++ (!checks).show ++ " checks passed")

@@ -6,17 +6,18 @@ effects, batching, and ownership are expressed with Koka's algebraic effects;
 the browser layer uses an effect-handled Koka DSL instead of JSX or a virtual
 DOM.
 
-The implementation targets Koka 3.2.3. The reactive graph and HTML vocabulary
-are backend-neutral, the complete browser renderer targets `jsweb`, and a
-small `wasmweb` bridge proves that retained Koka callbacks can safely re-enter
-the graph after `main` returns.
+The implementation targets Koka 3.2.3. The source-local continuation trace,
+one-shot observer scheduler, and HTML vocabulary are backend-neutral; the
+complete browser renderer targets `jsweb`, and a small `wasmweb` bridge proves
+that retained Koka callbacks can safely re-enter the runtime after `main`
+returns.
 
 ## Interactive report
 
 The Chinese report [代数效应如何驱动增量 UI](docs/algebraic-effects-ui-report/index.html)
 explains the runtime from a UI engineer's perspective. It includes executable
-dependency graphs, scheduler stepping, batching and ownership experiments, a
-React/Vue/Solid comparison, and the real Koka counter demo.
+continuation-trace visualizations, scheduler stepping, batching and ownership
+experiments, a React/Vue/Solid comparison, and the real Koka counter demo.
 
 ```sh
 make serve-report
@@ -33,9 +34,9 @@ getter. Kokaine makes the capabilities visible in inferred effect rows:
 
 | Capability     | Operation               | Handler responsibility                                               |
 | -------------- | ----------------------- | -------------------------------------------------------------------- |
-| `signal-read`  | `count.get`             | Return the value and, when tracking, record the dynamic edge.        |
-| `signal-write` | `count.set(1)`          | Commit atomically, invalidate subscribers, and schedule propagation. |
-| `html<e>`      | `text`, `div`, `region` | Collect emitted nodes into a backend-neutral `view<e>`.              |
+| `signal-read`  | `count.get`             | Validate its producer, then attach a wake token and version checkpoint. |
+| `signal-write` | `count.set(1)`          | Commit atomically, fire source-local wake capabilities, and flush.    |
+| `html<e>`      | `text`, `div`, `region` | Collect emitted nodes into a backend-neutral `view<e>`.               |
 
 This split has practical consequences. A memo calculator accepts
 `signal-read` but not `signal-write`; an effect separates its tracked function
@@ -46,12 +47,26 @@ survives higher-order code.
 
 ## Current guarantees
 
-- Dynamic dependencies are rebuilt on every successful computation.
-- Derivations settle before user effects and are ordered by graph rank.
-- `Pending` propagation preserves equality pruning through memo chains, so
-  diamonds never expose a mixture of old and new values.
-- Queue entries are deduplicated and lazy reads recursively settle their
-  producers without re-entering the global flush.
+- Dynamic source subscriptions are rebuilt for every observer generation;
+  the previous token eagerly cancels its old-branch links.
+- Observer rounds are driven by one-shot raw resumptions; action failures
+  publish the next retry continuation, and disposal explicitly finalizes
+  parked contexts.
+- Abortive host control leaves an observer retryable through a retained
+  recovery action. A resumptive or multi-shot host continuation must not
+  escape an observer round; that remains outside the supported runtime model.
+- There is no centralized dependency graph, node registry, topological rank,
+  observer reverse-edge list, or `Pending`/`Stale` propagation state.
+- Derivations settle before user effects. A memo read recursively validates
+  its generation checkpoints and extracts only the exact dirty producer, so
+  rank-free diamonds and dynamic depth changes do not mix old and new values
+  or execute an unrelated queued sibling.
+- Only an unequal signal or memo commit increments its source version and
+  fires wake tokens. An equal intermediate leaves a clean downstream
+  `memo(previous)` generation untouched.
+- Direct-handle queues deduplicate observer work, and each generation's
+  one-shot token deduplicates duplicate source wakeups; lazy validation follows
+  only the producer checkpoints required by the requested value.
 - Nested batches delay propagation while making the latest source values
   immediately readable.
 - Effects own nested effects, cleanup callbacks, DOM listeners, and regions.
@@ -129,7 +144,7 @@ For deterministic snapshots or server output, replace the DOM import with
 ## API shape
 
 - `create-root`, `root.dispose`, `update`, `sample`, and `dispatch` delimit
-  graph capabilities.
+  root-scoped reactive capabilities.
 - `signal`, `signal-by`, and `signal-always` select equality behavior.
 - `memo`, `memo-by`, and `memo-always` cache derived values and receive the
   previous successful value.
@@ -145,15 +160,22 @@ For deterministic snapshots or server output, replace the DOM import with
 See [the architecture notes](docs/architecture.md) for the scheduler, handler,
 browser re-entry, and WebAssembly design.
 
+The [continuation runtime decision record](docs/continuation-runtime-plan.md)
+records the research, capability assessment, and invariants behind the removal
+of the centralized graph in favor of source-local, continuation-indexed wake
+traces.
+
 ## Project layout
 
 ```text
-src/kokaine/reactive.kk  effect-typed graph, scheduler, batches, ownership
+src/kokaine/reactive.kk  source-local trace, continuation scheduler, ownership
 src/kokaine/html.kk      backend-neutral view values and handled HTML DSL
 src/kokaine/ssr.kk       escaped deterministic string renderer
 src/kokaine/dom.kk       jsweb DOM interpreter and asynchronous event boundary
 examples/counter.kk      responsive interactive example
 test/reactive.kk         scheduler, error, disposal, and containment invariants
+test/continuation.kk     raw resume, failure retry, and finalize semantics
+test/no_dependency_graph.py  structural assertion that graph machinery is gone
 test/html.kk             builder, liveness, escaping, and validation checks
 test/browser_counter.py  browser events, host safety, lifecycle, responsive UI
 test/dom-errors.kk       raw DOM exception translation fixture

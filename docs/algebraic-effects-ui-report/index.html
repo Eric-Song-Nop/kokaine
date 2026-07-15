@@ -38,11 +38,11 @@
         <ol>
           <li><a href="#abstract"><span>00</span>先说结论</a></li>
           <li><a href="#journey"><span>01</span>一次更新的旅程</a></li>
-          <li><a href="#flow-lab"><span>02</span>依赖图实验</a></li>
+          <li><a href="#flow-lab"><span>02</span>续体轨迹实验</a></li>
           <li><a href="#effects"><span>03</span>代数效应做了什么</a></li>
           <li><a href="#scheduler"><span>04</span>如何少算又算对</a></li>
           <li><a href="#batching"><span>05</span>批量更新</a></li>
-          <li><a href="#dynamic"><span>06</span>会变化的依赖</a></li>
+          <li><a href="#dynamic"><span>06</span>会变化的订阅</a></li>
           <li><a href="#ownership"><span>07</span>清理旧 UI</a></li>
           <li><a href="#comparison"><span>08</span>框架对比</a></li>
           <li><a href="#code"><span>09</span>Koka 代码</a></li>
@@ -98,8 +98,8 @@
           <div class="abstract-grid">
             <article>
               <span class="card-index">A</span>
-              <h2>信号是“会通知别人的值”</h2>
-              <p>读取时留下联系，写入时沿着联系通知。它像电子表格的单元格，不需要手写订阅名单。</p>
+              <h2>信号是“会唤醒续体的值”</h2>
+              <p>读取时把本轮的一次性 token 留在信号本地，并记住 memo producer 的 generation checkpoint；写入时只唤醒直接订阅者。根上不需要维护一张依赖图。</p>
             </article>
             <article>
               <span class="card-index">B</span>
@@ -109,7 +109,7 @@
             <article>
               <span class="card-index">C</span>
               <h2>代数效应是“可接管的操作接口”</h2>
-              <p>代码只说“我要读”或“我要写”，根处理器统一决定记录依赖、排队、检查和刷新。</p>
+              <p>代码只说“我要读”或“我要写”，根处理器统一决定捕获 token、递归验证 checkpoint、定向拉取和刷新。</p>
             </article>
           </div>
         </section>
@@ -133,7 +133,7 @@
               </li>
               <li>
                 <span class="journey-map__icon">02</span>
-                <div><strong>找到使用者</strong><small>平方、奇偶性、显示文字</small></div>
+                <div><strong>触发本地 token</strong><small>平方、奇偶性的续体</small></div>
               </li>
               <li>
                 <span class="journey-map__icon">03</span>
@@ -151,7 +151,7 @@
           </figure>
 
           <div class="plain-model">
-            <div class="plain-model__formula" aria-label="最小更新等于变化的数据、当前依赖关系、相等判断和执行顺序共同决定">
+            <div class="plain-model__formula" aria-label="最小更新等于变化的数据、当前 source-local 订阅、相等判断和执行顺序共同决定">
               <span>最小更新</span><b>=</b><span>变了的数据</span><b>+</b><span>当前联系</span><b>+</b><span>相等判断</span><b>+</b><span>执行顺序</span>
             </div>
             <p>
@@ -166,11 +166,11 @@
               <p class="section-number">02 / LIVE DATA FLOW</p>
               <h2>亲手推动一条数据流</h2>
             </div>
-            <p>蓝线表示本轮确实流过的变化。灰色节点没有被访问，也没有“跟着渲染”。</p>
+            <p>蓝线表示本轮确实触发的 source-local link。它们是续体轨迹的投影，不是集中存储的依赖图。</p>
           </header>
 
           <div class="lab" id="flow-lab-app">
-            <div class="lab__toolbar" role="group" aria-label="依赖图实验控制">
+            <div class="lab__toolbar" role="group" aria-label="续体轨迹实验控制">
               <button class="button button--primary" id="flow-plus" type="button">写入 +1</button>
               <button class="button button--accent" id="flow-batch" type="button">连续写 3 次</button>
               <button class="button button--quiet" id="flow-reset" type="button">复位</button>
@@ -178,7 +178,7 @@
             </div>
 
             <div class="flow-layout">
-              <div class="flow-graph graph-stage" id="flow-graph" aria-label="实时依赖图">
+              <div class="flow-graph graph-stage" id="flow-graph" aria-label="实时 source-local continuation trace">
                 <div class="graph-grid" aria-hidden="true"></div>
                 <div class="graph-node graph-node--source" id="node-count" data-node="count">
                   <small>原始数据 · signal</small>
@@ -222,7 +222,7 @@
                   <div><small>DOM 改动</small><strong id="flow-dom-count">0</strong></div>
                 </div>
                 <ol class="trace-list" id="flow-trace">
-                  <li><span>00</span>等待操作。当前依赖已在首次读取时建立。</li>
+                  <li><span>00</span>等待操作。首次读取已把当前 generation token 订阅到各个 source。</li>
                 </ol>
               </aside>
             </div>
@@ -231,8 +231,8 @@
           <div class="annotation-row">
             <article>
               <span>观察 1</span>
-              <h3>图不是预先声明的</h3>
-              <p>计算运行时读到了谁，边就连到谁；下一次走了不同分支，旧边会被移除。</p>
+              <h3>轨迹分散在 source 本地</h3>
+              <p>同一 generation 第一次读取某个 source 时安装一个本地 link 与 checkpoint；重复读取复用它。重跑前取消旧 token，下一轮按实际分支重新建立轨迹。</p>
             </article>
             <article>
               <span>观察 2</span>
@@ -260,7 +260,7 @@
               <div class="request-ticket">
                 <span>REQUEST</span>
                 <strong>请读取 count</strong>
-                <small>代码不直接碰全局依赖表</small>
+                <small>代码只发出 signal-read 操作</small>
               </div>
               <p>像前台开出请求单，只表达意图。</p>
             </article>
@@ -268,10 +268,10 @@
             <article class="analogy-card analogy-card--handler">
               <p class="analogy-card__label">根处理器 / handler</p>
               <ul>
-                <li><span>1</span>检查这个值是否属于当前根</li>
-                <li><span>2</span>先把它依赖的旧结果算新</li>
-                <li><span>3</span>记录“当前计算读过它”</li>
-                <li><span>4</span>返回最新的值</li>
+                <li><span>1</span>用 opaque root key 检查所属根</li>
+                <li><span>2</span>递归验证 producer generation checkpoint</li>
+                <li><span>3</span>失效时只定向拉取目标 producer</li>
+                <li><span>4</span>在同一稳定点读取值与版本，再订阅 token</li>
               </ul>
             </article>
             <div class="analogy-arrow" aria-hidden="true">→</div>
@@ -280,7 +280,7 @@
               <div class="request-ticket request-ticket--done">
                 <span>HANDLED</span>
                 <strong>值 = 3</strong>
-                <small>count → 当前计算 的联系已记录</small>
+                <small>当前 generation token 已留在 count 本地</small>
               </div>
               <p>一次普通读取，同时完成正确性工作。</p>
             </article>
@@ -299,7 +299,7 @@
             <div class="handler-stack__layers">
               <div><span>异常边界</span><small>DOM 或用户代码出错时恢复现场</small></div>
               <div><span>写入处理器</span><small>比较新旧值、标脏、批处理、安排刷新</small></div>
-              <div><span>读取处理器</span><small>补齐最新结果、记录依赖、返回值</small></div>
+              <div><span>读取处理器</span><small>验证 checkpoint、定向拉取、安装 token</small></div>
               <div class="handler-stack__app"><span>应用回调</span><small>count.modify(+1)</small></div>
             </div>
           </figure>
@@ -308,7 +308,7 @@
             <article>
               <h3>它不只是“换一种写回调”</h3>
               <p>
-                处理器能在一次操作周围统一加入规则：检查根是否还活着、读取前补齐结果、记录动态联系、写入后排队。这些规则不用散落在每个 signal 对象里。
+                处理器能在一次操作周围统一加入规则：检查根是否还活着、递归验证 producer checkpoint、只拉取失效目标、安装一次性 token。这些规则不用散落在应用代码里。
               </p>
             </article>
             <article>
@@ -320,7 +320,7 @@
             <article>
               <h3>同一种请求可以有不同解释</h3>
               <p>
-                正常读取会留下依赖；<code>untrack</code> 临时接管读取，把它转发成“不记录联系”。API 看起来仍是读取，运行含义被局部改变。
+                正常读取会留下 source-local 订阅；<code>untrack</code> 临时接管读取，把它转发成“不捕获 token”。API 看起来仍是读取，运行含义被局部改变。
               </p>
             </article>
           </div>
@@ -332,7 +332,7 @@
               <p class="section-number">04 / CORRECT &amp; MINIMAL</p>
               <h2>最难的不是“会更新”，而是“少算还不能算错”</h2>
             </div>
-            <p>下面的菱形数据流能暴露许多响应式运行时的细微错误。逐步执行，看变化如何被确认或截断。</p>
+            <p>下面的菱形数据流能暴露许多响应式运行时的细微错误。逐步执行，看局部 token 如何唤醒续体，以及变化如何在 memo 提交时被截断。</p>
           </header>
 
           <div class="scheduler-lab" id="scheduler-lab">
@@ -346,12 +346,12 @@
 
             <div class="state-legend" aria-label="调度状态图例">
               <span><i class="state-chip state-chip--clean"></i>干净：结果是新的</span>
-              <span><i class="state-chip state-chip--pending"></i>待确认：上游可能没真的变</span>
-              <span><i class="state-chip state-chip--stale"></i>确定过期：必须重算</span>
+              <span><i class="state-chip state-chip--pending"></i>已排队：token 本轮只唤醒一次</span>
+              <span><i class="state-chip state-chip--stale"></i>脏：直接 producer 等待续跑</span>
             </div>
 
             <div class="scheduler-stage">
-              <div class="scheduler-diamond" id="scheduler-diamond" aria-label="菱形依赖调度图">
+              <div class="scheduler-diamond" id="scheduler-diamond" aria-label="菱形 source-local continuation trace">
                 <div class="diamond-node is-clean" id="diamond-count">
                   <small>数据</small><strong>count = <span>2</span></strong><em>干净</em>
                 </div>
@@ -389,12 +389,12 @@
 
           <div class="pending-explainer">
             <div class="pending-explainer__visual" aria-hidden="true">
-              <span class="badge-stale">确定过期</span><b>→</b><span class="badge-pending">可能受影响</span><b>→</b><span class="badge-clean">仍然有效</span>
+              <span class="badge-stale">验证 checkpoint</span><b>→</b><span class="badge-pending">定向拉取 producer</span><b>→</b><span class="badge-clean">memo 提交截断</span>
             </div>
             <div>
-              <h3>为什么需要“待确认”这个中间状态？</h3>
+              <h3>不提前标脏下游，如何保证一致？</h3>
               <p>
-                count 加 2 时，“奇偶”仍是偶数。下游一开始只能知道“上游可能变了”，不能急着重跑。等奇偶值算完并发现相等，下游就可直接恢复干净。这就是 Kokaine 里 <code>Pending</code> 与 <code>Stale</code> 分开的原因。
+                source 只触发直接订阅在本地的 token，下游既不会被提前标脏，也不会被提前执行。每个 generation token 记录读取时的 source version 与可选 producer checkpoint；读取 memo 前会递归验证这条 checkpoint 链，失效时只从队列摘出并拉取那个 producer，不会顺带运行兄弟任务。只有 memo 提交出不相等的新值，才递增版本并唤醒下游；相等提交不改版本，依赖它的 <code>memo(previous)</code> 也不会被无端重跑。
               </p>
             </div>
           </div>
@@ -450,9 +450,9 @@
           <header class="section-heading section-heading--split">
             <div>
               <p class="section-number">06 / DYNAMIC DEPENDENCIES</p>
-              <h2>依赖会随代码分支变化</h2>
+              <h2>续体订阅会随代码分支变化</h2>
             </div>
-            <p>“读到了谁”比“代码里出现过谁”更精确。切换显示模式，观察依赖线现场换轨。</p>
+            <p>“本轮读到了谁”比“代码里出现过谁”更精确。切换显示模式，观察旧 generation 取消、新 generation 重新订阅。</p>
           </header>
 
           <div class="dynamic-lab" id="dynamic-lab">
@@ -470,7 +470,7 @@
               <label>名字 <input id="dynamic-name" value="Koka" /></label>
               <label>计数 <input id="dynamic-count" type="number" value="2" /></label>
             </div>
-            <div class="dynamic-graph" aria-label="动态依赖关系">
+            <div class="dynamic-graph" aria-label="动态 source-local continuation trace">
               <div class="dynamic-source" id="dynamic-mode-node"><small>signal</small><strong>mode</strong></div>
               <div class="dynamic-source" id="dynamic-name-node"><small>signal</small><strong>name</strong></div>
               <div class="dynamic-source is-muted" id="dynamic-count-node"><small>signal</small><strong>count</strong></div>
@@ -480,7 +480,7 @@
               <span class="dynamic-edge dynamic-edge--count is-hidden" id="dynamic-count-edge"></span>
             </div>
             <div class="dynamic-log" id="dynamic-log" aria-live="polite">
-              <span>已建立：mode → 标题、name → 标题</span>
+              <span>当前 token 已订阅：mode、name</span>
             </div>
           </div>
         </section>
@@ -522,7 +522,7 @@
             <div>
               <span class="phase-number">1</span>
               <h3>先封锁整棵旧树</h3>
-              <p>把所有后代标为“已销毁”，从队列和依赖关系中移除。此时清理代码即使写入 signal，也叫不醒正在拆除的兄弟节点。</p>
+              <p>把所有后代标为“已销毁”，从队列移除并取消各自 generation token 的 source-local links。此时清理代码即使写入 signal，也叫不醒正在拆除的兄弟节点。</p>
             </div>
             <div class="dispose-phases__arrow">→</div>
             <div>
@@ -574,11 +574,11 @@
               <div class="work-meter"><span>本场景抽象工作范围</span><i><b data-work="22"></b></i><em>绑定节点</em></div>
             </article>
             <article class="framework-card framework-card--kokaine" data-framework="kokaine">
-              <header><span class="framework-logo framework-logo--kokaine">K</span><div><h3>Kokaine</h3><small>细粒度图 + 效应处理器</small></div></header>
+              <header><span class="framework-logo framework-logo--kokaine">K</span><div><h3>Kokaine</h3><small>source-local trace + 效应处理器</small></div></header>
               <div class="route" data-route>
-                <span>write 操作</span><i>→</i><span>处理器排队</span><i>→</i><span>先结果后页面</span><i>→</i><span>改目标 DOM</span>
+                <span>write 操作</span><i>→</i><span>本地 token 唤醒</span><i>→</i><span>derivation 先恢复</span><i>→</i><span>改目标 DOM</span>
               </div>
-              <p data-route-note>数据路线接近 Solid；额外把“读 / 写 / UI”等能力放进 Koka 的效应类型与处理器中。</p>
+              <p data-route-note>source 保存本地订阅与版本；generation token 捕获 producer checkpoint，handler 递归验证后定向拉取，memo 不相等提交才唤醒页面续体。</p>
               <div class="work-meter"><span>本场景抽象工作范围</span><i><b data-work="22"></b></i><em>绑定节点</em></div>
             </article>
           </div>
@@ -593,7 +593,7 @@
                   <th>主要更新单位</th><td>组件返回结果</td><td>组件渲染 effect</td><td>细粒度计算 / DOM 绑定</td><td>细粒度计算 / DOM 绑定</td>
                 </tr>
                 <tr>
-                  <th>依赖如何发现</th><td>state 所在组件与 props 流向</td><td>运行时拦截属性读取</td><td>运行时 signal 读取</td><td>处理器接管 signal-read</td>
+                  <th>依赖如何发现</th><td>state 所在组件与 props 流向</td><td>运行时拦截属性读取</td><td>运行时 signal 读取</td><td>signal-read 把 token 订阅到 source</td>
                 </tr>
                 <tr>
                   <th>页面结构</th><td>重新得到元素描述并比较</td><td>编译提示 + 虚拟 DOM 补丁</td><td>静态结构建立一次</td><td>HTML DSL 建立结构，绑定单独更新</td>
@@ -611,7 +611,7 @@
           <aside class="comparison-takeaway">
             <span>关键结论</span>
             <p>
-              Kokaine 与 SolidJS 在“沿细粒度依赖直接更新目标”上最接近。真正不同之处不是 signal 这个容器，而是 Kokaine 把读取、写入和宿主 UI 当作<strong>可组合、可处理、能被类型看见的能力</strong>。
+              Kokaine 与 SolidJS 在“沿细粒度联系直接更新目标”上最接近。Kokaine 不集中保存这些联系：<strong>handler 把一次性续体 token 与 producer checkpoint 留在 source-local 轨迹里</strong>，并让读、写和宿主 UI 成为能被类型看见的能力。
             </p>
           </aside>
         </section>
@@ -619,7 +619,7 @@
         <section class="report-section" id="code" data-section="09">
           <header class="section-heading">
             <p class="section-number">09 / FROM IDEA TO KOKA</p>
-            <h2>把图上的动作翻译成 Koka 代码</h2>
+            <h2>把续体轨迹中的动作翻译成 Koka 代码</h2>
             <p>这里不追求展示全部实现，只对应前面已经看见的几个关键动作。</p>
           </header>
 
@@ -643,7 +643,7 @@ val square = memo(root,0,fn(_)
 
 <span class="code-comment">// 写入会由根处理器统一接管</span>
 count.modify(fn(value) value + 1)</code></pre>
-              <aside><strong>对应图中的三件事</strong><span>创建数据节点</span><span>运行时读取并连边</span><span>写入后沿边通知</span></aside>
+              <aside><strong>对应轨迹中的三件事</strong><span>source 保存本地订阅</span><span>读取捕获 generation token</span><span>写入直接触发本地 token</span></aside>
             </section>
 
             <section class="code-panel" role="tabpanel" id="code-panel-effect" aria-labelledby="code-tab-effect" hidden>
@@ -653,11 +653,15 @@ pub effect signal-read
 
 <span class="code-comment">// 根处理器给“读取”赋予运行时含义</span>
 with fun read-source(source,tracked)
-  settle-source(root,source.source-id) <span class="code-comment">// 先确保值是新的</span>
+  settle-source(root,source) <span class="code-comment">// 递归验证 checkpoint，必要时定向拉取</span>
+  val value = load(source.source-cell)
+  val version = load(source.source-version) <span class="code-comment">// 写效应被 mask：稳定快照</span>
   if tracked then
-    track-source(root,source.source-id) <span class="code-comment">// 再记录联系</span>
-  load(source.source-cell)             <span class="code-comment">// 最后返回值</span></code></pre>
-              <aside><strong>为什么集中处理？</strong><span>所有读取共享同一套正确性规则</span><span>测试与替换语义更直接</span><span>调用者无需接触依赖表</span></aside>
+    match load(root.root-current-token)
+      Just(token) -&gt; subscribe-source(token,source,version) <span class="code-comment">// 本地 link + observed version / producer</span>
+      Nothing -&gt; ()
+  value</code></pre>
+              <aside><strong>为什么交给 handler？</strong><span>所有读取共享同一套正确性规则</span><span>token 捕获与局部覆盖可以组合</span><span>根无需保存 source / observer 注册表</span></aside>
             </section>
 
             <section class="code-panel" role="tabpanel" id="code-panel-batch" aria-labelledby="code-tab-batch" hidden>
@@ -784,10 +788,10 @@ with fun read-source(source,tracked)
 
           <blockquote class="final-thesis">
             <p>
-              增量 UI 的本质，不是“让组件自动重渲染”，而是维护一张<strong>会随执行变化的数据联系图</strong>，并在变化到来时，只把必要工作按正确顺序做完。
+              增量 UI 的本质，不是“让组件自动重渲染”，而是让每轮计算留下<strong>分散在 source 本地的一次性续体轨迹与 producer checkpoints</strong>，并在变化到来时，只验证、拉取和唤醒必要工作。
             </p>
             <footer>
-              Kokaine 的代数效应让这张图的关键动作——读、写、提交、进入批次——从散落的内部约定，变成可处理的语言能力。
+              Kokaine 的代数效应让捕获、读取、写入、memo 提交与批次边界从散落的内部约定，变成可处理的语言能力。
             </footer>
           </blockquote>
 

@@ -68,14 +68,14 @@
   });
 
   // -----------------------------------------------------------------------
-  // Live dependency graph
+  // Live projection of source-local continuation links
   // -----------------------------------------------------------------------
 
   const flow = {
     count: 2,
     cycle: 0,
     running: false,
-    edges: [],
+    links: [],
   };
   const flowStage = $("#flow-graph");
   const flowButtons = [$("#flow-plus"), $("#flow-batch"), $("#flow-reset")];
@@ -117,15 +117,15 @@
     return edge;
   }
 
-  function redrawFlowGraph() {
-    flow.edges = flowConnections.map(([from, to, name]) => ({
+  function redrawFlowTrace() {
+    flow.links = flowConnections.map(([from, to, name]) => ({
       name,
       element: drawConnection(from, to, name),
     }));
   }
 
-  function flowEdge(name) {
-    return flow.edges.find((edge) => edge.name === name)?.element;
+  function flowLink(name) {
+    return flow.links.find((link) => link.name === name)?.element;
   }
 
   function flowNode(name) {
@@ -136,10 +136,10 @@
     $$(".is-active", flowStage).forEach((element) => element.classList.remove("is-active"));
   }
 
-  function activateFlow(nodes, edges) {
+  function activateFlow(nodes, links) {
     clearFlowActivity();
     nodes.forEach((name) => flowNode(name)?.classList.add("is-active"));
-    edges.forEach((name) => flowEdge(name)?.classList.add("is-active"));
+    links.forEach((name) => flowLink(name)?.classList.add("is-active"));
   }
 
   function renderFlowValues() {
@@ -183,8 +183,8 @@
     flow.count = next;
     setText("#flow-count", flow.count);
     const firstLine = writeCount > 1
-      ? `批次内完成 ${writeCount} 次写入（${previous} → ${next}），现在只触发一次刷新。`
-      : `count 从 ${previous} 写为 ${next}；直接使用者进入队列。`;
+      ? `批次内完成 ${writeCount} 次写入（${previous} → ${next}）；离开批次时，每个直接订阅在 count 本地的 token 只触发一次。`
+      : `count 从 ${previous} 写为 ${next}；只有直接订阅在它本地的 one-shot generation tokens 被触发。`;
     renderTrace([firstLine]);
     await tick();
 
@@ -194,7 +194,7 @@
     setText("#flow-compute-count", 2);
     renderTrace([
       firstLine,
-      `先重算中间结果：平方得到 ${flow.count * flow.count}，奇偶得到${flow.count % 2 === 0 ? "偶数" : "奇数"}。`,
+      `derivation 续体先恢复：平方得到 ${flow.count * flow.count}，奇偶得到${flow.count % 2 === 0 ? "偶数" : "奇数"}。`,
     ]);
     await tick();
 
@@ -208,10 +208,10 @@
     setText("#flow-dom-count", parityChanged ? 3 : 2);
     renderTrace([
       firstLine,
-      `先重算中间结果：平方得到 ${flow.count * flow.count}，奇偶得到${flow.count % 2 === 0 ? "偶数" : "奇数"}。`,
+      `derivation 续体先恢复：平方得到 ${flow.count * flow.count}，奇偶得到${flow.count % 2 === 0 ? "偶数" : "奇数"}。`,
       parityChanged
-        ? "页面阶段：更新数字、平方文字和奇偶样式，共 3 个目标。"
-        : "奇偶值没有变化；样式分支被截断，只改数字和平方文字。",
+        ? "memo 提交了不相等的新值，版本递增并触发下游 token；页面阶段更新 3 个目标。"
+        : "奇偶 memo 提交时值相等，版本与下游 checkpoint 均不变；页面阶段只改数字和平方文字。",
       "刷新完成；导航、侧栏和其他 DOM 从未进入这轮工作。",
     ]);
     await tick(320);
@@ -224,11 +224,11 @@
   $("#flow-batch").addEventListener("click", () => runFlow(3));
   $("#flow-reset").addEventListener("click", () => runFlow(0, true));
 
-  window.addEventListener("resize", redrawFlowGraph, { passive: true });
-  window.requestAnimationFrame(redrawFlowGraph);
+  window.addEventListener("resize", redrawFlowTrace, { passive: true });
+  window.requestAnimationFrame(redrawFlowTrace);
 
   // -----------------------------------------------------------------------
-  // Scheduler stepper: Stale vs Pending and equality pruning
+  // Scheduler stepper: one-shot wake tokens and memo commit pruning
   // -----------------------------------------------------------------------
 
   const scheduler = {
@@ -272,15 +272,15 @@
         values: { count: nextCount, parity: oldParity, double: scheduler.double },
         states: { count: "running", parity: "clean", double: "clean", summary: "clean" },
         queues: { derive: [], effect: [] },
-        message: `写入立即把 count 从 ${oldCount} 改为 ${nextCount}，接下来通知直接使用者。`,
+        message: `写入立即把 count 从 ${oldCount} 改为 ${nextCount}，接下来遍历 count 本地的 continuation tokens。`,
         runs: 0,
         pruned: 0,
       },
       {
         values: { count: nextCount, parity: oldParity, double: scheduler.double },
-        states: { count: "clean", parity: "stale", double: "stale", summary: "pending" },
-        queues: { derive: ["奇偶", "两倍"], effect: ["汇总 UI（待确认）"] },
-        message: "奇偶和两倍直接读了 count，所以确定过期；汇总 UI 只知道它的上游可能变化，先标为待确认。",
+        states: { count: "clean", parity: "dirty", double: "dirty", summary: "clean" },
+        queues: { derive: ["奇偶", "两倍"], effect: [] },
+        message: "count 本地的 token 只把直接 producer——奇偶、两倍——标脏并排入 derivation 队列；汇总 UI 没有被提前标脏，仍保持休眠。",
         runs: 0,
         pruned: 0,
       },
@@ -289,21 +289,21 @@
         states: {
           count: "clean",
           parity: paritySame ? "pruned" : "clean",
-          double: "stale",
-          summary: paritySame ? "pending" : "stale",
+          double: "dirty",
+          summary: paritySame ? "clean" : "queued",
         },
-        queues: { derive: ["两倍"], effect: [paritySame ? "汇总 UI（仍待确认）" : "汇总 UI"] },
+        queues: { derive: ["两倍"], effect: paritySame ? [] : ["汇总 UI"] },
         message: paritySame
-          ? `奇偶重算后仍是“${nextParity}”。结果相等，这一条变化在这里停止，汇总 UI 暂时不用因此运行。`
-          : `奇偶从“${oldParity}”变成“${nextParity}”。汇总 UI 现在确定过期，但仍要等其他中间结果。`,
+          ? `奇偶续体恢复后仍得到“${nextParity}”。memo 相等提交不递增版本，汇总 UI 的 checkpoint 仍有效，续体保持休眠。`
+          : `奇偶从“${oldParity}”提交为“${nextParity}”。版本递增后触发汇总 UI 的 one-shot token，把它排入 effect 队列。`,
         runs: 1,
         pruned: paritySame ? 1 : 0,
       },
       {
         values: { count: nextCount, parity: nextParity, double: nextDouble },
-        states: { count: "clean", parity: "clean", double: "clean", summary: "stale" },
+        states: { count: "clean", parity: "clean", double: "clean", summary: "queued" },
         queues: { derive: [], effect: ["汇总 UI"] },
-        message: `两倍从 ${scheduler.double} 变成 ${nextDouble}。中间结果队列已经清空，现在才轮到页面动作。`,
+        message: `两倍从 ${scheduler.double} 提交为 ${nextDouble}，版本递增。它也触发同一个 UI token，但 fired latch 保证只排队一次；derivation 队列清空后才进入 effect 阶段。`,
         runs: 2,
         pruned: paritySame ? 1 : 0,
       },
@@ -311,7 +311,7 @@
         values: { count: nextCount, parity: nextParity, double: nextDouble },
         states: { count: "clean", parity: "clean", double: "clean", summary: "running" },
         queues: { derive: [], effect: [] },
-        message: `汇总 UI 一次读到同一版本的数据：count=${nextCount}、奇偶=${nextParity}、两倍=${nextDouble}。`,
+        message: `汇总 UI 的续体恢复；读取处理器递归验证 producer checkpoints，并在稳定点捕获值与版本：奇偶=${nextParity}、两倍=${nextDouble}。`,
         runs: 3,
         pruned: paritySame ? 1 : 0,
       },
@@ -331,10 +331,19 @@
 
   const stateLabels = {
     clean: "干净",
-    pending: "待确认",
-    stale: "确定过期",
+    queued: "已排队",
+    dirty: "脏，待续跑",
     running: "正在处理",
     pruned: "相等，已截断",
+  };
+
+  // Existing CSS class names remain presentation-only; runtime states are latches.
+  const stateClasses = {
+    clean: "clean",
+    queued: "pending",
+    dirty: "stale",
+    running: "running",
+    pruned: "pruned",
   };
 
   function renderQueue(selector, items) {
@@ -357,7 +366,7 @@
   function renderSchedulerStep(step) {
     Object.entries(schedulerNodes).forEach(([name, node]) => {
       const state = step.states[name];
-      node.className = `diamond-node is-${state}`;
+      node.className = `diamond-node is-${stateClasses[state]}`;
       $("em", node).textContent = stateLabels[state];
     });
     $("#diamond-count strong span").textContent = step.values.count;
@@ -489,7 +498,7 @@
   renderBatch(1);
 
   // -----------------------------------------------------------------------
-  // Dynamic dependencies
+  // Dynamic source-local subscriptions
   // -----------------------------------------------------------------------
 
   const dynamic = {
@@ -522,23 +531,23 @@
 
   function switchDynamicMode(mode) {
     if (mode === dynamic.mode) return;
-    const oldDependency = dynamic.mode === "name" ? "name" : "count";
-    const newDependency = mode === "name" ? "name" : "count";
+    const oldSource = dynamic.mode === "name" ? "name" : "count";
+    const newSource = mode === "name" ? "name" : "count";
     dynamic.mode = mode;
-    renderDynamic(`重新运行后移除旧边 ${oldDependency} → 标题，建立新边 ${newDependency} → 标题。`);
+    renderDynamic(`旧 generation token 已取消；新 token 按本轮读取订阅 mode 与 ${newSource}，不再留在 ${oldSource}。`);
   }
 
   modeName.addEventListener("click", () => switchDynamicMode("name"));
   modeCount.addEventListener("click", () => switchDynamicMode("count"));
   dynamicName.addEventListener("input", () => {
     renderDynamic(
-      dynamic.mode === "name" ? "name 是当前依赖：标题页面动作已运行。" : "name 不是当前依赖：值变了，但标题没有运行。",
+      dynamic.mode === "name" ? "当前 token 订阅了 name：标题页面动作已运行。" : "当前 token 没有订阅 name：值变了，但标题没有运行。",
       dynamic.mode === "name",
     );
   });
   dynamicCount.addEventListener("input", () => {
     renderDynamic(
-      dynamic.mode === "count" ? "count 是当前依赖：标题页面动作已运行。" : "count 不是当前依赖：值变了，但标题没有运行。",
+      dynamic.mode === "count" ? "当前 token 订阅了 count：标题页面动作已运行。" : "当前 token 没有订阅 count：值变了，但标题没有运行。",
       dynamic.mode === "count",
     );
   });
@@ -608,7 +617,7 @@
     targets.forEach((node) => node.classList.add("is-disposing"));
     writeCleanupLog([
       `阶段 1：先把${kind === "toggle" ? "旧详情分支" : "整棵卡片树"}标为已销毁。`,
-      "从刷新队列移除，并断开所有数据依赖。",
+      "从刷新队列移除，并取消每个 generation token 的 source-local links。",
     ]);
     await tick(420);
     targets.forEach((node) => {
@@ -619,7 +628,7 @@
     if (kind === "toggle") {
       ownership.cleanups += 1;
       writeCleanupLog([
-        "阶段 1：旧详情已封锁并断开依赖。",
+        "阶段 1：旧详情已封锁，旧 token 与本地 links 已取消。",
         "阶段 2：移除旧详情的 DOM 范围。",
         `cleanup #${ownership.cleanups} 完成，准备创建新分支。`,
       ]);
@@ -632,7 +641,7 @@
       writeCleanupLog([
         "旧分支已经完整移除。",
         `详情 ${ownership.branch} 成为资料卡的新孩子。`,
-        "新分支读取数据并建立自己的依赖。",
+        "新分支读取数据，并把自己的 generation token 留在相关 source 本地。",
       ]);
       await tick(360);
       detail.classList.remove("is-new");
@@ -640,7 +649,7 @@
       ownership.cleanups += 3;
       ownership.mounted = false;
       writeCleanupLog([
-        "阶段 1：所有后代已封锁并断开依赖。",
+        "阶段 1：所有后代已封锁，全部 generation tokens 已取消。",
         "阶段 2：移除点击监听。",
         "阶段 2：清理文字绑定与条件区域。",
         "阶段 2：移除挂载 DOM 范围。",
@@ -680,8 +689,8 @@
         scope: "绑定节点",
       },
       kokaine: {
-        route: ["write 操作", "处理器排队", "先结果后页面", "改文字节点"],
-        note: "数据路线接近 Solid；读写额外经过可组合的 Koka 效应处理器。",
+        route: ["write 操作", "本地 token 唤醒", "derivation 先恢复", "改文字节点"],
+        note: "读取递归验证 producer checkpoints，并只摘出目标 producer；source-local token 只安排直接续体，memo 不相等提交后页面 effect 才恢复。",
         work: 22,
         scope: "绑定节点",
       },
@@ -706,8 +715,8 @@
         scope: "条件区域",
       },
       kokaine: {
-        route: ["write 操作", "region 过期", "封锁并清理旧树", "挂载新分支"],
-        note: "region effect 拥有分支内绑定和监听器；重跑前先按所有权树清理旧资源。",
+        route: ["write 操作", "region token 唤醒", "取消旧 generation", "挂载新分支"],
+        note: "region effect 拥有分支内绑定和监听器；续跑前取消旧 token，并按所有权树清理旧资源。",
         work: 39,
         scope: "所有权区域",
       },
@@ -732,8 +741,8 @@
         scope: "最终依赖",
       },
       kokaine: {
-        route: ["handler 记录批次深度", "3 次写只排队", "先 memo 后 effect", "目标 DOM"],
-        note: "enter-batch / leave-batch 是写入效应操作，最外层离开时才真正 flush。",
+        route: ["handler 记录批次深度", "本地 token 只触发一次", "先 memo 后 effect", "目标 DOM"],
+        note: "最外层 leave-batch 才 flush；one-shot fired latch 合并指向同一续体的多次唤醒。",
         work: 20,
         scope: "最终依赖",
       },
@@ -806,5 +815,5 @@
     frame.src = frame.getAttribute("src");
   });
 
-  window.addEventListener("load", redrawFlowGraph, { once: true });
+  window.addEventListener("load", redrawFlowTrace, { once: true });
 })();

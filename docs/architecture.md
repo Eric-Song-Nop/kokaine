@@ -6,9 +6,9 @@ mutation. This keeps the scheduling semantics independent of `jsweb` or
 
 ## Layers
 
-1. `kokaine/reactive` owns signals, dynamically discovered edges, memo caches,
-   the scheduler, transactions, and the ownership forest. It has no browser
-   dependency.
+1. `kokaine/reactive` owns signals, source-local continuation subscriptions,
+   memo caches, the scheduler, transactions, and ownership scopes. It has no
+   browser dependency.
 2. `kokaine/html` defines immutable `view<e>` values and a tail-resumptive
    builder effect. It contains no string concatenation or DOM access.
 3. `kokaine/ssr` and `kokaine/dom` are interpreters. The first produces escaped
@@ -26,15 +26,16 @@ mutation. This keeps the scheduling semantics independent of `jsweb` or
 fun read-source(source : source<a>, tracked : bool) : a
 ```
 
-The root handler first recursively settles a memo producer, then optionally
-records the edge from the current observer to the source, and finally returns
-the cell. A nested override handler implements `untrack` by forwarding the
-operation with `tracked = False`.
+The root handler first validates a memo producer's captured checkpoints and
+pulls the exact producer when needed. It then optionally subscribes the
+current one-shot wake token directly to the source, records the stable version,
+and returns the cell. A nested override handler implements `untrack` by
+forwarding the operation with `tracked = False`.
 
-`sample(root, action)` installs the read handler without creating a persistent
-observer. An observer's tracked function runs with its identity in the root;
-the apply half of a user effect runs with that identity cleared. A `sample`
-nested inside apply therefore cannot accidentally subscribe the effect.
+`sample(root, action)` installs the read handler without creating a wake token.
+An observer's tracked function runs with its current generation token; the
+apply half of a user effect runs with that token cleared. A `sample` nested
+inside apply therefore cannot accidentally subscribe the effect.
 
 ### Writes
 
@@ -50,10 +51,10 @@ Memo calculators have the closed type:
 
 They cannot directly call a write operation or perform an arbitrary host
 effect. Because higher-order code could capture a root and install a nested
-write handler itself, the interpreter also rejects every public write or graph
-registration while a dependency-tracking observer is current. Memo output is
-committed through a private operation. The property is therefore both typed
-and dynamically contained.
+write handler itself, the interpreter also rejects every public write or
+binding registration while a dependency-capture token is current. Memo output
+is committed through a private operation. The property is therefore both
+typed and dynamically contained.
 
 `update` handles writes, `sample` handles reads, and `dispatch` handles both.
 The narrower entry points make application intent visible while sharing one
@@ -79,12 +80,33 @@ region fn()
 The region thunk has `signal-read`; interpreting it is what creates an owned
 observer.
 
-## Graph representation
+## Continuation trace representation
 
-A root stores abstract sources and observers by integer identity. A source has
-a value cell, equality function, rank, subscriber IDs, and an optional memo
-producer. An observer stores its kind, rank, status, current dependencies,
-owned children, cleanup callbacks, optional output source, and action.
+There is no centralized dependency graph. A source contains its value,
+equality function, commit version, optional effect-erased producer state, and
+a local list of subscription closures. A tracked observer generation owns one
+`wake-token`; its first read of a source installs a local link and captures a
+version/producer checkpoint. Repeated reads reuse that checkpoint.
+
+The token carries four pieces of state:
+
+- `live`, which closes the generation;
+- `fired`, which makes several invalidations resume it once;
+- cancellation closures, which eagerly remove all source links on restart or
+  disposal;
+- dependency checkpoints, which recursively validate a clean memo before its
+  cached value is returned.
+
+A memo's `producer-state` contains only `live`, `dirty`, and `running` latches
+plus the checkpoint cell shared with its last generation. It contains no wake
+closure and therefore cannot retain the typed root or observer when an
+externally held memo outlives its owner.
+
+An observer contains only its continuation process, scheduling latches,
+capture token, owned children and cleanup callbacks. Scheduler queues and
+ownership scopes contain direct observer handles. Roots are separated by an
+opaque capability key. The root has no source or observer registry, integer
+identity, subscriber ID lists, rank, or reverse observer-to-source list.
 
 Persistent identities use private `ref<global,_>` cells because DOM and WASM
 callbacks outlive the lexical call to `main`. The state effect is discharged
@@ -92,45 +114,80 @@ inside the module with small `load`/`store` functions. Public APIs expose
 domain capabilities (`signal-read` and `signal-write`) instead of leaking
 implementation-level state effects.
 
-Observers use four logical states plus an independent execution bit:
+Observers use four independent latches:
 
-| State | Meaning |
+| Latch | Meaning |
 | --- | --- |
-| `Clean` | Every known producer is settled and the cached result is current. |
-| `Pending` | A transitive producer is dirty, but equality may still prove this observer unaffected. |
-| `Stale` | At least one direct input changed; the observer must execute. |
-| `Disposed` | The observer is detached and cannot be scheduled or read as a producer. |
+| `live` | The observer and its parked process may still be resumed. |
+| `dirty` | Its next captured generation must execute. |
+| `queued` | One direct scheduler ticket already exists. |
+| `running` | A producer pull must reject recursive re-entry. |
 
-Keeping `executing` separate matters: a write during apply can invalidate an
-observer without losing recursive-read detection.
+These are execution facts, not graph states. In particular, there is no
+possible-versus-definite `Pending`/`Stale` state machine.
+
+### Observer continuations
+
+Observer execution is continuation-backed even though signal reads stay on
+their optimized tail-resumptive `fun` path. A private `observer-suspend`
+control effect reifies each observer as a coroutine:
+
+1. the first scheduler step bootstraps a process parked before user code;
+2. a scheduler step resumes one raw, one-shot continuation;
+3. one complete observer round executes under freshly installed root handlers;
+4. success or failure becomes a first-class outcome;
+5. the next generation parks after the user action and its inner finalizers;
+   root handlers plus tracking/ownership restoration remain outside the
+   captured continuation.
+
+The parked continuation owns the normal restart loop. The original action is
+retained only as a recovery seed: if abortive host control exits the round
+before a successor can be published, the restoring frame queues the observer
+and the next scheduler step reifies a fresh process. Publishing the next
+parked generation before rethrowing an ordinary action failure preserves retry
+semantics without using that fallback. Disposal clears the seed and explicitly
+finalizes raw parked contexts before running user cleanups and unlinking the
+observer.
+
+This recovery rule covers abortive/final control. It does not make a host
+resumption safe to retain outside an observer round: the root's flush and
+tracking frames remain installed until that resumption is resumed or
+finalized, and multi-shot resumption would fork writes to one observer process
+slot. Escaping resumptive host control is therefore unsupported.
+
+The same generation token is the dependency trace. It is captured by the
+observer process, installed by the `signal-read` handler, fired by sources, and
+finalized by ownership disposal. See the
+[continuation runtime plan](continuation-runtime-plan.md) for the evidence and
+the rejected alternatives.
 
 ## Propagation algorithm
 
 When a source changes:
 
-1. Its direct subscribers become `Stale` and enter their phase queue.
-2. If a stale subscriber is a memo, subscribers of that memo's output become
-   `Pending`, recursively. They are possible, not definite, invalidations.
-3. The scheduler drains derivations before user effects. Each phase queue is
-   ordered by the latest discovered graph rank and deduplicated by observer ID.
-4. Settling a `Pending` observer recursively settles the producers it read last
-   time. If none committed a different value, the observer becomes `Clean`
-   without executing.
-5. A memo that commits an unequal value changes its pending direct subscribers
-   to `Stale`; an equal value prunes that branch.
-6. Immediately before the observer action, old dependencies are detached.
-   Reads rebuild the edge set actually encountered on that run and raise the
-   observer's rank from the corresponding producer ranks.
+1. An unequal source commit stores the value, increments its version, and fires
+   each live source-local token. A token's `fired` latch creates at most one
+   scheduler action even when the generation read several changed sources.
+2. Only direct subscribers become dirty. A memo becoming dirty does not
+   speculatively dirty or execute its downstream consumers.
+3. Before returning a memo cache, the read handler recursively validates the
+   producer checkpoints captured by its clean generation. A dependency memo
+   is settled before its recorded version is compared.
+4. When validation makes the requested producer dirty, the scheduler extracts
+   that exact observer from the derivation queue by its opaque latch and runs
+   it. It never executes an arbitrary sibling as a pull fallback, and a clean
+   read does not globally flush unrelated retry work.
+5. An unequal memo commit increments its version and fires downstream tokens.
+   An equal commit changes neither; even a stateful `memo(previous)` downstream
+   remains asleep.
+6. The global flush drains derivations before user effects. Before each resume,
+   the old token cancels all links; new control flow captures exactly the
+   source-local links and checkpoints encountered by the next generation.
 
-This distinction between `Pending` and `Stale` is what makes both requirements
-hold at once: a leaf memo read inside a batch is transitively fresh, while an
-equal intermediate memo still prevents downstream work. It also keeps diamond
-graphs coherent without running every descendant pessimistically.
-
-Pulled memo reads use the same settling functions. An outer `is-flushing`
-guard prevents their internal commit from starting a nested global flush, and
-the directly settled observer is removed from its queue before execution. No
-duplicate tombstones or arbitrary global iteration budget accumulate.
+This keeps a diamond coherent without rank. If a join is selected before one
+branch, checkpoint validation pulls that exact branch first; an equal branch
+commit is cut off without executing the join. User effects remain behind the
+derivation phase barrier.
 
 ## Transactions and execution phases
 
@@ -138,10 +195,10 @@ duplicate tombstones or arbitrary global iteration budget accumulate.
 no-op until the outermost `leave-batch`. The first real flush drains:
 
 ```text
-ranked derivations -> newly queued derivations -> ranked user effects
+dirty derivation continuations -> newly dirtied derivations -> user continuations
 ```
 
-If an effect write makes a derivation stale, the loop returns to the derivation
+If an effect write makes a derivation dirty, the loop returns to the derivation
 queue before selecting another effect. `is-flushing` makes propagation
 non-reentrant; writes only add work to the current queues.
 
@@ -158,23 +215,25 @@ turning its reads into dependencies.
 Every effect rerun first disposes its previous child forest and runs its prior
 cleanups. Disposal is two-phase:
 
-1. Collect and mark the complete forest `Disposed`, remove queue entries, and
-   detach every dependency edge.
-2. Run all cleanup callbacks, continuing through failures, then unlink observer
-   closures and memo sources from the root.
+1. Mark the complete direct-handle forest dead and cancel every generation's
+   source-local subscriptions.
+2. Finalize every parked process, run all cleanup callbacks while continuing
+   through failures, then unlink the ownership handles.
 
 Marking the forest before the first cleanup prevents a cleanup write from
 re-entering a sibling being torn down. Root disposal also sets a disposing
-guard, suppresses propagation, and clears every graph collection in a `finally`
-frame. Disposal is idempotent; creating a signal or observer in a dead root is
-an error.
+guard, suppresses token firing, and clears both work queues and ownership
+scopes in a `finally` frame. Disposal is idempotent; creating a signal or
+observer in a dead root is an error.
 
-An observer failure restores tracking/ownership context and keeps the observer
-stale and queued so it can retry. Cleanup failure occurs before detachment and
-retains the prior subscriptions; an action failure retains any edges already
-rebuilt by that attempt. A failed memo never becomes clean with its old cache.
+An observer failure restores capture/ownership context and queues a retry. An
+action failure keeps the source-local links already captured by that attempt;
+a cleanup failure has already canceled the prior generation but leaves a
+direct retry ticket. A failed memo never becomes clean with its old cache.
 Cleanup failure is exhaustive: later listener and DOM range cleanup still runs
-before the original exception escapes.
+before the original exception escapes. A cleanup may dispose its own observer;
+the scheduler checks `live` again before resuming. Registration under a dead
+current owner is rejected instead of creating an orphan observer.
 
 ## DOM interpretation
 
@@ -242,7 +301,7 @@ The generated Koka main normally finalizes module globals immediately after
 small custom main that calls module init/run but defers module `done` until
 process exit, keeping reactive cells and callbacks valid for asynchronous
 events. This ABI/runtime constraint belongs entirely to the WASM host adapter;
-the signal graph and HTML DSL are unchanged.
+the continuation-indexed signal trace and HTML DSL are unchanged.
 
 The executable bridge, custom main, fake DOM, and packaging script live in
 `support/wasmweb-proof`; `make test-wasm` recompiles and runs the proof.

@@ -14,7 +14,6 @@ from threading import Thread
 from playwright.sync_api import expect, sync_playwright
 
 
-BASE_URL = "http://127.0.0.1:4173/examples/counter/"
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 ARTIFACT_DIR = Path("/tmp/kokaine-browser")
 
@@ -27,11 +26,13 @@ class QuietHandler(SimpleHTTPRequestHandler):
 @contextmanager
 def serve_project():
     handler = partial(QuietHandler, directory=PROJECT_ROOT)
-    server = ThreadingHTTPServer(("127.0.0.1", 4173), handler)
+    # Let the OS choose an unused port so the suite can run beside `make serve`
+    # or another checkout without disturbing either process.
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
-        yield
+        yield f"http://127.0.0.1:{server.server_port}"
     finally:
         server.shutdown()
         server.server_close()
@@ -44,7 +45,8 @@ def assert_no_horizontal_overflow(page) -> None:
     ), "the responsive layout overflows the viewport"
 
 
-with serve_project():
+with serve_project() as origin:
+    base_url = f"{origin}/examples/counter/"
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         page_errors: list[str] = []
@@ -58,7 +60,7 @@ with serve_project():
             if message.type == "error"
             else None,
         )
-        desktop.goto(BASE_URL)
+        desktop.goto(base_url)
         desktop.wait_for_load_state("networkidle")
 
         translated_error = desktop.evaluate(
@@ -190,7 +192,7 @@ with serve_project():
 
         mobile = browser.new_page(viewport={"width": 375, "height": 812})
         mobile.on("pageerror", lambda error: page_errors.append(str(error)))
-        mobile.goto(BASE_URL)
+        mobile.goto(base_url)
         mobile.wait_for_load_state("networkidle")
         expect(mobile.locator(".reading__number")).to_have_text("0")
         assert_no_horizontal_overflow(mobile)
