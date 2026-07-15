@@ -69,6 +69,7 @@ pub effect signal-read
 pub effect signal-write
   fun write-source(source : source<a>, value : a) : ()
   fun modify-source(source : source<a>, update : a -> a) : ()
+  fun commit-source(source : source<a>, value : a) : ()
   fun enter-batch(key : root-key) : ()
   fun leave-batch(key : root-key) : ()
   fun request-flush(key : root-key) : ()
@@ -504,6 +505,16 @@ fun interpret-write(root : root<e>,
         notify-source(source)
         flush(root)
 
+    fun commit-source(source,value)
+      check-root(root,source.source-root)
+      val previous = load(source.source-cell)
+      val equal = source.source-equals
+      if equal(previous,value) then () else
+        store(source.source-cell,value)
+        store(source.source-version,load(source.source-version) + 1)
+        notify-source(source)
+        flush(root)
+
     fun enter-batch(key)
       mask<div>
         check-root(root,key)
@@ -708,10 +719,10 @@ fun register-fiber(root : root<e>, current : fiber<e>) : ()
 fun unregister-fiber(root : root<e>, current : fiber<e>) : ()
   store(root.root-fibers,compact-fibers(load(root.root-fibers)))
 
-fun create-effect-inner(root : root<e>,
-                        track : () -> <signal-read,pure> a,
-                        apply : (value : a) -> <signal-write,pure|e> ())
-                       : <signal-write,pure> disposer<e>
+fun create-trace-inner(root : root<e>, kind : trace-kind,
+                       track : () -> <signal-read,pure> a,
+                       apply : (value : a) -> <signal-write,pure|e> ())
+                      : <signal-write,pure> disposer<e>
   check-registration(root)
   val live = cell(True)
   val captured = cell(Trace-end)
@@ -721,7 +732,7 @@ fun create-effect-inner(root : root<e>,
     if !load(live) then Ok(()) else
       val (attempt,drafts) = pretend-no-div{
         attempt-build(root,fn()
-          reify-trace(root,Effect-trace,track,apply)
+          reify-trace(root,kind,track,apply)
         )
       }
       match attempt
@@ -744,13 +755,46 @@ fun create-effect-inner(root : root<e>,
               activate-trace(root,built.built-root)
               Ok(())
   ))
-  queue-work(root,Effect-trace,bootstrap)
+  queue-work(root,kind,bootstrap)
   request-flush(root.root-key)
   fn() pretend-no-div{
     if !load(live) then () else
       dispose-fiber(current)
       unregister-fiber(root,current)
   }
+
+fun create-effect-inner(root : root<e>,
+                        track : () -> <signal-read,pure> a,
+                        apply : (value : a) -> <signal-write,pure|e> ())
+                       : <signal-write,pure> disposer<e>
+  create-trace-inner(root,Effect-trace,track,apply)
+
+fun derive-by-inner(root : root<e>, initial : a,
+                    calculate : () -> <signal-read,pure> a,
+                    equals : (a,a) -> bool) : <signal-write,pure> memo<a>
+  check-registration(root)
+  val source = new-source(root,initial,equals)
+  val disposer = create-trace-inner(root,Derivation-trace,calculate,
+    fn(value) commit-source(source,value))
+  Memo(source)
+
+pub fun derive-by(root : root<e>, initial : a,
+                  calculate : () -> <signal-read,pure> a,
+                  equals : (a,a) -> bool) : <signal-write,pure> memo<a>
+  derive-by-inner(root,initial,calculate,equals)
+
+pub fun derive(root : root<e>, initial : a,
+               calculate : () -> <signal-read,pure> a,
+               ?(==) : (a,a) -> bool) : <signal-write,pure> memo<a>
+  derive-by(root,initial,calculate,(==))
+
+pub fun derive-always(root : root<e>, initial : a,
+                      calculate : () -> <signal-read,pure> a)
+                     : <signal-write,pure> memo<a>
+  derive-by(root,initial,calculate,fn(_,_) False)
+
+pub fun memo/get(memo : memo<a>) : signal-read a
+  read-source(memo.memo-source,True)
 
 pub fun create-effect(root : root<e>,
                       track : () -> <signal-read,pure> a,

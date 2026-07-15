@@ -222,10 +222,58 @@ fun test-failed-parent-keeps-frontier-gate()
   stop()
   root.dispose()
 
+fun test-derivation-suffix-and-equality-cutoff()
+  val after-a = hidden(0)
+  val after-b = hidden(0)
+  val parity-runs = hidden(0)
+  val sum-seen = hidden([])
+  val parity-seen = hidden([])
+
+  val (root,(a,b,stop-sum,stop-parity)) = create-root fn(root)
+    val a = signal(root,1)
+    val b = signal(root,10)
+    val sum = derive(root,0,fn()
+      val av = a.get
+      bump(after-a)
+      val bv = b.get
+      bump(after-b)
+      av + bv
+    )
+    val parity = derive(root,0,fn()
+      val value = a.get % 2
+      bump(parity-runs)
+      value
+    )
+    val stop-sum = create-effect(root,fn() sum.get,
+      fn(value) push(sum-seen,value))
+    val stop-parity = create-effect(root,fn() parity.get,
+      fn(value) push(parity-seen,value))
+    (a,b,stop-sum,stop-parity)
+
+  get-hidden(sum-seen).check-ints([11],"derived value settles before effects")
+  get-hidden(parity-seen).check-ints([1],"derived parity initially publishes")
+
+  update(root){ b.set(20) }
+  get-hidden(after-a).check-int(1,"derived b update keeps a prefix")
+  get-hidden(after-b).check-int(2,"derived b update resumes exact suffix")
+  get-hidden(sum-seen).check-ints([21,11],"derived b update publishes once")
+
+  update(root){ a.set(3) }
+  get-hidden(sum-seen).check-ints([23,21,11],"derived a update publishes sum")
+  get-hidden(parity-seen).check-ints([1],
+    "equal derived commit cuts off downstream effect")
+  get-hidden(parity-runs).check-int(2,
+    "equal derived value still recomputes its own suffix")
+
+  stop-sum()
+  stop-parity()
+  root.dispose()
+
 pub fun main()
   test-exact-suffix-and-frontier()
   test-dynamic-child-retirement()
   test-duplicate-read-frontier()
   test-failed-draft-does-not-escape()
   test-failed-parent-keeps-frontier-gate()
+  test-derivation-suffix-and-equality-cutoff()
   println("trace-semantics: all checks passed")
