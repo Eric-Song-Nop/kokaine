@@ -10,6 +10,7 @@ test: test-native
 
 test-native:
 	$(KOKA) $(KOKA_FLAGS) -e test/trace-semantics.kk
+	$(KOKA) $(KOKA_FLAGS) -e test/structural-scopes.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/smoke.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/continuation.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/reactive.kk

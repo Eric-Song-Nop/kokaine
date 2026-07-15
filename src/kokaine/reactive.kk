@@ -104,14 +104,15 @@ type capture-state
   Capture-spent
   Capture-dead
 
-abstract type trace<e::E>
+abstract div type trace<e::E>
   Trace-end
   Trace-read(
     trace-kind       : trace-kind,
     trace-state      : ref<global,capture-state>,
     trace-parent     : maybe<trace<e>>,
     trace-child      : ref<global,trace<e>>,
-    trace-resume     : () -> <div,exn|e> built-trace<e>,
+    trace-frame      : ref<global,frame<e>>,
+    trace-resume     : (frame<e>) -> <div,exn|e> built-trace<e>,
     trace-finalize   : () -> <div,exn|e> (),
     trace-unlink     : () -> (),
     trace-stale      : () -> bool
@@ -123,16 +124,39 @@ abstract type built-trace<e::E>
     built-publish : () -> <div|e> error<()>
   )
 
-abstract type fiber<e::E>
-  Fiber(
-    fiber-live  : ref<global,bool>,
-    fiber-trace : ref<global,trace<e>>
+type scope-state
+  Scope-starting
+  Scope-live
+  Scope-branch-dead
+  Scope-dead
+
+abstract type owned<e::E>
+  Owned-end
+  Owned-fork(owned-scope : scope<e>, owned-next : owned<e>)
+  Owned-cleanup(
+    cleanup-live   : ref<global,bool>,
+    cleanup-action : () -> <div,exn|e> (),
+    cleanup-next   : owned<e>
+  )
+
+abstract type scope<e::E>
+  Scope(
+    scope-state  : ref<global,scope-state>,
+    scope-prefix : ref<global,owned<e>>,
+    scope-body   : ref<global,trace<e>>,
+    scope-parent : maybe<trace<e>>
+  )
+
+abstract type frame<e::E>
+  Frame(
+    frame-token : ref<global,scope-state>,
+    frame-owned : ref<global,owned<e>>
   )
 
 abstract type work<e::E>
   Resume-work(resume-trace : trace<e>)
   Bootstrap-work(
-    bootstrap-live : ref<global,bool>,
+    bootstrap-scope : scope<e>,
     bootstrap-run  : () -> <div|e> error<()>
   )
 
@@ -142,8 +166,10 @@ abstract type root<e::E>
     root-derive-queue : ref<global,list<work<e>>>,
     root-effect-queue : ref<global,list<work<e>>>,
     root-current      : ref<global,maybe<trace<e>>>,
+    root-current-frame: ref<global,frame<e>>,
     root-draft        : ref<global,maybe<ref<global,list<trace<e>>>>>,
-    root-fibers       : ref<global,list<fiber<e>>>,
+    root-token        : ref<global,scope-state>,
+    root-owned        : ref<global,owned<e>>,
     root-batch-depth  : ref<global,int>,
     root-flushing     : ref<global,bool>,
     root-disposing    : ref<global,bool>,
@@ -158,23 +184,17 @@ abstract type root<e::E>
 fun trace-state-of(current : trace<e>) : capture-state
   match current
     Trace-end -> Capture-dead
-    Trace-read(_,state,_,_,_,_,_,_) -> load(state)
+    Trace-read(_,state,_,_,_,_,_,_,_) -> load(state)
 
 fun trace-parent-of(current : trace<e>) : maybe<trace<e>>
   match current
     Trace-end -> Nothing
-    Trace-read(_,_,parent,_,_,_,_,_) -> parent
+    Trace-read(_,_,parent,_,_,_,_,_,_) -> parent
 
 fun trace-active(current : trace<e>) : bool
   match current.trace-state-of
     Capture-dead -> False
     _ -> True
-
-fun fiber-active(current : fiber<e>) : bool
-  load(current.fiber-live)
-
-fun compact-fibers(values : list<fiber<e>>) : list<fiber<e>>
-  values.filter(fiber-active)
 
 fun pack-capture(root : root<e>, current : trace<e>) : packed-capture
   Packed-capture(fn(consume) consume(root,current))
@@ -214,7 +234,7 @@ fun pending-ancestor(parent : maybe<trace<e>>) : bool
 fun enqueue-trace(root : root<e>, current : trace<e>) : ()
   match current
     Trace-end -> ()
-    Trace-read(kind,state,_,_,_,_,_,_) ->
+    Trace-read(kind,state,_,_,_,_,_,_,_) ->
       match load(state)
         Capture-live ->
           store(state,Capture-pending)
@@ -252,15 +272,57 @@ fun collect-retirement(current : trace<e>)
                       : <div> list<() -> <div,exn|e> ()>
   match current
     Trace-end -> []
-    Trace-read(_,state,_,child,_,finalize,unlink,_) ->
+    Trace-read(_,state,_,child,current-frame-slot,_,finalize,unlink,_) ->
       match load(state)
         Capture-dead -> []
         _ ->
+          val current-frame = load(current-frame-slot)
           store(state,Capture-dead)
+          store(current-frame.frame-token,Scope-branch-dead)
           unlink()
           val nested = load(child)
           store(child,Trace-end)
-          collect-retirement(nested) ++ [finalize]
+          val structural = load(current-frame.frame-owned)
+          store(current-frame.frame-owned,Owned-end)
+          collect-retirement(nested) ++
+          collect-owned(structural) ++ [finalize]
+
+fun collect-scope(current : scope<e>)
+                 : <div> list<() -> <div,exn|e> ()>
+  match load(current.scope-state)
+    Scope-dead -> []
+    _ ->
+      store(current.scope-state,Scope-dead)
+      val body = load(current.scope-body)
+      val structural-prefix = load(current.scope-prefix)
+      store(current.scope-body,Trace-end)
+      store(current.scope-prefix,Owned-end)
+      collect-retirement(body) ++ collect-owned(structural-prefix)
+
+// Structural children are completely marked dead before cleanup actions are
+// allowed to run. This is what makes self-disposal and cleanup-triggered writes
+// unable to re-enter a half-retired subtree.
+fun collect-owned-forks(values : owned<e>)
+                       : <div> list<() -> <div,exn|e> ()>
+  match values
+    Owned-end -> []
+    Owned-fork(current,next) ->
+      collect-scope(current) ++ collect-owned-forks(next)
+    Owned-cleanup(_,_,next) -> collect-owned-forks(next)
+
+fun collect-owned-cleanups(values : owned<e>)
+                          : <div> list<() -> <div,exn|e> ()>
+  match values
+    Owned-end -> []
+    Owned-fork(_,next) -> collect-owned-cleanups(next)
+    Owned-cleanup(live,action,next) ->
+      if !load(live) then collect-owned-cleanups(next) else
+        store(live,False)
+        Cons(action,collect-owned-cleanups(next))
+
+fun collect-owned(values : owned<e>)
+                 : <div> list<() -> <div,exn|e> ()>
+  collect-owned-forks(values) ++ collect-owned-cleanups(values)
 
 fun run-finalizers(finalizers : list<() -> <div,exn|e> ()>)
                   : <div,exn|e> ()
@@ -271,6 +333,14 @@ fun run-finalizers(finalizers : list<() -> <div,exn|e> ()>)
 
 fun retire-trace(current : trace<e>) : <div,exn|e> ()
   val finalizers = pretend-no-div{ collect-retirement(current) }
+  run-finalizers(finalizers)
+
+fun retire-owned(values : owned<e>) : <div,exn|e> ()
+  val finalizers = pretend-no-div{ collect-owned(values) }
+  run-finalizers(finalizers)
+
+fun retire-scope(current : scope<e>) : <div,exn|e> ()
+  val finalizers = pretend-no-div{ collect-scope(current) }
   run-finalizers(finalizers)
 
 fun retire-drafts(values : list<trace<e>>) : <div,exn|e> ()
@@ -287,6 +357,9 @@ fun retire-drafts-now(values : list<trace<e>>) : <exn|e> ()
 
 fun try-retire-trace(current : trace<e>) : e error<()>
   error/try(fn() retire-trace-now(current))
+
+fun try-retire-owned(values : owned<e>) : e error<()>
+  error/try(fn() pretend-no-div{ retire-owned(values) })
 
 fun try-retire-drafts(values : list<trace<e>>) : e error<()>
   error/try(fn() retire-drafts-now(values))
@@ -312,10 +385,12 @@ fun attempt-build(root : root<e>,
 fun activate-trace-loop(root : root<e>, current : trace<e>) : <div> ()
   match current
     Trace-end -> ()
-    Trace-read(_,state,_,child,_,_,_,stale) ->
+    Trace-read(_,state,_,child,current-frame-slot,_,_,_,stale) ->
       match load(state)
         Capture-draft ->
+          val current-frame = load(current-frame-slot)
           store(state,Capture-live)
+          store(current-frame.frame-token,Scope-live)
           activate-trace-loop(root,load(child))
           if stale() then enqueue-trace(root,current) else ()
         _ -> ()
@@ -323,14 +398,29 @@ fun activate-trace-loop(root : root<e>, current : trace<e>) : <div> ()
 fun activate-trace(root : root<e>, current : trace<e>) : ()
   pretend-no-div{ activate-trace-loop(root,current) }
 
-fun with-current(root : root<e>, current : trace<e>,
+fun with-frame(root : root<e>, current : frame<e>,
+               action : () -> <div,exn|e> a) : <div,exn|e> a
+  val previous = load(root.root-current-frame)
+  finally(
+    fn() store(root.root-current-frame,previous),
+    fn()
+      store(root.root-current-frame,current)
+      action()
+  )
+
+fun with-current(root : root<e>, current : trace<e>, current-frame : frame<e>,
+                 action : () -> <div,exn|e> a) : <div,exn|e> a
+  with-context(root,Just(current),current-frame,action)
+
+fun with-context(root : root<e>, current : maybe<trace<e>>,
+                 current-frame : frame<e>,
                  action : () -> <div,exn|e> a) : <div,exn|e> a
   val previous = load(root.root-current)
   finally(
     fn() store(root.root-current,previous),
     fn()
-      store(root.root-current,Just(current))
-      action()
+      store(root.root-current,current)
+      with-frame(root,current-frame,action)
   )
 
 
@@ -340,7 +430,10 @@ fun with-current(root : root<e>, current : trace<e>,
 
 fun work-runnable(current : work<e>) : bool
   match current
-    Bootstrap-work(live,_) -> load(live)
+    Bootstrap-work(scope,_) ->
+      match load(scope.scope-state)
+        Scope-starting -> !pending-ancestor(scope.scope-parent)
+        _ -> False
     Resume-work(capture) ->
       match capture.trace-state-of
         Capture-pending -> !pending-ancestor(capture.trace-parent-of)
@@ -348,7 +441,10 @@ fun work-runnable(current : work<e>) : bool
 
 fun work-stale(current : work<e>) : bool
   match current
-    Bootstrap-work(live,_) -> !load(live)
+    Bootstrap-work(scope,_) ->
+      match load(scope.scope-state)
+        Scope-starting -> False
+        _ -> True
     Resume-work(capture) ->
       match capture.trace-state-of
         Capture-dead -> True
@@ -381,50 +477,102 @@ fun queue-work(root : root<e>, kind : trace-kind, current : work<e>) : ()
       store(root.root-effect-queue,
             Cons(current,load(root.root-effect-queue)))
 
+fun abandon-draft-frame(current : frame<e>, drafts : list<trace<e>>) : e ()
+  store(current.frame-token,Scope-branch-dead)
+  val structural = load(current.frame-owned)
+  store(current.frame-owned,Owned-end)
+  val _ = try-retire-drafts(drafts)
+  val _ = try-retire-owned(structural)
+  ()
+
 fun resume-capture(root : root<e>, current : trace<e>)
                    : <div|e> error<()>
   lift-div(fn()
     match current
       Trace-end -> Ok(())
-      Trace-read(_,state,_,child,resume,_,_,_) ->
+      Trace-read(_,state,_,child,current-frame-slot,resume,_,_,_) ->
         match load(state)
           Capture-pending ->
             store(state,Capture-running)
+            val old-frame = load(current-frame-slot)
+            val draft-owned = cell(Owned-end)
+            val draft-frame = Frame(cell(Scope-starting),draft-owned)
+            val resume-draft = fn() resume(draft-frame)
             val (attempt,drafts) = pretend-no-div{
-              attempt-build(root,fn() with-current(root,current,resume))
+              attempt-build(root,{
+                with-current(root,current,draft-frame,resume-draft)
+              })
             }
             match attempt
               Error(failure) ->
                 match load(state)
                   Capture-running -> enqueue-trace(root,current)
                   _ -> ()
-                val _ = try-retire-drafts(drafts)
+                abandon-draft-frame(draft-frame,drafts)
                 Error(failure)
               Ok(built) ->
                 val publish = built.built-publish
-                val publication = pretend-no-div{ publish() }
-                match publication
+                // The previous suffix generation is structurally dead before
+                // the replacement apply runs. Cleanups can write, but every
+                // descendant continuation and bootstrap has already been cut.
+                val old = load(child)
+                store(child,Trace-end)
+                store(old-frame.frame-token,Scope-branch-dead)
+                // From this point onward self-disposal must see and kill the
+                // in-flight generation, never the already detached one.
+                store(current-frame-slot,draft-frame)
+                val old-owned = load(old-frame.frame-owned)
+                store(old-frame.frame-owned,Owned-end)
+                val retirement = pretend-no-div{
+                  collect-retirement(old) ++ collect-owned(old-owned)
+                }
+                val retired = pretend-no-div{
+                  error/try(fn() run-finalizers(retirement))
+                }
+                match retired
                   Error(failure) ->
                     match load(state)
                       Capture-running -> enqueue-trace(root,current)
                       _ -> ()
-                    val _ = try-retire-drafts(drafts)
+                    abandon-draft-frame(draft-frame,drafts)
                     Error(failure)
                   Ok(_) ->
-                    val old = load(child)
-                    store(child,built.built-root)
-                    activate-trace(root,built.built-root)
                     match load(state)
-                      Capture-running -> store(state,Capture-live)
-                      _ -> ()
-                    try-retire-trace(old)
+                      Capture-dead ->
+                        abandon-draft-frame(draft-frame,drafts)
+                        Ok(())
+                      _ ->
+                        val publication = pretend-no-div{ publish() }
+                        match publication
+                          Error(failure) ->
+                            match load(state)
+                              Capture-running -> enqueue-trace(root,current)
+                              _ -> ()
+                            abandon-draft-frame(draft-frame,drafts)
+                            Error(failure)
+                          Ok(_) ->
+                            match load(state)
+                              Capture-dead ->
+                                abandon-draft-frame(draft-frame,drafts)
+                                Ok(())
+                              _ ->
+                                store(child,built.built-root)
+                                activate-trace(root,built.built-root)
+                                store(draft-frame.frame-token,Scope-live)
+                                match load(state)
+                                  Capture-running -> store(state,Capture-live)
+                                  _ -> ()
+                                Ok(())
           _ -> Ok(())
   )
 
 fun run-work(root : root<e>, current : work<e>) : <div|e> error<()>
   match current
     Resume-work(capture) -> resume-capture(root,capture)
-    Bootstrap-work(live,run) -> if load(live) then run() else Ok(())
+    Bootstrap-work(scope,run) ->
+      match load(scope.scope-state)
+        Scope-starting -> run()
+        _ -> Ok(())
 
 fun drain-loop(root : root<e>) : <div|e> error<()>
   val (derivation,derive-rest) = take-work(load(root.root-derive-queue))
@@ -471,6 +619,13 @@ fun check-registration(root : root<e>) : exn ()
   if load(root.root-disposed) || load(root.root-disposing)
   then throw("reactive value created in a disposed root")
   else ()
+
+fun check-frame-registration(root : root<e>, current : frame<e>) : exn ()
+  check-registration(root)
+  match load(current.frame-token)
+    Scope-starting -> ()
+    Scope-live -> ()
+    _ -> throw("reactive value created under a retired continuation branch")
 
 fun new-source(root : root<e>, value : a, equals : (a,a) -> bool) : source<a>
   Source(root.root-key,cell(value),equals,cell(0),cell([]))
@@ -560,10 +715,13 @@ fun reify-trace(root : root<e>, kind : trace-kind,
                : <div,exn|e> built-trace<e>
   with handler
         return(value) -> {
+          val terminal = load(root.root-current-frame)
+          val checkpoint = load(root.root-current)
           Built-trace(
             Trace-end,
             fn() error/try(fn()
-              interpret-write(root,fn() publish(value))
+              with-context(root,checkpoint,terminal,
+                fn() interpret-write(root,fn() publish(value)))
             )
           )
         }
@@ -573,6 +731,10 @@ fun reify-trace(root : root<e>, kind : trace-kind,
             val version = load(source.source-version)
             val state = cell(Capture-draft)
             val child = cell(Trace-end)
+            val token = cell(Scope-starting)
+            val owned = cell(Owned-end)
+            val current-frame = Frame(token,owned)
+            val current-frame-slot = cell(current-frame)
             val unlink = fn()
               store(source.source-captures,
                     compact-captures(load(source.source-captures)))
@@ -581,7 +743,8 @@ fun reify-trace(root : root<e>, kind : trace-kind,
               state,
               load(root.root-current),
               child,
-              fn() rcontext.resume(load(source.source-cell)),
+              current-frame-slot,
+              fn(_) rcontext.resume(load(source.source-cell)),
               fn() {
                 val _ = rcontext.finalize(
                   Built-trace(Trace-end,fn() lift-div(fn() Ok(())))
@@ -594,7 +757,7 @@ fun reify-trace(root : root<e>, kind : trace-kind,
             record-draft(root,current)
             store(source.source-captures,
                   Cons(pack-capture(root,current),load(source.source-captures)))
-            val nested = with-current(root,current,
+            val nested = with-current(root,current,current-frame,
               fn() rcontext.resume(load(source.source-cell)))
             store(child,nested.built-root)
             Built-trace(current,nested.built-publish)
@@ -607,9 +770,12 @@ fun reify-trace(root : root<e>, kind : trace-kind,
 // --------------------------------------------------------------------------
 
 fun fresh-root() : root<e>
+  val token = cell(Scope-live)
+  val owned = cell(Owned-end)
+  val current-frame = cell(Frame(token,owned))
   Root(
-    Root-key(cell(True)),cell([]),cell([]),cell(Nothing),cell(Nothing),cell([]),
-    cell(0),cell(False),cell(False),cell(False)
+    Root-key(cell(True)),cell([]),cell([]),cell(Nothing),current-frame,
+    cell(Nothing),token,owned,cell(0),cell(False),cell(False),cell(False)
   )
 
 pub fun create-root(action : (root<e>) -> <signal-write,pure|e> a)
@@ -622,25 +788,13 @@ pub fun create-root(action : (root<e>) -> <signal-write,pure|e> a)
     (root,result)
   }
 
-fun dispose-fiber(current : fiber<e>) : <div,exn|e> ()
-  if !load(current.fiber-live) then () else
-    store(current.fiber-live,False)
-    val captured = load(current.fiber-trace)
-    store(current.fiber-trace,Trace-end)
-    retire-trace(captured)
-
-fun dispose-fibers(values : list<fiber<e>>) : <div,exn|e> ()
-  match values
-    Nil -> ()
-    Cons(current,rest) ->
-      finally(fn() dispose-fibers(rest),fn() dispose-fiber(current))
-
 pub fun root/dispose(root : root<e>) : <exn|e> ()
   if load(root.root-disposed) || load(root.root-disposing) then ()
   elif load(root.root-flushing) || load(root.root-current).is-just
     then throw("cannot dispose a reactive root during a computation")
   else pretend-no-div{
     store(root.root-disposing,True)
+    store(root.root-token,Scope-dead)
     finally(
       fn() {
         store(root.root-disposed,True)
@@ -649,11 +803,12 @@ pub fun root/dispose(root : root<e>) : <exn|e> ()
         store(root.root-effect-queue,[])
         store(root.root-current,Nothing)
         store(root.root-draft,Nothing)
-        store(root.root-fibers,[])
+        store(root.root-owned,Owned-end)
       },
       fn()
-        val values = load(root.root-fibers)
-        dispose-fibers(values)
+        val values = load(root.root-owned)
+        val finalizers = collect-owned(values)
+        run-finalizers(finalizers)
     )
   }
 
@@ -713,54 +868,57 @@ pub fun untrack(action : () -> <signal-read,pure|e> a)
 // Continuation-backed effects
 // --------------------------------------------------------------------------
 
-fun register-fiber(root : root<e>, current : fiber<e>) : ()
-  store(root.root-fibers,Cons(current,load(root.root-fibers)))
-
-fun unregister-fiber(root : root<e>, current : fiber<e>) : ()
-  store(root.root-fibers,compact-fibers(load(root.root-fibers)))
-
 fun create-trace-inner(root : root<e>, kind : trace-kind,
                        track : () -> <signal-read,pure> a,
                        apply : (value : a) -> <signal-write,pure|e> ())
                       : <signal-write,pure> disposer<e>
-  check-registration(root)
-  val live = cell(True)
-  val captured = cell(Trace-end)
-  val current = Fiber(live,captured)
-  register-fiber(root,current)
-  val bootstrap = Bootstrap-work(live,fn() lift-div(fn()
-    if !load(live) then Ok(()) else
-      val (attempt,drafts) = pretend-no-div{
-        attempt-build(root,fn()
-          reify-trace(root,kind,track,apply)
-        )
-      }
-      match attempt
-        Error(failure) ->
-          store(live,False)
-          unregister-fiber(root,current)
-          val _ = try-retire-drafts(drafts)
-          Error(failure)
-        Ok(built) ->
-          val publish = built.built-publish
-          val publication = pretend-no-div{ publish() }
-          match publication
-            Error(failure) ->
-              store(live,False)
-              unregister-fiber(root,current)
-              val _ = try-retire-drafts(drafts)
-              Error(failure)
-            Ok(_) ->
-              store(captured,built.built-root)
-              activate-trace(root,built.built-root)
-              Ok(())
+  val owner = load(root.root-current-frame)
+  check-frame-registration(root,owner)
+  val state = cell(Scope-starting)
+  val structural-prefix = cell(Owned-end)
+  val body = cell(Trace-end)
+  val current = Scope(state,structural-prefix,body,load(root.root-current))
+  store(owner.frame-owned,
+        Owned-fork(current,load(owner.frame-owned)))
+  val bootstrap = Bootstrap-work(current,fn() lift-div(fn()
+    match load(state)
+      Scope-starting ->
+        val scope-frame = Frame(state,structural-prefix)
+        val (attempt,drafts) = pretend-no-div{
+          attempt-build(root,fn()
+            with-context(root,current.scope-parent,scope-frame,
+              fn() reify-trace(root,kind,track,apply))
+          )
+        }
+        match attempt
+          Error(failure) ->
+            val _ = pretend-no-div{ error/try(fn() retire-scope(current)) }
+            val _ = try-retire-drafts(drafts)
+            Error(failure)
+          Ok(built) ->
+            val publish = built.built-publish
+            val publication = pretend-no-div{ publish() }
+            match publication
+              Error(failure) ->
+                val _ = pretend-no-div{ error/try(fn() retire-scope(current)) }
+                val _ = try-retire-drafts(drafts)
+                Error(failure)
+              Ok(_) ->
+                match load(state)
+                  Scope-starting ->
+                    store(body,built.built-root)
+                    activate-trace(root,built.built-root)
+                    store(state,Scope-live)
+                    Ok(())
+                  _ ->
+                    val _ = try-retire-drafts(drafts)
+                    Ok(())
+      _ -> Ok(())
   ))
   queue-work(root,kind,bootstrap)
   request-flush(root.root-key)
   fn() pretend-no-div{
-    if !load(live) then () else
-      dispose-fiber(current)
-      unregister-fiber(root,current)
+    retire-scope(current)
   }
 
 fun create-effect-inner(root : root<e>,
@@ -801,3 +959,15 @@ pub fun create-effect(root : root<e>,
                       apply : (value : a) -> <signal-write,pure|e> ())
                      : <signal-write,pure> disposer<e>
   create-effect-inner(root,track,apply)
+
+pub fun on-cleanup(root : root<e>,
+                   cleanup : () -> <signal-write,pure|e> ()) : exn ()
+  val current = load(root.root-current-frame)
+  val checkpoint = load(root.root-current)
+  check-frame-registration(root,current)
+  val live = cell(True)
+  val action = fn()
+    with-context(root,checkpoint,current,
+      fn() interpret-write(root,cleanup))
+  store(current.frame-owned,
+        Owned-cleanup(live,action,load(current.frame-owned)))
