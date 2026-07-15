@@ -773,6 +773,10 @@
   const tabList = $(".code-tabs__list");
   const tabs = $$('[role="tab"]', tabList);
 
+  tabs.forEach((tab, index) => {
+    tab.tabIndex = index === 0 ? 0 : -1;
+  });
+
   function activateTab(tab) {
     tabs.forEach((candidate) => {
       const selected = candidate === tab;

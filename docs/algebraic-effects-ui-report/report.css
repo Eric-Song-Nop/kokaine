@@ -383,6 +383,18 @@ main {
   transform: translateY(1px);
 }
 
+.button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+  transform: none;
+}
+
+.button.is-active {
+  color: var(--ink);
+  background: var(--yellow);
+  border-color: #b48f19;
+}
+
 .button--primary {
   color: white;
   background: var(--blue);
