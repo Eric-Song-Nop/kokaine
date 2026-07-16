@@ -18,6 +18,11 @@ The Chinese report [代数效应与续体如何组成增量 UI](docs/algebraic-e
 explains the runtime from a UI engineer's perspective. It includes executable
 continuation-trace visualizations, scheduler stepping, batching and ownership
 experiments, a React/Vue/Solid comparison, and the real Koka Continuation Lab.
+Its core data-flow, Koka feature atlas, dynamic-dependency, and ownership
+sections are themselves authored with Kokaine: four DOM islands share one
+Koka root and are compiled from `examples/report/*.kk`. The small host script
+is reserved for document concerns such as scroll position and the explicitly
+labelled scheduler simulations.
 
 ```sh
 make serve-report
@@ -258,6 +263,8 @@ runtime with source-local indexes of actual continuation capabilities.
 
 ```text
 examples/counter.kk                         thin browser entry point
+examples/report.kk                          self-hosted report entry point
+examples/report/*.kk                        report model and executable islands
 examples/counter/model.kk                   sources and derived state
 examples/counter/actions.kk                 mutations, batches, child effects
 examples/counter/controls.kk                source controls and live properties
