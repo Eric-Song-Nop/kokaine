@@ -687,22 +687,30 @@ val track = fn() calculate(
             </section>
 
             <section class="code-panel" role="tabpanel" id="code-panel-view" aria-labelledby="code-tab-view" hidden>
-              <pre><code><span class="code-comment">// 阶段 1：html.emit 只收集 backend-neutral view</span>
+              <pre><code><span class="code-comment">// 阶段 1：trailing lambda 直接形成 tag block；attrs 默认 []</span>
 val page = view
   main-tag(attrs=[class("instrument")])
-    h1("Signal console")
-    p
+    h1("Signal console")          <span class="code-comment">// string leaf</span>
+    p(attrs=[class { if expanded.get then "result is-open" else "result" }])
       text("平方：")
-      text { square.get.show }
+      text { square.get.show }     <span class="code-comment">// live text overload</span>
+    input(attrs=[                 <span class="code-comment">// void helper</span>
+      kind("checkbox"),
+      checked { expanded.get }    <span class="code-comment">// live property overload</span>
+    ])
+    dynamic
+      if expanded.get
+      then p("Expanded")
+      else p("Collapsed")
 
 <span class="code-comment">// 阶段 2：DOM adapter 解释 view
 // Text      → 一次创建 Text node
 // Live-text → create-effect(track = read, apply = set Text.data)
-// Region    → create-effect + 结构化 child frame
+// dynamic → Region → create-effect + 结构化 child frame
 // Listener  → 普通 JS callback + captured reentry</span>
 
 val dispose = mount(root,body(),page)</code></pre>
-              <aside><strong>HTML effect 不直接传播更新</strong><span><code>html.emit</code> 是同步 tail-resumptive builder</span><span>动态 UI 由 DOM adapter 创建的 continuation-backed effect 更新</span><span><code>dynamic</code> 当前是整段替换，不宣称 keyed diff</span></aside>
+              <aside><strong>方案一只使用 Koka 语法</strong><span>trailing lambda 与 block brace elision 提供缩进式结构，不需要 JSX 或宏</span><span><code>attrs</code> 默认 <code>[]</code>；<code>tag("text")</code> 是 string leaf</span><span><code>text("...")</code> / <code>text { ... }</code>、<code>checked(False)</code> / <code>checked { ... }</code> 由 static overloading 共用名字</span><span><code>input</code>、<code>hr</code>、<code>br</code> 是 void helper</span><span><code>dynamic</code> 创建可替换的内部 <code>Region</code>；DOM adapter 为 live binding 建立 continuation-backed effect</span></aside>
             </section>
           </div>
         </section>
@@ -824,6 +832,7 @@ val dispose = mount(root,body(),page)</code></pre>
               <a href="https://docs.solidjs.com/reference/reactive-utilities/batch">SolidJS · batch</a>
               <a href="../architecture.md">Kokaine · Architecture</a>
               <a href="../../src/kokaine/reactive.kk">Kokaine · Reactive source</a>
+              <a href="../../src/kokaine/html.kk">Kokaine · HTML DSL source</a>
             </div>
             <p>框架对比以各项目官方文档描述的基础模型为准；所有队列动画、工作范围和次数都是 semantic simulation，用于解释状态转换，不是 runtime instrumentation 或 benchmark。</p>
           </section>

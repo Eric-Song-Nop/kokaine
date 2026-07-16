@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import re
 import sys
 from html.parser import HTMLParser
 from pathlib import Path
@@ -185,6 +186,52 @@ def main() -> int:
         errors.append(
             "missing continuation-native concepts: "
             + ", ".join(sorted(missing_semantics))
+        )
+
+    required_html_dsl = {
+        "trailing lambda",
+        "block brace elision",
+        "attrs 默认 []",
+        'h1("Signal console")',
+        "string leaf",
+        "class { if expanded.get",
+        "text { square.get.show }",
+        "input(attrs=[",
+        "checked { expanded.get }",
+        "    dynamic\n",
+        "dynamic → Region",
+        "void helper",
+        "static overloading",
+    }
+    missing_html_dsl = {
+        term for term in required_html_dsl if term not in report_text
+    }
+    if missing_html_dsl:
+        errors.append(
+            "missing indentation-first HTML DSL examples: "
+            + ", ".join(sorted(missing_html_dsl))
+        )
+
+    forbidden_html_dsl = {
+        "legacy *-live helper": (
+            r"\b(?:text|attr|prop|value|checked|disabled)-live\s*\("
+        ),
+        "legacy positional tag attributes": (
+            r"\b(?:main-tag|div|span|section|header|footer|h1|h2|p|strong|"
+            r"ul|ol|li|button|label|a|input|hr)\s*\(\s*\["
+        ),
+        "legacy view lambda": r"\bview\s+fn\s*\(",
+        "legacy region helper": r"\bregion\s*(?:fn\s*)?\(",
+    }
+    legacy_html_dsl = {
+        label
+        for label, pattern in forbidden_html_dsl.items()
+        if re.search(pattern, report_text)
+    }
+    if legacy_html_dsl:
+        errors.append(
+            "legacy HTML DSL examples remain: "
+            + ", ".join(sorted(legacy_html_dsl))
         )
 
     forbidden_legacy = {

@@ -607,7 +607,7 @@
       react: { route: ["state 更新", "重新得到分支描述", "协调子树", "提交增删"], note: "组件返回新元素结构，React 协调前后结构并提交节点增删。", work: 78, scope: "条件子树" },
       vue: { route: ["条件写入", "组件更新", "执行分支补丁", "挂载 / 卸载"], note: "编译器为模板生成分支提示，运行时执行对应补丁路径。", work: 58, scope: "条件区块" },
       solid: { route: ["signal 写入", "条件计算", "清理旧 owner", "挂载新分支"], note: "控制流范围在切换时清理旧分支并建立新分支。", work: 37, scope: "条件区域" },
-      kokaine: { route: ["outer K Pending", "旧 child Dead", "新 child Draft", "publish Live branch"], note: "region binding 的 continuation frame 拥有该 generation 的 DOM range、listener 与 child effects。", work: 39, scope: "continuation frame" },
+      kokaine: { route: ["outer K Pending", "旧 child Dead", "新 child Draft", "publish Live branch"], note: "dynamic 生成的 Region binding，其 continuation frame 拥有该 generation 的 DOM range、listener 与 child effects。", work: 39, scope: "continuation frame" },
     },
     batch: {
       react: { route: ["3 次 state 更新", "自动批处理", "组件渲染", "一次提交"], note: "现代 React 会在常见边界批处理；实际次数依更新方式而定。", work: 54, scope: "批后的子树" },
