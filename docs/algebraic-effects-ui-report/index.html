@@ -707,7 +707,7 @@ val page = view
 // Text      → 一次创建 Text node
 // Live-text → create-effect(track = read, apply = set Text.data)
 // dynamic → Region → create-effect + 结构化 child frame
-// Listener  → 普通 JS callback + captured reentry</span>
+// Listener  → ABI callback + captured reentry + event continuation</span>
 
 val dispose = mount(root,body(),page)</code></pre>
               <aside><strong>方案一只使用 Koka 语法</strong><span>trailing lambda 与 block brace elision 提供缩进式结构，不需要 JSX 或宏</span><span><code>attrs</code> 默认 <code>[]</code>；<code>tag("text")</code> 是 string leaf</span><span><code>text("...")</code> / <code>text { ... }</code>、<code>checked(False)</code> / <code>checked { ... }</code> 由 static overloading 共用名字</span><span><code>input</code>、<code>hr</code>、<code>br</code> 是 void helper</span><span><code>dynamic</code> 创建可替换的内部 <code>Region</code>；DOM adapter 为 live binding 建立 continuation-backed effect</span></aside>
@@ -718,8 +718,8 @@ val dispose = mount(root,body(),page)</code></pre>
         <section class="report-section" id="wasm" data-section="10">
           <header class="section-heading">
             <p class="section-number">10 / THE BROWSER BOUNDARY</p>
-            <h2>同步 continuation 与异步 callback 不能混为一谈</h2>
-            <p>tracked computation 中的 <code>get</code> 发生在 handler 动态范围内，因此能捕获同步 K；浏览器稍后触发的事件只有普通 JS callback，不能恢复一个并不存在的“事件 continuation”。</p>
+            <h2>宿主 callback 是入口，不是用户 action 的执行模型</h2>
+            <p>tracked computation 中的 <code>get</code> 捕获读操作后的同步 K；listener 安装也在 <code>await-browser-event</code> 处停放真实 event continuation。浏览器仍从 ABI callback 进入，但用户 action 只由 continuation resume 执行。</p>
           </header>
 
           <figure class="runtime-layers" aria-labelledby="runtime-layers-title">
@@ -739,9 +739,9 @@ val dispose = mount(root,body(),page)</code></pre>
               </article>
               <article>
                 <span class="target-badge target-badge--wasm">ASYNCHRONOUS EVENT</span>
-                <h3>普通 callback + structural reentry</h3>
-                <p>listener 只保存 JS callback 与 opaque <code>reentry</code>：root、continuation gate、generation frame。它可在 frame 存活时重复调用，但不是 parked affine continuation。</p>
-                <div class="target-route"><span>JS event</span><b>→</b><span>reenter</span><b>→</b><span>fresh reactive handlers</span></div>
+                <h3>ABI callback + event continuation</h3>
+                <p>listener 保存 structural <code>reentry</code> 与 opaque multi-shot event K。JS 只快照事件；live/retired gate 保证该 raw resumption 在 DOM generation 退休后不可再进入。</p>
+                <div class="target-route"><span>JS event snapshot</span><b>→</b><span>reenter</span><b>→</b><span>resume event K</span></div>
               </article>
             </div>
           </figure>
@@ -749,7 +749,7 @@ val dispose = mount(root,body(),page)</code></pre>
           <div class="boundary-note">
             <h3>structural reentry 恢复什么，又不恢复什么？</h3>
             <p>
-              <code>reenter</code> 检查安装 listener 的 frame 仍存活，恢复 effect-plane gate 与 frame，清除 state-entry target，重新安装 Kokaine 的读写 handler，并把整个 callback 作为一个 batch 执行。这样，callback 内新建的 effect 与 cleanup 归属于准确的 DOM generation。它不会伪造已经返回的任意用户 handler，也不会把宿主事件投递说成 continuation resume。wasmweb 若使用对象句柄，仍须另行管理 JS 对象与持久 callback 的保留和释放。
+              <code>reenter</code> 本身仍是 non-resumptive structural capability：它检查 frame、恢复 effect-plane gate 与 generation frame、清除 state-entry target，并安装新的读写 handler。随后 adapter 在这个 batch 内同步 resume 独立的 event continuation；因此嵌套 <code>dispatchEvent</code> 与 <code>preventDefault</code> 保持浏览器原生时序，callback 内新建的 effect 与 cleanup 也归属于准确 generation。它不会伪造已经返回的任意用户 handler，因此 public callback 关闭为 <code>&lt;signal-read,signal-write,ui,pure&gt;</code>；未在 callback 内处理的额外 effect 会被类型检查拒绝。wasmweb 若使用对象句柄，仍须管理 ABI callback 与 JS 对象句柄的保留和释放。
             </p>
           </div>
         </section>

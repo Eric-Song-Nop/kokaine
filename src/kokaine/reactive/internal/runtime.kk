@@ -36,34 +36,34 @@ fun fresh-root() : root<e>
     token,owned,cell(0),cell(False),cell(False),cell(False)
   )
 
-// Construction owns the root's outermost batch. If either the constructor or
-// its initial flush exits before the root is returned, cancel that batch without
-// flushing and synchronously retire every registered scope and cleanup.
-fun abort-root-construction(root : root<e>) : <exn|e> ()
-  pretend-no-div{
-    store(root.root-batch-depth,0)
-    store(root.root-disposing,True)
-    store(root.root-token,Scope-dead)
-    finally(
-      fn() {
-        store(root.root-disposed,True)
-        store(root.root-disposing,False)
-        store(root.root-derive-plane.plane-queue,[])
-        store(root.root-effect-plane.plane-queue,[])
-        store(root.root-derive-plane.plane-current,Nothing)
-        store(root.root-effect-plane.plane-current,Nothing)
-        store(root.root-derive-plane.plane-current-entry,Nothing)
-        store(root.root-effect-plane.plane-current-entry,Nothing)
-        store(root.root-derive-plane.plane-draft,Nothing)
-        store(root.root-effect-plane.plane-draft,Nothing)
-        store(root.root-owned,Owned-end)
-      },
-      fn()
-        val values = load(root.root-owned)
-        val finalizers = collect-owned(values)
-        run-finalizers(finalizers)
-    )
-  }
+// This is the non-validating half of root disposal. Besides ordinary public
+// disposal, it is used to roll back a root whose construction has not been
+// published yet. In that case a batch may still be open, or an initial flush
+// may have failed after publishing only a prefix of the queued scopes.
+fun retire-root-now(root : root<e>) : <div,exn|e> ()
+  store(root.root-disposing,True)
+  store(root.root-token,Scope-dead)
+  finally(
+    fn() {
+      store(root.root-batch-depth,0)
+      store(root.root-flushing,False)
+      store(root.root-disposed,True)
+      store(root.root-disposing,False)
+      store(root.root-derive-plane.plane-queue,[])
+      store(root.root-effect-plane.plane-queue,[])
+      store(root.root-derive-plane.plane-current,Nothing)
+      store(root.root-effect-plane.plane-current,Nothing)
+      store(root.root-derive-plane.plane-current-entry,Nothing)
+      store(root.root-effect-plane.plane-current-entry,Nothing)
+      store(root.root-derive-plane.plane-draft,Nothing)
+      store(root.root-effect-plane.plane-draft,Nothing)
+      store(root.root-owned,Owned-end)
+    },
+    fn()
+      val values = load(root.root-owned)
+      val finalizers = collect-owned(values)
+      run-finalizers(finalizers)
+  )
 
 pub fun create-root(action : (root<e>) -> <signal-write,pure|e> a)
                    : <exn|e> (root<e>,a)
@@ -72,17 +72,16 @@ pub fun create-root(action : (root<e>) -> <signal-write,pure|e> a)
   val committed = cell(False)
   pretend-no-div{
     finally(
-      fn() lift-div(fn()
-        if load(committed) then () else abort-root-construction(root)
-      ),
+      fn() {
+        if load(committed) then () else retire-root-now(root)
+      },
       fn()
-        val result = interpret-write(root)
-          enter-batch(root.root-key)
-          val value = action(root)
-          // Initial bootstrap is part of construction. Commit only after this
-          // flush completes successfully.
-          leave-batch(root.root-key)
-          value
+        // Keep all construction work queued until the action itself succeeds.
+        // Only a successful initial drain publishes the root to its caller.
+        store(root.root-batch-depth,1)
+        val result = interpret-write(root,fn() action(root))
+        store(root.root-batch-depth,0)
+        flush(root)
         store(committed,True)
         (root,result)
     )
@@ -97,27 +96,7 @@ pub fun root/dispose(root : root<e>) : <exn|e> ()
        load(root.root-derive-plane.plane-current).is-just
     then throw("cannot dispose a reactive root during a computation or batch")
   else pretend-no-div{
-    store(root.root-disposing,True)
-    store(root.root-token,Scope-dead)
-    finally(
-      fn() {
-        store(root.root-disposed,True)
-        store(root.root-disposing,False)
-        store(root.root-derive-plane.plane-queue,[])
-        store(root.root-effect-plane.plane-queue,[])
-        store(root.root-derive-plane.plane-current,Nothing)
-        store(root.root-effect-plane.plane-current,Nothing)
-        store(root.root-derive-plane.plane-current-entry,Nothing)
-        store(root.root-effect-plane.plane-current-entry,Nothing)
-        store(root.root-derive-plane.plane-draft,Nothing)
-        store(root.root-effect-plane.plane-draft,Nothing)
-        store(root.root-owned,Owned-end)
-      },
-      fn()
-        val values = load(root.root-owned)
-        val finalizers = collect-owned(values)
-        run-finalizers(finalizers)
-    )
+    retire-root-now(root)
   }
 
 pub fun root/is-disposed(root : root<e>) : bool

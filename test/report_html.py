@@ -176,7 +176,11 @@ def main() -> int:
         "final control",
         "html.emit",
         "structural reentry",
-        "普通 JS callback",
+        "ABI callback",
+        "event continuation",
+        "resume event K",
+        "&lt;signal-read,signal-write,ui,pure&gt;",
+        "类型检查拒绝",
         "semantic simulation",
     }
     missing_semantics = {
@@ -186,6 +190,18 @@ def main() -> int:
         errors.append(
             "missing continuation-native concepts: "
             + ", ".join(sorted(missing_semantics))
+        )
+
+    forbidden_semantics = {
+        "普通 JS callback + structural reentry",
+        "不能恢复一个并不存在的“事件 continuation”",
+        "does not resume a parked event continuation",
+    }
+    stale_semantics = {term for term in forbidden_semantics if term in report_text}
+    if stale_semantics:
+        errors.append(
+            "stale callback-only event claims remain: "
+            + ", ".join(sorted(stale_semantics))
         )
 
     required_html_dsl = {

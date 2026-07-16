@@ -27,6 +27,7 @@ test-native:
 	$(KOKA) $(KOKA_FLAGS) -e test/reactive-advanced.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/reactive-stress.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/html.kk
+	python3 test/event_effect_boundary.py $(KOKA)
 
 build-counter:
 	mkdir -p dist
@@ -38,6 +39,14 @@ build-browser-fixtures: build-counter
 		--buildname=dom-errors test/dom-errors.kk
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
 		--buildname=dom-lifecycle test/dom-lifecycle.kk
+	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
+		--buildname=dom-range-safety test/dom-range-safety.kk
+	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
+		--buildname=dom-mount-rollback test/dom-mount-rollback.kk
+	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
+		--buildname=dom-ownership test/dom-ownership.kk
+	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
+		--buildname=dom-event-continuation test/dom-event-continuation.kk
 
 browser-install:
 	$(UV) run --with playwright python -m playwright install chromium

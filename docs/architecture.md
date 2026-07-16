@@ -27,6 +27,7 @@ memos, and re-entry capabilities. Its implementation is split by responsibility:
 | `internal/scheduler.kk` | invalidation, queueing, resumption, and targeted settle |
 | `internal/handlers.kk` | write interpretation, sampled reads, and dispatch |
 | `internal/reentry.kk` | continuation-derived host re-entry |
+| `kokaine/internal/event-runtime.kk` | guarded multi-shot browser-event continuation |
 | `internal/runtime.kk` | roots and high-level signal, memo, and effect operations |
 | `internal/bridge.kk` | unambiguous calls from the opaque facade |
 
@@ -298,33 +299,74 @@ children, clears the contents between its persistent marker pair, and then
 mounts the new view. It is whole-range replacement, not keyed or virtual-DOM
 reconciliation.
 
-## Host callbacks and re-entry
+Mount construction is a commit boundary. The outer mount disposer is retained
+before its bootstrap batch may flush; if any descendant bootstrap fails or
+control abandons the call, that disposer retires the complete partially
+published mount before the error escapes. Root construction applies the same
+principle at a wider boundary and retires the unpublished root on action or
+initial-drain failure.
 
-Listener installation captures an opaque `reentry<e>` containing the current
-root, continuation gate, and generation frame. When the browser later invokes
-the ordinary retained callback, `reenter`:
+Managed element and trusted-HTML roots carry an internal same-root re-entry
+capability in a `WeakMap`. A later `mount` into such a node restores that exact
+generation before registering its own scope, so physical nesting under a
+dynamic region also becomes structural ownership. `mount-independent` opts out
+when an independently disposed nested root is intentional. Retirement clears
+the live portal and leaves only a numeric same-root tombstone, so an externally
+retained stale node is rejected without retaining its root or generation frame.
+Marker pairs are installed together, and range cleanup validates common
+parentage and endpoint reachability before removing any node; a damaged range
+therefore fails closed instead of scanning into foreign siblings. Cleanup
+snapshots the validated nodes and then detaches each from its current parent, so
+a custom element's synchronous `disconnectedCallback` cannot create a
+half-removed range merely by moving a later node elsewhere.
+
+## Host callbacks, event continuations, and re-entry
+
+Listener installation captures both an opaque `reentry<e>` and an opaque
+`event-continuation`. The latter is a real raw continuation parked at the
+handled `await-browser-event` operation; its suffix contains the user action.
+The retained JavaScript function is only the transport/ABI trampoline. When the
+browser invokes it, the adapter snapshots the event and `reenter`:
 
 1. rejects a retired or disposed frame;
 2. sets the state-entry target to `Nothing`;
 3. restores the captured effect-plane gate and frame;
 4. installs fresh signal read/write handlers; and
-5. runs the callback as one batch.
+5. synchronously resumes the event continuation as one batch.
 
 Reactive work created inside the callback is therefore owned by the exact DOM
 generation that installed the listener and is retired with that region or
 mount.
 
-`reenter` does not itself advance a tracked-read K. It executes the ordinary
-event callback under restored Kokaine structure; signal writes made by that
-callback then invalidate and schedule the relevant read continuations in the
-usual way.
+`reenter` does not itself advance a tracked-read K and remains non-resumptive.
+It supplies the structural/reactive handler context in which the separate event
+K is resumed. Signal writes made by the resumed action then invalidate and
+schedule tracked-read continuations in the usual way.
 
-This boundary is intentionally precise: re-entry is **continuation-derived
-structural re-entry**. Browser event delivery itself is still an ordinary host
-callback and does not resume a parked event continuation. Nor can it reconstruct
-arbitrary user-defined handlers whose lexical extent around `mount` has already
-returned. Such effects must be handled inside the callback or by a fresh
-application runner installed at the host boundary.
+The event master is multi-shot so repeated and synchronously nested DOM
+dispatches preserve native ordering. An opaque live/retired cell prevents a raw
+resumption after ownership retirement. Cleanup gates the capability before
+detaching the JavaScript listener, drops the only stored K, and clears the
+trampoline's mutable action cell. Thus even failed host removal leaves an inert
+function that no longer retains the root or portal. The parked suffix has not
+begun the user action and therefore owns no acquired cleanup.
+
+This boundary is intentionally precise. Browser delivery begins with an ABI
+callback, then performs structural re-entry and an actual event-continuation
+resume. It still cannot reconstruct arbitrary user-defined handlers whose
+lexical extent around `mount` has already returned. Accordingly, `callback` has
+the closed
+`<signal-read,signal-write,ui,pure>` capability row. An unsupported application
+effect must be handled inside the callback and is otherwise rejected during
+type checking; it cannot silently become a delayed missing-handler failure. A
+future fresh application runner installed at the host boundary could expose a
+wider row explicitly.
+
+Koka's `pure` row includes modeled `exn`/`div`; such exceptions are reported by
+the event boundary and unwind the batch normally. A native JavaScript throw from
+an extern declared only as `ui` is instead an FFI contract violation: it bypasses
+Koka handlers and `finally`. Adapter externs must catch native failures at their
+innermost boundary and translate them to Koka `exn`, as the DOM adapter does.
 
 ## Verification map
 
@@ -338,6 +380,13 @@ application runner installed at the host boundary.
 - `continuation-reentry.kk` checks callback-created ownership and stale re-entry.
 - `dom-lifecycle.kk` plus `browser_counter.py` check listener, region, and mount
   retirement in a real browser.
+- `dom-event-continuation.kk` checks repeated multi-shot delivery, synchronous
+  nested dispatch and `preventDefault`, plus rejection after retirement.
+- `root-construction.kk`, `dom-mount-rollback.kk`, `dom-ownership.kk`, and
+  `dom-range-safety.kk` check construction rollback, physical ownership, and
+  non-destructive marker failure in native and real-browser paths.
+- `event_effect_boundary.py` checks that a lexical-only application effect
+  cannot enter a retained callback.
 
 The browser renderer currently replaces all content between a region's
 persistent markers and does not provide keyed reconciliation, hydration,
