@@ -1,10 +1,13 @@
 HOMEBREW_KOKA := $(firstword $(wildcard /opt/homebrew/opt/koka/bin/koka /usr/local/opt/koka/bin/koka))
 KOKA ?= $(if $(HOMEBREW_KOKA),$(HOMEBREW_KOKA),koka)
+PYTHON ?= python3
 UV ?= uv
 
+PROJECT_ROOT := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
+RUN_LOCKED := $(PROJECT_ROOT)/support/run_locked.py
 KOKA_FLAGS := -j1 -i./src
-DIST_KOKA = python3 -c 'import fcntl, os, sys; lock = open(sys.argv[1], "a"); fcntl.flock(lock, fcntl.LOCK_EX); os.set_inheritable(lock.fileno(), True); os.execvp(sys.argv[2], sys.argv[2:])' \
-	dist/.koka-build.lock $(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist
+DIST_KOKA = $(PYTHON) "$(RUN_LOCKED)" dist/.koka-build.lock \
+	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist
 
 .PHONY: test test-native test-all test-wasm test-report build-counter build-top-layer build-report build-browser-fixtures browser-install test-browser serve serve-top-layer serve-report
 
@@ -36,21 +39,19 @@ test-native:
 	$(KOKA) $(KOKA_FLAGS) -e test/reactive-advanced.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/reactive-stress.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/html.kk
-	python3 test/event_effect_boundary.py $(KOKA)
-	python3 test/make_parallel.py
+	$(PYTHON) test/event_effect_boundary.py $(KOKA)
+	$(PYTHON) test/run_locked.py
+	$(PYTHON) test/make_parallel.py
 
 build-counter:
-	mkdir -p dist
 	$(DIST_KOKA) \
 		--buildname=counter examples/counter.kk
 
 build-top-layer:
-	mkdir -p dist
 	$(DIST_KOKA) \
 		--buildname=top-layer examples/top-layer.kk
 
 build-report:
-	mkdir -p dist
 	$(DIST_KOKA) \
 		--buildname=report examples/report.kk
 
@@ -82,17 +83,17 @@ test-wasm:
 
 test-report: build-report
 	node --check docs/algebraic-effects-ui-report/report.js
-	python3 test/report_html.py
+	$(PYTHON) test/report_html.py
 
 test-all: test-native test-browser test-wasm test-report
 
 serve: build-counter
-	python3 -m http.server 4173 --bind 127.0.0.1
+	$(PYTHON) -m http.server 4173 --bind 127.0.0.1
 
 serve-top-layer: build-top-layer
 	@echo "Kokaine top-layer example: http://127.0.0.1:4173/examples/top-layer/"
-	python3 -m http.server 4173 --bind 127.0.0.1
+	$(PYTHON) -m http.server 4173 --bind 127.0.0.1
 
 serve-report: build-report build-counter
 	@echo "Kokaine report: http://127.0.0.1:4173/docs/algebraic-effects-ui-report/"
-	python3 -m http.server 4173 --bind 127.0.0.1
+	$(PYTHON) -m http.server 4173 --bind 127.0.0.1

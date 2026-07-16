@@ -2,6 +2,7 @@
 
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -29,6 +30,9 @@ BROWSER_BUILD_SOURCES = [*BROWSER_APP_SOURCES, *BROWSER_FIXTURE_SOURCES]
 REPORT_SOURCE = "examples/report.kk"
 DIST_BUILD_SOURCES = {*BROWSER_BUILD_SOURCES, REPORT_SOURCE}
 WAIT_SECONDS = 10
+MAKE = shutil.which("make")
+
+assert MAKE is not None, "make is required for this regression check"
 
 
 def wait_for(path: Path) -> bool:
@@ -83,7 +87,7 @@ def fake_koka(arguments: list[str]) -> int:
 def dry_run(temporary: Path, *goals: str) -> str:
     result = subprocess.run(
         [
-            "make",
+            MAKE,
             "-n",
             "-f",
             str(MAKEFILE),
@@ -98,6 +102,44 @@ def dry_run(temporary: Path, *goals: str) -> str:
     )
     assert result.returncode == 0, result.stdout
     return result.stdout
+
+
+def check_configurable_python() -> None:
+    with tempfile.TemporaryDirectory(prefix="kokaine-make-python-") as directory:
+        temporary = Path(directory)
+        shim_directory = temporary / "bin"
+        shim_directory.mkdir()
+        hard_coded_python = shim_directory / "python3"
+        hard_coded_python.write_text("#!/bin/sh\nexit 91\n")
+        hard_coded_python.chmod(0o755)
+
+        environment = os.environ.copy()
+        environment["PATH"] = (
+            str(shim_directory)
+            + os.pathsep
+            + environment.get("PATH", "")
+        )
+        fake_koka = shlex.join([sys.executable, "-c", ""])
+        result = subprocess.run(
+            [
+                MAKE,
+                "-f",
+                str(MAKEFILE),
+                f"PYTHON={sys.executable}",
+                f"KOKA={fake_koka}",
+                "build-report",
+            ],
+            cwd=temporary,
+            env=environment,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            check=False,
+        )
+        assert result.returncode == 0, (
+            "Makefile ignored the configured Python interpreter:\n"
+            + result.stdout
+        )
 
 
 def check_parallel_build() -> None:
@@ -173,4 +215,5 @@ def check_parallel_build() -> None:
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--fake-koka":
         raise SystemExit(fake_koka(sys.argv[2:]))
+    check_configurable_python()
     check_parallel_build()
