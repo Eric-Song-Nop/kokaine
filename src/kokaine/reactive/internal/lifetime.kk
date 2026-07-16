@@ -113,9 +113,17 @@ pub fun collect-owned-resources(values : owned<e>)
     Owned-end -> []
     Owned-fork(_,next) -> collect-owned-resources(next)
     Owned-derive-fork(_,next) -> collect-owned-resources(next)
-    Owned-resource(resource,next) ->
-      Cons(resource-retirement(resource),
-           collect-owned-resources(next))
+    Owned-resource(slot,next) ->
+      // Retirement and explicit unregistration compete by taking the same
+      // slot. Once claimed here, a later unregister cannot discard or skip
+      // this cleanup from the already detached retirement snapshot.
+      val resource = load(slot)
+      store(slot,Nothing)
+      match resource
+        Nothing -> collect-owned-resources(next)
+        Just(current) ->
+          Cons(resource-retirement(current),
+               collect-owned-resources(next))
 
 pub fun collect-owned(values : owned<e>)
                  : <div> list<retirement<e>>

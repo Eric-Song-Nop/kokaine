@@ -12,6 +12,17 @@ import kokaine/reactive/internal/capture
 import kokaine/reactive/internal/resource
 import std/core/undiv
 
+// Internal registrations are removable without exposing the owner's effect
+// row to async task records. The action only seals and unlinks a parked
+// continuation; it never runs user cleanup.
+abstract type cleanup-registration
+  Cleanup-registration(unregister-action : () -> ())
+
+pub fun cleanup-registration/unregister(
+    registration : cleanup-registration) : ()
+  match registration
+    Cleanup-registration(unregister-action) -> unregister-action()
+
 // Public dispatch lives at the composition layer; the handler implementation
 // remains isolated in `internal/handlers`.
 pub fun dispatch(root : root<e>,
@@ -280,8 +291,34 @@ pub fun create-effect(root : root<e>,
                      : <signal-write,pure> disposer<e>
   create-effect-inner(root,track,apply)
 
-pub fun on-cleanup(root : root<e>,
-                   cleanup : () -> <signal-write,pure|e> ()) : exn ()
+fun remove-resource-slot(
+    values : owned<e>,
+    target : ref<global,maybe<resource-k<e>>>) : <div> owned<e>
+  match values
+    Owned-end -> Owned-end
+    Owned-fork(scope,next) ->
+      Owned-fork(scope,remove-resource-slot(next,target))
+    Owned-derive-fork(scope,next) ->
+      Owned-derive-fork(scope,remove-resource-slot(next,target))
+    Owned-resource(slot,next) ->
+      if same-resource-slot(slot,target) then next
+      else Owned-resource(slot,remove-resource-slot(next,target))
+
+noinline fun unregister-cleanup-slot(
+    owner : ref<global,owned<e>>,
+    slot : ref<global,maybe<resource-k<e>>>) : ()
+  val resource = load(slot)
+  store(slot,Nothing)
+  match resource
+    Nothing -> ()
+    Just(current) -> discard-resource(current)
+  val values = load(owner)
+  store(owner,pretend-no-div{ remove-resource-slot(values,slot) })
+
+pub fun register-cleanup(
+    root : root<e>,
+    cleanup : () -> <signal-write,pure|e> ())
+    : exn cleanup-registration
   check-not-pure-plane("cleanup registration")
   val plane = root.root-effect-plane
   val current = load(plane.plane-current-frame)
@@ -291,5 +328,13 @@ pub fun on-cleanup(root : root<e>,
     with-context(plane,checkpoint,current,
       fn() interpret-write(root,cleanup))
   )
+  val slot = cell(Just(resource))
+  val owner = current.frame-owned
   store(current.frame-owned,
-        Owned-resource(resource,load(current.frame-owned)))
+        Owned-resource(slot,load(current.frame-owned)))
+  Cleanup-registration(fn() unregister-cleanup-slot(owner,slot))
+
+pub fun on-cleanup(root : root<e>,
+                   cleanup : () -> <signal-write,pure|e> ()) : exn ()
+  val _ = register-cleanup(root,cleanup)
+  ()

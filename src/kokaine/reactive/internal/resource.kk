@@ -61,3 +61,11 @@ pub fun finalize-resource(resource : resource-k<e>) : <div,exn|e> ()
         // therefore cannot finalize this one-shot continuation twice.
         store(live,False)
         finalize()
+
+// Drop an unneeded parked cleanup without executing it. The caller must also
+// release its last reference to `resource`; sealing first makes an aliased
+// retirement capability inert.
+pub fun discard-resource(resource : resource-k<e>) : ()
+  match resource
+    Resource-done -> ()
+    Resource-parked(live,_) -> store(live,False)

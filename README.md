@@ -270,7 +270,8 @@ callback and returns a disposer. Use the public `run-async(root, action)`
 delimiter when starting the same kind of task from another live reactive turn.
 Every resumed suffix uses a fresh base async interpreter; structured siblings
 share only their active cancellation family, and terminal operations detach
-from that family and their owner lookup. `response.require-ok` aborts and
+from that family and physically unlink their structural cleanup registration.
+`response.require-ok` aborts and
 cancels an unconsumed error body before raising its HTTP exception.
 
 `kokaine/resource` packages the common tracked-source/load/state pattern:

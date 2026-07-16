@@ -427,6 +427,21 @@ with serve_project() as origin:
         resource_result = page.evaluate("__kokaineAsyncResource")
         assert resource_result["ok"], resource_result["message"]
 
+        # Completed awaits must physically unlink their structural cleanup
+        # registrations instead of leaving one owner tombstone per turn.
+        page.evaluate(
+            """async () => {
+                await import('/dist/test_async_dash_owner_dash_registration__main.mjs');
+            }"""
+        )
+        page.wait_for_function("globalThis.__kokaineAsyncOwner?.done === true")
+        owner_result = page.evaluate("__kokaineAsyncOwner")
+        assert owner_result == {
+            "done": True,
+            "owned": 0,
+            "outstanding": 0,
+        }, owner_result
+
         browser.close()
         assert not page_errors, "browser page errors:\n" + "\n".join(page_errors)
         assert not console_errors, "browser console errors:\n" + "\n".join(

@@ -364,11 +364,13 @@ its handle, Promise cancellation clears its callback cell, and Fetch
 cancellation clears both callbacks before aborting its controller.
 
 The shared family contains active capabilities only. A terminal task is pruned
-before user code is resumed, and its structural owner link is cleared through
-a one-shot indirection. The long-lived owner ledger is left with only an empty
-cell: it can no longer reach the family, task identity, continuation, portal,
-or disposer after settlement. This keeps cross-turn structured cancellation
-without turning either the family or owner ledger into a completed-task log.
+before user code is resumed, and its structural cleanup registration is both
+sealed and physically unlinked from the exact owning frame. Retirement and
+normal completion compete by taking the same one-shot resource slot: a
+retirement snapshot which takes it first still runs cleanup, while completion
+which takes it first discards the parked cleanup without executing it. The
+owner ledger is therefore bounded by live work instead of completed-task
+history, while neither path can finalize the registration twice.
 
 `Cancel` is distinct from `Exception`. Public await wrappers translate it to
 the final `discontinue` operation, so ordinary `catch` cannot turn cancellation
@@ -619,6 +621,9 @@ async, and Resource checks with `make test-browser`.
   boundary, Promise and Fetch adapters, structured combinators, duplicate and
   late callbacks, setup failure, generation replacement, and root disposal in
   Chromium.
+- `removable-cleanup.kk` and `async-owner-registration.kk` check exact physical
+  owner unlinking, retirement-snapshot precedence, and bounded completed-await
+  history.
 - `async-resource.kk` checks explicit equality, refresh/failure retention,
   explicit cancellation, rapid source churn, stale completions, and owner
   retirement in the browser.

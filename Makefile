@@ -11,6 +11,7 @@ test: test-native
 test-native:
 	$(KOKA) $(KOKA_FLAGS) -e test/root-construction.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/resource-finalization.kk
+	$(KOKA) $(KOKA_FLAGS) -e test/removable-cleanup.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/trace-semantics.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/structural-scopes.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/targeted-settle.kk
@@ -59,6 +60,8 @@ build-browser-fixtures: build-counter
 		--buildname=dom-async-runtime test/dom-async-runtime.kk
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
 		--buildname=async-resource test/async-resource.kk
+	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
+		--buildname=async-owner-registration test/async-owner-registration.kk
 
 browser-install:
 	$(UV) run --with playwright python -m playwright install chromium

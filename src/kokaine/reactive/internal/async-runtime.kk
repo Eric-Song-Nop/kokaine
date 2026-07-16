@@ -49,6 +49,7 @@ type generation-task<a,e::E>
     // The structural owner closes over only this indirection. Terminal tasks
     // clear it, severing the owner's path to the family and task identity.
     task-owner-stop : ref<global,maybe<() -> <signal-write,pure,ui|e> ()>>,
+    task-owner-registration : ref<global,maybe<cleanup-registration>>,
     task-label    : string
   )
 
@@ -153,6 +154,11 @@ fun async-family/fresh-task-id(family : async-family<e>) : int
 
 fun task/detach-owner(task : generation-task<a,e>) : ()
   store(task.task-owner-stop,Nothing)
+  val registration = load(task.task-owner-registration)
+  store(task.task-owner-registration,Nothing)
+  match registration
+    Nothing -> ()
+    Just(current) -> current.unregister
 
 noinline fun async-family/stop-task(family : async-family<e>, id : int,
                                     retired : bool)
@@ -308,7 +314,7 @@ fun register-task(
   val task-id = family.fresh-task-id
   val task = Generation-task(
     cell(Task-pending),cell(Nothing),cell(Just(portal)),
-    cell(Just(resume-action)),cell(Nothing),cell(Nothing),label
+    cell(Just(resume-action)),cell(Nothing),cell(Nothing),cell(Nothing),label
   )
   val capability = Task-capability(
     task-id,
@@ -319,7 +325,7 @@ fun register-task(
 
   val owner-stop = task.task-owner-stop
   store(owner-stop,Just(fn() family.stop-task(task-id,True)))
-  on-cleanup(root,fn()
+  val registration = register-cleanup(root,fn()
     // Consume before stopping: retirement recursively detaches this task, and
     // the owner action must remain one-shot under aliased cleanup paths.
     val stop = load(owner-stop)
@@ -328,6 +334,7 @@ fun register-task(
       Nothing -> ()
       Just(stop-task) -> stop-task()
   )
+  store(task.task-owner-registration,Just(registration))
 
   // Publish the operation only after its owner link is durable. If structural
   // registration rejects a dead frame, no runtime ledger or debug counter can

@@ -157,9 +157,14 @@ pub type owned<e::E>
     owned-next         : owned<e>
   )
   Owned-resource(
-    owned-resource : resource-k<e>,
-    resource-next  : owned<e>
+    owned-resource-slot : ref<global,maybe<resource-k<e>>>,
+    resource-next       : owned<e>
   )
+
+pub fun same-resource-slot(
+    left : ref<global,maybe<resource-k<e>>>,
+    right : ref<global,maybe<resource-k<e>>>) : bool
+  unsafe-ptr-eq(left,right)
 
 pub type continuation-scope<e::E>
   Scope(
