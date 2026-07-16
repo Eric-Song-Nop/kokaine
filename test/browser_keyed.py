@@ -76,7 +76,9 @@ with serve_project() as origin:
                     'keyed-main-root',
                     'keyed-duplicate-root',
                     'keyed-move-root',
-                    'keyed-bootstrap-root'
+                    'keyed-bootstrap-root',
+                    'keyed-dispose-stress-root',
+                    'keyed-rollback-stress-root'
                 ]) {
                     const host = document.createElement('div');
                     host.id = id;
@@ -324,12 +326,108 @@ with serve_project() as origin:
 
         assert invoke(page, "bulkRetirement") is True
 
+        disposal = page.evaluate(
+            """() => {
+                try {
+                    return {
+                        value: globalThis.__kokaineKeyed.disposeStress(),
+                        error: null
+                    };
+                } catch (error) {
+                    return {
+                        value: null,
+                        error: `${error.name}: ${error.message}`
+                    };
+                }
+            }"""
+        )
+        assert disposal == {
+            "value": True,
+            "error": None,
+        }, f"bulk keyed disposal was not stack-safe: {disposal!r}"
+        expect(page.locator("#keyed-dispose-stress-list > li")).to_have_count(0)
+
+        rollback_list = "#keyed-rollback-stress-list"
+        rollback_order = order(page, rollback_list)
+        assert len(rollback_order) == 4096
+        rollback_first = page.locator(
+            f"#keyed-rollback-stress-row-{rollback_order[0]}"
+        ).element_handle()
+        rollback_middle = page.locator(
+            f"#keyed-rollback-stress-row-{rollback_order[2048]}"
+        ).element_handle()
+        rollback_last = page.locator(
+            f"#keyed-rollback-stress-row-{rollback_order[-1]}"
+        ).element_handle()
+        assert all(
+            handle is not None
+            for handle in (rollback_first, rollback_middle, rollback_last)
+        )
+        page.evaluate(
+            """() => {
+                const parent = document.querySelector(
+                    '#keyed-rollback-stress-list'
+                );
+                const nativeInsert = parent.insertBefore;
+                let moves = 0;
+                parent.insertBefore = function insertThenThrow(child, before) {
+                    const result = nativeInsert.call(this, child, before);
+                    if (
+                        child.nodeType === Node.DOCUMENT_FRAGMENT_NODE &&
+                        ++moves === 64
+                    ) {
+                        throw new Error('forced keyed stress move');
+                    }
+                    return result;
+                };
+                globalThis.__restoreKeyedStressInsert = () => {
+                    parent.insertBefore = nativeInsert;
+                };
+            }"""
+        )
+        rollback = page.evaluate(
+            """() => {
+                try {
+                    return {
+                        value: globalThis.__kokaineKeyed.rollbackStress(),
+                        error: null
+                    };
+                } catch (error) {
+                    return {
+                        value: null,
+                        error: `${error.name}: ${error.message}`
+                    };
+                }
+            }"""
+        )
+        page.evaluate("globalThis.__restoreKeyedStressInsert()")
+        assert rollback == {
+            "value": False,
+            "error": None,
+        }, f"bulk keyed rollback was not stack-safe: {rollback!r}"
+        assert order(page, rollback_list) == rollback_order
+        assert_same(
+            rollback_first,
+            f"#keyed-rollback-stress-row-{rollback_order[0]}",
+        )
+        assert_same(
+            rollback_middle,
+            f"#keyed-rollback-stress-row-{rollback_order[2048]}",
+        )
+        assert_same(
+            rollback_last,
+            f"#keyed-rollback-stress-row-{rollback_order[-1]}",
+        )
+        assert invoke(page, "rollbackStressReset") is True
+
         invoke(page, "dispose")
         for selector in (
             "#keyed-main-root",
             "#keyed-duplicate-root",
             "#keyed-move-root",
             "#keyed-bootstrap-root",
+            "#keyed-dispose-stress-root",
+            "#keyed-rollback-stress-root",
         ):
             assert page.locator(selector).evaluate(
                 "node => node.childNodes.length"

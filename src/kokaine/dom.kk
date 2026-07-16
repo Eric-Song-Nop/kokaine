@@ -523,28 +523,65 @@ fun mount-attribute(root : root<<ui|e>>, target : element,
 // Incremental keyed regions
 // --------------------------------------------------------------------------
 
-fun dispose-keyed-rows<a,k,e::E>(rows : list<keyed-row<e,a,k>>)
-                                  : <ui,exn|e> ()
+fun throw-keyed-row-failure(
+      failure : ref<global,error<()>>) : exn ()
+  transaction-load(failure).untry
+
+fun run-keyed-row-actions<a,k,rowe::E,p::E>(
+      rows : list<keyed-row<rowe,a,k>>,
+      action : (keyed-row<rowe,a,k>) -> <exn|p> (),
+      failure : ref<global,error<()>>)
+    : <exn|p> ()
   match rows
     Nil -> ()
     Cons(row,rest) ->
-      // A throwing cleanup cannot prevent later draft/stale rows from retiring.
+      val completed = transaction-cell(False)
       finally(
-        fn() dispose-keyed-rows(rest),
-        fn() internal/dispose-structural-owner(row.row-owner)
+        fn() {
+          if transaction-load(completed) then () else
+            // A final control operation never returns through `error/try`.
+            // Finish the remaining actions in its dynamic cleanup, and let a
+            // later modeled exception override that control just as nested
+            // `finally` did before this loop became stack-safe.
+            run-keyed-row-actions(rest,action,failure)
+            throw-keyed-row-failure(failure)
+        },
+        fn() mask<exn>{
+          // Preserve only the latest modeled failure. Clearing the earlier
+          // one first is essential when this action performs final control:
+          // an older exception must not spuriously replace that control.
+          val previous = transaction-load(failure)
+          transaction-store(failure,Ok(()))
+          match error/try(fn() action(row))
+            Error(problem) -> transaction-store(failure,Error(problem))
+            Ok(_) -> transaction-store(failure,previous)
+          transaction-store(completed,True)
+        }
       )
+      run-keyed-row-actions(rest,action,failure)
+
+fun exhaust-keyed-row-actions<a,k,rowe::E,p::E>(
+      rows : list<keyed-row<rowe,a,k>>,
+      action : (keyed-row<rowe,a,k>) -> <exn|p> ())
+    : <exn|p> ()
+  val failure : ref<global,error<()>> = transaction-cell(Ok(()))
+  run-keyed-row-actions(rows,action,failure)
+  throw-keyed-row-failure(failure)
+
+fun dispose-keyed-rows<a,k,e::E>(rows : list<keyed-row<e,a,k>>)
+                                  : <ui,exn|e> ()
+  // A throwing cleanup cannot prevent later draft/stale rows from retiring.
+  exhaust-keyed-row-actions(rows,fn(row)
+    internal/dispose-structural-owner(row.row-owner)
+  )
 
 fun rollback-keyed-order<a,k,e::E>(parent : node, last : node,
                          rows : list<keyed-row<e,a,k>>) : <ui,exn> ()
-  match rows
-    Nil -> ()
-    Cons(row,rest) ->
-      // Moving each prior row to the closing boundary in its former order
-      // reconstructs that complete order regardless of the partial draft order.
-      finally(
-        fn() rollback-keyed-order(parent,last,rest),
-        fn() move-range-before(parent,row.row-first,row.row-last,last)
-      )
+  // Moving each prior row to the closing boundary in its former order
+  // reconstructs that complete order regardless of the partial draft order.
+  exhaust-keyed-row-actions(rows,fn(row)
+    move-range-before(parent,row.row-first,row.row-last,last)
+  )
 
 fun validate-keyed-order<a,k,e::E>(parent : node, last : node, cursor : node,
                          rows : list<keyed-row<e,a,k>>) : <ui,exn> ()

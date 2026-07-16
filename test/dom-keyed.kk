@@ -128,6 +128,13 @@ extern publish-faults(
   bulk-retirement : () -> ui bool) : ui ()
   js inline "Object.assign(globalThis.__kokaineKeyed, { duplicate:#1, duplicateReset:#2, move:#3, moveReset:#4, bootstrap:#5, bootstrapReset:#6, compactLedger:#7, bulkRetirement:#8 })"
 
+extern publish-stress(
+  dispose-stress : () -> ui bool,
+  dispose-stress-reset : () -> ui bool,
+  rollback-stress : () -> ui bool,
+  rollback-stress-reset : () -> ui bool) : ui ()
+  js inline "Object.assign(globalThis.__kokaineKeyed, { disposeStress:#1, disposeStressReset:#2, rollbackStress:#3, rollbackStressReset:#4 })"
+
 fun safe-set(root : root<<ui>>, source : signal<list<item-data>>,
              next : list<item-data>) : ui bool
   with catch fn(_)
@@ -286,6 +293,21 @@ fun bootstrap-page(source : signal<list<item-data>>) : view<total>
           })
         ])
 
+fun stress-items() : list<item-data>
+  fold(4096,[]) fn(index,items)
+    Cons(item(index,"stress"),items)
+
+fun stress-page(source : signal<list<item-data>>, list-id : string,
+                row-prefix : string) : view<total>
+  view
+    ul(attrs=[id(list-id)])
+      for(fn() source.get,fn(value) value.item-id) fn(current,_)
+        val initial = current()
+        element-empty("li",attrs=[
+          id(row-prefix ++ initial.item-id.show),
+          data("key",initial.item-id.show)
+        ])
+
 pub fun main()
   val (root,model) = create-root fn(root)
     val source = signal(root,initial-items())
@@ -335,6 +357,20 @@ pub fun main()
   val (compact-root,compact-owner) = create-root fn(current-root)
     internal/open-structural-owner(current-root)
 
+  val (dispose-stress-root,dispose-stress-source) = create-root fn(current-root)
+    signal(current-root,stress-items())
+  val dispose-stress-dispose = mount(
+    dispose-stress-root,query("#keyed-dispose-stress-root"),
+    stress-page(dispose-stress-source,"keyed-dispose-stress-list",
+                "keyed-dispose-stress-row-"))
+
+  val (rollback-stress-root,rollback-stress-source) = create-root fn(current-root)
+    signal(current-root,stress-items())
+  val rollback-stress-dispose = mount(
+    rollback-stress-root,query("#keyed-rollback-stress-root"),
+    stress-page(rollback-stress-source,"keyed-rollback-stress-list",
+                "keyed-rollback-stress-row-"))
+
   publish-main-actions(
     fn() safe-set(root,source,prepended-items()),
     fn() safe-set(root,source,appended-items()),
@@ -358,6 +394,8 @@ pub fun main()
       safe-dispose(move-root)
       safe-dispose(bootstrap-root)
       safe-dispose(compact-root)
+      safe-dispose(dispose-stress-root)
+      safe-dispose(rollback-stress-root)
     }
   )
   publish-faults(
@@ -373,4 +411,12 @@ pub fun main()
     fn() safe-set(bootstrap-root,bootstrap-source,[]),
     fn() compact-ledger-stress(compact-root,compact-owner),
     fn() bulk-retirement-stress(compact-root,compact-owner)
+  )
+  publish-stress(
+    fn() safe-set(dispose-stress-root,dispose-stress-source,[]),
+    fn() safe-set(dispose-stress-root,dispose-stress-source,stress-items()),
+    fn() safe-set(
+      rollback-stress-root,rollback-stress-source,stress-items().reverse),
+    fn() safe-set(
+      rollback-stress-root,rollback-stress-source,stress-items())
   )
