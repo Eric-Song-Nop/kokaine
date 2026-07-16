@@ -23,10 +23,17 @@ pub value struct event(
   original : any
 )
 
-// `ui` is fixed instead of part of `e`: the DOM root already owns one `ui`
-// capability, so a full handler can call prevent-default or another browser
-// primitive without inferring an invalid duplicate `<ui,ui>` row.
-pub alias callback<e> = (ev : event) -> <signal-read,signal-write,ui,pure|e> ()
+// A retained browser callback can use only capabilities which the DOM adapter
+// explicitly reinstalls at the later host turn. In particular this row is not
+// open: a lexical application handler surrounding `mount` has already returned
+// when JavaScript delivers an event and cannot safely be reconstructed.
+//
+// `pure` includes Koka's modeled `exn`/`div`: the event boundary reports an
+// uncaught Koka exception and still unwinds its reactive batch. Native throws
+// from an extern declared only as `ui` violate that extern's effect contract;
+// adapters must translate them at the innermost FFI boundary (as DOM does).
+pub alias callback-effect = <signal-read,signal-write,ui,pure>
+pub alias callback = (ev : event) -> callback-effect ()
 
 pub type property-value
   String-property(value : string)
@@ -39,7 +46,7 @@ pub type attribute<e::E>
   Property(name : string, value : property-value)
   Live-attribute(name : string, read : () -> signal-read maybe<string>)
   Live-property(name : string, read : () -> signal-read property-value)
-  Listener(name : string, action : callback<e>)
+  Listener(name : string, action : callback)
 
 
 // --------------------------------------------------------------------------
@@ -203,8 +210,10 @@ pub fun bool-property(value : bool) : property-value
 pub fun int-property(value : int) : property-value
   Int-property(value)
 
-// Full handlers may read and write signals and use the root's host row `e`.
-pub fun on(name : string, action : callback<e>) : attribute<e>
+// Closed event handlers may read/write signals and use the explicitly supported
+// DOM and Koka exception capabilities. Other effects must be handled inside
+// `action`.
+pub fun on(name : string, action : callback) : attribute<e>
   Listener(name,action)
 
 // Most controls only write. This adapter injects the unused read and framework
