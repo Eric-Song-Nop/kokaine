@@ -3,6 +3,8 @@ KOKA ?= $(if $(HOMEBREW_KOKA),$(HOMEBREW_KOKA),koka)
 UV ?= uv
 
 KOKA_FLAGS := -j1 -i./src
+DIST_KOKA = python3 -c 'import fcntl, os, sys; lock = open(sys.argv[1], "a"); fcntl.flock(lock, fcntl.LOCK_EX); os.set_inheritable(lock.fileno(), True); os.execvp(sys.argv[2], sys.argv[2:])' \
+	dist/.koka-build.lock $(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist
 
 .PHONY: test test-native test-all test-wasm test-report build-counter build-top-layer build-report build-browser-fixtures browser-install test-browser serve serve-top-layer serve-report
 
@@ -39,33 +41,33 @@ test-native:
 
 build-counter:
 	mkdir -p dist
-	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
+	$(DIST_KOKA) \
 		--buildname=counter examples/counter.kk
 
-build-top-layer: build-counter
+build-top-layer:
 	mkdir -p dist
-	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
+	$(DIST_KOKA) \
 		--buildname=top-layer examples/top-layer.kk
 
 build-report:
 	mkdir -p dist
-	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
+	$(DIST_KOKA) \
 		--buildname=report examples/report.kk
 
-build-browser-fixtures: build-top-layer
-	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
+build-browser-fixtures: build-counter build-top-layer
+	$(DIST_KOKA) \
 		--buildname=dom-errors test/dom-errors.kk
-	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
+	$(DIST_KOKA) \
 		--buildname=dom-lifecycle test/dom-lifecycle.kk
-	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
+	$(DIST_KOKA) \
 		--buildname=dom-range-safety test/dom-range-safety.kk
-	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
+	$(DIST_KOKA) \
 		--buildname=dom-mount-rollback test/dom-mount-rollback.kk
-	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
+	$(DIST_KOKA) \
 		--buildname=dom-ownership test/dom-ownership.kk
-	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
+	$(DIST_KOKA) \
 		--buildname=dom-event-continuation test/dom-event-continuation.kk
-	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
+	$(DIST_KOKA) \
 		--buildname=dom-top-layer test/dom-top-layer.kk
 
 browser-install:
