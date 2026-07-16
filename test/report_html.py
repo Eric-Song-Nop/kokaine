@@ -13,6 +13,8 @@ from urllib.parse import urlsplit
 ROOT = Path(__file__).resolve().parents[1]
 REPORT = ROOT / "docs" / "algebraic-effects-ui-report" / "index.html"
 REPORT_SCRIPT = REPORT.with_name("report.js")
+REPORT_ENTRY = ROOT / "examples" / "report.kk"
+REPORT_MODULES = ROOT / "examples" / "report"
 VOID_ELEMENTS = {
     "area",
     "base",
@@ -132,8 +134,10 @@ def main() -> int:
         errors.append(f"expected html lang=zh-CN, got {parser.lang!r}")
     if parser.h1_count != 1:
         errors.append(f"expected exactly one h1, got {parser.h1_count}")
-    if parser.button_count < 20:
-        errors.append(f"expected a rich interactive report, found only {parser.button_count} buttons")
+    if parser.button_count < 12:
+        errors.append(
+            f"expected a rich static report shell, found only {parser.button_count} buttons"
+        )
     if parser.button_count != parser.interactive_button_count:
         errors.append("not every button declares type=button")
 
@@ -151,7 +155,12 @@ def main() -> int:
         if not candidate.exists():
             errors.append(f"line {line}: local resource does not exist: {resource}")
 
-    expected_sources = {"react.dev", "vuejs.org", "docs.solidjs.com"}
+    expected_sources = {
+        "react.dev",
+        "vuejs.org",
+        "docs.solidjs.com",
+        "koka-lang.github.io",
+    }
     missing_sources = expected_sources - parser.external_hosts
     if missing_sources:
         errors.append(f"missing official comparison sources: {', '.join(sorted(missing_sources))}")
@@ -284,6 +293,80 @@ def main() -> int:
             + ", ".join(sorted(missing_behaviors))
         )
 
+    if not REPORT_ENTRY.exists() or not REPORT_MODULES.exists():
+        errors.append("self-hosted Koka report sources are missing")
+        koka_text = ""
+    else:
+        koka_paths = [REPORT_ENTRY, *sorted(REPORT_MODULES.glob("*.kk"))]
+        koka_text = "\n".join(path.read_text(encoding="utf-8") for path in koka_paths)
+
+    required_kokaine_surface = {
+        "import kokaine/reactive",
+        "import kokaine/html",
+        "import kokaine/dom",
+        'query("#koka-feature-app")',
+        'query("#koka-flow-app")',
+        'query("#koka-dynamic-app")',
+        'query("#koka-ownership-app")',
+        "derive(",
+        "memo(",
+        "dynamic",
+        "on-cleanup(",
+        "batch(",
+    }
+    missing_surface = {
+        term for term in required_kokaine_surface if term not in koka_text
+    }
+    if missing_surface:
+        errors.append(
+            "self-hosted report misses Kokaine surface: "
+            + ", ".join(sorted(missing_surface))
+        )
+
+    required_koka_controls = {
+        "kk-flow-plus",
+        "kk-flow-batch",
+        "kk-flow-reset",
+        "kk-feature-effects",
+        "kk-feature-control",
+        "kk-feature-multishot",
+        "kk-feature-perceus",
+        "kk-mode-name",
+        "kk-mode-count",
+        "kk-dynamic-name",
+        "kk-dynamic-count",
+        "kk-owner-toggle",
+        "kk-owner-arm",
+    }
+    missing_koka_controls = {
+        control for control in required_koka_controls if control not in koka_text
+    }
+    if missing_koka_controls:
+        errors.append(
+            "self-hosted report misses controls: "
+            + ", ".join(sorted(missing_koka_controls))
+        )
+
+    required_official_features = {
+        "sec-effect-types",
+        "sec-opfun",
+        "sec-multi-resume",
+        "why-perceus",
+    }
+    missing_features = {
+        feature
+        for feature in required_official_features
+        if feature not in report_text + "\n" + koka_text
+    }
+    if missing_features:
+        errors.append(
+            "report misses official Koka feature references: "
+            + ", ".join(sorted(missing_features))
+        )
+
+    if "examples_report__main.mjs" not in report_text:
+        errors.append("report does not load the compiled Kokaine report entry")
+
     if errors:
         print("report HTML checks failed:", file=sys.stderr)
         for error in errors:
@@ -292,7 +375,7 @@ def main() -> int:
 
     print(
         "report HTML checks passed: "
-        f"{len(parser.ids)} IDs, {parser.button_count} controls, "
+        f"{len(parser.ids)} static IDs, {parser.button_count} shell controls, "
         f"{len(parser.local_resources)} local resources"
     )
     return 0

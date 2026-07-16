@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#15202b" />
+    <meta name="theme-color" content="#e9edf0" />
     <meta
       name="description"
-      content="一份面向 UI 框架作者的可交互技术报告：解释 Kokaine 如何用代数效应捕获同步读取后缀，并以真实续体驱动增量 UI。"
+      content="一份由 Kokaine 自己渲染核心实验的可执行技术报告：解释 Koka 如何用代数效应捕获同步读取后缀，并以真实续体驱动增量 UI。"
     />
     <title>代数效应与续体如何驱动增量 UI｜Kokaine 可执行报告</title>
     <link rel="stylesheet" href="./report.css" />
@@ -29,7 +29,7 @@
       >
         目录
       </button>
-      <p class="topbar__status"><span class="status-dot"></span>文档内实验可直接操作</p>
+      <p class="topbar__status"><span class="status-dot"></span>核心实验由 Kokaine 自己渲染</p>
     </header>
 
     <div class="page-shell" id="top">
@@ -38,12 +38,12 @@
         <ol>
           <li><a href="#abstract"><span>00</span>先说结论</a></li>
           <li><a href="#journey"><span>01</span>一次更新的旅程</a></li>
-          <li><a href="#flow-lab"><span>02</span>续体轨迹实验</a></li>
-          <li><a href="#effects"><span>03</span>代数效应做了什么</a></li>
+          <li><a href="#flow-lab"><span>02</span>真实数据流</a></li>
+          <li><a href="#effects"><span>03</span>Koka 特性图谱</a></li>
           <li><a href="#scheduler"><span>04</span>如何少算又算对</a></li>
           <li><a href="#batching"><span>05</span>批量更新</a></li>
-          <li><a href="#dynamic"><span>06</span>会变化的订阅</a></li>
-          <li><a href="#ownership"><span>07</span>清理旧 UI</a></li>
+          <li><a href="#dynamic"><span>06</span>真实动态订阅</a></li>
+          <li><a href="#ownership"><span>07</span>真实生命周期</a></li>
           <li><a href="#comparison"><span>08</span>框架对比</a></li>
           <li><a href="#code"><span>09</span>Koka 代码</a></li>
           <li><a href="#wasm"><span>10</span>浏览器与 WASM</a></li>
@@ -60,39 +60,30 @@
       <main id="report">
         <section class="hero report-section" id="abstract" data-section="00">
           <div class="hero__copy">
-            <p class="kicker">可执行技术报告 · 面向 UI 工作者</p>
-            <h1>代数效应与续体如何驱动<br /><em>增量 UI</em></h1>
+            <p class="kicker"><span class="live-pill">SELF-HOSTED</span> 可执行技术报告 · 面向 UI 工作者</p>
+            <h1>这份报告，正在被<br />自己的<em>续体</em>驱动</h1>
             <p class="hero__lead">
-              当 <code>reify-trace</code> 内的同步 tracked <code>get</code> 发生时，Kokaine 捕获的是<strong>这次读取之后的计算后缀</strong>；Sample-read 与普通 dispatch read 不捕获。
-              值改变后，运行时恢复这段后缀，而不是保存原始闭包并从函数开头重跑。
+              页面里的数据流、动态分支与 cleanup 实验不是原生 JavaScript 仿制品：它们由本仓库的 <code>kokaine/html</code>、<code>signal</code>、<code>derive</code> 与 <code>memo(previous)</code> 直接生成。
+              每次 tracked <code>get</code> 留下<strong>读取之后的精确计算后缀</strong>；值改变后恢复 suffix，prefix 不会重放。
             </p>
             <div class="hero__actions">
-              <a class="button button--primary" href="#flow-lab">先动手试一次</a>
-              <a class="button button--quiet" href="#effects">代数效应是什么</a>
+              <a class="button button--primary" href="#flow-lab">推动真实数据流</a>
+              <a class="button button--quiet" href="#effects">浏览 Koka 特性</a>
             </div>
           </div>
 
-          <figure class="hero-meter" aria-labelledby="hero-meter-title">
-            <figcaption id="hero-meter-title">
-              <span>RESUMPTION SCOPE / 恢复范围</span>
-              <strong>恢复 get 之后，而不是重跑 get 之前</strong>
+          <figure class="hero-proof" aria-labelledby="hero-proof-title">
+            <figcaption id="hero-proof-title">
+              <span><i></i> LIVE BUILD / KOKA 3.2.3</span>
+              <strong>REPORT PROVENANCE</strong>
             </figcaption>
-            <div class="scope-meter" aria-hidden="true">
-              <span class="scope-meter__work"></span>
-              <span class="scope-meter__rest"></span>
-            </div>
-            <div class="scope-labels">
-              <span><b>K</b> 被 source 索引</span>
-              <span><b>prefix</b> 不被重放</span>
-            </div>
-            <div class="hero-meter__diagram" aria-hidden="true">
-              <span class="mini-node">prefix</span>
-              <i></i><span class="mini-node mini-node--hot">get / capture K</span>
-              <i></i><span class="mini-node mini-node--hot">suffix</span>
-              <span class="mini-node">旧 child</span>
-              <span class="mini-node">新 draft</span>
-              <span class="mini-node mini-node--hot">publish</span>
-            </div>
+            <ol class="proof-route">
+              <li><b>01</b><span><code>examples/report/*.kk</code><small>报告交互与状态模型</small></span></li>
+              <li><b>02</b><span><code>html&lt;e&gt; / emit</code><small>effect-handled view builder</small></span></li>
+              <li><b>03</b><span><code>jsweb / mount</code><small>continuation-backed DOM effects</small></span></li>
+              <li class="is-live"><b>04</b><span><strong>你正在操作的页面</strong><small>没有 JSX，也没有虚拟 DOM</small></span></li>
+            </ol>
+            <a class="proof-source" href="../../examples/report.kk">查看报告入口源码 <span>↗</span></a>
           </figure>
 
           <div class="abstract-grid">
@@ -164,70 +155,14 @@
         <section class="report-section lab-section" id="flow-lab" data-section="02">
           <header class="section-heading section-heading--split">
             <div>
-              <p class="section-number">02 / LIVE DATA FLOW</p>
-              <h2>亲手推动一条数据流</h2>
+              <p class="section-number">02 / SELF-HOSTED DATA FLOW</p>
+              <h2>亲手推动一条真实的 Kokaine 数据流</h2>
             </div>
-            <p>蓝线是 source 本地 capture 索引的语义投影。这里是教学模拟，不是运行时探针；队列里的工作单位是 <code>Resume-work(trace)</code>。</p>
+            <p>按钮、派生值、live class 与数字文字都由编译后的 Koka 运行。轨迹图是这些真实响应式结果的语义投影，不声称读取私有调度队列。</p>
           </header>
 
-          <div class="lab" id="flow-lab-app">
-            <div class="lab__toolbar" role="group" aria-label="续体轨迹实验控制">
-              <button class="button button--primary" id="flow-plus" type="button">写入 +1</button>
-              <button class="button button--accent" id="flow-batch" type="button">连续写 3 次</button>
-              <button class="button button--quiet" id="flow-reset" type="button">复位</button>
-              <span class="lab__hint">提示：观察运行次数与 DOM 改动数</span>
-            </div>
-
-            <div class="flow-layout">
-              <div class="flow-graph graph-stage" id="flow-graph" aria-label="实时 source-local continuation trace">
-                <div class="graph-grid" aria-hidden="true"></div>
-                <div class="graph-node graph-node--source" id="node-count" data-node="count">
-                  <small>source-local index</small>
-                  <strong>count = <span id="flow-count">2</span></strong>
-                  <i class="node-state">READY</i>
-                </div>
-                <div class="graph-node graph-node--memo" id="node-square" data-node="square">
-                  <small>pure plane · Trace-read</small>
-                  <strong>平方 = <span id="flow-square">4</span></strong>
-                  <i class="node-state">CLEAN</i>
-                </div>
-                <div class="graph-node graph-node--memo" id="node-parity" data-node="parity">
-                  <small>pure plane · Trace-read</small>
-                  <strong><span id="flow-parity">偶数</span></strong>
-                  <i class="node-state">CLEAN</i>
-                </div>
-                <div class="graph-node graph-node--effect" id="node-dom-number" data-node="dom-number">
-                  <small>effect plane · suffix</small>
-                  <strong>数字文字</strong>
-                  <i class="node-state">DOM</i>
-                </div>
-                <div class="graph-node graph-node--effect" id="node-dom-square" data-node="dom-square">
-                  <small>effect plane · suffix</small>
-                  <strong>平方文字</strong>
-                  <i class="node-state">DOM</i>
-                </div>
-                <div class="graph-node graph-node--effect" id="node-dom-theme" data-node="dom-theme">
-                  <small>effect plane · suffix</small>
-                  <strong>奇偶样式</strong>
-                  <i class="node-state">DOM</i>
-                </div>
-              </div>
-
-              <aside class="runtime-console" aria-live="polite">
-                <div class="runtime-console__head">
-                  <span>RUNTIME TRACE</span><span id="flow-cycle">cycle 00</span>
-                </div>
-                <div class="runtime-summary">
-                  <div><small>数据写入</small><strong id="flow-write-count">0</strong></div>
-                  <div><small>重新计算</small><strong id="flow-compute-count">0</strong></div>
-                  <div><small>DOM 改动</small><strong id="flow-dom-count">0</strong></div>
-                </div>
-                <ol class="trace-list" id="flow-trace">
-                  <li><span>00</span>等待操作。初次运行已为每个 tracked read occurrence 捕获后缀，并把 capability 索引到对应 source。</li>
-                </ol>
-              </aside>
-            </div>
-          </div>
+          <div class="koka-mount koka-mount--flow" id="koka-flow-app"></div>
+          <noscript><p class="mount-fallback">这个真实数据流需要启用 JavaScript 才能运行编译后的 Koka 模块。</p></noscript>
 
           <div class="annotation-row">
             <article>
@@ -250,81 +185,12 @@
 
         <section class="report-section" id="effects" data-section="03">
           <header class="section-heading">
-            <p class="section-number">03 / ALGEBRAIC EFFECTS, PLAINLY</p>
-            <h2>代数效应与 continuation 各自负责什么？</h2>
-            <p>两者缺一不可，但不是同一个概念：<strong>effect operation 是可处理的能力接口，continuation 是 operation 发生处之后的控制流</strong>。</p>
+            <p class="section-number">03 / KOKA FEATURE ATLAS</p>
+            <h2>Koka 不只“有 effect”：它把控制流做成了可组合的语言材料</h2>
+            <p>下面四组能力来自 Koka 3.2.3 官方文档。切换标签时，面板本身通过 Kokaine 的 signal 与 dynamic region 重建。</p>
           </header>
-
-          <div class="analogy-grid">
-            <article class="analogy-card">
-              <p class="analogy-card__label">组件 / 计算代码</p>
-              <div class="request-ticket">
-                <span>REQUEST</span>
-                <strong>请读取 count</strong>
-                <small>代码只发出 signal-read 操作</small>
-              </div>
-              <p>API 与 effect row 表达“允许请求读取”，不承诺具体传播算法。</p>
-            </article>
-            <div class="analogy-arrow" aria-hidden="true">→</div>
-            <article class="analogy-card analogy-card--handler">
-              <p class="analogy-card__label">根处理器 / handler</p>
-              <ul>
-                <li><span>1</span>检查 opaque root key 与 source 所属根</li>
-                <li><span>2</span>tracked read 用 raw ctl 捕获精确后缀 K</li>
-                <li><span>3</span>把 K、plane、target 打包进 source-local index</li>
-                <li><span>4</span>以当前值 resume K，继续完成初次计算</li>
-              </ul>
-            </article>
-            <div class="analogy-arrow" aria-hidden="true">→</div>
-            <article class="analogy-card">
-              <p class="analogy-card__label">运行时结果</p>
-              <div class="request-ticket request-ticket--done">
-                <span>HANDLED</span>
-                <strong>值 = 3</strong>
-                <small>该 read occurrence 的 Trace-read 已建立</small>
-              </div>
-              <p>同一 API 在 <code>untrack</code> 下会被 override 成 Sample-read，不捕获 K。</p>
-            </article>
-          </div>
-
-          <figure class="handler-stack" aria-labelledby="handler-stack-title">
-            <figcaption id="handler-stack-title" class="figure-title">
-              <span>图 2</span><strong>一次点击穿过的“处理层”</strong>
-            </figcaption>
-            <div class="handler-stack__host">
-              <span>同步 track</span>
-              <strong>get</strong>
-              <small>handler 仍在动态栈上，可捕获真正的 K</small>
-            </div>
-            <div class="handler-stack__arrow">→ raw ctl 捕获后缀</div>
-            <div class="handler-stack__layers">
-              <div><span>effect row</span><small>声明 track 只可请求 signal-read</small></div>
-              <div><span>read handler</span><small>区分 Track-read / Sample-read / State-entry-read</small></div>
-              <div><span>raw continuation</span><small>reify 为 Trace-read 或 Trace-entry</small></div>
-              <div class="handler-stack__app"><span>captured suffix</span><small>用 source 当前值继续执行</small></div>
-            </div>
-          </figure>
-
-          <div class="effect-value-grid">
-            <article>
-              <h3>effect 让策略可组合</h3>
-              <p>
-                正常读取、<code>untrack</code> 采样读取、stateful memo 的入口读取共用一个 operation，却由局部 handler 赋予不同解释。effect row 还能把“纯追踪”与“允许写 DOM”分开。
-              </p>
-            </article>
-            <article>
-              <h3>continuation 让更新真正增量</h3>
-              <p>
-                如果 handler 只记录 callback，再从函数开头执行，effect API 仍然成立，但不具备这里的语义。Kokaine 保存 <code>trace-resume</code>，正常刷新不依靠被保留的 calculation action。
-              </p>
-            </article>
-            <article>
-              <h3>类型约束也有准确边界</h3>
-              <p>
-                <code>() -&gt; &lt;signal-read,pure&gt; a</code> 不能把写能力直接逸出；函数仍可在内部安装自己的 handler。类型说明未处理的能力，不等价于“源码里绝不出现被局部处理的写操作”。
-              </p>
-            </article>
-          </div>
+          <div class="koka-mount koka-mount--features" id="koka-feature-app"></div>
+          <noscript><p class="mount-fallback">特性图谱需要启用 JavaScript 才能切换；官方资料链接仍可在文末访问。</p></noscript>
         </section>
 
         <section class="report-section lab-section" id="scheduler" data-section="04">
@@ -413,9 +279,9 @@
           <div class="batch-lab" id="batch-lab">
             <div class="batch-lab__controls" role="group" aria-label="批处理实验控制">
               <span>一次事件里写入：</span>
-              <button class="segment is-active" type="button" data-writes="1">1 次</button>
-              <button class="segment" type="button" data-writes="3">3 次</button>
-              <button class="segment" type="button" data-writes="10">10 次</button>
+              <button class="segment is-active" type="button" data-writes="1" aria-pressed="true">1 次</button>
+              <button class="segment" type="button" data-writes="3" aria-pressed="false">3 次</button>
+              <button class="segment" type="button" data-writes="10" aria-pressed="false">10 次</button>
             </div>
             <div class="bar-chart" aria-label="固定语义场景中逐次 settling 和 batch settling 比较">
               <div class="bar-chart__head"><span>模拟事件</span><span>每次立即 settle</span><span>batch 后 settle</span></div>
@@ -453,72 +319,24 @@
           <header class="section-heading section-heading--split">
             <div>
               <p class="section-number">06 / DYNAMIC DEPENDENCIES</p>
-              <h2>代码分支会生成不同的嵌套 continuation trace</h2>
+              <h2>改动未被选择的 source，页面真的不会恢复</h2>
             </div>
-            <p>“本轮执行到哪个 read occurrence”比静态扫描更精确。切换模式时，旧 child trace 变成 Dead，新 suffix 在 Draft frame 内按真实分支捕获。</p>
+            <p>这一段直接使用 <code>dynamic</code> 与两个真实 source。“本轮执行到哪个 read occurrence”比静态扫描更精确；切换模式会替换 region 的 continuation-owned generation。</p>
           </header>
 
-          <div class="dynamic-lab" id="dynamic-lab">
-            <div class="dynamic-preview">
-              <p class="dynamic-preview__label">当前卡片标题</p>
-              <strong id="dynamic-output">访客 Koka</strong>
-              <small id="dynamic-render-count">页面 suffix 运行 1 次</small>
-            </div>
-            <div class="dynamic-switcher">
-              <span>显示模式</span>
-              <div role="group" aria-label="选择卡片显示模式">
-                <button class="segment is-active" id="mode-name" type="button">显示名字</button>
-                <button class="segment" id="mode-count" type="button">显示计数</button>
-              </div>
-              <label>名字 <input id="dynamic-name" value="Koka" /></label>
-              <label>计数 <input id="dynamic-count" type="number" value="2" /></label>
-            </div>
-            <div class="dynamic-graph" aria-label="动态 source-local continuation trace">
-              <div class="dynamic-source" id="dynamic-mode-node"><small>signal</small><strong>mode</strong></div>
-              <div class="dynamic-source" id="dynamic-name-node"><small>signal</small><strong>name</strong></div>
-              <div class="dynamic-source is-muted" id="dynamic-count-node"><small>signal</small><strong>count</strong></div>
-              <div class="dynamic-effect" id="dynamic-title-node"><small>effect</small><strong>卡片标题</strong></div>
-              <span class="dynamic-edge dynamic-edge--mode"></span>
-              <span class="dynamic-edge dynamic-edge--name" id="dynamic-name-edge"></span>
-              <span class="dynamic-edge dynamic-edge--count is-hidden" id="dynamic-count-edge"></span>
-            </div>
-            <div class="dynamic-log" id="dynamic-log" aria-live="polite">
-              <span>Live trace：Trace-read(mode) → Trace-read(name)</span>
-            </div>
-          </div>
+          <div class="koka-mount koka-mount--dynamic" id="koka-dynamic-app"></div>
+          <noscript><p class="mount-fallback">动态依赖实验需要启用 JavaScript。</p></noscript>
         </section>
 
         <section class="report-section" id="ownership" data-section="07">
           <header class="section-heading">
             <p class="section-number">07 / OWNERSHIP &amp; CLEANUP</p>
-            <h2>新 suffix 何时能取代旧 generation？</h2>
-            <p>传播依赖 source-local capture；资源释放依赖结构化 frame/owner ledger。两者用途不同，不能把 ownership tree 当成 dependency graph。</p>
+            <h2>把分支隐藏掉，listener、child effect 与 cleanup 一起退休</h2>
+            <p>下面的 child effect 由分支里的真实 listener 创建；<code>on-cleanup</code> 绑定到准确 generation。传播依赖 source-local capture，资源释放依赖结构化 frame——两者用途不同。</p>
           </header>
 
-          <div class="ownership-lab" id="ownership-lab">
-            <div class="ownership-actions">
-              <button class="button button--primary" id="ownership-toggle" type="button">替换详情分支</button>
-              <button class="button button--accent" id="ownership-unmount" type="button">卸载整个卡片</button>
-              <button class="button button--quiet" id="ownership-reset" type="button">重新挂载</button>
-            </div>
-            <div class="ownership-layout">
-              <div class="owner-tree" aria-label="UI 所有权树">
-                <div class="owner-node owner-node--root" data-owner="root"><small>ROOT</small><strong>页面挂载</strong></div>
-                <div class="owner-tree__branch">
-                  <div class="owner-node" data-owner="card"><small>REGION</small><strong>资料卡</strong></div>
-                  <div class="owner-tree__branch owner-tree__branch--children">
-                    <div class="owner-node" data-owner="text"><small>LIVE TEXT</small><strong>名字绑定</strong></div>
-                    <div class="owner-node" data-owner="detail"><small>REGION</small><strong id="owner-detail-label">详情 A</strong></div>
-                    <div class="owner-node" data-owner="listener"><small>LISTENER</small><strong>点击监听</strong></div>
-                  </div>
-                </div>
-              </div>
-              <aside class="cleanup-console">
-                <div><span>CLEANUP LOG</span><strong id="cleanup-count">0 项</strong></div>
-                <ol id="cleanup-log"><li>等待替换或卸载操作。</li></ol>
-              </aside>
-            </div>
-          </div>
+          <div class="koka-mount koka-mount--ownership" id="koka-ownership-app"></div>
+          <noscript><p class="mount-fallback">结构化生命周期实验需要启用 JavaScript。</p></noscript>
 
           <figure class="dispose-phases" aria-labelledby="dispose-title">
             <figcaption id="dispose-title" class="figure-title"><span>图 3</span><strong>安全清理分两段完成</strong></figcaption>
@@ -546,9 +364,9 @@
           </header>
 
           <div class="comparison-switcher" role="group" aria-label="选择对比场景">
-            <button class="segment is-active" type="button" data-scenario="leaf">叶子文字变化</button>
-            <button class="segment" type="button" data-scenario="branch">条件分支替换</button>
-            <button class="segment" type="button" data-scenario="batch">连续三次写入</button>
+            <button class="segment is-active" type="button" data-scenario="leaf" aria-pressed="true">叶子文字变化</button>
+            <button class="segment" type="button" data-scenario="branch" aria-pressed="false">条件分支替换</button>
+            <button class="segment" type="button" data-scenario="batch" aria-pressed="false">连续三次写入</button>
           </div>
 
           <div class="framework-routes" id="framework-routes">
@@ -830,6 +648,10 @@ val dispose = mount(root,body(),page)</code></pre>
               <a href="https://vuejs.org/api/general.html#nexttick">Vue · DOM update timing</a>
               <a href="https://docs.solidjs.com/advanced-concepts/fine-grained-reactivity">SolidJS · Fine-grained reactivity</a>
               <a href="https://docs.solidjs.com/reference/reactive-utilities/batch">SolidJS · batch</a>
+              <a href="https://koka-lang.github.io/koka/doc/book.html#sec-effect-types">Koka · Effect types</a>
+              <a href="https://koka-lang.github.io/koka/doc/book.html#sec-opfun">Koka · Tail-resumptive operations</a>
+              <a href="https://koka-lang.github.io/koka/doc/book.html#sec-multi-resume">Koka · Multi-shot resumptions</a>
+              <a href="https://koka-lang.github.io/koka/doc/book.html#sec-fbip">Koka · Functional but in-place</a>
               <a href="../architecture.md">Kokaine · Architecture</a>
               <a href="../../src/kokaine/reactive.kk">Kokaine · Reactive source</a>
               <a href="../../src/kokaine/html.kk">Kokaine · HTML DSL source</a>
@@ -846,5 +668,6 @@ val dispose = mount(root,body(),page)</code></pre>
     </div>
 
     <script src="./report.js" defer></script>
+    <script type="module" src="../../dist/examples_report__main.mjs"></script>
   </body>
 </html>
