@@ -9,6 +9,7 @@ import kokaine/reactive/internal/lifetime
 import kokaine/reactive/internal/scheduler
 import kokaine/reactive/internal/handlers
 import kokaine/reactive/internal/capture
+import kokaine/reactive/internal/resource
 import std/core/undiv
 
 // Public dispatch lives at the composition layer; the handler implementation
@@ -305,9 +306,9 @@ pub fun on-cleanup(root : root<e>,
   val current = load(plane.plane-current-frame)
   val checkpoint = load(plane.plane-current)
   check-frame-registration(root,current)
-  val live = cell(True)
-  val action = fn()
+  val resource = capture-resource(fn()
     with-context(plane,checkpoint,current,
       fn() interpret-write(root,cleanup))
+  )
   store(current.frame-owned,
-        Owned-cleanup(live,action,load(current.frame-owned)))
+        Owned-resource(resource,load(current.frame-owned)))

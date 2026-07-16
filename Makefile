@@ -10,6 +10,7 @@ test: test-native
 
 test-native:
 	$(KOKA) $(KOKA_FLAGS) -e test/root-construction.kk
+	$(KOKA) $(KOKA_FLAGS) -e test/resource-finalization.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/trace-semantics.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/structural-scopes.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/targeted-settle.kk

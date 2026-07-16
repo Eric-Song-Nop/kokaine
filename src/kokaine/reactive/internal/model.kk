@@ -8,6 +8,7 @@ module kokaine/reactive/internal/model
 
 import std/core/unsafe
 import std/core/undiv
+import kokaine/reactive/internal/resource
 
 // --------------------------------------------------------------------------
 // Persistent cells and root identity
@@ -155,10 +156,9 @@ pub type owned<e::E>
     owned-derive-scope : continuation-scope<total>,
     owned-next         : owned<e>
   )
-  Owned-cleanup(
-    cleanup-live   : ref<global,bool>,
-    cleanup-action : () -> <div,exn|e> (),
-    cleanup-next   : owned<e>
+  Owned-resource(
+    owned-resource : resource-k<e>,
+    resource-next  : owned<e>
   )
 
 pub type continuation-scope<e::E>

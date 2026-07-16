@@ -111,9 +111,11 @@ attempts.
 - Replacement generations are built as drafts. Failure or abortive final
   control retires unpublished continuations and structural children while the
   committed source value and pending retry K remain explicit.
-- Continuation frames own nested effects, derivations, and cleanup registrations
-  for DOM listeners and regions. Replacing a generation retires that complete
-  extent; root disposal is exhaustive and idempotent.
+- Continuation frames own nested effects, derivations, and opaque parked
+  resource continuations for DOM listeners and regions. Cleanup code lives in
+  each resource K's `finally`; generation retirement invokes
+  `rcontext.finalize` rather than calling an action closure stored in the owner
+  ledger. Root disposal follows the same exhaustive, idempotent path.
 - Nested batches delay settling while making newly committed source values
   immediately readable. Host re-entry is also one atomic batched turn.
 - Browser listeners capture a typed `reentry<e>` containing their registering
@@ -222,8 +224,8 @@ For deterministic snapshots or server output, replace the DOM import with
   previous successfully committed value.
 - `create-effect(root, track, apply)` tracks only `track`; reads performed by
   `apply` do not silently become dependencies.
-- `on-cleanup` attaches work to the current owner. Disposers returned by
-  `create-effect` remove the complete owned subtree.
+- `on-cleanup` parks a one-shot resource continuation under the current owner.
+  Disposers returned by `create-effect` finalize the complete owned subtree.
 - `capture-reentry` and `reenter` let a host callback re-enter the exact
   continuation generation that registered it. They restore Kokaine's reactive
   structure, not arbitrary lexical effect handlers.
@@ -254,6 +256,7 @@ src/kokaine/reactive/effects.kk            signal read/write effect operations
 src/kokaine/reactive/internal/model.kk     traces, planes, scopes, and capabilities
 src/kokaine/reactive/internal/capture.kk   exact read-suffix reification
 src/kokaine/reactive/internal/lifetime.kk  draft transactions and finalization
+src/kokaine/reactive/internal/resource.kk  opaque parked resource continuations
 src/kokaine/reactive/internal/scheduler.kk invalidation, queues, targeted settle
 src/kokaine/reactive/internal/handlers.kk  signal interpreters and dispatch
 src/kokaine/reactive/internal/reentry.kk   batched structural host re-entry
@@ -263,6 +266,7 @@ src/kokaine/html.kk                        handled backend-neutral view DSL
 src/kokaine/dom.kk                         jsweb renderer and event boundary
 src/kokaine/ssr.kk                         escaped deterministic string renderer
 test/trace-semantics.kk                    exact suffix and branching semantics
+test/resource-finalization.kk              resource-K parking and finalization
 test/structural-scopes.kk                  ownership and cleanup generations
 test/targeted-settle*.kk                   isolated and transitive memo settling
 test/execution-planes.kk                   pure/effect plane behavior
