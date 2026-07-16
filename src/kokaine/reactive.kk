@@ -159,6 +159,6 @@ pub fun reenter(value : reentry<e>,
 // is current at the call site. Each suspension is registered with that owner;
 // later completion re-enters through a fresh Kokaine batch.
 pub fun run-async(root : root<<ui|e>>,
-                  action : () -> <async,signal-read,signal-write,pure,ui|e> ())
+                  action : () -> <async,signal-read,signal-write,pure,ui> ())
                  : <signal-read,signal-write,pure,ui|e> ()
   runtime-run-generation-async(root.unwrap-root,action)

@@ -496,7 +496,7 @@ fun run-generation-async-with-family(
 
 pub fun run-generation-async(
     root : root<<ui|e>>,
-    action : () -> <async,signal-read,signal-write,pure,ui|e> ())
+    action : () -> <async,signal-read,signal-write,pure,ui> ())
     : <signal-read,signal-write,pure,ui|e> ()
   run-generation-async-with-family(
     root,Async-family(cell([]),cell([]),cell(1)),action

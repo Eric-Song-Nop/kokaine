@@ -13,6 +13,7 @@ FIXTURES = (
     "derive-async-invalid.kk",
     "memo-async-invalid.kk",
     "resource-source-async-invalid.kk",
+    "run-async-effect-boundary-invalid.kk",
 )
 
 
@@ -45,12 +46,20 @@ def main() -> int:
                 raise AssertionError(
                     f"{fixture_name} unexpectedly admitted async suspension"
                 )
-            if "async-await" not in diagnostics:
+            expected_effect = (
+                "audit-effect"
+                if fixture_name == "run-async-effect-boundary-invalid.kk"
+                else "async-await"
+            )
+            if expected_effect not in diagnostics:
                 raise AssertionError(
                     f"{fixture_name} failed for an unexpected reason:\n{diagnostics}"
                 )
 
-    print("async-effect-boundary: derive, memo, and Resource source stay sync")
+    print(
+        "async-effect-boundary: tracked sources stay sync and run-async "
+        "rejects unsupported lexical effects"
+    )
     return 0
 
 

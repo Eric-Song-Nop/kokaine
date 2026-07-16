@@ -96,6 +96,6 @@ pub fun runtime-run-reentry(value : reentry<e>,
 // derivation or scheduler APIs merely because a root happens to carry `ui`.
 pub fun runtime-run-generation-async(
     root : root<<ui|e>>,
-    action : () -> <async,signal-read,signal-write,pure,ui|e> ())
+    action : () -> <async,signal-read,signal-write,pure,ui> ())
     : <signal-read,signal-write,pure,ui|e> ()
   kokaine/reactive/internal/async-runtime/run-generation-async(root,action)

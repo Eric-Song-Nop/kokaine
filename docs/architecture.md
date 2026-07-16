@@ -296,6 +296,12 @@ generation is current—for example, inside the re-entry batch which resumes a
 DOM event continuation. The action runs normally until it returns or performs
 `do-await`.
 
+The action has a closed
+`<async,signal-read,signal-write,pure,ui>` capability row. The root may still
+carry a wider ambient row for synchronous framework plumbing, but an arbitrary
+application handler cannot be retained by the parked suffix: later turns
+reconstruct only Kokaine's reactive and async interpreters.
+
 At an await, the raw async handler captures the suffix, registers it with the
 current structural frame, and returns without resuming it. This is the turn
 boundary: the event continuation returns, the re-entry batch closes, and
@@ -592,7 +598,8 @@ async, and Resource checks with `make test-browser`.
 - `structured-async.kk` checks ordered `parallel`, winning `race`, sibling
   cancellation, and loser finalizer draining without timing dependence.
 - `derive-async-invalid.kk`, `memo-async-invalid.kk`,
-  `resource-source-async-invalid.kk`, and `async_effect_boundary.py` are
+  `resource-source-async-invalid.kk`, `run-async-effect-boundary-invalid.kk`,
+  and `async_effect_boundary.py` are
   compile-time canaries for the tracked/untracked async capability boundary.
 - `dom-async-runtime.kk` plus `browser_async.py` check the microtask turn
   boundary, Promise and Fetch adapters, structured combinators, duplicate and
