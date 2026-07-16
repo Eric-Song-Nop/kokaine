@@ -147,6 +147,81 @@ with serve_project() as origin:
                 host.id = 'async-runtime-root';
                 document.body.replaceChildren(host);
 
+                const nativeSetTimeout = globalThis.setTimeout.bind(globalThis);
+                const nativeClearTimeout = globalThis.clearTimeout.bind(globalThis);
+                const nativePerformanceNow = performance.now.bind(performance);
+                const longTimer = {
+                    enabled: false,
+                    now: 0,
+                    nextId: 1,
+                    tasks: [],
+                    delays: [],
+                    clears: 0,
+                    setCalls: 0,
+                    throwOnCall: null,
+                    ignoreClear: false,
+                    enable(throwOnCall = null, ignoreClear = false) {
+                        this.enabled = true;
+                        this.now = 0;
+                        this.nextId = 1;
+                        this.tasks = [];
+                        this.delays = [];
+                        this.clears = 0;
+                        this.setCalls = 0;
+                        this.throwOnCall = throwOnCall;
+                        this.ignoreClear = ignoreClear;
+                    },
+                    disable() {
+                        this.enabled = false;
+                    },
+                    advance(milliseconds) {
+                        this.now += milliseconds;
+                        while (true) {
+                            this.tasks.sort((left, right) => left.at - right.at);
+                            const index = this.tasks.findIndex(task => task.at <= this.now);
+                            if (index < 0) break;
+                            const [task] = this.tasks.splice(index, 1);
+                            if (!task.canceled) task.callback();
+                        }
+                    },
+                    fireNextEarly() {
+                        this.tasks.sort((left, right) => left.at - right.at);
+                        const task = this.tasks.shift();
+                        if (task && !task.canceled) task.callback();
+                    }
+                };
+                globalThis.__kokaineLongTimer = longTimer;
+                globalThis.setTimeout = (callback, delay = 0, ...args) => {
+                    if (!longTimer.enabled) {
+                        return nativeSetTimeout(callback, delay, ...args);
+                    }
+                    longTimer.setCalls += 1;
+                    if (longTimer.setCalls === longTimer.throwOnCall) {
+                        throw new Error('forced long timer reschedule failure');
+                    }
+                    const task = {
+                        id: longTimer.nextId++,
+                        at: longTimer.now + Math.max(0, Number(delay)),
+                        callback: () => callback(...args),
+                        canceled: false
+                    };
+                    longTimer.delays.push(Number(delay));
+                    longTimer.tasks.push(task);
+                    return { __kokaineLongTimerTask: task };
+                };
+                globalThis.clearTimeout = handle => {
+                    const task = handle?.__kokaineLongTimerTask;
+                    if (!task) return nativeClearTimeout(handle);
+                    if (!task.canceled) longTimer.clears += 1;
+                    if (longTimer.ignoreClear) return;
+                    task.canceled = true;
+                    longTimer.tasks = longTimer.tasks.filter(current => current !== task);
+                };
+                Object.defineProperty(performance, 'now', {
+                    configurable: true,
+                    value: () => longTimer.enabled ? longTimer.now : nativePerformanceNow()
+                });
+
                 const nativeFetch = globalThis.fetch.bind(globalThis);
                 globalThis.__kokaineFetchAbortCount = 0;
                 globalThis.__kokaineBodyCancelCount = 0;
@@ -191,6 +266,95 @@ with serve_project() as origin:
         immediate = dispatch_and_read(page, "#async-timer")
         assert immediate == {"phase": "timer-before", "outstanding": 1}, immediate
         expect(page.locator("#async-phase")).to_have_text("timer-after")
+        assert page.evaluate("__kokaineAsyncRuntime.outstanding()") == 0
+
+        # Browser timers use a signed 32-bit delay. A longer sleep must be
+        # deadline-driven across bounded chunks instead of wrapping to ~1ms.
+        page.evaluate("__kokaineLongTimer.enable()")
+        immediate = dispatch_and_read(page, "#async-long-timer")
+        assert immediate == {
+            "phase": "long-timer-before",
+            "outstanding": 1,
+        }, immediate
+        assert page.evaluate("__kokaineLongTimer.delays") == [2147483647]
+        early = page.evaluate(
+            """() => {
+                __kokaineLongTimer.fireNextEarly();
+                return {
+                    phase: document.querySelector('#async-phase').textContent,
+                    outstanding: __kokaineAsyncRuntime.outstanding(),
+                    delays: __kokaineLongTimer.delays,
+                    pending: __kokaineLongTimer.tasks.length
+                };
+            }"""
+        )
+        assert early == {
+            "phase": "long-timer-before",
+            "outstanding": 1,
+            "delays": [2147483647, 2147483647],
+            "pending": 1,
+        }, early
+        middle = page.evaluate(
+            """() => {
+                __kokaineLongTimer.advance(2147483647);
+                return {
+                    phase: document.querySelector('#async-phase').textContent,
+                    outstanding: __kokaineAsyncRuntime.outstanding(),
+                    delays: __kokaineLongTimer.delays,
+                    pending: __kokaineLongTimer.tasks.length
+                };
+            }"""
+        )
+        assert middle == {
+            "phase": "long-timer-before",
+            "outstanding": 1,
+            "delays": [2147483647, 2147483647, 1],
+            "pending": 1,
+        }, middle
+        page.evaluate(
+            """() => {
+                __kokaineLongTimer.advance(1);
+                __kokaineLongTimer.disable();
+            }"""
+        )
+        expect(page.locator("#async-phase")).to_have_text("long-timer-after")
+        assert page.evaluate("__kokaineAsyncRuntime.outstanding()") == 0
+
+        # Failure of the first bounded chunk remains a setup error and leaves
+        # no fake timer behind.
+        page.evaluate("__kokaineLongTimer.enable(1)")
+        immediate = dispatch_and_read(page, "#async-long-timer-failure")
+        assert immediate == {
+            "phase": "long-timer-failure-before",
+            "outstanding": 1,
+        }, immediate
+        page.evaluate("__kokaineLongTimer.disable()")
+        expect(page.locator("#async-phase")).to_have_text(
+            "long-timer-failed:browser timer setup failed: "
+            "forced long timer reschedule failure"
+        )
+        assert page.evaluate("__kokaineLongTimer.tasks.length") == 0
+        assert page.evaluate("__kokaineAsyncRuntime.outstanding()") == 0
+
+        # A later chunk can fail even when initial setup succeeded. That error
+        # must settle the same await instead of escaping the host callback.
+        page.evaluate("__kokaineLongTimer.enable(2)")
+        immediate = dispatch_and_read(page, "#async-long-timer-failure")
+        assert immediate == {
+            "phase": "long-timer-failure-before",
+            "outstanding": 1,
+        }, immediate
+        assert page.evaluate("__kokaineLongTimer.delays") == [2147483647]
+        page.evaluate(
+            """() => {
+                __kokaineLongTimer.advance(2147483647);
+                __kokaineLongTimer.disable();
+            }"""
+        )
+        expect(page.locator("#async-phase")).to_have_text(
+            "long-timer-failed:browser timer failed: "
+            "forced long timer reschedule failure"
+        )
         assert page.evaluate("__kokaineAsyncRuntime.outstanding()") == 0
 
         # Already-settled Promise delivery still crosses a later microtask turn.
@@ -327,12 +491,49 @@ with serve_project() as origin:
         page.wait_for_timeout(240)
         expect(page.locator("#async-phase")).to_have_text("retire-timer-before")
 
+        # Cancellation after the first bounded chunk clears the replacement
+        # handle, and advancing the fake clock cannot revive the dead suffix.
+        toggle_live_generation(page)
+        page.evaluate("__kokaineLongTimer.enable(null, true)")
+        immediate = dispatch_and_read(page, "#async-retire-long-timer")
+        assert immediate == {
+            "phase": "retire-long-timer-before",
+            "outstanding": 1,
+        }, immediate
+        page.evaluate("__kokaineLongTimer.advance(2147483647)")
+        assert page.evaluate("__kokaineLongTimer.delays") == [2147483647, 1]
+        toggle_live_generation(page)
+        expect(page.locator("#async-finalizers")).to_have_text("5")
+        assert page.evaluate("__kokaineAsyncRuntime.outstanding()") == 0
+        canceled_long_timer = page.evaluate(
+            """() => {
+                const pendingBeforeLateCallback = __kokaineLongTimer.tasks.length;
+                __kokaineLongTimer.advance(1);
+                const pendingAfterLateCallback = __kokaineLongTimer.tasks.length;
+                __kokaineLongTimer.disable();
+                return {
+                    pendingBeforeLateCallback,
+                    pendingAfterLateCallback,
+                    clears: __kokaineLongTimer.clears
+                };
+            }"""
+        )
+        assert canceled_long_timer == {
+            "pendingBeforeLateCallback": 1,
+            "pendingAfterLateCallback": 0,
+            "clears": 1,
+        }
+        page.wait_for_timeout(20)
+        expect(page.locator("#async-phase")).to_have_text(
+            "retire-long-timer-before"
+        )
+
         # Fetch retirement revokes callbacks first and then aborts the request.
         toggle_live_generation(page)
         immediate = dispatch_and_read(page, "#async-retire-fetch")
         assert immediate["phase"] == "retire-fetch-before"
         toggle_live_generation(page)
-        expect(page.locator("#async-finalizers")).to_have_text("5")
+        expect(page.locator("#async-finalizers")).to_have_text("6")
         assert page.evaluate("__kokaineFetchAbortCount") == 2
         assert page.evaluate("__kokaineAsyncRuntime.outstanding()") == 0
         page.wait_for_timeout(40)
@@ -349,7 +550,7 @@ with serve_project() as origin:
         )
         assert page.evaluate("__kokaineAsyncRuntime.outstanding()") == 1
         toggle_live_generation(page)
-        expect(page.locator("#async-finalizers")).to_have_text("6")
+        expect(page.locator("#async-finalizers")).to_have_text("7")
         assert page.evaluate("__kokaineFetchAbortCount") == 3
         assert page.evaluate("__kokaineAsyncRuntime.outstanding()") == 0
         page.wait_for_timeout(40)
@@ -397,7 +598,7 @@ with serve_project() as origin:
         assert immediate["phase"] == "retire-structured-before"
         assert immediate["outstanding"] >= 3, immediate
         toggle_live_generation(page)
-        expect(page.locator("#async-finalizers")).to_have_text("10")
+        expect(page.locator("#async-finalizers")).to_have_text("11")
         assert page.evaluate("__kokaineAsyncRuntime.outstanding()") == 0
         for child in (
             "retire-parallel-left",
@@ -422,7 +623,7 @@ with serve_project() as origin:
         )
         assert immediate["phase"] == "retire-structured-delivered-before"
         expect(page.locator("#async-retired-generation")).to_be_attached()
-        expect(page.locator("#async-finalizers")).to_have_text("12")
+        expect(page.locator("#async-finalizers")).to_have_text("13")
         assert page.evaluate("__kokaineAsyncRuntime.outstanding()") == 0
         delivered_log = page.evaluate("__kokaineAsyncRuntime.log")
         assert "retire-delivered-left-after-await" not in delivered_log

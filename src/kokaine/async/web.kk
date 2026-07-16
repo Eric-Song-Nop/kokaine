@@ -23,9 +23,13 @@ import std/time/duration
 abstract type timer-subscription
   Timer-subscription(value : any)
 
+// Browsers coerce one timeout delay through a signed 32-bit representation.
+// Keep the exact total as a safe integer, schedule bounded chunks, and use a
+// short monotonic deadline per chunk to absorb both early and late callbacks.
 extern timer-setup-raw(milliseconds : int,
-                       resume : () -> ui ()) : ui any
-  js inline "(function(){ var state={ callback:#2, handle:null }; try { state.handle=setTimeout(function(){ var callback=state.callback; state.callback=null; state.handle=null; if(callback) callback(); },Math.max(0,Number(#1))); return { ok:true, state:state }; } catch(error) { state.callback=null; state.handle=null; return { ok:false, message:String(error && error.message != null ? error.message : error) }; } })()"
+                       fulfill : () -> ui (),
+                       reject : string -> ui ()) : ui any
+  js inline "(function(){ var maxDelay=2147483647; var requested=Math.max(0,Number(#1)); var state={ fulfill:#2, reject:#3, handle:null, remaining:0, started:0, slice:0, deadline:0 }; function message(error){ return String(error && error.message != null ? error.message : error); } function clear(){ state.fulfill=null; state.reject=null; state.handle=null; } function complete(){ var callback=state.fulfill; clear(); if(callback) callback(); } function fail(error){ var callback=state.reject; clear(); if(callback) callback(message(error)); } function schedule(delay){ state.handle=setTimeout(tick,delay); } function arm(){ state.slice=Math.min(maxDelay,Math.ceil(state.remaining)); state.started=performance.now(); state.deadline=state.started+state.slice; schedule(state.slice); } function tick(){ state.handle=null; if(!state.fulfill) return; try { var now=performance.now(); var until=state.deadline-now; if(until>0){ schedule(Math.min(maxDelay,Math.ceil(until))); return; } state.remaining=Math.max(0,state.remaining-Math.max(state.slice,now-state.started)); if(state.remaining<=0) complete(); else arm(); } catch(error) { fail(error); } } if(!Number.isSafeInteger(requested)){ clear(); return { ok:false, message:'duration exceeds the exact browser timer range' }; } state.remaining=requested; try { arm(); return { ok:true, state:state }; } catch(error) { clear(); return { ok:false, message:message(error) }; } })()"
 
 extern host-result-ok(value : any) : bool
   js inline "!!(#1).ok"
@@ -37,13 +41,18 @@ extern host-result-state(value : any) : timer-subscription
   js inline "(#1).state"
 
 extern timer-retire(value : timer-subscription) : ui ()
-  js inline "(function(){ var state=#1; if(!state) return; var handle=state.handle; state.callback=null; state.handle=null; if(handle!=null){ try { clearTimeout(handle); } catch(_) {} } })()"
+  js inline "(function(){ var state=#1; if(!state) return; var handle=state.handle; state.fulfill=null; state.reject=null; state.handle=null; if(handle!=null){ try { clearTimeout(handle); } catch(_) {} } })()"
 
 // Sleep without holding a Kokaine batch open. The generation handler invokes
 // this setup only after it has registered the task with the current owner.
 pub fun sleep(delay : duration) : <async,exn> ()
-  await0("sleep " ++ delay.show,fn(resume)
-    val installed = timer-setup-raw(max(0,delay.milli-seconds),resume)
+  setup/await("sleep " ++ delay.show,fn(resume)
+    val installed = timer-setup-raw(
+      max(0,delay.milli-seconds),
+      fn() resume(Ok(())),
+      fn(message) resume(Error(Exception(
+        "browser timer failed: " ++ message,ExnError)))
+    )
     if !host-result-ok(installed)
     then Error(Exception("browser timer setup failed: " ++
                          host-result-message(installed),ExnError))

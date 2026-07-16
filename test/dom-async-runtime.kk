@@ -104,6 +104,26 @@ pub fun main()
         )
       ])
 
+      button("long timer",attrs=[
+        id("async-long-timer"),kind("button"),
+        on("click",fn(_)
+          phase.set("long-timer-before")
+          sleep(2147483648.milli-seconds)
+          phase.set("long-timer-after")
+        )
+      ])
+
+      button("long timer reschedule failure",attrs=[
+        id("async-long-timer-failure"),kind("button"),
+        on("click",fn(_)
+          phase.set("long-timer-failure-before")
+          with catch fn(problem)
+            phase.set("long-timer-failed:" ++ show-error(problem))
+          sleep(2147483648.milli-seconds)
+          phase.set("long-timer-failure-was-not-raised")
+        )
+      ])
+
       button("promise",attrs=[
         id("async-promise"),kind("button"),
         on("click",fn(_)
@@ -281,6 +301,19 @@ pub fun main()
                   fn()
                     sleep(200.milli-seconds)
                     phase.set("retire-timer-stale")
+                )
+              )
+            ])
+
+            button("retire long timer chunk",attrs=[
+              id("async-retire-long-timer"),kind("button"),
+              on("click",fn(_)
+                phase.set("retire-long-timer-before")
+                finally(
+                  fn() finish-count(finalizers,"retire-long-timer-finally"),
+                  fn()
+                    sleep(2147483648.milli-seconds)
+                    phase.set("retire-long-timer-stale")
                 )
               )
             ])
