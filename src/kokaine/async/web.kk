@@ -37,6 +37,12 @@ extern host-result-ok(value : any) : bool
 extern host-result-message(value : any) : string
   js inline "String((#1).message == null ? '' : (#1).message)"
 
+// JavaScript promises may reject with any value, including a Proxy or object
+// whose `message` getter/string conversion throws. Formatting must never keep
+// the Koka completion callback from observing that rejection.
+extern host-error-message(value : any) : string
+  js inline "(function(error){ try { var message=error && error.message; return String(message == null ? error : message); } catch(formatError) { try { var fallback=formatError && formatError.message; return String(fallback == null ? formatError : fallback); } catch(_) { return 'unprintable host error'; } } })(#1)"
+
 extern host-result-state(value : any) : timer-subscription
   js inline "(#1).state"
 
@@ -91,8 +97,8 @@ pub extern promise/unsafe-any(value : promise<a>) : any
 
 extern promise-subscribe(value : promise<a>,
                          fulfill : a -> ui (),
-                         reject : string -> ui ()) : ui any
-  js inline "(function(){ var state={ fulfill:#2, reject:#3 }; try { Promise.resolve(#1).then(function(value){ var callback=state.fulfill; state.fulfill=null; state.reject=null; if(callback) callback(value); },function(error){ var callback=state.reject; state.fulfill=null; state.reject=null; if(callback) callback(String(error && error.message != null ? error.message : error)); }); return { ok:true, state:state }; } catch(error) { state.fulfill=null; state.reject=null; return { ok:false, message:String(error && error.message != null ? error.message : error) }; } })()"
+                         reject : any -> ui ()) : ui any
+  js inline "(function(){ var state={ fulfill:#2, reject:#3 }; try { Promise.resolve(#1).then(function(value){ var callback=state.fulfill; state.fulfill=null; state.reject=null; if(callback) callback(value); },function(error){ var callback=state.reject; state.fulfill=null; state.reject=null; if(callback) callback(error); }); return { ok:true, state:state }; } catch(error) { state.fulfill=null; state.reject=null; return { ok:false, message:String(error && error.message != null ? error.message : error) }; } })()"
 
 extern promise-result-state(value : any) : promise-subscription
   js inline "(#1).state"
@@ -107,8 +113,8 @@ pub fun promise/await(value : promise<a>) : <async,exn> a
     val installed = promise-subscribe(
       value,
       fn(result) resume(Ok(result)),
-      fn(message) resume(Error(Exception(
-        "browser Promise rejected: " ++ message,ExnError)))
+      fn(reason) resume(Error(Exception(
+        "browser Promise rejected: " ++ host-error-message(reason),ExnError)))
     )
     if !host-result-ok(installed)
     then Error(Exception("browser Promise setup failed: " ++

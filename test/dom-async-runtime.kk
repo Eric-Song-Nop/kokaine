@@ -28,6 +28,9 @@ extern resolved-promise(value : string) : promise<string>
 extern rejected-promise(message : string) : promise<string>
   js inline "Promise.reject(new Error(#1))"
 
+extern hostile-rejected-promise() : promise<string>
+  js inline "Promise.reject(Object.defineProperty({},'message',{ get:function(){ throw new Error('message getter exploded'); } }))"
+
 extern publish-controls(dispose-root : () -> ui (),
                         outstanding : () -> ui int) : ui ()
   js inline "(function(){ globalThis.__kokaineAsyncRuntime.disposeRoot=#1; globalThis.__kokaineAsyncRuntime.outstanding=#2; })()"
@@ -141,6 +144,17 @@ pub fun main()
             phase.set("promise-rejected:" ++ show-error(problem))
           val _ = rejected-promise("expected rejection").await
           phase.set("promise-rejection-was-not-raised")
+        )
+      ])
+
+      button("hostile promise rejection",attrs=[
+        id("async-promise-hostile-reject"),kind("button"),
+        on("click",fn(_)
+          phase.set("promise-hostile-reject-before")
+          with catch fn(problem)
+            phase.set("promise-hostile-rejected:" ++ show-error(problem))
+          val _ = hostile-rejected-promise().await
+          phase.set("promise-hostile-rejection-was-not-raised")
         )
       ])
 

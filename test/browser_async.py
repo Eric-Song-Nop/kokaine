@@ -370,6 +370,14 @@ with serve_project() as origin:
         )
         assert page.evaluate("__kokaineAsyncRuntime.outstanding()") == 0
 
+        immediate = dispatch_and_read(page, "#async-promise-hostile-reject")
+        assert immediate["phase"] == "promise-hostile-reject-before"
+        expect(page.locator("#async-phase")).to_have_text(
+            "promise-hostile-rejected:browser Promise rejected: "
+            "message getter exploded"
+        )
+        assert page.evaluate("__kokaineAsyncRuntime.outstanding()") == 0
+
         # Even a hostile setup callback which fires twice synchronously resumes
         # once, after dispatchEvent has returned.
         immediate = dispatch_and_read(page, "#async-sync-double")
