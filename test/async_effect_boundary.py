@@ -14,6 +14,7 @@ FIXTURES = (
     "memo-async-invalid.kk",
     "resource-source-async-invalid.kk",
     "run-async-effect-boundary-invalid.kk",
+    "run-async-root-effect-boundary-invalid.kk",
     "enqueue-microtask-effect-boundary-invalid.kk",
 )
 
@@ -52,6 +53,7 @@ def main() -> int:
                 if fixture_name
                 in {
                     "run-async-effect-boundary-invalid.kk",
+                    "run-async-root-effect-boundary-invalid.kk",
                     "enqueue-microtask-effect-boundary-invalid.kk",
                 }
                 else "async-await"

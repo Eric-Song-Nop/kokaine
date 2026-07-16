@@ -95,7 +95,7 @@ pub fun runtime-run-reentry(value : reentry<e>,
 // Keeping this bridge separate from `dispatch` prevents async from entering
 // derivation or scheduler APIs merely because a root happens to carry `ui`.
 pub fun runtime-run-generation-async(
-    root : root<<ui|e>>,
+    root : root<<ui>>,
     action : () -> <async,signal-read,signal-write,pure,ui> ())
-    : <signal-read,signal-write,pure,ui|e> ()
+    : <signal-read,signal-write,pure,ui> ()
   kokaine/reactive/internal/async-runtime/run-generation-async(root,action)

@@ -296,11 +296,12 @@ generation is current—for example, inside the re-entry batch which resumes a
 DOM event continuation. The action runs normally until it returns or performs
 `do-await`.
 
-The action has a closed
-`<async,signal-read,signal-write,pure,ui>` capability row. The root may still
-carry a wider ambient row for synchronous framework plumbing, but an arbitrary
-application handler cannot be retained by the parked suffix: later turns
-reconstruct only Kokaine's reactive and async interpreters.
+Both the action and root are closed: the action has the
+`<async,signal-read,signal-write,pure,ui>` capability row, and the root is a
+`root<<ui>>`. A wider reactive root could flush an apply or cleanup which needs
+an arbitrary application handler; that handler cannot be retained by the
+parked suffix. Later turns reconstruct only Kokaine's reactive and async
+interpreters.
 
 At an await, the raw async handler captures the suffix, registers it with the
 current structural frame, and returns without resuming it. This is the turn
@@ -554,7 +555,7 @@ half-removed range merely by moving a later node elsewhere.
 
 ## Host callbacks, event continuations, and re-entry
 
-Listener installation captures both an opaque `reentry<e>` and an opaque
+Listener installation captures both an opaque `reentry<<ui>>` and an opaque
 `event-continuation`. The latter is a real raw continuation parked at the
 handled `await-browser-event` operation; its suffix contains the user action.
 The retained JavaScript function is only the transport/ABI trampoline. When the
@@ -590,7 +591,8 @@ callback, then performs structural re-entry and an actual event-continuation
 resume. It still cannot reconstruct arbitrary user-defined handlers whose
 lexical extent around `mount` has already returned. Accordingly, `callback` has
 the closed `<signal-read,signal-write,ui,async,pure>` capability row. Kokaine
-reinstalls the async handlers for every continuation turn. Any other
+reinstalls the async handlers for every continuation turn, and both `mount`
+and `run-async` require a `root<<ui>>`. Any other
 application effect must be handled inside the callback and is otherwise
 rejected during type checking; it cannot silently become a delayed
 missing-handler failure.
@@ -623,13 +625,14 @@ async, and Resource checks with `make test-browser`.
   `dom-range-safety.kk` check construction rollback, physical ownership, and
   non-destructive marker failure in native and real-browser paths.
 - `event_effect_boundary.py` checks that a lexical-only application effect
-  cannot enter a retained callback.
+  cannot enter a retained callback or a DOM root which may flush after one.
 - `async-effects.kk` checks await result conversion, final cancellation, and
   scope ancestry with a deterministic handler.
 - `structured-async.kk` checks ordered `parallel`, winning `race`, sibling
   cancellation, and loser finalizer draining without timing dependence.
 - `derive-async-invalid.kk`, `memo-async-invalid.kk`,
   `resource-source-async-invalid.kk`, `run-async-effect-boundary-invalid.kk`,
+  `run-async-root-effect-boundary-invalid.kk`,
   `enqueue-microtask-effect-boundary-invalid.kk`, and
   `async_effect_boundary.py` are
   compile-time canaries for the tracked/untracked async capability boundary.

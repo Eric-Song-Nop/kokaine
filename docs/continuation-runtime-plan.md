@@ -262,7 +262,7 @@ Browser listeners must outlive the lexical call to `mount`, but a normal host
 callback does not preserve Koka's dynamic handler stack. Listener installation
 therefore captures two separate capabilities:
 
-- `reentry<e>` stores the structural capability needed by the reactive runtime:
+- `reentry<<ui>>` stores the structural capability needed by the DOM runtime:
   root, generation gate, and generation frame; and
 - `event-continuation` stores the user action after a handled
   `await-browser-event` operation as an opaque raw multi-shot resumption.
@@ -301,7 +301,8 @@ remains closed.
 - The public callback row is closed over the capabilities reinstalled by this
   boundary. Arbitrary application effects need a handler inside the callback;
   otherwise type checking rejects the listener. A future host runner may widen
-  this contract explicitly.
+  this contract explicitly. Until such a runner exists, DOM mounts and
+  `run-async` accept only `root<<ui>>`.
 - Modeled Koka `exn` (included by `pure`) unwinds and closes the host batch. A
   raw JavaScript throw from an extern declared merely `ui` violates its FFI
   effect contract; adapters must translate such failures at the innermost host
@@ -331,7 +332,7 @@ The important tests are behavioral rather than source-string checks:
   synchronously resume event K, including `preventDefault`, and that retirement
   closes the capability.
 - `event_effect_boundary.py` proves a lexical-only effect cannot escape into a
-  retained listener and fail later at the JavaScript host turn.
+  retained listener or its root and fail later at the JavaScript host turn.
 
 A mutation that replaces trace resume with a retained full-action call must not
 be possible without adding a new forbidden runtime path. A mutation that drops

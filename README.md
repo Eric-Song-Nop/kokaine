@@ -333,7 +333,9 @@ self-cancellation is terminal too: it restores the previous value (or
   callback only snapshots the event and synchronously resumes that capability.
 - `run-async(root, action)` delimits one generation-bound browser task. Each
   await returns control to close the current turn; completion resumes under a
-  newly installed async interpreter inside the captured generation.
+  newly installed async interpreter inside the captured generation. Its root
+  is closed to `ui`: a later browser turn cannot reconstruct a lexical handler
+  needed by a wider reactive root.
 - `kokaine/async/web` supplies `sleep`, `yield`, `timeout`, Promise interop,
   `request`/`get`/`post`/`fetch`, and response status/body operations; it
   re-exports `parallel` and `race`. `kokaine/async/effects` supplies the
@@ -346,7 +348,9 @@ self-cancellation is terminal too: it restores the previous value (or
   typed listeners form the HTML DSL. A listener callback has the closed
   `<signal-read,signal-write,ui,async,pure>` capability row; unsupported
   application effects are rejected instead of escaping into a later host turn.
-- `mount`/`unmount` interpret a view into validated DOM ranges. A mount into a
+- `mount`/`unmount` interpret a view into validated DOM ranges. Browser mounts
+  likewise require a `root<<ui>>`, because a tree may contain a retained
+  listener. A mount into a
   managed element inherits the exact same-root DOM generation which created
   that element, while `mount-independent` is the explicit opt-out. Mount
   construction is transactional, so a descendant bootstrap failure cannot
@@ -434,7 +438,7 @@ building block for conditional structure, not an optimized list diff.
 Browser delivery still begins at an ordinary host ABI callback, but that
 callback no longer calls the user action directly. Listener installation parks
 the action behind `await-browser-event`; delivery snapshots the event, restores
-the structural/reactive context with `reentry<e>`, and synchronously resumes the
+the structural/reactive context with `reentry<<ui>>`, and synchronously resumes the
 opaque multi-shot event K. Multi-shot is required because DOM dispatch may nest
 before the outer action returns. Retirement changes the capability to
 `Event-retired`, clears the trampoline's retained action cell, and only then
@@ -448,7 +452,8 @@ does not reconstruct arbitrary user-defined handlers that lexically surrounded
 closed capability row which now includes Kokaine's Web `async` algebra. Handle
 additional application effects inside the callback; `run-async` reinstalls the
 async handlers at every continuation turn, but does not reconstruct unrelated
-lexical handlers.
+lexical handlers. For the same reason, `mount` and `run-async` accept only a
+`root<<ui>>`.
 
 ## Design references
 

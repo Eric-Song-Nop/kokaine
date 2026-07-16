@@ -158,7 +158,7 @@ pub fun reenter(value : reentry<e>,
 // Run a direct-style browser task under the exact structural generation which
 // is current at the call site. Each suspension is registered with that owner;
 // later completion re-enters through a fresh Kokaine batch.
-pub fun run-async(root : root<<ui|e>>,
+pub fun run-async(root : root<<ui>>,
                   action : () -> <async,signal-read,signal-write,pure,ui> ())
-                 : <signal-read,signal-write,pure,ui|e> ()
+                 : <signal-read,signal-write,pure,ui> ()
   runtime-run-generation-async(root.unwrap-root,action)
