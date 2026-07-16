@@ -165,6 +165,7 @@ fun bootstrap-structural-loop(frame : frame<e>) : <div|e> error<()>
 
 pub fun bootstrap-structural-owner(owner : structural-owner<e>)
                               : <div,exn|e> ()
+  check-not-pure-plane("structural owner bootstrap")
   val result = lift-exn(fn() bootstrap-structural-loop(
     owner.structural-frame))
   result.untry

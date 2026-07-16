@@ -73,6 +73,39 @@ fun test-targeted-bootstrap-preserves-fifo()
   assert-events(targeted,scheduled,
     "targeted structural bootstrap matches scheduler FIFO")
 
+fun register-pure-bootstrap-probe(root : root<total>,
+                                  runs : ref<global,int>,
+                                  runs-during : ref<global,int>,
+                                  rejected : ref<global,bool>)
+                                 : <signal-write,div,exn> ()
+  val owner = internal/open-structural-owner(root)
+  internal/with-structural-owner(root,owner,fn()
+    val probe = derive(root,0,fn()
+      val attempted = bootstrap-total(owner)
+      store(rejected,attempted.is-error)
+      store(runs-during,load(runs))
+      1
+    )
+    val stop = create-effect(root,fn() (),fn(_) increment(runs))
+    batch(root){ () }
+  )
+
+fun test-targeted-bootstrap-rejects-pure-plane()
+  val runs = cell(0)
+  val runs-during = cell(-1)
+  val rejected = cell(False)
+  val (root,attempted) : (root<total>,error<()>) = create-root fn(root)
+    error/try fn()
+      pretend-no-div{
+        register-pure-bootstrap-probe(root,runs,runs-during,rejected)
+      }
+  attempted.untry
+  load(runs-during).assert-int(
+    0,"pure derivation cannot bootstrap effect descendants")
+  assert(load(rejected),"pure derivations reject structural owner bootstrap")
+  load(runs).assert-int(1,"effect still boots through the ordinary scheduler")
+  root.dispose()
+
 pub fun main()
   val row-runs = cell(0)
   val row-owner-cleanups = cell(0)
@@ -152,5 +185,6 @@ pub fun main()
          "pure derivations reject hidden structural owner creation")
 
   test-targeted-bootstrap-preserves-fifo()
+  test-targeted-bootstrap-rejects-pure-plane()
 
   println("structural-owners: persistence, recursion, staleness, and purity passed")
