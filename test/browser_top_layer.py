@@ -324,6 +324,13 @@ with serve_project() as origin:
             fixture.evaluate(f"{controls}.popover.detached()"),
             "browser dom exception",
         )
+        # Native togglePopover(false) still validates a hidden target. The
+        # legacy-force compatibility path must not turn this failure into a
+        # successful no-op merely because the requested state already matches.
+        assert_error(
+            fixture.evaluate(f"{controls}.popover.detachedSetClosed()"),
+            "browser dom exception",
+        )
         assert_error(
             fixture.evaluate(f"{controls}.popover.invalidEvent()"),
             "currenttarget",
