@@ -93,6 +93,13 @@ with serve_project() as origin:
 
         example.locator("#open-help-popover").click()
         assert popover.evaluate("node => node.matches(':popover-open')")
+        expect(
+            example.get_by_role(
+                "dialog",
+                name="Top layer without a portal",
+                exact=True,
+            )
+        ).to_be_visible()
         expect(example.locator("#popover-state")).to_have_text("OPEN")
 
         example.locator("#close-help-popover").click()
@@ -114,6 +121,13 @@ with serve_project() as origin:
         original_url = example.url
         example.locator("#open-settings-dialog").click()
         assert dialog.evaluate("node => node.open && node.matches(':modal')")
+        expect(
+            example.get_by_role(
+                "dialog",
+                name="Review settings",
+                exact=True,
+            )
+        ).to_be_visible()
         assert example.evaluate("document.activeElement.id") == "save-dialog"
         assert dialog.evaluate(
             "node => getComputedStyle(node, '::backdrop').backgroundColor"

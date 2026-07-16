@@ -83,6 +83,7 @@ pub fun main()
 
       dialog(attrs=[
         id("settings-dialog"),class("settings-dialog"),
+        aria("labelledby","settings-dialog-title"),
         dialog-closed-by(Dialog-close-request),
         on("cancel",fn(ev)
           dialog-cancels.modify(fn(value) value + 1)
@@ -97,7 +98,7 @@ pub fun main()
       ])
         div(attrs=[class("dialog-heading")])
           p("NATIVE MODAL",attrs=[class("demo-card__kind")])
-          h2("Review settings")
+          h2("Review settings",attrs=[id("settings-dialog-title")])
           p("Escape sends a cancel request. The checkbox makes that request cancelable.")
         element("form",attrs=[dialog-form-method(),class("dialog-form")])
           label(attrs=[class("keep-open")])
@@ -119,6 +120,7 @@ pub fun main()
 
       div(attrs=[
         id("help-popover"),class("help-popover"),popover(Popover-auto),
+        role("dialog"),aria("labelledby","help-popover-title"),
         on("toggle",fn(ev)
           match toggle/state(ev)
             Toggle-open -> popover-state.set("open")
@@ -126,7 +128,7 @@ pub fun main()
         )
       ])
         p("FIELD NOTE / AUTO",attrs=[class("demo-card__kind")])
-        h2("Top layer without a portal")
+        h2("Top layer without a portal",attrs=[id("help-popover-title")])
         p("This node remains a child of the mounted Kokaine view. Click outside, press Escape, or use the explicit hide action.")
         button("Close note",attrs=[
           id("close-help-popover"),kind("button"),class("action action--quiet"),
