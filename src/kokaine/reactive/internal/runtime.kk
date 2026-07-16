@@ -35,14 +35,55 @@ fun fresh-root() : root<e>
     token,owned,cell(0),cell(False),cell(False),cell(False)
   )
 
+// Construction owns the root's outermost batch. If either the constructor or
+// its initial flush exits before the root is returned, cancel that batch without
+// flushing and synchronously retire every registered scope and cleanup.
+fun abort-root-construction(root : root<e>) : <exn|e> ()
+  pretend-no-div{
+    store(root.root-batch-depth,0)
+    store(root.root-disposing,True)
+    store(root.root-token,Scope-dead)
+    finally(
+      fn() {
+        store(root.root-disposed,True)
+        store(root.root-disposing,False)
+        store(root.root-derive-plane.plane-queue,[])
+        store(root.root-effect-plane.plane-queue,[])
+        store(root.root-derive-plane.plane-current,Nothing)
+        store(root.root-effect-plane.plane-current,Nothing)
+        store(root.root-derive-plane.plane-current-entry,Nothing)
+        store(root.root-effect-plane.plane-current-entry,Nothing)
+        store(root.root-derive-plane.plane-draft,Nothing)
+        store(root.root-effect-plane.plane-draft,Nothing)
+        store(root.root-owned,Owned-end)
+      },
+      fn()
+        val values = load(root.root-owned)
+        val finalizers = collect-owned(values)
+        run-finalizers(finalizers)
+    )
+  }
+
 pub fun create-root(action : (root<e>) -> <signal-write,pure|e> a)
                    : <exn|e> (root<e>,a)
   val root = fresh-root()
+  val committed = cell(False)
   pretend-no-div{
-    val result = interpret-write(root)
-      enter-batch(root.root-key)
-      finally(fn() leave-batch(root.root-key),fn() action(root))
-    (root,result)
+    finally(
+      fn() lift-div(fn()
+        if load(committed) then () else abort-root-construction(root)
+      ),
+      fn()
+        val result = interpret-write(root)
+          enter-batch(root.root-key)
+          val value = action(root)
+          // Initial bootstrap is part of construction. Commit only after this
+          // flush completes successfully.
+          leave-batch(root.root-key)
+          value
+        store(committed,True)
+        (root,result)
+    )
   }
 
 pub fun root/dispose(root : root<e>) : <exn|e> ()
