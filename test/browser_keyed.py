@@ -266,6 +266,26 @@ with serve_project() as origin:
             "data-boom", "seven"
         )
 
+        compaction = page.evaluate(
+            """() => {
+                try {
+                    return {
+                        value: globalThis.__kokaineKeyed.compactLedger(),
+                        error: null
+                    };
+                } catch (error) {
+                    return {
+                        value: null,
+                        error: `${error.name}: ${error.message}`
+                    };
+                }
+            }"""
+        )
+        assert compaction == {
+            "value": True,
+            "error": None,
+        }, f"structural ledger compaction was not stack-safe: {compaction!r}"
+
         invoke(page, "dispose")
         for selector in (
             "#keyed-main-root",

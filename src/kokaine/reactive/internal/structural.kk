@@ -71,10 +71,9 @@ fun compact-structural-ledger(values : owned<e>) : owned<e>
     Owned-resource(resource,next) ->
       Owned-resource(resource,compact-structural-ledger(next))
     Owned-structural(child,next) ->
-      val rest = compact-structural-ledger(next)
       match load(child.structural-frame.frame-token)
-        Scope-dead -> rest
-        _ -> Owned-structural(child,rest)
+        Scope-dead -> compact-structural-ledger(next)
+        _ -> Owned-structural(child,compact-structural-ledger(next))
 
 pub fun compact-structural-owner(owner : structural-owner<e>) : ()
   val frame = owner.structural-frame

@@ -4,6 +4,7 @@ import kokaine/reactive
 import kokaine/html
 import kokaine/control
 import kokaine/dom
+import std/core/undiv
 
 
 value struct tag-data(tag-id : int, tag-label : string)
@@ -112,8 +113,9 @@ extern publish-faults(
   move : () -> ui bool,
   move-reset : () -> ui bool,
   bootstrap : () -> ui bool,
-  bootstrap-reset : () -> ui bool) : ui ()
-  js inline "Object.assign(globalThis.__kokaineKeyed, { duplicate:#1, duplicateReset:#2, move:#3, moveReset:#4, bootstrap:#5, bootstrapReset:#6 })"
+  bootstrap-reset : () -> ui bool,
+  compact-ledger : () -> ui bool) : ui ()
+  js inline "Object.assign(globalThis.__kokaineKeyed, { duplicate:#1, duplicateReset:#2, move:#3, moveReset:#4, bootstrap:#5, bootstrapReset:#6, compactLedger:#7 })"
 
 fun safe-set(root : root<<ui>>, source : signal<list<item-data>>,
              next : list<item-data>) : ui bool
@@ -149,6 +151,22 @@ fun safe-read(root : root<<ui>>, source : signal<int>) : ui int
 fun safe-dispose(root : root<<ui>>) : ui ()
   with catch fn(_) ()
   root.dispose()
+
+fun compact-ledger-stress(root : root<<ui>>,
+                          owner : structural-owner<<ui>>) : ui bool
+  with catch fn(_)
+    False
+  val children = pretend-no-div{
+    internal/with-structural-owner(root,owner,fn()
+      fold(4000,[]) fn(_,values)
+        Cons(internal/open-structural-owner(root),values)
+    )
+  }
+  internal/compact-structural-owner(owner)
+  children.foreach fn(child)
+    internal/dispose-structural-owner(child)
+  internal/compact-structural-owner(owner)
+  True
 
 fun main-row(root : root<<ui>>, pulse : signal<int>, clicks : signal<int>,
              runs : signal<int>, cleanups : signal<int>, compact : memo<bool>,
@@ -277,6 +295,9 @@ pub fun main()
     bootstrap-root,query("#keyed-bootstrap-root"),
     bootstrap-page(bootstrap-source))
 
+  val (compact-root,compact-owner) = create-root fn(current-root)
+    internal/open-structural-owner(current-root)
+
   publish-main-actions(
     fn() safe-set(root,source,prepended-items()),
     fn() safe-set(root,source,appended-items()),
@@ -299,6 +320,7 @@ pub fun main()
       safe-dispose(duplicate-root)
       safe-dispose(move-root)
       safe-dispose(bootstrap-root)
+      safe-dispose(compact-root)
     }
   )
   publish-faults(
@@ -311,5 +333,6 @@ pub fun main()
     fn() safe-set(move-root,move-source,
       [item(1,"one"),item(2,"two"),item(3,"three")]),
     fn() safe-set(bootstrap-root,bootstrap-source,[item(7,"seven")]),
-    fn() safe-set(bootstrap-root,bootstrap-source,[])
+    fn() safe-set(bootstrap-root,bootstrap-source,[]),
+    fn() compact-ledger-stress(compact-root,compact-owner)
   )
