@@ -137,7 +137,7 @@ pub fun post(url : string, body : string) : request
 extern fetch-subscribe(value : request,
                        fulfill : response -> ui (),
                        reject : string -> ui ()) : ui any
-  js inline "(function(){ var controller=null; var state={ fulfill:#2, reject:#3, controller:null }; try { controller=new AbortController(); state.controller=controller; var request=#1; globalThis.fetch(request.url,Object.assign({},request.init,{ signal:controller.signal })).then(function(value){ var callback=state.fulfill; var activeController=state.controller; state.fulfill=null; state.reject=null; if(callback) callback({ response:value, controller:activeController }); },function(error){ var callback=state.reject; state.fulfill=null; state.reject=null; state.controller=null; if(callback) callback(String(error && error.message != null ? error.message : error)); }); return { ok:true, state:state }; } catch(error) { state.fulfill=null; state.reject=null; state.controller=null; return { ok:false, message:String(error && error.message != null ? error.message : error) }; } })()"
+  js inline "(function(){ var controller=null; var state={ fulfill:#2, reject:#3, controller:null }; try { controller=new AbortController(); state.controller=controller; var request=#1; globalThis.fetch(request.url,Object.assign({},request.init,{ signal:controller.signal })).then(function(value){ var callback=state.fulfill; var activeController=state.controller; state.fulfill=null; state.reject=null; if(callback) callback({ response:value, controller:activeController, release:null }); },function(error){ var callback=state.reject; state.fulfill=null; state.reject=null; state.controller=null; if(callback) callback(String(error && error.message != null ? error.message : error)); }); return { ok:true, state:state }; } catch(error) { state.fulfill=null; state.reject=null; state.controller=null; return { ok:false, message:String(error && error.message != null ? error.message : error) }; } })()"
 
 extern fetch-result-state(value : any) : fetch-subscription
   js inline "(#1).state"
@@ -148,7 +148,7 @@ extern fetch-retire(value : fetch-subscription) : ui ()
   js inline "(function(){ var state=#1; if(!state) return; var controller=state.controller; state.fulfill=null; state.reject=null; state.controller=null; if(controller){ try { controller.abort(); } catch(_) {} } })()"
 
 pub fun fetch(value : request) : <async,exn> response
-  setup/await("fetch",fn(resume)
+  val result = setup/await("fetch",fn(resume)
     val installed = fetch-subscribe(
       value,
       fn(result) resume(Ok(result)),
@@ -162,6 +162,11 @@ pub fun fetch(value : request) : <async,exn> response
       val subscription = fetch-result-state(installed)
       Ok(fn() fetch-retire(subscription))
   )
+  // Header delivery completes the Fetch await, but the controller must remain
+  // owned until the response is discarded or body consumption takes over.
+  val release = async-own(fn() response-retire(result))
+  async-host(fn() response-own(result,release))
+  result
 
 pub extern response/status(value : response) : ui int
   js inline "Number((#1).response.status)"
@@ -172,11 +177,19 @@ pub extern response/ok(value : response) : ui bool
 pub extern response/url(value : response) : ui string
   js inline "String((#1).response.url == null ? '' : (#1).response.url)"
 
-// A response which will not be consumed must release the controller retained
-// after Fetch delivered its headers. Clear the wrapper first so even hostile
-// AbortController/ReadableStream implementations cannot observe it as live.
-extern response-discard(value : response) : ui ()
-  js inline "(function(){ var wrapper=#1; if(!wrapper) return; var response=wrapper.response; var controller=wrapper.controller; var body=response && response.body; wrapper.controller=null; if(controller){ try { controller.abort(); } catch(_) {} } if(body && !body.locked){ try { var canceled=body.cancel(); if(canceled && canceled.catch) canceled.catch(function(){}); } catch(_) {} } })()"
+extern response-own(value : response, release : dispose-fn) : ui ()
+  js inline "(#1).release=#2"
+
+// Generation retirement owns this raw disposer. It must not call the lease's
+// release action because the owner registration is already being finalized.
+extern response-retire(value : response) : ui ()
+  js inline "(function(){ var wrapper=#1; if(!wrapper) return; var response=wrapper.response; var controller=wrapper.controller; var body=response && response.body; wrapper.release=null; wrapper.controller=null; if(controller){ try { controller.abort(); } catch(_) {} } if(body && !body.locked){ try { var canceled=body.cancel(); if(canceled && canceled.catch) canceled.catch(function(){}); } catch(_) {} } })()"
+
+// A response which will not be consumed explicitly releases its generation
+// lease before aborting. Clear the wrapper first so hostile host objects cannot
+// observe or re-enter a live ownership edge.
+pub extern response/discard(value : response) : ui ()
+  js inline "(function(){ var wrapper=#1; if(!wrapper) return; var response=wrapper.response; var release=wrapper.release; var controller=wrapper.controller; var body=response && response.body; wrapper.release=null; wrapper.controller=null; if(release){ try { release(); } catch(_) {} } if(controller){ try { controller.abort(); } catch(_) {} } if(body && !body.locked){ try { var canceled=body.cancel(); if(canceled && canceled.catch) canceled.catch(function(){}); } catch(_) {} } })()"
 
 abstract type response-body-subscription
   Response-body-subscription(value : any)
@@ -188,7 +201,7 @@ abstract type response-body-subscription
 extern response-body-subscribe(value : response, as-json : bool,
                                fulfill : a -> ui (),
                                reject : string -> ui ()) : ui any
-  js inline "(function(){ var wrapper=#1; var response=wrapper.response; var state={ fulfill:#3, reject:#4, controller:wrapper.controller, body:response.body, wrapper:wrapper }; function clear(){ state.controller=null; state.body=null; state.wrapper=null; wrapper.controller=null; } function stop(){ var controller=state.controller; var body=state.body; state.fulfill=null; state.reject=null; clear(); if(controller){ try { controller.abort(); } catch(_) {} } if(body && !body.locked){ try { var canceled=body.cancel(); if(canceled && canceled.catch) canceled.catch(function(){}); } catch(_) {} } } try { var pending=(#2 ? response.json() : response.text()); Promise.resolve(pending).then(function(result){ var callback=state.fulfill; state.fulfill=null; state.reject=null; clear(); if(callback) callback(result); },function(error){ var callback=state.reject; state.fulfill=null; state.reject=null; clear(); if(callback) callback(String(error && error.message != null ? error.message : error)); }); return { ok:true, state:state }; } catch(error) { stop(); return { ok:false, message:String(error && error.message != null ? error.message : error) }; } })()"
+  js inline "(function(){ var wrapper=#1; var response=wrapper.response; var release=wrapper.release; var state={ fulfill:#3, reject:#4, controller:wrapper.controller, body:response.body }; wrapper.release=null; wrapper.controller=null; function clear(){ state.controller=null; state.body=null; } function stop(){ var controller=state.controller; var body=state.body; state.fulfill=null; state.reject=null; clear(); if(controller){ try { controller.abort(); } catch(_) {} } if(body && !body.locked){ try { var canceled=body.cancel(); if(canceled && canceled.catch) canceled.catch(function(){}); } catch(_) {} } } try { if(release) release(); var pending=(#2 ? response.json() : response.text()); Promise.resolve(pending).then(function(result){ var callback=state.fulfill; state.fulfill=null; state.reject=null; clear(); if(callback) callback(result); },function(error){ var callback=state.reject; state.fulfill=null; state.reject=null; clear(); if(callback) callback(String(error && error.message != null ? error.message : error)); }); return { ok:true, state:state }; } catch(error) { stop(); return { ok:false, message:String(error && error.message != null ? error.message : error) }; } })()"
 
 extern response-body-result-state(value : any) : response-body-subscription
   js inline "(#1).state"
@@ -197,7 +210,7 @@ extern response-body-result-state(value : any) : response-body-subscription
 // canceled by AbortController; an as-yet-unlocked stream is canceled directly
 // as well so custom Fetch implementations get the same retirement contract.
 extern response-body-retire(value : response-body-subscription) : ui ()
-  js inline "(function(){ var state=#1; if(!state) return; var controller=state.controller; var body=state.body; var wrapper=state.wrapper; state.fulfill=null; state.reject=null; state.controller=null; state.body=null; state.wrapper=null; if(wrapper) wrapper.controller=null; if(controller){ try { controller.abort(); } catch(_) {} } if(body && !body.locked){ try { var canceled=body.cancel(); if(canceled && canceled.catch) canceled.catch(function(){}); } catch(_) {} } })()"
+  js inline "(function(){ var state=#1; if(!state) return; var controller=state.controller; var body=state.body; state.fulfill=null; state.reject=null; state.controller=null; state.body=null; if(controller){ try { controller.abort(); } catch(_) {} } if(body && !body.locked){ try { var canceled=body.cancel(); if(canceled && canceled.catch) canceled.catch(function(){}); } catch(_) {} } })()"
 
 fun await-response-body(value : response, as-json : bool)
                        : <async,exn> a
@@ -228,5 +241,5 @@ pub fun response/require-ok(value : response) : <ui,exn> response
   if value.ok then value
   else
     val status = value.status
-    response-discard(value)
+    value.discard
     throw("HTTP request failed with status " ++ status.show)

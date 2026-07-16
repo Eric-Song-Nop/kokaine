@@ -326,6 +326,24 @@ pub fun main()
               )
             ])
 
+            button("retire response between headers and body",attrs=[
+              id("async-retire-header-gap"),kind("button"),
+              on("click",fn(_)
+                phase.set("retire-header-gap-fetch-before")
+                finally(
+                  fn() finish-count(finalizers,"retire-header-gap-finally"),
+                  fn()
+                    val response =
+                      fetch(get("/async-header-gap.txt")).require-ok
+                    phase.set("retire-header-gap-headers")
+                    sleep(2.seconds)
+                    phase.set("retire-header-gap-body-before")
+                    val body = response.text
+                    phase.set("retire-header-gap-stale:" ++ body)
+                )
+              )
+            ])
+
             button("retire structured group",attrs=[
               id("async-retire-structured"),kind("button"),
               on("click",fn(_)

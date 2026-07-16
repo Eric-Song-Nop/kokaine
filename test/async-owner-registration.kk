@@ -9,10 +9,17 @@ import std/core/undiv
 
 
 extern begin-result() : ui ()
-  js inline "globalThis.__kokaineAsyncOwner={ done:false, owned:-1, outstanding:-1 }"
+  js inline "globalThis.__kokaineAsyncOwner={ done:false, owned:-1, outstanding:-1, leasedOwned:-1, leasedOutstanding:-1, leaseDisposals:0, snapshotLeaseDisposals:0 }"
 
-extern publish-result(owned : int, outstanding : int) : ui ()
-  js inline "globalThis.__kokaineAsyncOwner={ done:true, owned:#1, outstanding:#2 }"
+extern record-lease-disposal() : ui ()
+  js inline "globalThis.__kokaineAsyncOwner.leaseDisposals += 1"
+
+extern record-snapshot-lease-disposal() : ui ()
+  js inline "globalThis.__kokaineAsyncOwner.snapshotLeaseDisposals += 1"
+
+extern publish-result(owned : int, outstanding : int,
+                      leased-owned : int, leased-outstanding : int) : ui ()
+  js inline "Object.assign(globalThis.__kokaineAsyncOwner,{ done:true, owned:#1, outstanding:#2, leasedOwned:#3, leasedOutstanding:#4 })"
 
 fun owned-resource-count(values : owned<e>) : <div> int
   match values
@@ -30,13 +37,32 @@ fun complete-three() : async ()
   val _ = await1-noexn("owner registration three",fn(complete) complete(3))
   ()
 
+// Retirement first claims all owner slots into a detached snapshot. A newer
+// cleanup may then attempt to release an older lease; the snapshot must remain
+// the unique winner and still run the lease disposer exactly once.
+fun exercise-snapshot-release-race() : <ui,exn> ()
+  val (root,()) : (root<<ui>>,()) = create-root fn(_root) ()
+  dispatch(root,fn()
+    run-generation-async(root,fn()
+      val release = async-own(fn() record-snapshot-lease-disposal())
+      on-cleanup(root,fn() release())
+    )
+  )
+  root.dispose()
+
 pub fun main()
   begin-result()
+  exercise-snapshot-release-race()
   val (root,()) : (root<<ui>>,()) = create-root fn(_root) ()
   dispatch(root,fn()
     run-generation-async(root,fn()
       complete-three()
+      val release = async-own(fn() record-lease-disposal())
+      val leased-owned = root-owned-resource-count(root)
+      val leased-outstanding = generation-async-outstanding()
+      release()
       publish-result(
-        root-owned-resource-count(root),generation-async-outstanding())
+        root-owned-resource-count(root),generation-async-outstanding(),
+        leased-owned,leased-outstanding)
     )
   )

@@ -16,12 +16,19 @@ import std/core/undiv
 // row to async task records. The action only seals and unlinks a parked
 // continuation; it never runs user cleanup.
 abstract type cleanup-registration
-  Cleanup-registration(unregister-action : () -> ())
+  Cleanup-registration(unregister-action : () -> bool)
+
+// Claim and physically unlink a cleanup which retirement has not already
+// moved into its detached snapshot. The boolean identifies the unique winner.
+pub fun cleanup-registration/try-unregister(
+    registration : cleanup-registration) : bool
+  match registration
+    Cleanup-registration(unregister-action) -> unregister-action()
 
 pub fun cleanup-registration/unregister(
     registration : cleanup-registration) : ()
-  match registration
-    Cleanup-registration(unregister-action) -> unregister-action()
+  val _ = registration.try-unregister
+  ()
 
 // Public dispatch lives at the composition layer; the handler implementation
 // remains isolated in `internal/handlers`.
@@ -306,14 +313,17 @@ fun remove-resource-slot(
 
 noinline fun unregister-cleanup-slot(
     owner : ref<global,owned<e>>,
-    slot : ref<global,maybe<resource-k<e>>>) : ()
+    slot : ref<global,maybe<resource-k<e>>>) : bool
   val resource = load(slot)
   store(slot,Nothing)
-  match resource
-    Nothing -> ()
-    Just(current) -> discard-resource(current)
+  val claimed = match resource
+    Nothing -> False
+    Just(current) ->
+      discard-resource(current)
+      True
   val values = load(owner)
   store(owner,pretend-no-div{ remove-resource-slot(values,slot) })
+  claimed
 
 pub fun register-cleanup(
     root : root<e>,

@@ -64,6 +64,10 @@ pub effect async-cancel
 pub effect async-ioc
   fun async-ioc(action : () -> ui a) : a
   fun async-schedule-ioc(scope : async-scope, action : () -> ui ()) : ()
+  // Keep a host disposer owned by the current reactive generation after an
+  // await has completed. The returned release action transfers ownership
+  // without running the disposer; generation retirement runs it exactly once.
+  fun async-own-disposer(dispose : dispose-fn) : dispose-fn
 
 
 // --------------------------------------------------------------------------
@@ -139,6 +143,12 @@ pub fun async-host(action : () -> ui a) : async a
 // Schedule browser work through the active generation interpreter.
 pub fun async-schedule(action : () -> ui ()) : async ()
   async-schedule-ioc(async-scope,action)
+
+// Acquire a generation-owned lease for a host resource. This deliberately
+// follows the reactive generation rather than a structured cancellation scope:
+// a delivered value may escape a child async scope before it is consumed.
+pub fun async-own(dispose : dispose-fn) : async dispose-fn
+  async-own-disposer(dispose)
 
 
 // --------------------------------------------------------------------------

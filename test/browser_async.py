@@ -53,6 +53,21 @@ class AsyncHandler(SimpleHTTPRequestHandler):
             except (BrokenPipeError, ConnectionResetError):
                 pass
             return
+        if self.path == "/async-header-gap.txt":
+            first = b"headers-owned:"
+            second = b"too-late"
+            try:
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                self.send_header("Content-Length", str(len(first) + len(second)))
+                self.end_headers()
+                self.wfile.write(first)
+                self.wfile.flush()
+                sleep(0.8)
+                self.wfile.write(second)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+            return
         if self.path == "/async-error.txt":
             first = b"expected service failure:"
             second = b"too-late"
@@ -135,6 +150,7 @@ with serve_project() as origin:
                 const nativeFetch = globalThis.fetch.bind(globalThis);
                 globalThis.__kokaineFetchAbortCount = 0;
                 globalThis.__kokaineBodyCancelCount = 0;
+                globalThis.__kokaineHeaderGapBodyStarts = 0;
                 globalThis.fetch = (input, init = {}) => {
                     if (String(input).endsWith('/async-reject.txt')) {
                         return Promise.reject(new Error('forced fetch rejection'));
@@ -145,6 +161,13 @@ with serve_project() as origin:
                         }, { once: true });
                     }
                     return nativeFetch(input, init).then(response => {
+                        if (String(input).endsWith('/async-header-gap.txt')) {
+                            const nativeText = response.text.bind(response);
+                            response.text = (...args) => {
+                                globalThis.__kokaineHeaderGapBodyStarts += 1;
+                                return nativeText(...args);
+                            };
+                        }
                         if (String(input).endsWith('/async-error.txt') && response.body) {
                             const nativeCancel = response.body.cancel.bind(response.body);
                             response.body.cancel = (...args) => {
@@ -334,6 +357,37 @@ with serve_project() as origin:
             "retire-stream-body-before"
         )
 
+        # Fetch completes at response headers. Until body consumption starts,
+        # the delivered Response must itself retain generation ownership of
+        # the controller. Retirement aborts it without starting response.text.
+        toggle_live_generation(page)
+        aborts_before_header_gap = page.evaluate(
+            "__kokaineFetchAbortCount"
+        )
+        finalizers_before_header_gap = int(
+            page.locator("#async-finalizers").text_content()
+        )
+        immediate = dispatch_and_read(page, "#async-retire-header-gap")
+        assert immediate["phase"] == "retire-header-gap-fetch-before"
+        expect(page.locator("#async-phase")).to_have_text(
+            "retire-header-gap-headers"
+        )
+        assert page.evaluate("__kokaineAsyncRuntime.outstanding()") == 2
+        assert page.evaluate("__kokaineHeaderGapBodyStarts") == 0
+        toggle_live_generation(page)
+        expect(page.locator("#async-finalizers")).to_have_text(
+            str(finalizers_before_header_gap + 1)
+        )
+        assert page.evaluate("__kokaineFetchAbortCount") == (
+            aborts_before_header_gap + 1
+        )
+        assert page.evaluate("__kokaineAsyncRuntime.outstanding()") == 0
+        page.wait_for_timeout(840)
+        expect(page.locator("#async-phase")).to_have_text(
+            "retire-header-gap-headers"
+        )
+        assert page.evaluate("__kokaineHeaderGapBodyStarts") == 0
+
         # Retiring a parent generation must not strand structured children
         # behind queue drivers owned by that same dead generation. This nests
         # race inside parallel so all three child disposers and finalizers are
@@ -343,7 +397,7 @@ with serve_project() as origin:
         assert immediate["phase"] == "retire-structured-before"
         assert immediate["outstanding"] >= 3, immediate
         toggle_live_generation(page)
-        expect(page.locator("#async-finalizers")).to_have_text("9")
+        expect(page.locator("#async-finalizers")).to_have_text("10")
         assert page.evaluate("__kokaineAsyncRuntime.outstanding()") == 0
         for child in (
             "retire-parallel-left",
@@ -368,7 +422,7 @@ with serve_project() as origin:
         )
         assert immediate["phase"] == "retire-structured-delivered-before"
         expect(page.locator("#async-retired-generation")).to_be_attached()
-        expect(page.locator("#async-finalizers")).to_have_text("11")
+        expect(page.locator("#async-finalizers")).to_have_text("12")
         assert page.evaluate("__kokaineAsyncRuntime.outstanding()") == 0
         delivered_log = page.evaluate("__kokaineAsyncRuntime.log")
         assert "retire-delivered-left-after-await" not in delivered_log
@@ -440,6 +494,10 @@ with serve_project() as origin:
             "done": True,
             "owned": 0,
             "outstanding": 0,
+            "leasedOwned": 1,
+            "leasedOutstanding": 1,
+            "leaseDisposals": 0,
+            "snapshotLeaseDisposals": 1,
         }, owner_result
 
         browser.close()

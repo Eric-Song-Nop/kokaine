@@ -372,6 +372,43 @@ noinline fun release-runtime-scope(runtime : generation-runtime<e>,
                                    scope : async-scope) : ()
   runtime.release-canceled(scope)
 
+// Some host resources outlive the await which creates them. Register their
+// disposer directly with the current reactive generation and return a
+// one-shot release action for ownership transfer. Both paths consume the same
+// slot before unlinking or invoking host code, so re-entry cannot double-run
+// either transition.
+fun register-owned-disposer(root : root<<ui|e>>, dispose : dispose-fn)
+                           : <signal-write,pure,ui|e> dispose-fn
+  val disposer-slot = cell(Just(dispose))
+  val committed = cell(False)
+  val rollback = fn()
+    if load(committed) then () else dispose()
+  finally(
+    rollback,
+    fn()
+      val registration = register-cleanup(root,fn()
+        val current = load(disposer-slot)
+        store(disposer-slot,Nothing)
+        match current
+          Nothing -> ()
+          Just(current-dispose) ->
+            decrement-outstanding()
+            current-dispose()
+      )
+      increment-outstanding()
+      store(committed,True)
+      fn()
+        // Retirement may already have claimed the registered cleanup into a
+        // detached snapshot. Only a successful unlink may consume this slot;
+        // otherwise the snapshot remains responsible for disposal/counting.
+        if !registration.try-unregister then () else
+          val current = load(disposer-slot)
+          store(disposer-slot,Nothing)
+          match current
+            Nothing -> ()
+            Just(_) -> decrement-outstanding()
+  )
+
 // Scheduled host actions are ordinary generation-owned tasks. Keep their
 // structural phase evidence live through registration; erasing it would make
 // owner cleanup masks invalid at runtime on Koka's JavaScript backend.
@@ -469,6 +506,9 @@ fun run-generation-async-with-family(
       mask<signal-read>{
         register-scheduled-ioc(root,runtime,scope,host-action)
       }
+
+    fun async-own-disposer(dispose)
+      mask<signal-read>{ register-owned-disposer(root,dispose) }
 
   with handler<async-cancel>
     val async-scope = root-scope
