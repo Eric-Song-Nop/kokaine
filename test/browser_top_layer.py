@@ -362,6 +362,132 @@ with serve_project() as origin:
                 "popover", "hint"
             )
 
+        # Nodes keep the Web IDL brand of the realm which created them even
+        # after the main document adopts them. Adapter validation must accept
+        # those genuine nodes without relying on the main realm's instanceof.
+        foreign_realm = fixture.evaluate(
+            f"""() => {{
+                const originalDialog =
+                    document.querySelector('#fixture-dialog');
+                const originalPopover =
+                    document.querySelector('#fixture-manual-popover');
+                const frame = document.body.appendChild(
+                    document.createElement('iframe')
+                );
+                const foreignWindow = frame.contentWindow;
+                const foreignDocument = frame.contentDocument;
+                const dialog = foreignDocument.createElement('dialog');
+                const popover = foreignDocument.createElement('div');
+                dialog.id = 'fixture-dialog';
+                popover.id = 'fixture-manual-popover';
+                popover.popover = 'manual';
+                originalDialog.id = 'fixture-dialog-main-realm';
+                originalPopover.id = 'fixture-popover-main-realm';
+                document.body.append(dialog, popover);
+
+                try {{
+                    const result = {{
+                        dialogMainInstance:
+                            dialog instanceof HTMLDialogElement,
+                        popoverMainInstance: popover instanceof Element
+                    }};
+
+                    result.dialogShow = {controls}.dialog.show();
+                    result.dialogOpen = {controls}.dialog.isOpen();
+                    result.dialogNonModal = !{controls}.dialog.isModal();
+                    result.dialogClose =
+                        {controls}.dialog.close('foreign-non-modal');
+                    result.dialogReturn = {controls}.dialog.returnValue();
+                    result.dialogShowModal = {controls}.dialog.showModal();
+                    result.dialogModal = {controls}.dialog.isModal();
+                    result.dialogCloseModal =
+                        {controls}.dialog.close('foreign-modal');
+                    result.dialogHasRequestClose =
+                        typeof dialog.requestClose === 'function';
+                    if (result.dialogHasRequestClose) {{
+                        result.dialogShowForRequest =
+                            {controls}.dialog.showModal();
+                        result.dialogRequestClose =
+                            {controls}.dialog.requestClose('foreign-request');
+                        result.dialogRequestReturn =
+                            {controls}.dialog.returnValue();
+                    }}
+
+                    result.popoverShow = {controls}.popover.showManual();
+                    result.popoverOpen =
+                        {controls}.popover.isManualOpen();
+                    result.popoverHide = {controls}.popover.hideManual();
+                    result.popoverToggleOpen =
+                        {controls}.popover.toggleManual();
+                    result.popoverToggleClosed =
+                        {controls}.popover.toggleManual();
+                    result.popoverSet =
+                        {controls}.popover.setManual(true);
+                    result.popoverSetOpen =
+                        {controls}.popover.isManualOpen();
+                    result.popoverUnset =
+                        {controls}.popover.setManual(false);
+
+                    let toggleRead = 'listener-not-called';
+                    popover.addEventListener('toggle', event => {{
+                        toggleRead = {controls}.popover.readEvent(event);
+                    }}, {{ once: true }});
+                    const toggleEvent = new foreignWindow.ToggleEvent(
+                        'toggle',
+                        {{ oldState: 'closed', newState: 'open' }}
+                    );
+                    popover.dispatchEvent(toggleEvent);
+                    result.toggleEventMainInstance = toggleEvent instanceof Event;
+                    result.toggleRead = toggleRead;
+
+                    dialog.returnValue = 'foreign-event';
+                    let closeRead = 'listener-not-called';
+                    dialog.addEventListener('close', event => {{
+                        closeRead = {controls}.dialog.readEvent(event);
+                    }}, {{ once: true }});
+                    const closeEvent = new foreignWindow.Event('close');
+                    dialog.dispatchEvent(closeEvent);
+                    result.closeEventMainInstance = closeEvent instanceof Event;
+                    result.closeRead = closeRead;
+                    return result;
+                }} finally {{
+                    if (dialog.open) dialog.close();
+                    if (popover.matches(':popover-open')) popover.hidePopover();
+                    dialog.remove();
+                    popover.remove();
+                    originalDialog.id = 'fixture-dialog';
+                    originalPopover.id = 'fixture-manual-popover';
+                    frame.remove();
+                }}
+            }}"""
+        )
+        assert not foreign_realm["dialogMainInstance"]
+        assert not foreign_realm["popoverMainInstance"]
+        assert not foreign_realm["toggleEventMainInstance"]
+        assert not foreign_realm["closeEventMainInstance"]
+        assert_ok(foreign_realm["dialogShow"])
+        assert foreign_realm["dialogOpen"]
+        assert foreign_realm["dialogNonModal"]
+        assert_ok(foreign_realm["dialogClose"])
+        assert foreign_realm["dialogReturn"] == "foreign-non-modal"
+        assert_ok(foreign_realm["dialogShowModal"])
+        assert foreign_realm["dialogModal"]
+        assert_ok(foreign_realm["dialogCloseModal"])
+        if foreign_realm["dialogHasRequestClose"]:
+            assert_ok(foreign_realm["dialogShowForRequest"])
+            assert_ok(foreign_realm["dialogRequestClose"])
+            assert foreign_realm["dialogRequestReturn"] == "foreign-request"
+        assert_ok(foreign_realm["popoverShow"])
+        assert foreign_realm["popoverOpen"]
+        assert_ok(foreign_realm["popoverHide"])
+        assert foreign_realm["popoverToggleOpen"]
+        assert not foreign_realm["popoverToggleClosed"]
+        assert_ok(foreign_realm["popoverSet"])
+        assert foreign_realm["popoverSetOpen"]
+        assert_ok(foreign_realm["popoverUnset"])
+        assert foreign_realm["toggleRead"] == "open"
+        assert foreign_realm["closeRead"] == "foreign-event"
+
         # Removing an open ordinary node through its Kokaine owner also takes
         # it out of the top layer. A retained JS handle cannot reactivate the
         # retired Koka event continuation.
