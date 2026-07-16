@@ -748,9 +748,16 @@ fun reconcile-keyed<a,k,e::E>(
           // Comparator failures while finding stale rows still happen before
           // the first move, so the old DOM and sources remain untouched.
           val stale = collect-stale-rows(old-order,final-index,compare)
+          val final-order = final-updates.map(fn(update) update.update-row)
           transaction-store(move-phase,True)
           val cursor = range-first(parent,first,last)
           val _ = place-keyed-updates(parent,cursor,final-updates)
+
+          // Moving a row may synchronously reconnect custom elements.  Validate
+          // the complete region after those callbacks and before publishing any
+          // owner, source, or table state.
+          val placed = range-first(parent,first,last)
+          validate-keyed-order(parent,last,placed,final-order ++ stale)
 
           // A synchronous host callback can retire the parent while a fallback
           // fragment move is in progress.  Re-entering validates the persistent
@@ -765,7 +772,6 @@ fun reconcile-keyed<a,k,e::E>(
           reactive-write-ui{
             final-updates.foreach(fn(update) commit-keyed-update(update))
           }
-          val final-order = final-updates.map(fn(update) update.update-row)
           transaction-store(table,Keyed-table(final-index,final-order))
           transaction-store(committed,True)
 

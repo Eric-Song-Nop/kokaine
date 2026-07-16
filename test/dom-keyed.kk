@@ -237,6 +237,7 @@ fun simple-page(source : signal<list<item-data>>, list-id : string,
         li(attrs=[id(row-prefix ++ initial.item-id.show),
                   data("key",initial.item-id.show)])
           text { index().show ++ ":" ++ current().item-label }
+          element-empty("x-kokaine-keyed-move-hook")
 
 fun bootstrap-page(source : signal<list<item-data>>) : view<total>
   view

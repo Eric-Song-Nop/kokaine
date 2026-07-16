@@ -83,6 +83,7 @@ with serve_project() as origin:
                     document.body.append(host);
                 }
                 globalThis.__kokaineThrowKeyedBootstrap = true;
+                globalThis.__kokaineInjectKeyedRogue = false;
                 if (!customElements.get('x-kokaine-keyed-fail')) {
                     customElements.define(
                         'x-kokaine-keyed-fail',
@@ -94,6 +95,27 @@ with serve_project() as origin:
                                     );
                                 }
                                 this.dataset.boom = value;
+                            }
+                        }
+                    );
+                }
+                if (!customElements.get('x-kokaine-keyed-move-hook')) {
+                    customElements.define(
+                        'x-kokaine-keyed-move-hook',
+                        class extends HTMLElement {
+                            connectedCallback() {
+                                const parent = this.closest('#keyed-move-list');
+                                if (!parent || !globalThis.__kokaineInjectKeyedRogue) {
+                                    return;
+                                }
+                                globalThis.__kokaineInjectKeyedRogue = false;
+                                const rogue = document.createElement('i');
+                                rogue.id = 'keyed-move-rogue';
+                                Node.prototype.insertBefore.call(
+                                    parent,
+                                    rogue,
+                                    parent.firstChild.nextSibling
+                                );
                             }
                         }
                     );
@@ -255,6 +277,20 @@ with serve_project() as origin:
         assert_same(move_one, "#keyed-move-row-1")
         assert_same(move_two, "#keyed-move-row-2")
         assert_same(move_three, "#keyed-move-row-3")
+
+        assert invoke(page, "moveReset") is True
+        assert order(page, "#keyed-move-list") == [1, 2, 3]
+        page.evaluate("globalThis.__kokaineInjectKeyedRogue = true")
+        assert invoke(page, "move") is False
+        assert page.locator("#keyed-move-rogue").count() == 1
+        assert order(page, "#keyed-move-list") == [1, 2, 3]
+        assert_same(move_one, "#keyed-move-row-1")
+        assert_same(move_two, "#keyed-move-row-2")
+        assert_same(move_three, "#keyed-move-row-3")
+        page.locator("#keyed-move-rogue").evaluate("node => node.remove()")
+        assert invoke(page, "moveReset") is True
+        assert invoke(page, "move") is True
+        assert order(page, "#keyed-move-list") == [3, 1, 2]
 
         assert invoke(page, "bootstrap") is False
         assert page.locator("#keyed-bootstrap-target").count() == 0
