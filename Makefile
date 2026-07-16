@@ -35,6 +35,7 @@ test-native:
 	$(KOKA) $(KOKA_FLAGS) -e test/reactive-stress.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/html.kk
 	python3 test/event_effect_boundary.py $(KOKA)
+	python3 test/make_parallel.py
 
 build-counter:
 	mkdir -p dist
@@ -51,7 +52,9 @@ build-report:
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
 		--buildname=report examples/report.kk
 
-build-browser-fixtures: build-counter build-top-layer
+build-browser-fixtures: build-counter
+	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
+		--buildname=top-layer examples/top-layer.kk
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
 		--buildname=dom-errors test/dom-errors.kk
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
