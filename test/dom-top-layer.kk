@@ -15,8 +15,8 @@ extern publish-dialog-controls(
   show-modal : () -> ui string,
   close-dialog : (string) -> ui string,
   request-close : (string) -> ui string,
-  is-open : () -> ui bool,
-  is-modal : () -> ui bool,
+  is-open : () -> ui string,
+  is-modal : () -> ui string,
   return-value : () -> ui string,
   wrong-target : () -> ui string,
   detached-modal : () -> ui string
@@ -26,9 +26,9 @@ extern publish-dialog-controls(
 extern publish-popover-controls(
   show-manual : () -> ui string,
   hide-manual : () -> ui string,
-  toggle-manual : () -> ui bool,
+  toggle-manual : () -> ui string,
   set-manual : (bool) -> ui string,
-  is-manual-open : () -> ui bool,
+  is-manual-open : () -> ui string,
   show-auto : () -> ui string,
   show-hint-one : () -> ui string,
   show-hint-two : () -> ui string,
@@ -86,9 +86,9 @@ fun unit-result(action : () -> <ui,exn> ()) : ui string
   action()
   "ok"
 
-fun bool-result(action : () -> <ui,exn> bool) : ui bool
-  with catch fn(_) False
-  action()
+fun bool-result(action : () -> <ui,exn> bool) : ui string
+  with catch fn(problem) "error: " ++ problem.show
+  if action() then "ok:true" else "ok:false"
 
 fun string-result(action : () -> <ui,exn> string) : ui string
   with catch fn(problem) "error: " ++ problem.show

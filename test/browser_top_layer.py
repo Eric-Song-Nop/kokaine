@@ -44,6 +44,11 @@ def assert_error(result: str, *fragments: str) -> None:
         )
 
 
+def assert_bool_result(result: str, expected: bool) -> None:
+    wanted = f"ok:{str(expected).lower()}"
+    assert result == wanted, f"expected {wanted!r}, got {result!r}"
+
+
 with serve_project() as origin:
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
@@ -169,8 +174,12 @@ with serve_project() as origin:
         command_dialog = fixture.locator("#fixture-dialog")
 
         assert_ok(fixture.evaluate(f"{controls}.dialog.show()"))
-        assert fixture.evaluate(f"{controls}.dialog.isOpen()")
-        assert not fixture.evaluate(f"{controls}.dialog.isModal()")
+        assert_bool_result(
+            fixture.evaluate(f"{controls}.dialog.isOpen()"), True
+        )
+        assert_bool_result(
+            fixture.evaluate(f"{controls}.dialog.isModal()"), False
+        )
         assert command_dialog.evaluate("node => node.open && !node.matches(':modal')")
         wrong_modal_state = fixture.evaluate(f"{controls}.dialog.showModal()")
         assert_error(wrong_modal_state, "browser dom exception", "non-modal")
@@ -178,8 +187,12 @@ with serve_project() as origin:
         assert fixture.evaluate(f"{controls}.dialog.returnValue()") == "non-modal"
 
         assert_ok(fixture.evaluate(f"{controls}.dialog.showModal()"))
-        assert fixture.evaluate(f"{controls}.dialog.isOpen()")
-        assert fixture.evaluate(f"{controls}.dialog.isModal()")
+        assert_bool_result(
+            fixture.evaluate(f"{controls}.dialog.isOpen()"), True
+        )
+        assert_bool_result(
+            fixture.evaluate(f"{controls}.dialog.isModal()"), True
+        )
         assert command_dialog.evaluate("node => node.matches(':modal')")
         wrong_non_modal_state = fixture.evaluate(f"{controls}.dialog.show()")
         assert_error(wrong_non_modal_state, "browser dom exception", "modal")
@@ -196,16 +209,19 @@ with serve_project() as origin:
             assert_ok(
                 fixture.evaluate(f"{controls}.dialog.requestClose('blocked')")
             )
-            assert fixture.evaluate(f"{controls}.dialog.isOpen()"), (
-                "preventDefault in the Koka cancel handler did not block requestClose"
+            request_stayed_open = fixture.evaluate(
+                f"{controls}.dialog.isOpen()"
             )
+            assert_bool_result(request_stayed_open, True)
             assert_ok(
                 fixture.evaluate(f"{controls}.dialog.setCancelBlocked(false)")
             )
             assert_ok(
                 fixture.evaluate(f"{controls}.dialog.requestClose('requested')")
             )
-            assert not fixture.evaluate(f"{controls}.dialog.isOpen()")
+            assert_bool_result(
+                fixture.evaluate(f"{controls}.dialog.isOpen()"), False
+            )
             assert fixture.evaluate(f"{controls}.dialog.returnValue()") == "requested"
 
             # Removing the host method models an older browser. The adapter
@@ -259,7 +275,9 @@ with serve_project() as origin:
         assert fixture.evaluate(f"{controls}.popover.beforeState()"), (
             "toggle/state did not read beforetoggle.newState='open'"
         )
-        assert fixture.evaluate(f"{controls}.popover.isManualOpen()")
+        assert_bool_result(
+            fixture.evaluate(f"{controls}.popover.isManualOpen()"), True
+        )
         fixture.locator("#fixture-outside").click()
         assert manual.evaluate("node => node.matches(':popover-open')"), (
             "a manual popover was light-dismissed"
@@ -286,7 +304,7 @@ with serve_project() as origin:
                 }}
             }}"""
         )
-        assert legacy_toggle is True
+        assert_bool_result(legacy_toggle, True)
         assert manual.evaluate("node => node.matches(':popover-open')")
         assert_ok(fixture.evaluate(f"{controls}.popover.hideManual()"))
 
@@ -319,9 +337,49 @@ with serve_project() as origin:
             "set-open toggled a popover that was already in the requested state"
         )
 
-        assert fixture.evaluate(f"{controls}.popover.toggleManual()")
+        post_toggle_probe = fixture.evaluate(
+            f"""() => {{
+                const target = document.querySelector(
+                    '#fixture-manual-popover'
+                );
+                const opened = {controls}.popover.showManual();
+                const nativeMatches = target.matches;
+                target.matches = function(selector) {{
+                    if (selector === ':popover-open') {{
+                        throw new Error('post-toggle-state-probe');
+                    }}
+                    return nativeMatches.call(this, selector);
+                }};
+                try {{
+                    const adapter = {controls}.popover.toggleManual();
+                    return {{
+                        opened,
+                        adapter,
+                        closed: !nativeMatches.call(
+                            target,
+                            ':popover-open'
+                        )
+                    }};
+                }} finally {{
+                    delete target.matches;
+                }}
+            }}"""
+        )
+        assert_ok(post_toggle_probe["opened"])
+        assert post_toggle_probe["closed"], (
+            "native toggle did not reach the false state before the probe failed"
+        )
+        assert_error(
+            post_toggle_probe["adapter"], "post-toggle-state-probe"
+        )
+
+        assert_bool_result(
+            fixture.evaluate(f"{controls}.popover.toggleManual()"), True
+        )
         assert manual.evaluate("node => node.matches(':popover-open')")
-        assert not fixture.evaluate(f"{controls}.popover.toggleManual()")
+        assert_bool_result(
+            fixture.evaluate(f"{controls}.popover.toggleManual()"), False
+        )
         assert not manual.evaluate("node => node.matches(':popover-open')")
 
         assert_ok(fixture.evaluate(f"{controls}.popover.setManual(true)"))
@@ -681,7 +739,7 @@ with serve_project() as origin:
 
                     result.dialogShow = {controls}.dialog.show();
                     result.dialogOpen = {controls}.dialog.isOpen();
-                    result.dialogNonModal = !{controls}.dialog.isModal();
+                    result.dialogNonModal = {controls}.dialog.isModal();
                     result.dialogClose =
                         {controls}.dialog.close('foreign-non-modal');
                     result.dialogReturn = {controls}.dialog.returnValue();
@@ -756,24 +814,24 @@ with serve_project() as origin:
         assert not foreign_realm["toggleEventMainInstance"]
         assert not foreign_realm["closeEventMainInstance"]
         assert_ok(foreign_realm["dialogShow"])
-        assert foreign_realm["dialogOpen"]
-        assert foreign_realm["dialogNonModal"]
+        assert_bool_result(foreign_realm["dialogOpen"], True)
+        assert_bool_result(foreign_realm["dialogNonModal"], False)
         assert_ok(foreign_realm["dialogClose"])
         assert foreign_realm["dialogReturn"] == "foreign-non-modal"
         assert_ok(foreign_realm["dialogShowModal"])
-        assert foreign_realm["dialogModal"]
+        assert_bool_result(foreign_realm["dialogModal"], True)
         assert_ok(foreign_realm["dialogCloseModal"])
         if foreign_realm["dialogHasRequestClose"]:
             assert_ok(foreign_realm["dialogShowForRequest"])
             assert_ok(foreign_realm["dialogRequestClose"])
             assert foreign_realm["dialogRequestReturn"] == "foreign-request"
         assert_ok(foreign_realm["popoverShow"])
-        assert foreign_realm["popoverOpen"]
+        assert_bool_result(foreign_realm["popoverOpen"], True)
         assert_ok(foreign_realm["popoverHide"])
-        assert foreign_realm["popoverToggleOpen"]
-        assert not foreign_realm["popoverToggleClosed"]
+        assert_bool_result(foreign_realm["popoverToggleOpen"], True)
+        assert_bool_result(foreign_realm["popoverToggleClosed"], False)
         assert_ok(foreign_realm["popoverSet"])
-        assert foreign_realm["popoverSetOpen"]
+        assert_bool_result(foreign_realm["popoverSetOpen"], True)
         assert_ok(foreign_realm["popoverUnset"])
         assert foreign_realm["toggleRead"] == "open"
         assert foreign_realm["closeRead"] == "foreign-event"
