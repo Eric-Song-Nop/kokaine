@@ -12,6 +12,7 @@ import kokaine/reactive/internal/lifetime
 import kokaine/reactive/internal/resource
 import kokaine/reactive/internal/scheduler
 import std/core/undiv
+import std/core/unsafe
 
 
 pub fun open-structural-owner(root : root<e>) : exn structural-owner<e>
@@ -21,7 +22,7 @@ pub fun open-structural-owner(root : root<e>) : exn structural-owner<e>
   check-frame-registration(root,parent)
   val frame = Frame(cell(Scope-live),cell(Owned-end))
   val owner = Structural-owner(
-    root.root-key,load(plane.plane-current),frame)
+    root.root-key,load(plane.plane-current),frame,plane.plane-queue)
   // Link before returning.  Draft/bootstrap/final-control rollback can now
   // discover this owner through the ordinary frame ledger.
   store(parent.frame-owned,
@@ -83,93 +84,105 @@ pub fun compact-structural-owner(owner : structural-owner<e>) : ()
                compact-structural-ledger(load(frame.frame-owned)))
 
 // A row is not committed until every effect in its freshly mounted subtree has
-// completed its first publication.  Normal scheduler tickets remain queued and
+// completed its first publication. Normal scheduler tickets remain queued and
 // become stale after these targeted bootstraps, so unrelated root work is never
 // drained recursively from inside reconciliation.
-fun bootstrap-structural-trace(current : trace<e>) : <div|e> error<bool>
-  match current
-    Trace-end -> Ok(False)
-    Trace-read(_,_,_,child,frame-slot,_,_,_,_) ->
-      match bootstrap-structural-owned(
-              load(load(frame-slot).frame-owned))
-        Error(problem) -> Error(problem)
-        Ok(frame-progress) ->
-          match bootstrap-structural-trace(load(child))
-            Error(problem) -> Error(problem)
-            Ok(child-progress) -> Ok(frame-progress || child-progress)
-    Trace-entry(_,_,child,frame-slot,_,_) ->
-      match bootstrap-structural-owned(
-              load(load(frame-slot).frame-owned))
-        Error(problem) -> Error(problem)
-        Ok(frame-progress) ->
-          match bootstrap-structural-trace(load(child))
-            Error(problem) -> Error(problem)
-            Ok(child-progress) -> Ok(frame-progress || child-progress)
+type structural-bootstrap-task<e::E>
+  Bootstrap-owned-task(task-owned : owned<e>)
+  Bootstrap-scope-task(task-scope : continuation-scope<e>)
+  Bootstrap-trace-task(task-trace : trace<e>)
+  Bootstrap-frame-task(task-frame : frame<e>)
 
-fun bootstrap-structural-scope-rest(scope : continuation-scope<e>,
-                                    started : bool)
-                                   : <div|e> error<bool>
-  match load(scope.scope-state)
-    Scope-live ->
-      match bootstrap-structural-owned(load(scope.scope-prefix))
-        Error(problem) -> Error(problem)
-        Ok(prefix-progress) ->
-          match bootstrap-structural-trace(load(scope.scope-body))
-            Error(problem) -> Error(problem)
-            Ok(body-progress) ->
-              Ok(started || prefix-progress || body-progress)
-    _ -> Ok(started)
+fun mark-structural-scopes(
+      pending : list<structural-bootstrap-task<e>>,
+      mark : ref<global,bool>) : <div> ()
+  match pending
+    Nil -> ()
+    Cons(current,rest) ->
+      match current
+        Bootstrap-frame-task(frame) ->
+          match load(frame.frame-token)
+            Scope-dead -> mark-structural-scopes(rest,mark)
+            _ -> mark-structural-scopes(
+              Cons(Bootstrap-owned-task(load(frame.frame-owned)),rest),mark)
+        Bootstrap-owned-task(values) ->
+          match values
+            Owned-end -> mark-structural-scopes(rest,mark)
+            Owned-resource(_,next) -> mark-structural-scopes(
+              Cons(Bootstrap-owned-task(next),rest),mark)
+            // Pure derivations use a separate plane and cannot register
+            // structural descendants while their calculation is running.
+            Owned-derive-fork(_,next) -> mark-structural-scopes(
+              Cons(Bootstrap-owned-task(next),rest),mark)
+            Owned-fork(scope,next) -> mark-structural-scopes(
+              Cons(Bootstrap-scope-task(scope),
+                Cons(Bootstrap-owned-task(next),rest)),mark)
+            Owned-structural(child,next) -> mark-structural-scopes(
+              Cons(Bootstrap-frame-task(child.structural-frame),
+                Cons(Bootstrap-owned-task(next),rest)),mark)
+        Bootstrap-scope-task(scope) ->
+          store(scope.scope-target-mark,Just(mark))
+          match load(scope.scope-state)
+            Scope-live -> mark-structural-scopes(
+              Cons(Bootstrap-owned-task(load(scope.scope-prefix)),
+                Cons(Bootstrap-trace-task(load(scope.scope-body)),rest)),mark)
+            _ -> mark-structural-scopes(rest,mark)
+        Bootstrap-trace-task(current-trace) ->
+          match current-trace
+            Trace-end -> mark-structural-scopes(rest,mark)
+            Trace-read(_,_,_,child,frame-slot,_,_,_,_) ->
+              mark-structural-scopes(
+                Cons(Bootstrap-owned-task(
+                    load(load(frame-slot).frame-owned)),
+                  Cons(Bootstrap-trace-task(load(child)),rest)),mark)
+            Trace-entry(_,_,child,frame-slot,_,_) ->
+              mark-structural-scopes(
+                Cons(Bootstrap-owned-task(
+                    load(load(frame-slot).frame-owned)),
+                  Cons(Bootstrap-trace-task(load(child)),rest)),mark)
 
-fun bootstrap-structural-scope(scope : continuation-scope<e>)
+fun scope-has-target-mark(scope : continuation-scope<e>,
+                          mark : ref<global,bool>) : bool
+  match load(scope.scope-target-mark)
+    Nothing -> False
+    Just(current) -> unsafe-ptr-eq(current,mark)
+
+// Frame ledgers encode ownership but cannot encode one total registration
+// order across nested stable owners. Scan the plane's canonical FIFO and run
+// only tickets which are still members of this structural subtree.
+fun bootstrap-structural-queue(mark : ref<global,bool>,
+                               values : list<work<e>>, progressed : bool)
                               : <div|e> error<bool>
-  match load(scope.scope-state)
-    Scope-starting ->
-      if load(scope.scope-bootstrap-slot).is-nothing ||
-         invalidated-ancestor(scope.scope-parent)
-      then Ok(False)
-      else
-        match run-bootstrap(scope)
-          Error(problem) -> Error(problem)
-          Ok(_) -> Ok(True)
-    _ -> bootstrap-structural-scope-rest(scope,False)
-
-fun bootstrap-structural-owned(values : owned<e>) : <div|e> error<bool>
   match values
-    Owned-end -> Ok(False)
-    Owned-resource(_,next) -> bootstrap-structural-owned(next)
-    // A synchronously read memo settles its own producer. Unobserved derived
-    // work remains in normal queue order and cannot affect initial row DOM.
-    Owned-derive-fork(_,next) -> bootstrap-structural-owned(next)
-    Owned-fork(scope,next) ->
-      // Ledgers are newest-first while scheduler bootstrap order is FIFO.
-      match bootstrap-structural-owned(next)
-        Error(problem) -> Error(problem)
-        Ok(rest-progress) ->
-          match bootstrap-structural-scope(scope)
-            Error(problem) -> Error(problem)
-            Ok(scope-progress) -> Ok(rest-progress || scope-progress)
-    Owned-structural(child,next) ->
-      match bootstrap-structural-owned(next)
-        Error(problem) -> Error(problem)
-        Ok(rest-progress) ->
-          match bootstrap-structural-frame(child.structural-frame)
-            Error(problem) -> Error(problem)
-            Ok(child-progress) -> Ok(rest-progress || child-progress)
+    Nil -> Ok(progressed)
+    Cons(current,rest) ->
+      match current
+        Resume-work(_) -> bootstrap-structural-queue(mark,rest,progressed)
+        Bootstrap-work(scope,_) ->
+          if targeted-bootstrap-runnable(scope) &&
+             scope-has-target-mark(scope,mark)
+          then
+            match run-bootstrap(scope)
+              Error(problem) -> Error(problem)
+              Ok(_) -> bootstrap-structural-queue(mark,rest,True)
+          else bootstrap-structural-queue(mark,rest,progressed)
 
-fun bootstrap-structural-frame(frame : frame<e>) : <div|e> error<bool>
+fun bootstrap-structural-loop(owner : structural-owner<e>)
+                             : <div|e> error<()>
+  val frame = owner.structural-frame
   match load(frame.frame-token)
-    Scope-dead -> Ok(False)
-    _ -> bootstrap-structural-owned(load(frame.frame-owned))
-
-fun bootstrap-structural-loop(frame : frame<e>) : <div|e> error<()>
-  match bootstrap-structural-frame(frame)
-    Error(problem) -> Error(problem)
-    Ok(True) -> bootstrap-structural-loop(frame)
-    Ok(False) -> Ok(())
+    Scope-dead -> Ok(())
+    _ ->
+      val mark = cell(False)
+      mark-structural-scopes([Bootstrap-frame-task(frame)],mark)
+      match bootstrap-structural-queue(
+              mark,load(owner.structural-queue),False)
+        Error(problem) -> Error(problem)
+        Ok(True) -> bootstrap-structural-loop(owner)
+        Ok(False) -> Ok(())
 
 pub fun bootstrap-structural-owner(owner : structural-owner<e>)
                               : <div,exn|e> ()
   check-not-pure-plane("structural owner bootstrap")
-  val result = lift-exn(fn() bootstrap-structural-loop(
-    owner.structural-frame))
+  val result = lift-exn(fn() bootstrap-structural-loop(owner))
   result.untry

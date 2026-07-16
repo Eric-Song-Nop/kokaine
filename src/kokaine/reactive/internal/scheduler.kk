@@ -163,6 +163,13 @@ pub fun work-runnable(current : work<e>) : bool
         Capture-pending -> !pending-ancestor(capture.trace-parent-of)
         _ -> False
 
+pub fun targeted-bootstrap-runnable(scope : continuation-scope<e>) : bool
+  match load(scope.scope-state)
+    Scope-starting ->
+      load(scope.scope-bootstrap-slot).is-just &&
+      !invalidated-ancestor(scope.scope-parent)
+    _ -> False
+
 pub fun work-stale(current : work<e>) : bool
   match current
     Bootstrap-work(scope,_) ->

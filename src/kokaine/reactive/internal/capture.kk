@@ -140,7 +140,9 @@ pub fun prepare-trace(root : root<r>, plane : plane<e>,
   val structural-prefix = cell(Owned-end)
   val body = cell(Trace-end)
   val bootstrap-slot : ref<global,maybe<() -> <div|e> error<()>>> = cell(Nothing)
-  val current = Scope(state,structural-prefix,body,parent,bootstrap-slot)
+  val target-mark : ref<global,maybe<ref<global,bool>>> = cell(Nothing)
+  val current = Scope(
+    state,structural-prefix,body,parent,bootstrap-slot,target-mark)
   val bootstrap-run = fn()
     match load(state)
       Scope-starting ->

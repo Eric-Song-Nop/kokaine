@@ -74,6 +74,7 @@ pub fun collect-scope(current : continuation-scope<e>)
   // Cancellation before bootstrap is still one-shot: retirement severs the
   // only retained path to the initial calculate closure.
   store(current.scope-bootstrap-slot,Nothing)
+  store(current.scope-target-mark,Nothing)
   match load(current.scope-state)
     Scope-dead -> []
     _ ->

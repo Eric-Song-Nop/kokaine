@@ -73,6 +73,67 @@ fun test-targeted-bootstrap-preserves-fifo()
   assert-events(targeted,scheduled,
     "targeted structural bootstrap matches scheduler FIFO")
 
+fun register-nested-bootstrap-order(root : root<total>,
+                                    events : ref<global,list<string>>,
+                                    targeted : bool)
+                                   : <signal-write,div,exn> ()
+  val owner = internal/open-structural-owner(root)
+  internal/with-structural-owner(root,owner,fn()
+    val child = internal/open-structural-owner(root)
+    val stop-b = create-effect(root,fn() (),fn(_) emit(events,"B"))
+    internal/with-structural-owner(root,child,fn()
+      val stop-c = create-effect(root,fn() (),fn(_) emit(events,"C"))
+      ()
+    )
+    val attempted = if targeted then bootstrap-total(owner) else Ok(())
+    attempted.untry
+    batch(root){ () }
+  )
+
+fun run-nested-bootstrap-order(targeted : bool) : exn list<string>
+  val events = cell([])
+  val (root,attempted) : (root<total>,error<()>) = create-root fn(root)
+    error/try fn()
+      pretend-no-div{
+        register-nested-bootstrap-order(root,events,targeted)
+      }
+  attempted.untry
+  val result = load(events)
+  root.dispose()
+  result
+
+fun test-targeted-bootstrap-preserves-global-fifo()
+  val scheduled = run-nested-bootstrap-order(False)
+  val targeted = run-nested-bootstrap-order(True)
+  assert-events(scheduled,["B","C"],
+    "ordinary scheduler preserves cross-owner registration order")
+  assert-events(targeted,scheduled,
+    "targeted bootstrap preserves cross-owner registration order")
+
+fun register-targeted-bootstrap-stress(root : root<total>,
+                                       runs : ref<global,int>, count : int)
+                                      : <signal-write,div,exn> ()
+  val owner = internal/open-structural-owner(root)
+  internal/with-structural-owner(root,owner,fn()
+    for(count) fn(_)
+      val stop = create-effect(root,fn() (),fn(_) increment(runs))
+      ()
+    bootstrap-total(owner).untry
+  )
+
+fun test-targeted-bootstrap-is-stack-safe()
+  val count = 4096
+  val runs = cell(0)
+  val (root,attempted) : (root<total>,error<()>) = create-root fn(root)
+    error/try fn()
+      pretend-no-div{
+        register-targeted-bootstrap-stress(root,runs,count)
+      }
+  attempted.untry
+  load(runs).assert-int(count,
+    "targeted bootstrap drains a wide owner without recursive stack growth")
+  root.dispose()
+
 fun register-pure-bootstrap-probe(root : root<total>,
                                   runs : ref<global,int>,
                                   runs-during : ref<global,int>,
@@ -215,6 +276,8 @@ pub fun main()
          "pure derivations reject hidden structural owner creation")
 
   test-targeted-bootstrap-preserves-fifo()
+  test-targeted-bootstrap-preserves-global-fifo()
+  test-targeted-bootstrap-is-stack-safe()
   test-targeted-bootstrap-rejects-pure-plane()
   test-targeted-bootstrap-respects-invalidated-parent()
 

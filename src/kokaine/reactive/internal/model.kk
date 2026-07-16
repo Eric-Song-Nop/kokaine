@@ -153,12 +153,14 @@ pub type scope-state
 // from effect generations.  Keyed DOM rows use it to retain their reactive
 // subtree while the collection observer's own continuation generation is
 // replaced.  The checkpoint is reinstated together with the frame so children
-// never inherit a transient reconciliation gate.
+// never inherit a transient reconciliation gate. The effect queue is the
+// canonical cross-frame registration order for targeted bootstrap.
 pub type structural-owner<e::E>
   Structural-owner(
     structural-root       : root-key,
     structural-checkpoint : maybe<continuation-gate>,
-    structural-frame      : frame<e>
+    structural-frame      : frame<e>,
+    structural-queue      : ref<global,list<work<e>>>
   )
 
 pub type owned<e::E>
@@ -183,7 +185,8 @@ pub type continuation-scope<e::E>
     scope-prefix : ref<global,owned<e>>,
     scope-body   : ref<global,trace<e>>,
     scope-parent : maybe<continuation-gate>,
-    scope-bootstrap-slot : ref<global,maybe<() -> <div|e> error<()>>>
+    scope-bootstrap-slot : ref<global,maybe<() -> <div|e> error<()>>>,
+    scope-target-mark : ref<global,maybe<ref<global,bool>>>
   )
 
 pub type frame<e::E>
