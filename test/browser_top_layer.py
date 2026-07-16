@@ -276,6 +276,35 @@ with serve_project() as origin:
         assert manual.evaluate("node => node.matches(':popover-open')")
         assert_ok(fixture.evaluate(f"{controls}.popover.hideManual()"))
 
+        # Core Popover implementations predating the force overload ignore the
+        # boolean argument and perform an ordinary toggle. set-open must remain
+        # idempotent on those engines instead of reversing the requested state.
+        ignored_force = fixture.evaluate(
+            f"""() => {{
+                const target = document.querySelector('#fixture-manual-popover');
+                const nativeToggle = target.togglePopover;
+                target.togglePopover = function(_force) {{
+                    return nativeToggle.call(this);
+                }};
+                try {{
+                    const first = {controls}.popover.setManual(true);
+                    const afterFirst = target.matches(':popover-open');
+                    const second = {controls}.popover.setManual(true);
+                    const afterSecond = target.matches(':popover-open');
+                    return {{ first, afterFirst, second, afterSecond }};
+                }} finally {{
+                    delete target.togglePopover;
+                    if (target.matches(':popover-open')) target.hidePopover();
+                }}
+            }}"""
+        )
+        assert_ok(ignored_force["first"])
+        assert ignored_force["afterFirst"]
+        assert_ok(ignored_force["second"])
+        assert ignored_force["afterSecond"], (
+            "set-open toggled a popover that was already in the requested state"
+        )
+
         assert fixture.evaluate(f"{controls}.popover.toggleManual()")
         assert manual.evaluate("node => node.matches(':popover-open')")
         assert not fixture.evaluate(f"{controls}.popover.toggleManual()")
