@@ -126,7 +126,7 @@ fun bootstrap-structural-scope(scope : continuation-scope<e>)
     Scope-starting ->
       match run-bootstrap(scope)
         Error(problem) -> Error(problem)
-        Ok(_) -> bootstrap-structural-scope-rest(scope,True)
+        Ok(_) -> Ok(True)
     _ -> bootstrap-structural-scope-rest(scope,False)
 
 fun bootstrap-structural-owned(values : owned<e>) : <div|e> error<bool>

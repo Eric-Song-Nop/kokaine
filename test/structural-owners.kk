@@ -1,6 +1,7 @@
 module structural-owners
 
 import kokaine/reactive
+import std/core/undiv
 import std/core/unsafe
 
 
@@ -16,12 +17,61 @@ fun store(target : ref<global,a>, value : a)
 fun increment(target : ref<global,int>)
   store(target,load(target) + 1)
 
+fun emit(target : ref<global,list<string>>, value : string)
+  store(target,load(target) ++ [value])
+
 fun assert-int(actual : int, expected : int, label : string)
+  if actual == expected then () else
+    throw(label ++ " expected=" ++ expected.show ++ " actual=" ++ actual.show)
+
+fun assert-events(actual : list<string>, expected : list<string>, label : string)
   if actual == expected then () else
     throw(label ++ " expected=" ++ expected.show ++ " actual=" ++ actual.show)
 
 fun assert(ok : bool, label : string)
   if ok then () else throw("assertion failed: " ++ label)
+
+fun bootstrap-total(owner : structural-owner<total>) : error<()>
+  error/try fn()
+    pretend-no-div{
+      internal/bootstrap-structural-owner(owner)
+    }
+
+fun register-bootstrap-order(root : root<total>,
+                             events : ref<global,list<string>>,
+                             targeted : bool)
+                            : <signal-write,div,exn> ()
+  val owner = internal/open-structural-owner(root)
+  internal/with-structural-owner(root,owner,fn()
+    val stop-a = create-effect(root,fn() (),fn(_)
+      emit(events,"A")
+      val stop-c = create-effect(root,fn() (),fn(_) emit(events,"C"))
+      ()
+    )
+    val stop-b = create-effect(root,fn() (),fn(_) emit(events,"B"))
+    val attempted = if targeted then bootstrap-total(owner) else Ok(())
+    attempted.untry
+    batch(root){ () }
+  )
+
+fun run-bootstrap-order(targeted : bool) : exn list<string>
+  val events = cell([])
+  val (root,attempted) : (root<total>,error<()>) = create-root fn(root)
+    error/try fn()
+      pretend-no-div{
+        register-bootstrap-order(root,events,targeted)
+      }
+  attempted.untry
+  val result = load(events)
+  root.dispose()
+  result
+
+fun test-targeted-bootstrap-preserves-fifo()
+  val scheduled = run-bootstrap-order(False)
+  val targeted = run-bootstrap-order(True)
+  assert-events(scheduled,["A","B","C"],"ordinary scheduler is FIFO")
+  assert-events(targeted,scheduled,
+    "targeted structural bootstrap matches scheduler FIFO")
 
 pub fun main()
   val row-runs = cell(0)
@@ -100,5 +150,7 @@ pub fun main()
     ()
   assert(pure-registration.is-error,
          "pure derivations reject hidden structural owner creation")
+
+  test-targeted-bootstrap-preserves-fifo()
 
   println("structural-owners: persistence, recursion, staleness, and purity passed")
