@@ -23,8 +23,10 @@ decision therefore has two independent parts:
 An effect row records operations left unhandled by a function. A local handler
 can discharge an operation before it reaches that boundary, so the design does
 not claim that types alone detect a hidden or "smuggled" write handler. The
-continuation-native claim rests on stored runtime capabilities and behavioral
-mutation canaries, not merely on API effect rows.
+runtime closes that gap with a nested, runtime-wide pure phase around all
+derivation execution and targeted settlement. Framework mutation, ownership
+registration, disposal, and re-entry check that phase before changing state;
+behavioral canaries cover same-root and cross-root attempts.
 
 ## Why this decision was necessary
 

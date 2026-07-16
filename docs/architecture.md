@@ -43,11 +43,14 @@ writes settle, and nested HTML handlers collect only their own emitted children.
 
 An effect row reports operations that escape a function after local handling.
 It does not attest that an operation was never performed inside the function,
-and it does not say how reactivity propagates. In particular, Kokaine does not
-claim a runtime prohibition on locally handled "write-handler smuggling."
-Continuation-native propagation is instead guaranteed structurally: sources
-store captured read resumptions, queues store `Resume-work(trace)`, and no
-producer retains a full calculation action after bootstrap.
+and it does not say how reactivity propagates. Kokaine adds the missing runtime
+boundary explicitly: every pure derivation bootstrap, resumption, and targeted
+settlement enters a nested pure phase. Reactive writes, structural registration,
+disposal, and re-entry fail before mutation in that phase, even when a local
+wrapper handled their public effect row or targets another root. Separately,
+continuation-native propagation is guaranteed structurally: sources store
+captured read resumptions, queues store `Resume-work(trace)`, and no producer
+retains a full calculation action after bootstrap.
 
 The continuation capabilities are also not affine. A live read trace may be
 invalidated and resumed on many turns; after failure, the same capability

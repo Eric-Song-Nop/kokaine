@@ -66,6 +66,7 @@ fun abort-root-construction(root : root<e>) : <exn|e> ()
 
 pub fun create-root(action : (root<e>) -> <signal-write,pure|e> a)
                    : <exn|e> (root<e>,a)
+  check-not-pure-plane("reactive root creation")
   val root = fresh-root()
   val committed = cell(False)
   pretend-no-div{
@@ -87,6 +88,7 @@ pub fun create-root(action : (root<e>) -> <signal-write,pure|e> a)
   }
 
 pub fun root/dispose(root : root<e>) : <exn|e> ()
+  check-not-pure-plane("reactive root disposal")
   if load(root.root-disposed) || load(root.root-disposing) then ()
   elif load(root.root-batch-depth) > 0 ||
        load(root.root-flushing) ||
@@ -135,6 +137,7 @@ pub fun sample(root : root<e>, action : () -> <signal-read,pure|e> a)
 
 pub fun signal-by(root : root<e>, initial : a,
                   equals : (a,a) -> bool) : exn signal<a>
+  check-not-pure-plane("signal creation")
   check-registration(root)
   Signal(new-source(root,initial,equals))
 
@@ -180,6 +183,7 @@ fun create-effect-inner(root : root<e>,
                         track : () -> <signal-read,pure> a,
                         apply : (value : a) -> <signal-write,pure|e> ())
                        : <signal-write,pure> disposer<e>
+  check-not-pure-plane("effect creation")
   val plane = root.root-effect-plane
   val owner-slot = cell(Nothing)
   val owner = load(plane.plane-current-frame)
@@ -206,6 +210,7 @@ fun commit-derived(root : root<e>, source : source<a>, value : a) : exn ()
 fun derive-by-inner(root : root<e>, initial : a,
                     calculate : () -> <signal-read,pure> a,
                     equals : (a,a) -> bool) : <signal-write,pure> memo<a>
+  check-not-pure-plane("derivation creation")
   check-registration(root)
   val source = new-source(root,initial,equals)
   val effect-plane = root.root-effect-plane
@@ -243,6 +248,7 @@ pub fun derive-always(root : root<e>, initial : a,
 fun memo-by-inner(root : root<e>, initial : a,
                   calculate : (previous : a) -> <signal-read,pure> a,
                   equals : (a,a) -> bool) : <signal-write,pure> memo<a>
+  check-not-pure-plane("memo creation")
   check-registration(root)
   val source = new-source(root,initial,equals)
   val effect-plane = root.root-effect-plane
@@ -294,6 +300,7 @@ pub fun create-effect(root : root<e>,
 
 pub fun on-cleanup(root : root<e>,
                    cleanup : () -> <signal-write,pure|e> ()) : exn ()
+  check-not-pure-plane("cleanup registration")
   val plane = root.root-effect-plane
   val current = load(plane.plane-current-frame)
   val checkpoint = load(plane.plane-current)

@@ -56,10 +56,12 @@ from its untracked apply function; `untrack` is a nested override handler; and
 An effect row describes operations that remain unhandled at a function
 boundary. It does not prove that no operation was performed and handled inside
 that function. Consequently, an effect-typed API is valuable capability
-documentation and composition, but it is not by itself evidence of a
-continuation-native reactive runtime. Kokaine relies on runtime invariants and
-mutation tests for that stronger claim; it makes no separate "write-handler
-smuggling" guarantee.
+documentation and composition, but it is not by itself a sufficient purity
+boundary. Kokaine therefore enters a runtime-wide pure phase around derivation
+bootstrap, resumption, and targeted settlement. Framework writes, ownership
+registration, disposal, and re-entry are rejected in that phase even when a
+local public wrapper handled their outward effect row, including cross-root
+attempts.
 
 ## Current guarantees
 
@@ -96,6 +98,9 @@ smuggling" guarantee.
 - Pure derivations run on `plane<total>`; user effects run on `plane<e>`. A
   synchronous memo read can therefore settle only the required producer chain
   without erasing an ambient user effect row or draining unrelated work.
+- The pure plane is dynamically read-only. Hidden signal writes and structural
+  registration are rejected before mutating a source, queue, or owner ledger;
+  the phase is restored across exceptions and abortive final control.
 - `derive` is stateless: its captured read suffix calculates from current
   inputs. `memo(previous)` adds a separate state-entry continuation that
   injects the latest successfully committed output without subscribing to its

@@ -22,6 +22,25 @@ pub fun load(value : ref<global,a>) : a
 pub fun store(target : ref<global,a>, value : a) : ()
   unsafe-total { target := value }
 
+// A derivation is dynamically read-only even when application code hides a
+// reactive operation behind a locally handled public wrapper. This marker is
+// runtime-wide on purpose: a calculator running for root A must not mutate or
+// register work in root B either. The runtime is synchronous; nesting is still
+// represented explicitly so targeted producer settlement is safe.
+val pure-plane-depth : ref<global,int> = cell(0)
+
+pub fun enter-pure-plane() : int
+  val previous = load(pure-plane-depth)
+  store(pure-plane-depth,previous + 1)
+  previous
+
+pub fun restore-pure-plane(previous : int) : ()
+  store(pure-plane-depth,previous)
+
+pub fun check-not-pure-plane(operation : string) : exn ()
+  if load(pure-plane-depth) <= 0 then ()
+  else throw(operation ++ " is forbidden while a pure derivation is running")
+
 pub fun lift-div(action : () -> e a) : <div|e> a
   mask<div>{ action() }
 
