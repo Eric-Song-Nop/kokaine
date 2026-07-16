@@ -69,9 +69,10 @@ pub effect async-ioc
 // loaders can install a nearer lease ledger without proxying polymorphic host
 // operations through a retained continuation.
 pub effect async-ownership
-  // Keep a host disposer owned by the current reactive generation after an
-  // await has completed. The returned release action transfers ownership
-  // without running the disposer; generation retirement runs it exactly once.
+  // Keep a host disposer in the nearest ownership ledger after an await has
+  // completed. The base ledger follows the reactive generation; structured
+  // combinators and Resource loaders can refine that lifetime. The returned
+  // release action transfers ownership without running the disposer.
   fun async-own-disposer(dispose : dispose-fn) : dispose-fn
 
 
@@ -150,9 +151,9 @@ pub fun async-host(action : () -> ui a) : async a
 pub fun async-schedule(action : () -> ui ()) : async ()
   async-schedule-ioc(async-scope,action)
 
-// Acquire a generation-owned lease for a host resource. This deliberately
-// follows the reactive generation rather than a structured cancellation scope:
-// a delivered value may escape a child async scope before it is consumed.
+// Acquire a lease for a host resource. By default it follows the reactive
+// generation rather than a structured cancellation scope; a nearer structured
+// or Resource ledger may further constrain or promote that lifetime.
 pub fun async-own(dispose : dispose-fn) : async dispose-fn
   async-own-disposer(dispose)
 

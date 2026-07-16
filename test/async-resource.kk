@@ -68,6 +68,34 @@ val dispose-count : ref<global,int> = hidden(0)
 val self-cancel-setup-count : ref<global,int> = hidden(0)
 val self-cancel-finally-count : ref<global,int> = hidden(0)
 val staged-load-count : ref<global,int> = hidden(0)
+val last-active-owned : ref<global,maybe<owned-host>> = hidden(Nothing)
+val last-released-owned : ref<global,maybe<owned-host>> = hidden(Nothing)
+
+// A JavaScript-owned fixture distinguishes a value which is merely still
+// stored from one whose underlying host lifetime is still valid.
+abstract type owned-host
+  Owned-host(host-object : any)
+
+extern new-owned-host(payload : int) : ui owned-host
+  js inline "({ payload:#1, live:true, disposeCount:0 })"
+
+extern owned-host/payload(value : owned-host) : ui int
+  js inline "Number((#1).payload)"
+
+extern owned-host/live(value : owned-host) : ui bool
+  js inline "!!(#1).live"
+
+extern owned-host/disposals(value : owned-host) : ui int
+  js inline "Number((#1).disposeCount)"
+
+extern retire-owned-host(value : owned-host) : ui ()
+  js inline "(function(host){ if(host.live){ host.live=false; host.disposeCount+=1; } })(#1)"
+
+fun require-stored-owned(slot : ref<global,maybe<owned-host>>,
+                         label : string) : exn owned-host
+  match read-cell(slot)
+    Just(value) -> value
+    Nothing -> throw(label)
 
 fun fake-request/request-number(request : fake-request) : int
   match request
@@ -108,6 +136,32 @@ fun fake-load(key : int) : <async,ui,exn> int
       Cons(Fake-request(id,key,complete,disposed),read-cell(requests)))
     Ok(fn() retire-fake(disposed))
   )
+
+fun fake-owned-load(key : int) : <async,ui,exn> owned-host
+  val payload = fake-load(key)
+  val value = new-owned-host(payload)
+  val release = async-own(fn() retire-owned-host(value))
+  value
+
+// This shape acquires ownership before its first suspension. Replacing the
+// request must retire this active group even though the scheduler constructs
+// the next effect generation before finalizing the previous one.
+fun active-owned-load(key : int) : <async,ui,exn> owned-host
+  val value = new-owned-host(key)
+  write-cell(last-active-owned,Just(value))
+  val release = async-own(fn() retire-owned-host(value))
+  val completed = fake-load(key)
+  value
+
+// Releasing an ownership edge transfers the raw host lifetime to the caller.
+// A later Resource transition must not reinterpret release as disposal.
+fun released-owned-load(key : int) : <async,ui,exn> owned-host
+  val value = new-owned-host(key)
+  write-cell(last-released-owned,Just(value))
+  val release = async-own(fn() retire-owned-host(value))
+  release()
+  val completed = fake-load(key)
+  value
 
 fun cancel-before-setup() : <async,ui,exn> int
   finally(
@@ -169,6 +223,34 @@ fun expect-failed(root : root<<ui>>, value : resource<int,int>,
     Failed(problem,actual) ->
       check(problem.message == expected-message && actual == previous,label)
     _ -> check(False,label ++ " (not Failed)")
+
+fun read-owned-state(root : root<<ui>>,
+                     value : resource<int,owned-host>)
+                    : <ui,exn> resource-state<owned-host>
+  sample(root){ value.state }
+
+fun require-owned-ready(root : root<<ui>>,
+                        value : resource<int,owned-host>,
+                        label : string) : <ui,exn> owned-host
+  match read-owned-state(root,value)
+    Ready(current) ->
+      check(True,label)
+      current
+    _ ->
+      check(False,label)
+      throw(label ++ " (not Ready)")
+
+fun require-owned-pending-previous(
+    root : root<<ui>>,
+    value : resource<int,owned-host>,
+    label : string) : <ui,exn> owned-host
+  match read-owned-state(root,value)
+    Pending(Just(previous)) ->
+      check(True,label)
+      previous
+    _ ->
+      check(False,label)
+      throw(label ++ " (no Pending previous value)")
 
 
 // --------------------------------------------------------------------------
@@ -502,6 +584,252 @@ fun after-ready-batched-nothing-cancel(
   check(read-latest(root,value) == Nothing,
     "Ready source Nothing plus cancel clears latest")
   root.dispose()
+  test-owned-resource-lifetime()
+
+
+// --------------------------------------------------------------------------
+// Host-owned Resource values
+// --------------------------------------------------------------------------
+
+fun test-owned-resource-lifetime() : <ui,exn> ()
+  val (root,(source,value))
+      : (root<<ui>>,(signal<maybe<int>>,resource<int,owned-host>)) =
+    create-root fn(root)
+      val source = signal(root,Just(800))
+      val value = resource(root,fn() source.get,fake-owned-load)
+      (source,value)
+
+  current-request().succeed(800)
+  enqueue-microtask(fn() stage(fn()
+    after-owned-seed(root,source,value)
+  ))
+
+fun after-owned-seed(
+    root : root<<ui>>,
+    source : signal<maybe<int>>,
+    value : resource<int,owned-host>) : <ui,exn> ()
+  val previous = require-owned-ready(
+    root,value,"owned Resource publishes its seed")
+  check(previous.payload == 800 && previous.live,
+    "owned Resource seed is live")
+  check(previous.disposals == 0,
+    "owned Resource seed has not been disposed")
+
+  update(root){ value.refresh }
+  val retained = require-owned-pending-previous(
+    root,value,"owned refresh retains its previous value")
+  check(retained.live,
+    "owned previous remains live while refresh is pending")
+  check(retained.disposals == 0,
+    "owned previous is not disposed at refresh start")
+
+  update(root){ value.cancel }
+  val restored = require-owned-ready(
+    root,value,"owned cancel restores its previous value")
+  check(restored.live,
+    "owned previous remains live after refresh cancellation")
+  check(restored.disposals == 0,
+    "owned previous is not disposed by refresh cancellation")
+
+  update(root){ value.refresh }
+  current-request().succeed(801)
+  enqueue-microtask(fn() stage(fn()
+    after-owned-replacement(root,source,value,previous)
+  ))
+
+fun after-owned-replacement(
+    root : root<<ui>>,
+    source : signal<maybe<int>>,
+    value : resource<int,owned-host>,
+    previous : owned-host) : <ui,exn> ()
+  val current = require-owned-ready(
+    root,value,"owned refresh publishes its replacement")
+  check(current.payload == 801 && current.live,
+    "owned replacement is live")
+  check(previous.disposals == 1 && !previous.live,
+    "successful replacement disposes the old value exactly once")
+
+  update(root){ source.set(Nothing) }
+  match read-owned-state(root,value)
+    Unresolved -> check(True,
+      "source Nothing clears an owned Resource")
+    _ -> check(False,
+      "source Nothing clears an owned Resource")
+  check(current.disposals == 1 && !current.live,
+    "source Nothing disposes the current value exactly once")
+  check(generation-async-outstanding() == 0,
+    "source Nothing leaves no owned Resource lease outstanding")
+
+  root.dispose()
+  test-owned-ready-root-retirement()
+
+fun test-owned-ready-root-retirement() : <ui,exn> ()
+  val (root,value) : (root<<ui>>,resource<int,owned-host>) =
+    create-root fn(root)
+      resource(root,fn() Just(900),fake-owned-load)
+  current-request().succeed(900)
+  enqueue-microtask(fn() stage(fn()
+    after-owned-ready-root-retirement(root,value)
+  ))
+
+fun after-owned-ready-root-retirement(
+    root : root<<ui>>,
+    value : resource<int,owned-host>) : <ui,exn> ()
+  val current = require-owned-ready(
+    root,value,"root-retirement fixture publishes an owned Ready value")
+  check(current.live && current.disposals == 0,
+    "owned Ready value is live before root retirement")
+  root.dispose()
+  check(!current.live && current.disposals == 1,
+    "root retirement disposes an owned Ready value exactly once")
+  check(generation-async-outstanding() == 0,
+    "owned Ready root retirement leaves no lease outstanding")
+  test-active-owned-replacement()
+
+
+// --------------------------------------------------------------------------
+// Active ownership and explicit release
+// --------------------------------------------------------------------------
+
+fun test-active-owned-replacement() : <ui,exn> ()
+  write-cell(last-active-owned,Nothing)
+  val requests-before = request-count()
+  val (root,(source,value))
+      : (root<<ui>>,(signal<int>,resource<int,owned-host>)) =
+    create-root fn(root)
+      val source = signal(root,1000)
+      val value = resource(
+        root,fn() Just(source.get),active-owned-load)
+      (source,value)
+
+  val previous = require-stored-owned(
+    last-active-owned,"active-owned loader did not publish its first host")
+  check(previous.live && previous.disposals == 0,
+    "active owned host starts live before suspension")
+  check(request-count() == requests-before + 1,
+    "active owned loader installs its first request")
+
+  update(root){ source.set(1001) }
+  val current = require-stored-owned(
+    last-active-owned,"active-owned loader did not publish its replacement")
+  check(request-count() == requests-before + 2,
+    "active owned source replacement installs one request")
+  check(!previous.live && previous.disposals == 1,
+    "source replacement disposes the suspended old host exactly once")
+  check(current.live && current.disposals == 0,
+    "active owned replacement starts live")
+
+  update(root){ value.cancel }
+  check(!current.live && current.disposals == 1,
+    "cancel disposes the replacement active host exactly once")
+  match read-owned-state(root,value)
+    Unresolved -> check(True,
+      "cancel leaves the active-owned Resource Unresolved")
+    _ -> check(False,
+      "cancel leaves the active-owned Resource Unresolved")
+  check(generation-async-outstanding() == 0,
+    "active-owned replacement and cancel leave no lease outstanding")
+  root.dispose()
+  check(previous.disposals == 1 && current.disposals == 1,
+    "root retirement does not dispose canceled active hosts twice")
+  test-released-owned-lifetime()
+
+fun test-released-owned-lifetime() : <ui,exn> ()
+  write-cell(last-released-owned,Nothing)
+  val (root,(source,value))
+      : (root<<ui>>,(signal<maybe<int>>,resource<int,owned-host>)) =
+    create-root fn(root)
+      val source = signal(root,Just(1100))
+      val value = resource(root,fn() source.get,released-owned-load)
+      (source,value)
+
+  val first = require-stored-owned(
+    last-released-owned,"released loader did not publish its first host")
+  current-request().succeed(1100)
+  enqueue-microtask(fn() stage(fn()
+    after-released-owned-seed(root,source,value,first)
+  ))
+
+fun after-released-owned-seed(
+    root : root<<ui>>,
+    source : signal<maybe<int>>,
+    value : resource<int,owned-host>,
+    first : owned-host) : <ui,exn> ()
+  val ready = require-owned-ready(
+    root,value,"explicitly released host reaches Ready")
+  check(ready.payload == 1100 && ready.live && ready.disposals == 0,
+    "explicit release keeps the successful host caller-owned")
+
+  update(root){ value.refresh }
+  val second = require-stored-owned(
+    last-released-owned,"released loader did not publish its replacement")
+  check(first.live && first.disposals == 0,
+    "refresh does not dispose an explicitly released previous host")
+  current-request().succeed(1101)
+  enqueue-microtask(fn() stage(fn()
+    after-released-owned-replacement(root,source,value,first,second)
+  ))
+
+fun after-released-owned-replacement(
+    root : root<<ui>>,
+    source : signal<maybe<int>>,
+    value : resource<int,owned-host>,
+    first : owned-host,
+    second : owned-host) : <ui,exn> ()
+  val ready = require-owned-ready(
+    root,value,"released ownership refresh publishes a replacement")
+  check(ready.payload == 1100,
+    "explicitly released refresh keeps the source snapshot")
+  check(ready.live,
+    "explicitly released replacement is live")
+  check(first.live && first.disposals == 0,
+    "replacement does not dispose the explicitly released old host")
+
+  update(root){ source.set(Nothing) }
+  match read-owned-state(root,value)
+    Unresolved -> check(True,
+      "source Nothing clears an explicitly released Resource")
+    _ -> check(False,
+      "source Nothing clears an explicitly released Resource")
+  check(second.live && second.disposals == 0,
+    "source Nothing does not dispose an explicitly released host")
+  check(generation-async-outstanding() == 0,
+    "released ownership leaves no lease outstanding after source Nothing")
+
+  update(root){ source.set(Just(1102)) }
+  val third = require-stored-owned(
+    last-released-owned,"released loader did not publish its final host")
+  current-request().succeed(1102)
+  enqueue-microtask(fn() stage(fn()
+    after-released-owned-root-retirement(root,value,first,second,third)
+  ))
+
+fun after-released-owned-root-retirement(
+    root : root<<ui>>,
+    value : resource<int,owned-host>,
+    first : owned-host,
+    second : owned-host,
+    third : owned-host) : <ui,exn> ()
+  val ready = require-owned-ready(
+    root,value,"released ownership fixture returns to Ready")
+  check(ready.payload == 1102 && third.live && third.disposals == 0,
+    "final explicitly released host is live before root retirement")
+  root.dispose()
+  check(first.live && second.live && third.live,
+    "root retirement does not dispose explicitly released hosts")
+  check(first.disposals == 0 && second.disposals == 0 &&
+        third.disposals == 0,
+    "Resource never invokes a released raw disposer")
+  check(generation-async-outstanding() == 0,
+    "released ownership root retirement leaves no lease outstanding")
+
+  // Ownership was transferred to this test; retire each host explicitly.
+  retire-owned-host(first)
+  retire-owned-host(second)
+  retire-owned-host(third)
+  check(first.disposals == 1 && second.disposals == 1 &&
+        third.disposals == 1,
+    "transferred hosts remain independently disposable exactly once")
   finish()
 
 

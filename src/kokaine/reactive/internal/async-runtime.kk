@@ -80,6 +80,23 @@ type generation-runtime<e::E>
 // remain owned exclusively by frames and lexical cancellation scopes.
 val outstanding-operations : ref<global,int> = cell(0)
 
+// Resource loaders need a lifetime which can outlive the create-effect
+// generation that observed their source. A lease group owns only raw host
+// disposers; the Resource keeps the active and latest groups in its own
+// one-shot state machine.
+type async-lease-entry
+  Async-lease-entry(
+    lease-entry-id       : int,
+    lease-entry-disposer : ref<global,maybe<dispose-fn>>
+  )
+
+abstract type async-lease-group
+  Async-lease-group(
+    lease-group-live    : ref<global,bool>,
+    lease-group-entries : ref<global,list<async-lease-entry>>,
+    lease-group-next-id : ref<global,int>
+  )
+
 extern report-async-error(message : string) : ui ()
   js inline "console.error(#1)"
 
@@ -112,6 +129,84 @@ fun increment-outstanding() : ()
 fun decrement-outstanding() : ()
   val current = load(outstanding-operations)
   store(outstanding-operations,if current <= 0 then 0 else current - 1)
+
+pub fun new-async-lease-group() : async-lease-group
+  Async-lease-group(cell(True),cell([]),cell(1))
+
+fun release-async-lease(group : async-lease-group,
+                        id : int,
+                        disposer-slot : ref<global,maybe<dispose-fn>>) : ui ()
+  match group
+    Async-lease-group(_,entries,_) ->
+      val current = load(disposer-slot)
+      store(disposer-slot,Nothing)
+      // Physically unlink released entries so a long-lived Resource cannot
+      // accumulate empty slots after explicit ownership transfers.
+      store(entries,load(entries).filter(fn(entry) entry.lease-entry-id != id))
+      match current
+        Nothing -> ()
+        Just(_) -> decrement-outstanding()
+
+fun async-lease-release(group : async-lease-group,
+                        id : int,
+                        disposer-slot : ref<global,maybe<dispose-fn>>)
+                       : dispose-fn
+  fn() release-async-lease(group,id,disposer-slot)
+
+pub fun async-lease-group/own(group : async-lease-group,
+                              dispose : dispose-fn) : ui dispose-fn
+  match group
+    Async-lease-group(live,entries,next-id) ->
+      if !load(live) then
+        // A re-entrant acquisition after retirement cannot become reachable.
+        dispose()
+        fn() ()
+      else
+        val id = load(next-id)
+        val disposer-slot = cell(Just(dispose))
+        store(next-id,id + 1)
+        store(entries,
+          Cons(Async-lease-entry(id,disposer-slot),load(entries)))
+        increment-outstanding()
+        async-lease-release(group,id,disposer-slot)
+
+fun claim-async-lease-disposers(entries : list<async-lease-entry>)
+                                : list<dispose-fn>
+  match entries
+    Nil -> []
+    Cons(entry,rest) ->
+      val disposer-slot = entry.lease-entry-disposer
+      val disposer = load(disposer-slot)
+      store(disposer-slot,Nothing)
+      match disposer
+        Nothing -> claim-async-lease-disposers(rest)
+        Just(current-dispose) ->
+          decrement-outstanding()
+          Cons(current-dispose,claim-async-lease-disposers(rest))
+
+fun run-async-lease-disposers(disposers : list<dispose-fn>) : ui ()
+  match disposers
+    Nil -> ()
+    Cons(dispose,rest) ->
+      // A later disposer still runs if an earlier hostile host callback
+      // escapes unexpectedly. Koka's finally lowering also preserves this
+      // ordering on the JavaScript backend.
+      finally(fn() run-async-lease-disposers(rest),dispose)
+
+pub fun async-lease-group/dispose(group : async-lease-group) : ui ()
+  match group
+    Async-lease-group(live,entries,_) ->
+      if !load(live) then () else
+        // Close and detach the complete ledger before invoking untrusted host
+        // disposers. Re-entry and aliased cleanup therefore see a terminal
+        // group and cannot claim any entry twice.
+        store(live,False)
+        val current = load(entries)
+        store(entries,[])
+        // Claim and account for every slot before invoking the first disposer.
+        // Even if host code aborts control flow, no detached entry remains
+        // counted or available to a competing release path.
+        run-async-lease-disposers(claim-async-lease-disposers(current))
 
 fun task/is-active(task : generation-task<a,e>) : bool
   match load(task.task-state)

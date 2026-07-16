@@ -502,6 +502,16 @@ cancels its awaits and runs its finalizers. A numeric generation guard remains
 at completion as defense against a host which invokes an already retired
 callback. Only the winning generation may publish `Ready` or `Failed`.
 
+An `async-own` acquired by the loader enters a request-local lease group rather
+than the transient effect generation's base ledger. Failure or cancellation
+closes the active group. Success promotes it alongside `latest-success`; a
+later refresh can therefore expose a still-live `Pending(previous)` and restore
+the same live value after failure or cancellation. Successful replacement
+publishes the new value before closing the old group. A `Nothing` source and
+root retirement first detach both active/latest groups and clear observable
+state, then run their disposers in LIFO order. Explicit ownership release
+unlinks its entry without disposing the host value.
+
 `Pending` is paired with exactly one active request token. Success, failure,
 and cancellation all consume that token through the same terminal transition;
 because cancellation is final control, the canceled transition runs in the
@@ -652,8 +662,8 @@ async, and Resource checks with `make test-browser`.
   owner unlinking, retirement-snapshot precedence, and bounded completed-await
   history.
 - `async-resource.kk` checks explicit equality, refresh/failure retention,
-  explicit cancellation, rapid source churn, stale completions, and owner
-  retirement in the browser.
+  explicit cancellation, rapid source churn, stale completions, owned host
+  value promotion/replacement, and owner retirement in the browser.
 
 The browser renderer currently replaces all content between a region's
 persistent markers and does not provide keyed reconciliation, hydration,

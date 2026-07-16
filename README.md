@@ -316,6 +316,11 @@ retires an active request. `resource-by` accepts explicit source equality;
 equal snapshots do not restart or cancel the active loader. Loader
 self-cancellation is terminal too: it restores the previous value (or
 `Unresolved`) during unwinding and never strands the Resource in `Pending`.
+Host values acquired through `async-own` are promoted from the request into
+the Resource on success. The previous value therefore remains live across
+refresh, failure, and cancellation; replacement, a `Nothing` source, or root
+retirement releases its lease exactly once. Calling the returned release
+action explicitly transfers that ownership back to application code.
 
 ## API shape
 
