@@ -41,9 +41,11 @@ extern publish-adapter-controls(
   invalid-dialog-event : () -> ui string,
   before-state : () -> ui bool,
   detached-popover-target : () -> ui string,
-  invalid-popover-event : () -> ui string
+  invalid-popover-event : () -> ui string,
+  read-toggle-event : (any) -> ui string,
+  read-dialog-event : (any) -> ui string
 ) : ui ()
-  js inline "(Object.assign(globalThis.__kokaineTopLayer.dialog,{ setCancelBlocked:#1, invalidEvent:#2 }), Object.assign(globalThis.__kokaineTopLayer.popover,{ beforeState:#3, detached:#4, invalidEvent:#5 }))"
+  js inline "(Object.assign(globalThis.__kokaineTopLayer.dialog,{ setCancelBlocked:#1, invalidEvent:#2, readEvent:#7 }), Object.assign(globalThis.__kokaineTopLayer.popover,{ beforeState:#3, detached:#4, invalidEvent:#5, readEvent:#6 }))"
 
 extern publish-owned-controls(
   open-dialog : () -> ui string,
@@ -111,6 +113,16 @@ fun invalid-dialog-result() : ui string
     Event("",False,"",invalid-dialog-event())
   )
   "missed"
+
+fun toggle-event-result(original : any) : ui string
+  with catch fn(problem) "error: " ++ problem.show
+  match toggle/state(Event("",False,"",original))
+    Toggle-open -> "open"
+    Toggle-closed -> "closed"
+
+fun dialog-event-result(original : any) : ui string
+  with catch fn(problem) "error: " ++ problem.show
+  dialog/event-return-value(Event("",False,"",original))
 
 fun dispose-result(root : root<<ui>>) : ui string
   with catch fn(problem) "error: " ++ problem.show
@@ -225,7 +237,9 @@ pub fun main()
     fn() invalid-dialog-result(),
     fn() read-bool(root,manual-before-open),
     fn() unit-result(fn() popover/show(detached-popover())),
-    fn() invalid-toggle-result()
+    fn() invalid-toggle-result(),
+    fn(original) toggle-event-result(original),
+    fn(original) dialog-event-result(original)
   )
 
   publish-owned-controls(
