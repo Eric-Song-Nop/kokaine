@@ -4,6 +4,7 @@ import kokaine/reactive
 import kokaine/resource
 import kokaine/async/effects
 import kokaine/async/internal/web-schedule
+import kokaine/reactive/internal/async-runtime
 import std/core/unsafe
 
 
@@ -64,6 +65,9 @@ type fake-request
 val next-request-id : ref<global,int> = hidden(1)
 val requests : ref<global,list<fake-request>> = hidden([])
 val dispose-count : ref<global,int> = hidden(0)
+val self-cancel-setup-count : ref<global,int> = hidden(0)
+val self-cancel-finally-count : ref<global,int> = hidden(0)
+val staged-load-count : ref<global,int> = hidden(0)
 
 fun fake-request/request-number(request : fake-request) : int
   match request
@@ -104,6 +108,33 @@ fun fake-load(key : int) : <async,ui,exn> int
       Cons(Fake-request(id,key,complete,disposed),read-cell(requests)))
     Ok(fn() retire-fake(disposed))
   )
+
+fun cancel-before-setup() : <async,ui,exn> int
+  finally(
+    fn() write-cell(self-cancel-finally-count,
+          read-cell(self-cancel-finally-count) + 1),
+    fn() cancelation-scope(fn()
+      cancel-outstanding()
+      setup/await-noexn("self-canceled resource load",fn(_complete)
+        write-cell(self-cancel-setup-count,
+          read-cell(self-cancel-setup-count) + 1)
+        fn() ()
+      )
+    )
+  )
+
+fun self-cancel-load(_key : int) : <async,ui,exn> int
+  cancel-before-setup()
+
+fun staged-self-cancel-load(_key : int) : <async,ui,exn> int
+  val request = read-cell(staged-load-count) + 1
+  write-cell(staged-load-count,request)
+  if request == 1 then
+    await1-noexn("self-cancel seed",fn(complete) complete(100))
+  elif request == 2 then
+    cancel-before-setup()
+  else
+    await1-noexn("self-cancel recovery",fn(complete) complete(300))
 
 
 // --------------------------------------------------------------------------
@@ -355,9 +386,74 @@ fun test-owner-retirement() : <ui,exn> ()
       _ -> check(False,
         "retired owner rejects a hostile late resource completion")
     root.dispose()
-    finish()
+    test-self-cancel-resources()
   )
   enqueue-microtask(next)
+
+fun test-self-cancel-resources() : <ui,exn> ()
+  write-cell(self-cancel-setup-count,0)
+  write-cell(self-cancel-finally-count,0)
+  write-cell(staged-load-count,0)
+
+  val (empty-root,empty-value)
+      : (root<<ui>>,resource<int,int>) =
+    create-root fn(root)
+      resource(root,fn() Just(1),self-cancel-load)
+  match read-state(empty-root,empty-value)
+    Unresolved -> check(True,
+      "initial self-cancel leaves Resource Unresolved")
+    _ -> check(False,
+      "initial self-cancel leaves Resource Unresolved")
+  check(read-cell(self-cancel-setup-count) == 0,
+    "self-cancel is observed before host setup")
+  check(read-cell(self-cancel-finally-count) == 1,
+    "self-canceled loader finalizes exactly once")
+  check(generation-async-outstanding() == 0,
+    "initial self-cancel leaves no generation task")
+  empty-root.dispose()
+
+  val (root,value) : (root<<ui>>,resource<int,int>) =
+    create-root fn(root)
+      resource(root,fn() Just(2),staged-self-cancel-load)
+  expect-pending(root,value,Nothing,
+    "self-cancel previous-value fixture starts Pending")
+  enqueue-microtask(fn() stage(fn()
+    after-self-cancel-seed(root,value)
+  ))
+
+fun after-self-cancel-seed(root : root<<ui>>,
+                           value : resource<int,int>) : <ui,exn> ()
+  expect-ready(root,value,100,
+    "self-cancel previous-value fixture publishes its seed")
+  update(root){ value.refresh }
+  expect-ready(root,value,100,
+    "self-cancel restores the previous Ready value")
+  check(read-latest(root,value) == Just(100),
+    "latest survives a self-canceled refresh")
+  check(read-cell(self-cancel-setup-count) == 0,
+    "self-canceled refresh does not install host work")
+  check(read-cell(self-cancel-finally-count) == 2,
+    "both self-canceled loaders finalize once")
+  check(generation-async-outstanding() == 0,
+    "self-canceled refresh leaves no generation task")
+
+  update(root){ value.refresh }
+  expect-pending(root,value,Just(100),
+    "a request can restart after self-cancel")
+  enqueue-microtask(fn() stage(fn()
+    after-self-cancel-recovery(root,value)
+  ))
+
+fun after-self-cancel-recovery(root : root<<ui>>,
+                               value : resource<int,int>) : <ui,exn> ()
+  expect-ready(root,value,300,
+    "a request completes normally after self-cancel")
+  check(read-cell(staged-load-count) == 3,
+    "self-cancel does not wedge request metadata")
+  check(generation-async-outstanding() == 0,
+    "self-cancel recovery leaves no generation task")
+  root.dispose()
+  finish()
 
 
 pub fun main()

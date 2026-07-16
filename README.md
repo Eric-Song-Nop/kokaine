@@ -303,7 +303,9 @@ Failed(error : exception, previous : maybe<a>)
 `data.latest` returns the current or last successful value. `data.refresh`
 starts a fresh generation without discarding that value, and `data.cancel`
 retires an active request. `resource-by` accepts explicit source equality;
-equal snapshots do not restart or cancel the active loader.
+equal snapshots do not restart or cancel the active loader. Loader
+self-cancellation is terminal too: it restores the previous value (or
+`Unresolved`) during unwinding and never strands the Resource in `Pending`.
 
 ## API shape
 

@@ -475,6 +475,12 @@ cancels its awaits and runs its finalizers. A numeric generation guard remains
 at completion as defense against a host which invokes an already retired
 callback. Only the winning generation may publish `Ready` or `Failed`.
 
+`Pending` is paired with exactly one active request token. Success, failure,
+and cancellation all consume that token through the same terminal transition;
+because cancellation is final control, the canceled transition runs in the
+loader's unwind. A loader which cancels its own scope therefore restores
+`Ready(previous)` or `Unresolved` instead of leaving an unreachable `Pending`.
+
 The last successful value is retained across refresh and failure and is exposed
 by `resource.latest`. Explicit `resource.cancel` retires an active loader and
 restores `Ready(previous)` or `Unresolved`; a later unequal source change can

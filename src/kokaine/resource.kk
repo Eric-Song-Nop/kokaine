@@ -31,6 +31,11 @@ type resource-command
 type resource-input<s>
   Resource-input(source : maybe<s>, command : resource-command)
 
+type request-terminal<a>
+  Request-succeeded(value : a)
+  Request-failed(error : exception)
+  Request-canceled
+
 // The constructor is private: callers observe the one atomic state signal and
 // can only invalidate the private control signal through `refresh` or `cancel`.
 abstract value type resource<s,a>
@@ -76,6 +81,33 @@ fun canceled-state(previous : maybe<a>) : resource-state<a>
     Nothing -> Unresolved
     Just(value) -> Ready(value)
 
+fun settle-active-request(
+    state-source : signal<resource-state<a>>,
+    request-active : ref<global,bool>,
+    latest-success : ref<global,maybe<a>>,
+    terminal : request-terminal<a>) : signal-write ()
+  if !cell/read(request-active) then () else
+    cell/write(request-active,False)
+    match terminal
+      Request-succeeded(value) ->
+        cell/write(latest-success,Just(value))
+        state-source.set(Ready(value))
+      Request-failed(problem) ->
+        state-source.set(Failed(problem,cell/read(latest-success)))
+      Request-canceled ->
+        state-source.set(canceled-state(cell/read(latest-success)))
+
+fun settle-request(
+    state-source : signal<resource-state<a>>,
+    request-generation : ref<global,int>,
+    request-active : ref<global,bool>,
+    latest-success : ref<global,maybe<a>>,
+    generation : int,
+    terminal : request-terminal<a>) : signal-write ()
+  if cell/read(request-generation) != generation then () else
+    settle-active-request(
+      state-source,request-active,latest-success,terminal)
+
 
 // --------------------------------------------------------------------------
 // Generation-bound request execution
@@ -102,18 +134,28 @@ fun start-request(
     mask<signal-write>{
       dispatch(root,fn()
         run-async(root,fn()
-          val outcome = error/try(fn() load(snapshot))
-          // Cancellation is final control and never reaches this branch. The
-          // numeric guard is still mandatory for a completion which raced with
-          // a refresh/cancel before host retirement won.
-          if cell/read(request-generation) != generation then () else
-            cell/write(request-active,False)
-            match outcome
-              Ok(value) ->
-                cell/write(latest-success,Just(value))
-                state-source.set(Ready(value))
-              Error(problem) ->
-                state-source.set(Failed(problem,cell/read(latest-success)))
+          // Cancellation is final control, so terminal state publication must
+          // live in the same unwind as the loader. Normal settlement consumes
+          // `request-active` first and makes the finalizer a no-op.
+          finally(
+            fn() settle-request(
+              state-source,request-generation,request-active,latest-success,
+              generation,Request-canceled),
+            fn() {
+              val outcome = error/try(fn() load(snapshot))
+              // The numeric guard rejects a completion which raced with a
+              // refresh/cancel before host retirement won.
+              match outcome
+                Ok(value) ->
+                  settle-request(
+                    state-source,request-generation,request-active,
+                    latest-success,generation,Request-succeeded(value))
+                Error(problem) ->
+                  settle-request(
+                    state-source,request-generation,request-active,
+                    latest-success,generation,Request-failed(problem))
+            }
+          )
         )
       )
     }
@@ -129,9 +171,8 @@ fun retire-resource(
   // its commit token as a second guard for hostile host callbacks, then make
   // an escaped resource observably terminal while its root is still live.
   cell/write(request-generation,cell/read(request-generation) + 1)
-  if !cell/read(request-active) then () else
-    cell/write(request-active,False)
-    state-source.set(canceled-state(cell/read(latest-success)))
+  settle-active-request(
+    state-source,request-active,latest-success,Request-canceled)
 
 fun apply-input(
     root : root<<ui>>,
@@ -162,9 +203,8 @@ fun apply-input(
       // source invalidation. On a later turn the unchanged Cancel command is
       // merely historical, so a genuinely new source can start normally.
       if command-changed && !command.is-refresh then
-        if !cell/read(request-active) then () else
-          cell/write(request-active,False)
-          state-source.set(canceled-state(cell/read(latest-success)))
+        settle-active-request(
+          state-source,request-active,latest-success,Request-canceled)
       elif changed || (command-changed && command.is-refresh) then
         match snapshot
           Nothing ->
