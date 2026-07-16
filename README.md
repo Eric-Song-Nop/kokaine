@@ -1,9 +1,10 @@
 # Kokaine
 
 Kokaine is an experimental fine-grained UI runtime for
-[Koka](https://koka-lang.github.io/koka/doc/book.html). Signals, derivations,
-effects, batching, and ownership are expressed with Koka's algebraic effects;
-the browser layer uses an effect-handled Koka DSL instead of JSX or a virtual
+[Koka](https://koka-lang.github.io/koka/doc/book.html). Signal operations and
+the HTML vocabulary are exposed as algebraic effects; propagation resumes
+captured continuations, while continuation frames record structural lifetime.
+The browser layer uses an effect-handled Koka DSL instead of JSX or a virtual
 DOM.
 
 The implementation targets Koka 3.2.3. Its source-local continuation index,
@@ -13,10 +14,10 @@ the retained-callback ABI used to cross an asynchronous host boundary.
 
 ## Interactive report
 
-The Chinese report [代数效应如何驱动增量 UI](docs/algebraic-effects-ui-report/index.html)
+The Chinese report [代数效应与续体如何组成增量 UI](docs/algebraic-effects-ui-report/index.html)
 explains the runtime from a UI engineer's perspective. It includes executable
 continuation-trace visualizations, scheduler stepping, batching and ownership
-experiments, a React/Vue/Solid comparison, and the real Koka counter demo.
+experiments, a React/Vue/Solid comparison, and the real Koka Continuation Lab.
 
 ```sh
 make serve-report
@@ -26,52 +27,88 @@ Then open
 `http://127.0.0.1:4173/docs/algebraic-effects-ui-report/`. Run the report's
 static integrity checks with `make test-report`.
 
-## Why algebraic effects
+## Why algebraic effects and continuations
 
-Ordinary signal libraries hide a mutable dependency collector behind every
-getter. Kokaine makes the capabilities visible in inferred effect rows:
+Algebraic effects and continuations do different jobs in Kokaine. Effect
+operations state what a computation may ask for, and handlers decide how those
+operations are interpreted. The continuation captured by a tracked read states
+where incremental execution can continue. Neither role is a synonym for the
+other:
 
 | Capability     | Operation               | Handler responsibility                                                  |
 | -------------- | ----------------------- | ----------------------------------------------------------------------- |
-| `signal-read`  | `count.get`             | Validate its producer and capture the exact synchronous read suffix.    |
-| `signal-write` | `count.set(1)`          | Commit, invalidate source-indexed continuation capabilities, and flush. |
+| `signal-read`  | `count.get`             | Validate a producer and interpret the read as tracked or sampled.        |
+| `signal-write` | `count.set(1)`          | Apply equality, commit, invalidate, batch, and request settling.         |
 | `html<e>`      | `text`, `div`, `region` | Collect emitted nodes into a backend-neutral `view<e>`.                  |
+
+The tracked-read handler installed by `reify-trace` is where the two ideas meet.
+It handles the `signal-read` operation with `raw ctl`, reifies the exact
+synchronous suffix after that `get`, resumes it immediately with the current
+value, and indexes the resulting capability at the source. A later unequal
+write queues that suffix. It does not call a saved component or calculator
+closure.
 
 This split has practical consequences. A memo calculator accepts
 `signal-read` but not `signal-write`; an effect separates its tracked function
 from its untracked apply function; `untrack` is a nested override handler; and
-`batch` is a scoped interpretation of write operations. Runtime containment
-also rejects a write handler smuggled into a derivation, so the static promise
-survives higher-order code.
+`batch` is a scoped interpretation of write operations.
+
+An effect row describes operations that remain unhandled at a function
+boundary. It does not prove that no operation was performed and handled inside
+that function. Consequently, an effect-typed API is valuable capability
+documentation and composition, but it is not by itself evidence of a
+continuation-native reactive runtime. Kokaine relies on runtime invariants and
+mutation tests for that stronger claim; it makes no separate "write-handler
+smuggling" guarantee.
 
 ## Current guarantees
 
-- A tracked synchronous `get` uses `raw ctl` to capture the continuation after
-  that exact read. Invalidation resumes that suffix; code before the read is not
-  replayed.
+- Inside a calculator or binding running under `reify-trace`, each synchronous
+  `Track-read` uses `raw ctl` to capture the continuation after that exact read.
+  Invalidation resumes that suffix; code before the read is not replayed.
+  Sampled reads and ordinary reads handled by `dispatch` return the current cell
+  directly and leave no trace.
+- Every such tracked read occurrence creates its own trace node, including
+  repeated reads of the same source. Later reads are nested beneath earlier
+  reads. If one write invalidates several nodes in that chain, frontier
+  scheduling advances the earliest runnable ancestor and lets replacement
+  retire or supersede its old descendants; there is no read de-duplication token
+  or dirty observer.
 - Each source indexes rank-2 packages containing the actual execution plane,
   target trace, and owning read trace. There are no subscriber wake closures,
   retained calculation actions, or old-style Observer dependency graph.
+- This index, parent gates, and child traces are graph-shaped runtime data. The
+  precise claim is **no separate Observer dependency graph**, not "no graph at
+  all."
 - Scheduler tickets contain either an actual trace resumption or a one-shot
   bootstrap scope. The bootstrap slot is cleared before its initial calculation
   runs; a producer never retains `calculate` as a recovery fallback.
 - `Capture-pending` and `Capture-running` are lifecycle states of resumptions,
   not dirty flags paired with a separately retained action. A write while a K
   is running marks that same capability for a later turn.
+- Resume capabilities are not modeled as affine or one-shot. A live trace can
+  be invalidated and resumed again, and a failed replacement attempt keeps the
+  same K pending for retry. The bootstrap closure is deliberately one-shot; an
+  initial bootstrap failure retires its scope instead of replaying that closure.
+- The scheduler admits only the current continuation frontier: a pending trace
+  is runnable when no ancestor is pending or running. Blocked or retired tickets
+  may remain in a queue temporarily and are deferred or skipped by state.
 - Pure derivations run on `plane<total>`; user effects run on `plane<e>`. A
   synchronous memo read can therefore settle only the required producer chain
   without erasing an ambient user effect row or draining unrelated work.
-- Stateful `memo(previous)` values retain an entry continuation that receives
-  the latest successfully committed value. It does not subscribe the memo to
-  its own output source.
+- `derive` is stateless: its captured read suffix calculates from current
+  inputs. `memo(previous)` adds a separate state-entry continuation that
+  injects the latest successfully committed output without subscribing to its
+  own source. Both publish through source equality before downstream work is
+  invalidated.
 - Unequal commits advance the source version and invalidate its indexed
   continuations. Equality cuts propagation before downstream work is scheduled.
 - Replacement generations are built as drafts. Failure or abortive final
   control retires unpublished continuations and structural children while the
   committed source value and pending retry K remain explicit.
-- Continuation frames own nested effects, derivations, cleanup callbacks, DOM
-  listeners, and regions. Replacing a generation retires that complete extent;
-  root disposal is exhaustive and idempotent.
+- Continuation frames own nested effects, derivations, and cleanup registrations
+  for DOM listeners and regions. Replacing a generation retires that complete
+  extent; root disposal is exhaustive and idempotent.
 - Nested batches delay settling while making newly committed source values
   immediately readable. Host re-entry is also one atomic batched turn.
 - Browser listeners capture a typed `reentry<e>` containing their registering
@@ -95,7 +132,7 @@ make test-browser
 make test-wasm
 ```
 
-To explore the responsive counter instrument:
+To explore the responsive Continuation Lab:
 
 ```sh
 make serve
@@ -103,6 +140,27 @@ make serve
 
 Then open <http://127.0.0.1:4173/examples/counter/>. `make build-counter`
 emits the `jsweb` ES modules into the ignored `dist/` directory.
+
+The lab is intentionally a multi-file application rather than one oversized
+demo component:
+
+| Module | What it demonstrates |
+| --- | --- |
+| `model.kk` | Sources, dynamic `derive`, custom equality, `memo(previous)`, `untrack`, `signal-always`, and a tracked/apply effect sink. |
+| `actions.kk` | Ordinary writes, explicit batches, and callback-created effects and cleanups. |
+| `controls.kk` | Typed events plus live value, checked, and disabled DOM properties. |
+| `meter.kk` | Fine-grained live text/attributes and a visible `source -> captured suffix -> DOM effect` trace. |
+| `probe.kk` | Dynamic regions, host re-entry, generation ownership, and exact retirement. |
+| `app.kk` | Static page composition across the feature modules. |
+
+`examples/counter.kk` is only the browser entry point: it creates the root and
+model, composes the page, and mounts it. In the lab, changing the inactive
+channel demonstrates dependency pruning and switching the selector replaces
+the dynamic branch; crossing zero shows custom equality and state entry;
+editing the operator separates tracked reads from `untrack`; repeatedly
+publishing heartbeat `0` demonstrates `signal-always`; and retiring the probe
+region removes its listener, child effect, and cleanup as one
+continuation-owned generation.
 
 `make test-wasm` additionally requires Emscripten and Node. It compiles the
 isolated `wasmweb` proof and verifies two asynchronous fake-DOM events.
@@ -119,7 +177,7 @@ import kokaine/dom
 pub fun main()
   val (root,(count,doubled)) = create-root fn(root)
     val count = signal(root,0)
-    val doubled = memo(root,0,fn(_) count.get * 2)
+    val doubled = derive(root,0,fn() count.get * 2)
     (count,doubled)
 
   val page = view fn()
@@ -138,9 +196,12 @@ pub fun main()
 ```
 
 The `view fn() ...` block is normal Koka syntax. Tag helpers delimit nested
-`html` handlers, while `text-live` installs a fine-grained binding when the
-view is mounted. Static structure is created once; only the dependent text
-node changes after a click.
+`html` handlers. This synchronous builder algebraic effect produces a `view`
+without retaining its continuation as the propagation engine. When mounted,
+`text-live`, live attributes/properties, and `region` become
+continuation-backed effects. Static
+structure is created once; each live binding owns the continuation-backed
+effect targeting its node, while mount and region scopes own DOM ranges.
 
 For deterministic snapshots or server output, replace the DOM import with
 `kokaine/ssr` and call `render(root,page)`.
@@ -150,12 +211,13 @@ For deterministic snapshots or server output, replace the DOM import with
 - `create-root`, `root.dispose`, `update`, `sample`, and `dispatch` delimit
   root-scoped reactive capabilities.
 - `signal`, `signal-by`, and `signal-always` select equality behavior.
-- `memo`, `memo-by`, and `memo-always` cache derived values and receive the
-  previous successful value.
+- `derive`, `derive-by`, and `derive-always` cache stateless derived values.
+- `memo`, `memo-by`, and `memo-always` add a state entry that receives the
+  previous successfully committed value.
 - `create-effect(root, track, apply)` tracks only `track`; reads performed by
   `apply` do not silently become dependencies.
-- `on-cleanup` attaches work to the current owner. A returned disposer removes
-  the complete owned subtree.
+- `on-cleanup` attaches work to the current owner. Disposers returned by
+  `create-effect` remove the complete owned subtree.
 - `capture-reentry` and `reenter` let a host callback re-enter the exact
   continuation generation that registered it. They restore Kokaine's reactive
   structure, not arbitrary lexical effect handlers.
@@ -174,6 +236,13 @@ runtime with source-local indexes of actual continuation capabilities.
 ## Project layout
 
 ```text
+examples/counter.kk                         thin browser entry point
+examples/counter/model.kk                   sources and derived state
+examples/counter/actions.kk                 mutations, batches, child effects
+examples/counter/controls.kk                source controls and live properties
+examples/counter/meter.kk                   live projections and trace ledger
+examples/counter/probe.kk                   dynamic region and re-entry lifetime
+examples/counter/app.kk                     page composition
 src/kokaine/reactive.kk                    opaque public facade
 src/kokaine/reactive/effects.kk            signal read/write effect operations
 src/kokaine/reactive/internal/model.kk     traces, planes, scopes, and capabilities
@@ -206,8 +275,8 @@ support/wasmweb-proof/                     retained-callback Emscripten ABI proo
 
 Kokaine does not yet provide hydration, keyed list reconciliation, suspense,
 or a complete WASM DOM renderer. The current `region` primitive intentionally
-replaces its owned range; it is the correct building block for conditional
-structure, not an optimized list diff.
+replaces the contents between persistent marker nodes; it is the correct
+building block for conditional structure, not an optimized list diff.
 
 Browser event delivery still begins with an ordinary host callback; it does not
 resume a parked event continuation. `reentry<e>` is

@@ -4,7 +4,9 @@
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const tick = (duration = 220) => new Promise((resolve) => window.setTimeout(resolve, reducedMotion ? 12 : duration));
+  const tick = (duration = 220) => new Promise((resolve) => {
+    window.setTimeout(resolve, reducedMotion ? 12 : duration);
+  });
 
   function setText(selector, value, root = document) {
     const element = $(selector, root);
@@ -12,15 +14,12 @@
   }
 
   function setButtonsDisabled(buttons, disabled) {
-    buttons.forEach((button) => {
+    buttons.filter(Boolean).forEach((button) => {
       button.disabled = disabled;
     });
   }
 
-  // -----------------------------------------------------------------------
-  // Reading progress, current section, and mobile table of contents
-  // -----------------------------------------------------------------------
-
+  // Reading progress, current section, and mobile table of contents.
   const progress = $("#reading-progress");
   const toc = $("#toc");
   const tocToggle = $("#toc-toggle");
@@ -67,19 +66,10 @@
     });
   });
 
-  // -----------------------------------------------------------------------
-  // Live projection of source-local continuation links
-  // -----------------------------------------------------------------------
-
-  const flow = {
-    count: 2,
-    cycle: 0,
-    running: false,
-    links: [],
-  };
+  // Semantic simulation: source-local capture index and exact suffix work.
+  const flow = { count: 2, version: 0, cycle: 0, running: false, links: [] };
   const flowStage = $("#flow-graph");
   const flowButtons = [$("#flow-plus"), $("#flow-batch"), $("#flow-reset")];
-
   const flowConnections = [
     ["node-count", "node-square", "count-square"],
     ["node-count", "node-parity", "count-parity"],
@@ -99,7 +89,6 @@
       edge.setAttribute("aria-hidden", "true");
       flowStage.appendChild(edge);
     }
-
     const stageRect = flowStage.getBoundingClientRect();
     const fromRect = from.getBoundingClientRect();
     const toRect = to.getBoundingClientRect();
@@ -107,13 +96,10 @@
     const startY = fromRect.top - stageRect.top + fromRect.height / 2;
     const endX = toRect.left - stageRect.left;
     const endY = toRect.top - stageRect.top + toRect.height / 2;
-    const distance = Math.hypot(endX - startX, endY - startY);
-    const angle = Math.atan2(endY - startY, endX - startX) * (180 / Math.PI);
-
     edge.style.left = `${startX}px`;
     edge.style.top = `${startY}px`;
-    edge.style.width = `${distance}px`;
-    edge.style.transform = `rotate(${angle}deg)`;
+    edge.style.width = `${Math.hypot(endX - startX, endY - startY)}px`;
+    edge.style.transform = `rotate(${Math.atan2(endY - startY, endX - startX) * (180 / Math.PI)}deg)`;
     return edge;
   }
 
@@ -124,28 +110,14 @@
     }));
   }
 
-  function flowLink(name) {
-    return flow.links.find((link) => link.name === name)?.element;
-  }
-
-  function flowNode(name) {
-    return $(`[data-node="${name}"]`, flowStage);
-  }
-
   function clearFlowActivity() {
     $$(".is-active", flowStage).forEach((element) => element.classList.remove("is-active"));
   }
 
   function activateFlow(nodes, links) {
     clearFlowActivity();
-    nodes.forEach((name) => flowNode(name)?.classList.add("is-active"));
-    links.forEach((name) => flowLink(name)?.classList.add("is-active"));
-  }
-
-  function renderFlowValues() {
-    setText("#flow-count", flow.count);
-    setText("#flow-square", flow.count * flow.count);
-    setText("#flow-parity", flow.count % 2 === 0 ? "偶数" : "奇数");
+    nodes.forEach((name) => $(`[data-node="${name}"]`, flowStage)?.classList.add("is-active"));
+    links.forEach((name) => flow.links.find((link) => link.name === name)?.element.classList.add("is-active"));
   }
 
   function renderTrace(items) {
@@ -164,7 +136,7 @@
     if (flow.running) return;
     const next = reset ? 2 : flow.count + writes;
     if (next === flow.count) {
-      renderTrace(["新旧值相等，写入处理器直接停止；没有节点需要排队。"]);
+      renderTrace(["新旧值相等：write handler 不提交 cell、不增加 version，也不 notify source-local captures。"]);
       return;
     }
 
@@ -174,28 +146,27 @@
     const previous = flow.count;
     const writeCount = reset ? 1 : writes;
     const parityChanged = previous % 2 !== next % 2;
+    flow.count = next;
+    flow.version += writeCount;
     setText("#flow-cycle", `cycle ${String(flow.cycle).padStart(2, "0")}`);
     setText("#flow-write-count", writeCount);
     setText("#flow-compute-count", 0);
     setText("#flow-dom-count", 0);
-
-    activateFlow(["count"], []);
-    flow.count = next;
     setText("#flow-count", flow.count);
+
     const firstLine = writeCount > 1
-      ? `批次内完成 ${writeCount} 次写入（${previous} → ${next}）；离开批次时，每个直接订阅在 count 本地的 token 只触发一次。`
-      : `count 从 ${previous} 写为 ${next}；只有直接订阅在它本地的 one-shot generation tokens 被触发。`;
+      ? `batch 内逐次提交 ${writeCount} 次 cell/version/notify（${previous} → ${next}，模拟 version=${flow.version}）；第一次 notify 已把 Live captures 变为 Pending，后续 notify 不复制同一 resumption。`
+      : `count 从 ${previous} 提交为 ${next}（模拟 version=${flow.version}）；source-local index 把对应 Live captures 转为 Pending，并排入 Resume-work(trace)。`;
+    activateFlow(["count"], []);
     renderTrace([firstLine]);
     await tick();
 
+    const deriveLine = `pure plane 先恢复 square 与 parity 的精确 suffix；每次恢复都在 Draft frame 中捕获新的 child trace，prefix 不重放。`;
     activateFlow(["count", "square", "parity"], ["count-square", "count-parity"]);
     setText("#flow-square", flow.count * flow.count);
     setText("#flow-parity", flow.count % 2 === 0 ? "偶数" : "奇数");
     setText("#flow-compute-count", 2);
-    renderTrace([
-      firstLine,
-      `derivation 续体先恢复：平方得到 ${flow.count * flow.count}，奇偶得到${flow.count % 2 === 0 ? "偶数" : "奇数"}。`,
-    ]);
+    renderTrace([firstLine, deriveLine]);
     await tick();
 
     const domNodes = ["dom-number", "dom-square"];
@@ -208,11 +179,11 @@
     setText("#flow-dom-count", parityChanged ? 3 : 2);
     renderTrace([
       firstLine,
-      `derivation 续体先恢复：平方得到 ${flow.count * flow.count}，奇偶得到${flow.count % 2 === 0 ? "偶数" : "奇数"}。`,
+      deriveLine,
       parityChanged
-        ? "memo 提交了不相等的新值，版本递增并触发下游 token；页面阶段更新 3 个目标。"
-        : "奇偶 memo 提交时值相等，版本与下游 checkpoint 均不变；页面阶段只改数字和平方文字。",
-      "刷新完成；导航、侧栏和其他 DOM 从未进入这轮工作。",
+        ? "square 与 parity 都发布不相等结果；输出 source notify 对应 effect-plane captures。"
+        : "parity 的 equality 截断 publication：它的输出 version 不变，也不唤醒 parity 后面的 UI suffix。",
+      `effect plane 恢复此固定教学场景中的 ${parityChanged ? 3 : 2} 段 UI suffix；这些数字是模拟结果，不是框架对任意应用的固定保证。`,
     ]);
     await tick(320);
     clearFlowActivity();
@@ -223,14 +194,10 @@
   $("#flow-plus").addEventListener("click", () => runFlow(1));
   $("#flow-batch").addEventListener("click", () => runFlow(3));
   $("#flow-reset").addEventListener("click", () => runFlow(0, true));
-
   window.addEventListener("resize", redrawFlowTrace, { passive: true });
   window.requestAnimationFrame(redrawFlowTrace);
 
-  // -----------------------------------------------------------------------
-  // Scheduler stepper: one-shot wake tokens and memo commit pruning
-  // -----------------------------------------------------------------------
-
+  // Semantic simulation: frontier, nested effect captures, and stale tickets.
   const scheduler = {
     count: 2,
     parity: "偶",
@@ -240,7 +207,6 @@
     timer: null,
     auto: false,
   };
-
   const schedulerNodes = {
     count: $("#diamond-count"),
     parity: $("#diamond-parity"),
@@ -248,10 +214,10 @@
     summary: $("#diamond-summary"),
   };
 
-  function cleanSnapshot(message = "选择 +1 或 +2，创建一次变化。") {
+  function liveSnapshot(message = "选择 +1 或 +2，创建一次变化。") {
     return {
       values: { count: scheduler.count, parity: scheduler.parity, double: scheduler.double },
-      states: { count: "clean", parity: "clean", double: "clean", summary: "clean" },
+      states: { count: "source", parity: "live", double: "live", summary: "live" },
       queues: { derive: [], effect: [] },
       message,
       runs: 0,
@@ -264,64 +230,71 @@
     const nextCount = oldCount + delta;
     const oldParity = scheduler.parity;
     const nextParity = nextCount % 2 === 0 ? "偶" : "奇";
+    const oldDouble = scheduler.double;
     const nextDouble = nextCount * 2;
     const paritySame = oldParity === nextParity;
+    const parityEffect = paritySame ? [] : ["Resume(summary@parity)"];
+    const bothEffectTickets = paritySame
+      ? ["Resume(summary@double)"]
+      : ["Resume(summary@double · deferred)", "Resume(summary@parity)"];
 
     return [
       {
-        values: { count: nextCount, parity: oldParity, double: scheduler.double },
-        states: { count: "running", parity: "clean", double: "clean", summary: "clean" },
-        queues: { derive: [], effect: [] },
-        message: `写入立即把 count 从 ${oldCount} 改为 ${nextCount}，接下来遍历 count 本地的 continuation tokens。`,
+        values: { count: nextCount, parity: oldParity, double: oldDouble },
+        states: { count: "source", parity: "pending", double: "pending", summary: "live" },
+        queues: { derive: ["Resume(parity K)", "Resume(double K)"], effect: [] },
+        message: `count ${oldCount} → ${nextCount}：两个 pure captures 从 Live 变 Pending；队列保存 trace，不保存 producer action。`,
         runs: 0,
         pruned: 0,
       },
       {
-        values: { count: nextCount, parity: oldParity, double: scheduler.double },
-        states: { count: "clean", parity: "dirty", double: "dirty", summary: "clean" },
-        queues: { derive: ["奇偶", "两倍"], effect: [] },
-        message: "count 本地的 token 只把直接 producer——奇偶、两倍——标脏并排入 derivation 队列；汇总 UI 没有被提前标脏，仍保持休眠。",
-        runs: 0,
+        values: { count: nextCount, parity: oldParity, double: oldDouble },
+        states: { count: "source", parity: "running", double: "pending", summary: "live" },
+        queues: { derive: ["Resume(double K)"], effect: [] },
+        message: "frontier 选中没有 Pending/Running ancestor 的 parity K：capability 进入 Running，新后缀与结构孩子先进入 Draft frame。",
+        runs: 1,
         pruned: 0,
       },
       {
-        values: { count: nextCount, parity: nextParity, double: scheduler.double },
-        states: {
-          count: "clean",
-          parity: paritySame ? "pruned" : "clean",
-          double: "dirty",
-          summary: paritySame ? "clean" : "queued",
-        },
-        queues: { derive: ["两倍"], effect: paritySame ? [] : ["汇总 UI"] },
+        values: { count: nextCount, parity: nextParity, double: oldDouble },
+        states: { count: "source", parity: "live", double: "pending", summary: paritySame ? "live" : "pending" },
+        queues: { derive: ["Resume(double K)"], effect: parityEffect },
         message: paritySame
-          ? `奇偶续体恢复后仍得到“${nextParity}”。memo 相等提交不递增版本，汇总 UI 的 checkpoint 仍有效，续体保持休眠。`
-          : `奇偶从“${oldParity}”提交为“${nextParity}”。版本递增后触发汇总 UI 的 one-shot token，把它排入 effect 队列。`,
+          ? `parity 仍为“${nextParity}”：Draft trace 可转 Live，但 output source equality 截断发布，不产生 effect ticket。`
+          : `parity 发布“${nextParity}”：summary@parity capture 进入 Pending。它的 K 包含后续 double.get，因此是 UI trace 的外层 capture。`,
         runs: 1,
         pruned: paritySame ? 1 : 0,
       },
       {
         values: { count: nextCount, parity: nextParity, double: nextDouble },
-        states: { count: "clean", parity: "clean", double: "clean", summary: "queued" },
-        queues: { derive: [], effect: ["汇总 UI"] },
-        message: `两倍从 ${scheduler.double} 提交为 ${nextDouble}，版本递增。它也触发同一个 UI token，但 fired latch 保证只排队一次；derivation 队列清空后才进入 effect 阶段。`,
+        states: { count: "source", parity: "live", double: "live", summary: "pending" },
+        queues: { derive: [], effect: bothEffectTickets },
+        message: paritySame
+          ? `double 发布 ${nextDouble}，只让更窄的 summary@double suffix 进入 Pending；恢复它无需重读 parity。`
+          : `double 发布 ${nextDouble}，旧 summary@double child 也有一张 ticket，但它位于 Pending 外层 capture 下，frontier 暂时 deferred。`,
         runs: 2,
         pruned: paritySame ? 1 : 0,
       },
       {
         values: { count: nextCount, parity: nextParity, double: nextDouble },
-        states: { count: "clean", parity: "clean", double: "clean", summary: "running" },
-        queues: { derive: [], effect: [] },
-        message: `汇总 UI 的续体恢复；读取处理器递归验证 producer checkpoints，并在稳定点捕获值与版本：奇偶=${nextParity}、两倍=${nextDouble}。`,
+        states: { count: "source", parity: "live", double: "live", summary: "running" },
+        queues: {
+          derive: [],
+          effect: paritySame ? [] : ["stale: summary@double-old"],
+        },
+        message: paritySame
+          ? "frontier 直接恢复 summary@double K：只执行 double.get 后的 UI suffix；更早的 parity read 不重放。"
+          : "frontier 先恢复外层 summary@parity K，重新执行后续 double.get 并建立新 child；旧 child 变 Dead，旧 ticket 随即 stale。",
         runs: 3,
         pruned: paritySame ? 1 : 0,
       },
       {
         values: { count: nextCount, parity: nextParity, double: nextDouble },
-        states: { count: "clean", parity: "clean", double: "clean", summary: "clean" },
+        states: { count: "source", parity: "live", double: "live", summary: "live" },
         queues: { derive: [], effect: [] },
         message: paritySame
-          ? "刷新完成。相等判断截断了一条无效变化，同时另一条真实变化仍正确抵达页面。"
-          : "刷新完成。所有中间结果先稳定，页面动作最后运行一次。",
+          ? "新 UI suffix 发布成功并转 Live；effect plane 回到 frontier。"
+          : "取工作时丢弃 Dead capture 对应的 stale ticket；没有 Observer 去重 latch，只有嵌套 K、ancestor frontier 与 capability state。",
         runs: 3,
         pruned: paritySame ? 1 : 0,
         commit: { count: nextCount, parity: nextParity, double: nextDouble },
@@ -330,20 +303,12 @@
   }
 
   const stateLabels = {
-    clean: "干净",
-    queued: "已排队",
-    dirty: "脏，待续跑",
-    running: "正在处理",
-    pruned: "相等，已截断",
-  };
-
-  // Existing CSS class names remain presentation-only; runtime states are latches.
-  const stateClasses = {
-    clean: "clean",
-    queued: "pending",
-    dirty: "stale",
-    running: "running",
-    pruned: "pruned",
+    source: "cell / version",
+    draft: "Draft",
+    live: "Live",
+    pending: "Pending",
+    running: "Running",
+    dead: "Dead",
   };
 
   function renderQueue(selector, items) {
@@ -366,12 +331,12 @@
   function renderSchedulerStep(step) {
     Object.entries(schedulerNodes).forEach(([name, node]) => {
       const state = step.states[name];
-      node.className = `diamond-node is-${stateClasses[state]}`;
+      node.className = `diamond-node is-${state}`;
       $("em", node).textContent = stateLabels[state];
     });
-    $("#diamond-count strong span").textContent = step.values.count;
-    $("#diamond-parity strong span").textContent = step.values.parity;
-    $("#diamond-double strong span").textContent = step.values.double;
+    setText("#diamond-count strong span", step.values.count);
+    setText("#diamond-parity strong span", step.values.parity);
+    setText("#diamond-double strong span", step.values.double);
     setText("#scheduler-message", step.message);
     setText("#scheduler-progress", scheduler.steps.length ? `${scheduler.index + 1} / ${scheduler.steps.length}` : "0 / 0");
     setText("#scheduler-runs", step.runs);
@@ -390,19 +355,14 @@
   }
 
   function schedulerNext() {
-    if (scheduler.steps.length === 0) return;
-    if (scheduler.index >= scheduler.steps.length - 1) {
+    if (scheduler.steps.length === 0 || scheduler.index >= scheduler.steps.length - 1) {
       stopSchedulerAuto();
       return;
     }
     scheduler.index += 1;
     const step = scheduler.steps[scheduler.index];
     renderSchedulerStep(step);
-    if (step.commit) {
-      scheduler.count = step.commit.count;
-      scheduler.parity = step.commit.parity;
-      scheduler.double = step.commit.double;
-    }
+    if (step.commit) Object.assign(scheduler, step.commit);
     if (scheduler.auto) scheduler.timer = window.setTimeout(schedulerNext, reducedMotion ? 90 : 900);
   }
 
@@ -433,78 +393,61 @@
   });
   $("#scheduler-reset").addEventListener("click", () => {
     stopSchedulerAuto();
-    scheduler.count = 2;
-    scheduler.parity = "偶";
-    scheduler.double = 4;
-    scheduler.steps = [];
-    scheduler.index = -1;
-    renderSchedulerStep(cleanSnapshot());
+    Object.assign(scheduler, { count: 2, parity: "偶", double: 4, steps: [], index: -1 });
+    renderSchedulerStep(liveSnapshot());
   });
 
-  // -----------------------------------------------------------------------
-  // Batch comparison
-  // -----------------------------------------------------------------------
-
+  // Batch comparison. Counts belong only to this fixed semantic scenario.
   const batchButtons = $$("[data-writes]", $("#batch-lab"));
 
-  function createTimelineItem(label, className) {
+  function createTimelineItem(label) {
     const li = document.createElement("li");
     li.textContent = label;
-    if (className) li.className = className;
     return li;
   }
 
   function setBar(name, value, maximum) {
-    const bar = $(`[data-bar="${name}"]`);
-    const label = $(`[data-value="${name}"]`);
-    bar.style.width = `${Math.max(8, (value / maximum) * 100)}%`;
-    label.textContent = value;
+    $(`[data-bar="${name}"]`).style.width = `${Math.max(8, (value / maximum) * 100)}%`;
+    $(`[data-value="${name}"]`).textContent = value;
   }
 
   function renderBatch(writes) {
-    batchButtons.forEach((button) => button.classList.toggle("is-active", Number(button.dataset.writes) === writes));
-    const naive = { write: writes, compute: writes * 2, dom: writes * 3 };
+    batchButtons.forEach((button) => {
+      button.classList.toggle("is-active", Number(button.dataset.writes) === writes);
+    });
+    const immediate = { write: writes, compute: writes * 2, dom: writes * 3 };
     const batched = { write: writes, compute: 2, dom: 3 };
-    setBar("naive-write", naive.write, naive.write);
-    setBar("batch-write", batched.write, naive.write);
-    setBar("naive-compute", naive.compute, naive.compute);
-    setBar("batch-compute", batched.compute, naive.compute);
-    setBar("naive-dom", naive.dom, naive.dom);
-    setBar("batch-dom", batched.dom, naive.dom);
+    setBar("naive-write", immediate.write, immediate.write);
+    setBar("batch-write", batched.write, immediate.write);
+    setBar("naive-compute", immediate.compute, immediate.compute);
+    setBar("batch-compute", batched.compute, immediate.compute);
+    setBar("naive-dom", immediate.dom, immediate.dom);
+    setBar("batch-dom", batched.dom, immediate.dom);
 
-    const naiveTimeline = $("#naive-timeline");
+    const immediateTimeline = $("#naive-timeline");
     const batchTimeline = $("#batch-timeline");
-    naiveTimeline.replaceChildren();
+    immediateTimeline.replaceChildren();
     batchTimeline.replaceChildren();
     for (let index = 0; index < writes; index += 1) {
-      naiveTimeline.append(
-        createTimelineItem("写"),
-        createTimelineItem("算"),
-        createTimelineItem("DOM"),
-      );
-      batchTimeline.append(createTimelineItem("写"));
+      immediateTimeline.append(createTimelineItem("写/notify"), createTimelineItem("settle"), createTimelineItem("publish"));
+      batchTimeline.append(createTimelineItem("写/notify"));
     }
-    batchTimeline.append(createTimelineItem("算"), createTimelineItem("DOM"));
-
+    batchTimeline.append(createTimelineItem("settle"), createTimelineItem("publish"));
     setText(
       "#batch-result",
       writes === 1
-        ? "写 1 次时，两种方式工作量相同。"
-        : `写 ${writes} 次时，batch 仍只安排 2 个中间计算和 3 个页面动作；示意工作量从 ${naive.compute + naive.dom} 降到 ${batched.compute + batched.dom}。`,
+        ? "在这条固定模拟路径中，写 1 次时两边相同。"
+        : `在这条固定模拟路径中，${writes} 次 write/version/notify 都发生；batch 只把 settling 延后到最外层边界。图中恢复与 DOM 数不是通用性能保证。`,
     );
   }
 
-  batchButtons.forEach((button) => button.addEventListener("click", () => renderBatch(Number(button.dataset.writes))));
+  batchButtons.forEach((button) => {
+    button.addEventListener("click", () => renderBatch(Number(button.dataset.writes)));
+  });
   renderBatch(1);
 
-  // -----------------------------------------------------------------------
-  // Dynamic source-local subscriptions
-  // -----------------------------------------------------------------------
-
-  const dynamic = {
-    mode: "name",
-    renders: 1,
-  };
+  // Dynamic nested trace simulation.
+  const dynamic = { mode: "name", renders: 1 };
   const modeName = $("#mode-name");
   const modeCount = $("#mode-count");
   const dynamicName = $("#dynamic-name");
@@ -519,7 +462,7 @@
   function renderDynamic(reason, didRun = true) {
     if (didRun) dynamic.renders += 1;
     setText("#dynamic-output", currentDynamicOutput());
-    setText("#dynamic-render-count", `页面动作运行 ${dynamic.renders} 次`);
+    setText("#dynamic-render-count", `页面 suffix 运行 ${dynamic.renders} 次`);
     modeName.classList.toggle("is-active", dynamic.mode === "name");
     modeCount.classList.toggle("is-active", dynamic.mode === "count");
     $("#dynamic-name-node").classList.toggle("is-muted", dynamic.mode !== "name");
@@ -531,37 +474,32 @@
 
   function switchDynamicMode(mode) {
     if (mode === dynamic.mode) return;
-    const oldSource = dynamic.mode === "name" ? "name" : "count";
-    const newSource = mode === "name" ? "name" : "count";
+    const oldSource = dynamic.mode;
     dynamic.mode = mode;
-    renderDynamic(`旧 generation token 已取消；新 token 按本轮读取订阅 mode 与 ${newSource}，不再留在 ${oldSource}。`);
+    renderDynamic(`恢复外层 Trace-read(mode) 的 K；旧 ${oldSource} child 变 Dead，新 Draft 捕获 Trace-read(${mode})，发布后整条 trace 转 Live。`);
   }
 
   modeName.addEventListener("click", () => switchDynamicMode("name"));
   modeCount.addEventListener("click", () => switchDynamicMode("count"));
   dynamicName.addEventListener("input", () => {
     renderDynamic(
-      dynamic.mode === "name" ? "当前 token 订阅了 name：标题页面动作已运行。" : "当前 token 没有订阅 name：值变了，但标题没有运行。",
+      dynamic.mode === "name"
+        ? "name 的窄 suffix 被恢复；更早的 mode.get 不重放。"
+        : "name 没有属于当前 Live generation 的 capture；值改变但页面 suffix 不运行。",
       dynamic.mode === "name",
     );
   });
   dynamicCount.addEventListener("input", () => {
     renderDynamic(
-      dynamic.mode === "count" ? "当前 token 订阅了 count：标题页面动作已运行。" : "当前 token 没有订阅 count：值变了，但标题没有运行。",
+      dynamic.mode === "count"
+        ? "count 的窄 suffix 被恢复；更早的 mode.get 不重放。"
+        : "count 没有属于当前 Live generation 的 capture；值改变但页面 suffix 不运行。",
       dynamic.mode === "count",
     );
   });
 
-  // -----------------------------------------------------------------------
-  // Ownership and cleanup
-  // -----------------------------------------------------------------------
-
-  const ownership = {
-    mounted: true,
-    branch: "A",
-    busy: false,
-    cleanups: 0,
-  };
+  // Structural ownership and draft publication simulation.
+  const ownership = { mounted: true, branch: "A", busy: false, cleanups: 0 };
   const ownershipButtons = [$("#ownership-toggle"), $("#ownership-unmount"), $("#ownership-reset")];
 
   function ownerNodes(names) {
@@ -586,17 +524,13 @@
       return;
     }
     if (kind === "unmount" && !ownership.mounted) {
-      writeCleanupLog(["根已经卸载；重复 dispose 是安全的，不再做任何工作。"]);
+      writeCleanupLog(["scope 已经 Dead；重复 disposer 不再做结构工作。"]);
       return;
     }
-
     ownership.busy = true;
     setButtonsDisabled(ownershipButtons, true);
-    const targets = kind === "toggle"
-      ? ownerNodes(["detail"])
-      : kind === "unmount"
-        ? ownerNodes(["root", "card", "text", "detail", "listener"])
-        : ownerNodes(["root", "card", "text", "detail", "listener"]);
+    const allNames = ["root", "card", "text", "detail", "listener"];
+    const targets = kind === "toggle" ? ownerNodes(["detail"]) : ownerNodes(allNames);
 
     if (kind === "reset") {
       targets.forEach((node) => {
@@ -606,7 +540,7 @@
       ownership.mounted = true;
       ownership.branch = "A";
       setText("#owner-detail-label", "详情 A");
-      writeCleanupLog(["创建新的所有权树。", "文字绑定、详情区域与点击监听重新挂到资料卡下。"]);
+      writeCleanupLog(["新的 mount bootstrap scope 启动。", "bootstrap closure 只消费一次；成功后 trace 与 frame 变 Live。"]);
       await tick(360);
       targets.forEach((node) => node.classList.remove("is-new"));
       ownership.busy = false;
@@ -616,8 +550,8 @@
 
     targets.forEach((node) => node.classList.add("is-disposing"));
     writeCleanupLog([
-      `阶段 1：先把${kind === "toggle" ? "旧详情分支" : "整棵卡片树"}标为已销毁。`,
-      "从刷新队列移除，并取消每个 generation token 的 source-local links。",
+      kind === "toggle" ? "replacement K 进入 Running，并建立新 Draft branch。" : "disposer 先把完整结构子树标记为 Dead。",
+      "旧 capture 不再 runnable；队列中的旧票据由 frontier 视为 stale。",
     ]);
     await tick(420);
     targets.forEach((node) => {
@@ -628,9 +562,9 @@
     if (kind === "toggle") {
       ownership.cleanups += 1;
       writeCleanupLog([
-        "阶段 1：旧详情已封锁，旧 token 与本地 links 已取消。",
-        "阶段 2：移除旧详情的 DOM 范围。",
-        `cleanup #${ownership.cleanups} 完成，准备创建新分支。`,
+        "旧 generation 的 DOM range、listener 与 child effects 已 finalise。",
+        `cleanup #${ownership.cleanups} 完成；新 Draft 尚未对 source 可见。`,
+        "计算与 publication 成功后，Draft 才变 Live。",
       ]);
       await tick(300);
       ownership.branch = ownership.branch === "A" ? "B" : "A";
@@ -639,9 +573,8 @@
       detail.classList.add("is-new");
       setText("#owner-detail-label", `详情 ${ownership.branch}`);
       writeCleanupLog([
-        "旧分支已经完整移除。",
-        `详情 ${ownership.branch} 成为资料卡的新孩子。`,
-        "新分支读取数据，并把自己的 generation token 留在相关 source 本地。",
+        `详情 ${ownership.branch} 已发布为新的 Live branch。`,
+        "若 replacement 计算、cleanup、publish 或 final control 中止，Draft 会被清理，原 K 保持 Pending 等待重试。",
       ]);
       await tick(360);
       detail.classList.remove("is-new");
@@ -649,13 +582,11 @@
       ownership.cleanups += 3;
       ownership.mounted = false;
       writeCleanupLog([
-        "阶段 1：所有后代已封锁，全部 generation tokens 已取消。",
-        "阶段 2：移除点击监听。",
-        "阶段 2：清理文字绑定与条件区域。",
-        "阶段 2：移除挂载 DOM 范围。",
+        "所有 continuation gates 与 frames 已变 Dead。",
+        "事件 listener、live text effect 与 region range 按结构 ledger 清理。",
+        "source-local capture index 会压缩掉 Dead entries。",
       ]);
     }
-
     ownership.busy = false;
     setButtonsDisabled(ownershipButtons, false);
   }
@@ -664,91 +595,27 @@
   $("#ownership-unmount").addEventListener("click", () => runOwnership("unmount"));
   $("#ownership-reset").addEventListener("click", () => runOwnership("reset"));
 
-  // -----------------------------------------------------------------------
-  // Framework route comparison
-  // -----------------------------------------------------------------------
-
+  // Framework route comparison. Work widths are explanatory, not benchmarks.
   const comparisonScenarios = {
     leaf: {
-      react: {
-        route: ["state 更新", "调用组件", "比较结果", "提交文字 DOM"],
-        note: "默认从发生更新的组件开始重新计算其返回结果，再把必要的 DOM 改动提交出去。",
-        work: 64,
-        scope: "组件子树",
-      },
-      vue: {
-        route: ["属性写入", "触发订阅", "组件更新", "补丁文字 DOM"],
-        note: "Proxy / ref 在运行时跟踪读写；组件本身以响应式 effect 进行渲染和更新。",
-        work: 48,
-        scope: "相关组件",
-      },
-      solid: {
-        route: ["signal 写入", "通知使用者", "重算绑定", "改文字节点"],
-        note: "运行时记录 signal 与计算之间的联系，静态 DOM 通常只建立一次。",
-        work: 22,
-        scope: "绑定节点",
-      },
-      kokaine: {
-        route: ["write 操作", "本地 token 唤醒", "derivation 先恢复", "改文字节点"],
-        note: "读取递归验证 producer checkpoints，并只摘出目标 producer；source-local token 只安排直接续体，memo 不相等提交后页面 effect 才恢复。",
-        work: 22,
-        scope: "绑定节点",
-      },
+      react: { route: ["state 更新", "调用组件", "比较结果", "提交文字 DOM"], note: "默认从发生更新的组件开始重新计算其返回结果，再提交必要的 DOM 改动。", work: 64, scope: "组件子树" },
+      vue: { route: ["属性写入", "触发订阅", "组件更新", "补丁文字 DOM"], note: "Proxy / ref 在运行时跟踪读写；组件通常以响应式 effect 更新。", work: 48, scope: "相关组件" },
+      solid: { route: ["signal 写入", "通知计算", "重算绑定", "改文字节点"], note: "运行时记录 signal 与计算之间的联系，静态 DOM 通常只建立一次。", work: 22, scope: "绑定节点" },
+      kokaine: { route: ["write operation", "Resume-work(trace)", "恢复 exact suffix", "发布文字 effect"], note: "source 索引实际 K；恢复 tracked read 后缀，而不是从 retained action 开头重算。", work: 22, scope: "capture suffix" },
     },
     branch: {
-      react: {
-        route: ["state 更新", "重新得到分支描述", "协调子树", "提交增删"],
-        note: "组件重新返回新的元素结构，React 协调前后结构并提交必要的节点增删。",
-        work: 78,
-        scope: "条件子树",
-      },
-      vue: {
-        route: ["条件写入", "组件更新", "执行分支补丁", "挂载 / 卸载"],
-        note: "编译器为模板生成分支提示，运行时组件 effect 执行对应的补丁路径。",
-        work: 58,
-        scope: "条件区块",
-      },
-      solid: {
-        route: ["signal 写入", "条件计算", "清理旧 owner", "挂载新分支"],
-        note: "控制流原语拥有自己的响应式范围，切换时清理旧分支并建立新分支。",
-        work: 37,
-        scope: "条件区域",
-      },
-      kokaine: {
-        route: ["write 操作", "region token 唤醒", "取消旧 generation", "挂载新分支"],
-        note: "region effect 拥有分支内绑定和监听器；续跑前取消旧 token，并按所有权树清理旧资源。",
-        work: 39,
-        scope: "所有权区域",
-      },
+      react: { route: ["state 更新", "重新得到分支描述", "协调子树", "提交增删"], note: "组件返回新元素结构，React 协调前后结构并提交节点增删。", work: 78, scope: "条件子树" },
+      vue: { route: ["条件写入", "组件更新", "执行分支补丁", "挂载 / 卸载"], note: "编译器为模板生成分支提示，运行时执行对应补丁路径。", work: 58, scope: "条件区块" },
+      solid: { route: ["signal 写入", "条件计算", "清理旧 owner", "挂载新分支"], note: "控制流范围在切换时清理旧分支并建立新分支。", work: 37, scope: "条件区域" },
+      kokaine: { route: ["outer K Pending", "旧 child Dead", "新 child Draft", "publish Live branch"], note: "region binding 的 continuation frame 拥有该 generation 的 DOM range、listener 与 child effects。", work: 39, scope: "continuation frame" },
     },
     batch: {
-      react: {
-        route: ["3 次 state 更新", "自动批处理", "组件渲染", "一次提交"],
-        note: "现代 React 会在常见事件中批处理更新；最终渲染与提交次数取决于边界和更新方式。",
-        work: 54,
-        scope: "批后的子树",
-      },
-      vue: {
-        route: ["3 次属性写入", "任务去重", "组件更新", "一次补丁"],
-        note: "响应式触发被调度到队列，同一组件的更新任务会被合并。",
-        work: 45,
-        scope: "去重任务",
-      },
-      solid: {
-        route: ["batch 中 3 次写", "延后下游", "一次传播", "目标 DOM"],
-        note: "batch 延后下游计算，离开批次后按最终值更新依赖。",
-        work: 20,
-        scope: "最终依赖",
-      },
-      kokaine: {
-        route: ["handler 记录批次深度", "本地 token 只触发一次", "先 memo 后 effect", "目标 DOM"],
-        note: "最外层 leave-batch 才 flush；one-shot fired latch 合并指向同一续体的多次唤醒。",
-        work: 20,
-        scope: "最终依赖",
-      },
+      react: { route: ["3 次 state 更新", "自动批处理", "组件渲染", "一次提交"], note: "现代 React 会在常见边界批处理；实际次数依更新方式而定。", work: 54, scope: "批后的子树" },
+      vue: { route: ["3 次属性写入", "任务去重", "组件更新", "一次补丁"], note: "触发被调度到队列，同一组件任务通常会合并。", work: 45, scope: "去重任务" },
+      solid: { route: ["batch 中 3 次写", "延后下游", "一次传播", "目标 DOM"], note: "batch 延后下游计算，离开边界后按最终值传播。", work: 20, scope: "最终联系" },
+      kokaine: { route: ["3 次 write/version/notify", "capability 保持 Pending", "边界后 settle", "publish"], note: "batch 只延迟 settling；source 写入和 notify 仍逐次发生。", work: 20, scope: "Pending frontier" },
     },
   };
-
   const scenarioButtons = $$("[data-scenario]", $("#comparison"));
 
   function renderComparison(scenario) {
@@ -773,26 +640,21 @@
     });
   }
 
-  scenarioButtons.forEach((button) => button.addEventListener("click", () => renderComparison(button.dataset.scenario)));
+  scenarioButtons.forEach((button) => {
+    button.addEventListener("click", () => renderComparison(button.dataset.scenario));
+  });
 
-  // -----------------------------------------------------------------------
-  // Accessible code tabs and real demo reload
-  // -----------------------------------------------------------------------
-
+  // Accessible code tabs and real example reload.
   const tabList = $(".code-tabs__list");
   const tabs = $$('[role="tab"]', tabList);
-
-  tabs.forEach((tab, index) => {
-    tab.tabIndex = index === 0 ? 0 : -1;
-  });
+  tabs.forEach((tab, index) => { tab.tabIndex = index === 0 ? 0 : -1; });
 
   function activateTab(tab) {
     tabs.forEach((candidate) => {
       const selected = candidate === tab;
       candidate.setAttribute("aria-selected", String(selected));
       candidate.tabIndex = selected ? 0 : -1;
-      const panel = $(`#${candidate.getAttribute("aria-controls")}`);
-      panel.hidden = !selected;
+      $(`#${candidate.getAttribute("aria-controls")}`).hidden = !selected;
     });
     tab.focus();
   }

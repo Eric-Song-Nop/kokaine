@@ -6,9 +6,9 @@
     <meta name="theme-color" content="#15202b" />
     <meta
       name="description"
-      content="一份面向 UI 工作者的可交互技术报告：从数据流出发，解释 Kokaine 如何用信号与代数效应计算最小的 UI 变化。"
+      content="一份面向 UI 框架作者的可交互技术报告：解释 Kokaine 如何用代数效应捕获同步读取后缀，并以真实续体驱动增量 UI。"
     />
-    <title>代数效应如何驱动增量 UI｜Kokaine 可执行报告</title>
+    <title>代数效应与续体如何驱动增量 UI｜Kokaine 可执行报告</title>
     <link rel="stylesheet" href="./report.css" />
   </head>
   <body>
@@ -61,10 +61,10 @@
         <section class="hero report-section" id="abstract" data-section="00">
           <div class="hero__copy">
             <p class="kicker">可执行技术报告 · 面向 UI 工作者</p>
-            <h1>代数效应如何驱动<br /><em>增量 UI</em></h1>
+            <h1>代数效应与续体如何驱动<br /><em>增量 UI</em></h1>
             <p class="hero__lead">
-              当一个数从 <strong>2</strong> 变成 <strong>3</strong>，浏览器并不需要“重做整个页面”。真正的问题是：
-              <strong>哪些结果受影响、按什么顺序重算、最后碰哪几个 DOM 节点？</strong>
+              当 <code>reify-trace</code> 内的同步 tracked <code>get</code> 发生时，Kokaine 捕获的是<strong>这次读取之后的计算后缀</strong>；Sample-read 与普通 dispatch read 不捕获。
+              值改变后，运行时恢复这段后缀，而不是保存原始闭包并从函数开头重跑。
             </p>
             <div class="hero__actions">
               <a class="button button--primary" href="#flow-lab">先动手试一次</a>
@@ -74,42 +74,42 @@
 
           <figure class="hero-meter" aria-labelledby="hero-meter-title">
             <figcaption id="hero-meter-title">
-              <span>UPDATE SCOPE / 更新范围</span>
-              <strong>只重算真正受影响的部分</strong>
+              <span>RESUMPTION SCOPE / 恢复范围</span>
+              <strong>恢复 get 之后，而不是重跑 get 之前</strong>
             </figcaption>
             <div class="scope-meter" aria-hidden="true">
               <span class="scope-meter__work"></span>
               <span class="scope-meter__rest"></span>
             </div>
             <div class="scope-labels">
-              <span><b>3</b> 个相关节点</span>
-              <span><b>97</b> 个节点保持不动</span>
+              <span><b>K</b> 被 source 索引</span>
+              <span><b>prefix</b> 不被重放</span>
             </div>
             <div class="hero-meter__diagram" aria-hidden="true">
-              <span class="mini-node mini-node--hot">数据</span>
-              <i></i><span class="mini-node mini-node--hot">计算</span>
-              <i></i><span class="mini-node mini-node--hot">文字</span>
-              <span class="mini-node">导航</span>
-              <span class="mini-node">侧栏</span>
-              <span class="mini-node">页脚</span>
+              <span class="mini-node">prefix</span>
+              <i></i><span class="mini-node mini-node--hot">get / capture K</span>
+              <i></i><span class="mini-node mini-node--hot">suffix</span>
+              <span class="mini-node">旧 child</span>
+              <span class="mini-node">新 draft</span>
+              <span class="mini-node mini-node--hot">publish</span>
             </div>
           </figure>
 
           <div class="abstract-grid">
             <article>
               <span class="card-index">A</span>
-              <h2>信号是“会唤醒续体的值”</h2>
-              <p>读取时把本轮的一次性 token 留在信号本地，并记住 memo producer 的 generation checkpoint；写入时只唤醒直接订阅者。根上不需要维护一张依赖图。</p>
+              <h2>代数效应定义能力边界</h2>
+              <p><code>signal-read</code>、<code>signal-write</code> 与 <code>html&lt;e&gt;</code> 说明代码可以请求什么；handler 决定如何解释请求。效应类型本身并不等于增量传播。</p>
             </article>
             <article>
               <span class="card-index">B</span>
-              <h2>增量计算是“只重做变化波及的工作”</h2>
-              <p>中间结果相同时，变化会被截断；连续写入可以先合并，再统一刷新。</p>
+              <h2>续体是增量执行单元</h2>
+              <p>每个 tracked read occurrence 都通过 <code>raw ctl</code> 捕获自己的同步后缀；后续读取继续捕获，形成嵌套的 <code>Trace-read</code>。</p>
             </article>
             <article>
               <span class="card-index">C</span>
-              <h2>代数效应是“可接管的操作接口”</h2>
-              <p>代码只说“我要读”或“我要写”，根处理器统一决定捕获 token、递归验证 checkpoint、定向拉取和刷新。</p>
+              <h2>调度器负责正确提交</h2>
+              <p>source 本地索引真实 capture；写入排入 <code>Resume-work(trace)</code>。Draft 只在后缀与发布成功后变成 Live，失败或 final control 会回滚草稿。</p>
             </article>
           </div>
         </section>
@@ -117,45 +117,46 @@
         <section class="report-section" id="journey" data-section="01">
           <header class="section-heading">
             <p class="section-number">01 / THE JOURNEY</p>
-            <h2>一次 UI 更新，实际上经历了什么？</h2>
-            <p>先不谈任何语言理论。把一次点击拆成五站，就能看见问题的全貌。</p>
+            <h2>一条语句，被 get 切成 prefix 与 suffix</h2>
+            <p>增量性的关键不是“记住谁读过谁”，而是把同步执行在准确位置切开，并保存可以恢复的后半段。</p>
           </header>
 
           <figure class="journey-map" aria-labelledby="journey-title">
             <figcaption id="journey-title" class="figure-title">
               <span>图 1</span>
-              <strong>从点击到屏幕的最短路线</strong>
+              <strong>一次同步读取的精确捕获与恢复</strong>
             </figcaption>
             <ol>
               <li>
                 <span class="journey-map__icon">01</span>
-                <div><strong>数据改变</strong><small>count: 2 → 3</small></div>
+                <div><strong>先执行 prefix</strong><small>日志、局部计算、分支判断</small></div>
               </li>
               <li>
                 <span class="journey-map__icon">02</span>
-                <div><strong>触发本地 token</strong><small>平方、奇偶性的续体</small></div>
+                <div><strong>执行 tracked count.get</strong><small>在 reify-trace 中发出 signal-read</small></div>
               </li>
               <li>
                 <span class="journey-map__icon">03</span>
-                <div><strong>先算中间结果</strong><small>square: 4 → 9</small></div>
+                <div><strong>handler 捕获 K</strong><small>K = get 之后的 suffix</small></div>
               </li>
               <li>
                 <span class="journey-map__icon">04</span>
-                <div><strong>再做页面动作</strong><small>更新两个 Text.data</small></div>
+                <div><strong>初次立刻 resume</strong><small>用当前值完成本轮计算</small></div>
               </li>
               <li>
                 <span class="journey-map__icon">05</span>
-                <div><strong>浏览器绘制</strong><small>其余 DOM 保持原样</small></div>
+                <div><strong>写入后 Resume(K)</strong><small>prefix 不再执行；suffix 建新 draft</small></div>
               </li>
             </ol>
           </figure>
 
           <div class="plain-model">
-            <div class="plain-model__formula" aria-label="最小更新等于变化的数据、当前 source-local 订阅、相等判断和执行顺序共同决定">
-              <span>最小更新</span><b>=</b><span>变了的数据</span><b>+</b><span>当前联系</span><b>+</b><span>相等判断</span><b>+</b><span>执行顺序</span>
+            <div class="plain-model__formula" aria-label="增量恢复等于 source 本地 capture 索引、精确后缀、提交协议与执行平面">
+              <span>增量恢复</span><b>=</b><span>source-local capture</span><b>+</b><span>精确 suffix</span><b>+</b><span>draft / publish</span><b>+</b><span>执行 plane</span>
             </div>
             <p>
-              这四项少一项都可能出错：不知道联系就只能大范围重算；没有相等判断就会做无用功；顺序错了，页面可能读到一半新一半旧的数据。
+              例如 <code>prefix(); val a = x.get; middle(); val b = y.get; suffix()</code> 会产生嵌套轨迹：
+              <code>Trace-read(x, child = Trace-read(y, child = Trace-end))</code>。每个 read occurrence 都有自己的 K；重复读取同一 source 也不会复用一次捕获。
             </p>
           </div>
         </section>
@@ -166,7 +167,7 @@
               <p class="section-number">02 / LIVE DATA FLOW</p>
               <h2>亲手推动一条数据流</h2>
             </div>
-            <p>蓝线表示本轮确实触发的 source-local link。它们是续体轨迹的投影，不是集中存储的依赖图。</p>
+            <p>蓝线是 source 本地 capture 索引的语义投影。这里是教学模拟，不是运行时探针；队列里的工作单位是 <code>Resume-work(trace)</code>。</p>
           </header>
 
           <div class="lab" id="flow-lab-app">
@@ -181,32 +182,32 @@
               <div class="flow-graph graph-stage" id="flow-graph" aria-label="实时 source-local continuation trace">
                 <div class="graph-grid" aria-hidden="true"></div>
                 <div class="graph-node graph-node--source" id="node-count" data-node="count">
-                  <small>原始数据 · signal</small>
+                  <small>source-local index</small>
                   <strong>count = <span id="flow-count">2</span></strong>
                   <i class="node-state">READY</i>
                 </div>
                 <div class="graph-node graph-node--memo" id="node-square" data-node="square">
-                  <small>中间结果 · memo</small>
+                  <small>pure plane · Trace-read</small>
                   <strong>平方 = <span id="flow-square">4</span></strong>
                   <i class="node-state">CLEAN</i>
                 </div>
                 <div class="graph-node graph-node--memo" id="node-parity" data-node="parity">
-                  <small>中间结果 · memo</small>
+                  <small>pure plane · Trace-read</small>
                   <strong><span id="flow-parity">偶数</span></strong>
                   <i class="node-state">CLEAN</i>
                 </div>
                 <div class="graph-node graph-node--effect" id="node-dom-number" data-node="dom-number">
-                  <small>页面动作 · effect</small>
+                  <small>effect plane · suffix</small>
                   <strong>数字文字</strong>
                   <i class="node-state">DOM</i>
                 </div>
                 <div class="graph-node graph-node--effect" id="node-dom-square" data-node="dom-square">
-                  <small>页面动作 · effect</small>
+                  <small>effect plane · suffix</small>
                   <strong>平方文字</strong>
                   <i class="node-state">DOM</i>
                 </div>
                 <div class="graph-node graph-node--effect" id="node-dom-theme" data-node="dom-theme">
-                  <small>页面动作 · effect</small>
+                  <small>effect plane · suffix</small>
                   <strong>奇偶样式</strong>
                   <i class="node-state">DOM</i>
                 </div>
@@ -222,7 +223,7 @@
                   <div><small>DOM 改动</small><strong id="flow-dom-count">0</strong></div>
                 </div>
                 <ol class="trace-list" id="flow-trace">
-                  <li><span>00</span>等待操作。首次读取已把当前 generation token 订阅到各个 source。</li>
+                  <li><span>00</span>等待操作。初次运行已为每个 tracked read occurrence 捕获后缀，并把 capability 索引到对应 source。</li>
                 </ol>
               </aside>
             </div>
@@ -231,18 +232,18 @@
           <div class="annotation-row">
             <article>
               <span>观察 1</span>
-              <h3>轨迹分散在 source 本地</h3>
-              <p>同一 generation 第一次读取某个 source 时安装一个本地 link 与 checkpoint；重复读取复用它。重跑前取消旧 token，下一轮按实际分支重新建立轨迹。</p>
+              <h3>source 索引真实 capture</h3>
+              <p>索引项打包执行 plane、目标 trace 与 owning read。它不是 wake callback、Observer ID 或被保留的完整 action。</p>
             </article>
             <article>
               <span>观察 2</span>
-              <h3>先更新结果，再更新页面</h3>
-              <p>中间结果队列总是先清空，页面动作不会读到过期的平方或奇偶性。</p>
+              <h3>两条执行 plane</h3>
+              <p>纯 derivation 只能保存 <code>plane&lt;total&gt;</code>；UI effect 保存宿主 effect plane。完整 flush 优先推进 pure work，再推进 effect work。</p>
             </article>
             <article>
               <span>观察 3</span>
-              <h3>批量写入只刷新一次</h3>
-              <p>数据可以立刻变化，但刷新会等最外层批次结束，再按最终值做一次工作。</p>
+              <h3>状态属于 capability</h3>
+              <p>Draft、Live、Pending、Running、Dead 描述真实 resumption 的生命周期；没有平行的 dirty Observer 状态机。</p>
             </article>
           </div>
         </section>
@@ -250,8 +251,8 @@
         <section class="report-section" id="effects" data-section="03">
           <header class="section-heading">
             <p class="section-number">03 / ALGEBRAIC EFFECTS, PLAINLY</p>
-            <h2>代数效应：把“我要做什么”与“具体怎么办”分开</h2>
-            <p>名字听起来像数学，其实可以先把它理解成：<strong>一组会被上层接管的操作</strong>。</p>
+            <h2>代数效应与 continuation 各自负责什么？</h2>
+            <p>两者缺一不可，但不是同一个概念：<strong>effect operation 是可处理的能力接口，continuation 是 operation 发生处之后的控制流</strong>。</p>
           </header>
 
           <div class="analogy-grid">
@@ -262,16 +263,16 @@
                 <strong>请读取 count</strong>
                 <small>代码只发出 signal-read 操作</small>
               </div>
-              <p>像前台开出请求单，只表达意图。</p>
+              <p>API 与 effect row 表达“允许请求读取”，不承诺具体传播算法。</p>
             </article>
             <div class="analogy-arrow" aria-hidden="true">→</div>
             <article class="analogy-card analogy-card--handler">
               <p class="analogy-card__label">根处理器 / handler</p>
               <ul>
-                <li><span>1</span>用 opaque root key 检查所属根</li>
-                <li><span>2</span>递归验证 producer generation checkpoint</li>
-                <li><span>3</span>失效时只定向拉取目标 producer</li>
-                <li><span>4</span>在同一稳定点读取值与版本，再订阅 token</li>
+                <li><span>1</span>检查 opaque root key 与 source 所属根</li>
+                <li><span>2</span>tracked read 用 raw ctl 捕获精确后缀 K</li>
+                <li><span>3</span>把 K、plane、target 打包进 source-local index</li>
+                <li><span>4</span>以当前值 resume K，继续完成初次计算</li>
               </ul>
             </article>
             <div class="analogy-arrow" aria-hidden="true">→</div>
@@ -280,9 +281,9 @@
               <div class="request-ticket request-ticket--done">
                 <span>HANDLED</span>
                 <strong>值 = 3</strong>
-                <small>当前 generation token 已留在 count 本地</small>
+                <small>该 read occurrence 的 Trace-read 已建立</small>
               </div>
-              <p>一次普通读取，同时完成正确性工作。</p>
+              <p>同一 API 在 <code>untrack</code> 下会被 override 成 Sample-read，不捕获 K。</p>
             </article>
           </div>
 
@@ -291,36 +292,36 @@
               <span>图 2</span><strong>一次点击穿过的“处理层”</strong>
             </figcaption>
             <div class="handler-stack__host">
-              <span>浏览器事件</span>
-              <strong>click</strong>
-              <small>main 已经返回，这是一次新的异步进入</small>
+              <span>同步 track</span>
+              <strong>get</strong>
+              <small>handler 仍在动态栈上，可捕获真正的 K</small>
             </div>
-            <div class="handler-stack__arrow">↓ 安装新的安全边界</div>
+            <div class="handler-stack__arrow">→ raw ctl 捕获后缀</div>
             <div class="handler-stack__layers">
-              <div><span>异常边界</span><small>DOM 或用户代码出错时恢复现场</small></div>
-              <div><span>写入处理器</span><small>比较新旧值、标脏、批处理、安排刷新</small></div>
-              <div><span>读取处理器</span><small>验证 checkpoint、定向拉取、安装 token</small></div>
-              <div class="handler-stack__app"><span>应用回调</span><small>count.modify(+1)</small></div>
+              <div><span>effect row</span><small>声明 track 只可请求 signal-read</small></div>
+              <div><span>read handler</span><small>区分 Track-read / Sample-read / State-entry-read</small></div>
+              <div><span>raw continuation</span><small>reify 为 Trace-read 或 Trace-entry</small></div>
+              <div class="handler-stack__app"><span>captured suffix</span><small>用 source 当前值继续执行</small></div>
             </div>
           </figure>
 
           <div class="effect-value-grid">
             <article>
-              <h3>它不只是“换一种写回调”</h3>
+              <h3>effect 让策略可组合</h3>
               <p>
-                处理器能在一次操作周围统一加入规则：检查根是否还活着、递归验证 producer checkpoint、只拉取失效目标、安装一次性 token。这些规则不用散落在应用代码里。
+                正常读取、<code>untrack</code> 采样读取、stateful memo 的入口读取共用一个 operation，却由局部 handler 赋予不同解释。effect row 还能把“纯追踪”与“允许写 DOM”分开。
               </p>
             </article>
             <article>
-              <h3>类型会显示代码能做什么</h3>
+              <h3>continuation 让更新真正增量</h3>
               <p>
-                只负责计算 memo 的函数允许 <code>signal-read</code>，却不允许 <code>signal-write</code>。也就是说，“算平方时偷偷改 count”不仅不推荐，而是接口本身就不放行。
+                如果 handler 只记录 callback，再从函数开头执行，effect API 仍然成立，但不具备这里的语义。Kokaine 保存 <code>trace-resume</code>，正常刷新不依靠被保留的 calculation action。
               </p>
             </article>
             <article>
-              <h3>同一种请求可以有不同解释</h3>
+              <h3>类型约束也有准确边界</h3>
               <p>
-                正常读取会留下 source-local 订阅；<code>untrack</code> 临时接管读取，把它转发成“不捕获 token”。API 看起来仍是读取，运行含义被局部改变。
+                <code>() -&gt; &lt;signal-read,pure&gt; a</code> 不能把写能力直接逸出；函数仍可在内部安装自己的 handler。类型说明未处理的能力，不等价于“源码里绝不出现被局部处理的写操作”。
               </p>
             </article>
           </div>
@@ -330,9 +331,9 @@
           <header class="section-heading section-heading--split">
             <div>
               <p class="section-number">04 / CORRECT &amp; MINIMAL</p>
-              <h2>最难的不是“会更新”，而是“少算还不能算错”</h2>
+              <h2>frontier 如何选择一条可运行的 continuation？</h2>
             </div>
-            <p>下面的菱形数据流能暴露许多响应式运行时的细微错误。逐步执行，看局部 token 如何唤醒续体，以及变化如何在 memo 提交时被截断。</p>
+            <p>下面是 <code>Resume-work(trace)</code> 与两条执行 plane 的语义模拟，不是实际队列采样。逐步执行，看 Pending capability 如何进入 Running、创建 Draft 并发布新 Live generation。</p>
           </header>
 
           <div class="scheduler-lab" id="scheduler-lab">
@@ -345,24 +346,26 @@
             </div>
 
             <div class="state-legend" aria-label="调度状态图例">
-              <span><i class="state-chip state-chip--clean"></i>干净：结果是新的</span>
-              <span><i class="state-chip state-chip--pending"></i>已排队：token 本轮只唤醒一次</span>
-              <span><i class="state-chip state-chip--stale"></i>脏：直接 producer 等待续跑</span>
+              <span><i class="state-chip state-chip--live"></i>Live：可被 source 唤醒</span>
+              <span><i class="state-chip state-chip--pending"></i>Pending：已有 Resume-work</span>
+              <span><i class="state-chip state-chip--running"></i>Running：当前 K 正在恢复</span>
+              <span><i class="state-chip state-chip--draft"></i>Draft：尚未公开的新 generation</span>
+              <span><i class="state-chip state-chip--dead"></i>Dead：已退役，ticket 可 stale</span>
             </div>
 
             <div class="scheduler-stage">
               <div class="scheduler-diamond" id="scheduler-diamond" aria-label="菱形 source-local continuation trace">
-                <div class="diamond-node is-clean" id="diamond-count">
-                  <small>数据</small><strong>count = <span>2</span></strong><em>干净</em>
+                <div class="diamond-node is-source" id="diamond-count">
+                  <small>source</small><strong>count = <span>2</span></strong><em>cell / version</em>
                 </div>
-                <div class="diamond-node is-clean" id="diamond-parity">
-                  <small>结果 A</small><strong>奇偶 = <span>偶</span></strong><em>干净</em>
+                <div class="diamond-node is-live" id="diamond-parity">
+                  <small>pure suffix A</small><strong>奇偶 = <span>偶</span></strong><em>Live</em>
                 </div>
-                <div class="diamond-node is-clean" id="diamond-double">
-                  <small>结果 B</small><strong>两倍 = <span>4</span></strong><em>干净</em>
+                <div class="diamond-node is-live" id="diamond-double">
+                  <small>pure suffix B</small><strong>两倍 = <span>4</span></strong><em>Live</em>
                 </div>
-                <div class="diamond-node is-clean" id="diamond-summary">
-                  <small>页面动作</small><strong>汇总 UI</strong><em>干净</em>
+                <div class="diamond-node is-live" id="diamond-summary">
+                  <small>effect suffix</small><strong>汇总 UI</strong><em>Live</em>
                 </div>
                 <span class="diamond-edge diamond-edge--ca"></span>
                 <span class="diamond-edge diamond-edge--cb"></span>
@@ -376,12 +379,12 @@
                 </div>
                 <p class="step-panel__message" id="scheduler-message">选择 +1 或 +2，创建一次变化。</p>
                 <div class="queue-lanes">
-                  <div><small>先算结果</small><ol id="derive-queue"><li class="empty">空</li></ol></div>
-                  <div><small>再动页面</small><ol id="effect-queue"><li class="empty">空</li></ol></div>
+                  <div><small>pure plane</small><ol id="derive-queue"><li class="empty">空</li></ol></div>
+                  <div><small>effect plane</small><ol id="effect-queue"><li class="empty">空</li></ol></div>
                 </div>
                 <div class="scheduler-score">
-                  <span>本轮实际重算 <strong id="scheduler-runs">0</strong> 次</span>
-                  <span>被相等判断截断 <strong id="scheduler-pruned">0</strong> 条</span>
+                  <span>本轮恢复 suffix <strong id="scheduler-runs">0</strong> 次</span>
+                  <span>相等提交截断 <strong id="scheduler-pruned">0</strong> 条</span>
                 </div>
               </aside>
             </div>
@@ -389,12 +392,12 @@
 
           <div class="pending-explainer">
             <div class="pending-explainer__visual" aria-hidden="true">
-              <span class="badge-stale">验证 checkpoint</span><b>→</b><span class="badge-pending">定向拉取 producer</span><b>→</b><span class="badge-clean">memo 提交截断</span>
+              <span class="badge-stale">frontier 跳过 deferred</span><b>→</b><span class="badge-pending">Resume-work(trace)</span><b>→</b><span class="badge-clean">draft publish / retire</span>
             </div>
             <div>
-              <h3>不提前标脏下游，如何保证一致？</h3>
+              <h3>队列不是 Observer 列表，targeted settle 也不是全局 flush</h3>
               <p>
-                source 只触发直接订阅在本地的 token，下游既不会被提前标脏，也不会被提前执行。每个 generation token 记录读取时的 source version 与可选 producer checkpoint；读取 memo 前会递归验证这条 checkpoint 链，失效时只从队列摘出并拉取那个 producer，不会顺带运行兄弟任务。只有 memo 提交出不相等的新值，才递增版本并唤醒下游；相等提交不改版本，依赖它的 <code>memo(previous)</code> 也不会被无端重跑。
+                frontier 选择 Pending 且没有 Pending/Running ancestor 的工作；已退休的 stale ticket 可以暂留队列，取工作时再丢弃。同步 <code>memo.get</code> 只沿目标 producer 的 gate、input producer、entry target 与 child trace 定向 settle，不会顺带清空无关 pure work，更不会执行 effect plane。只有 derive 发布不相等的新值时，输出 source 才增加版本并触发下游 capture。
               </p>
             </div>
           </div>
@@ -403,8 +406,8 @@
         <section class="report-section" id="batching" data-section="05">
           <header class="section-heading">
             <p class="section-number">05 / BATCHING</p>
-            <h2>连续改十次，不等于页面也要改十次</h2>
-            <p>批处理不是让数据晚一点变化，而是让昂贵的“重新计算与改页面”晚一点、一起发生。</p>
+            <h2>连续写十次，只需让同一 capability 保持 Pending</h2>
+            <p>source cell 仍然立即更新；batch 只延后 settle。一个 Live trace 第一次失效时转成 Pending 并产生工作票，之后的写入不会再凭空复制同一个 resumption。</p>
           </header>
 
           <div class="batch-lab" id="batch-lab">
@@ -414,35 +417,35 @@
               <button class="segment" type="button" data-writes="3">3 次</button>
               <button class="segment" type="button" data-writes="10">10 次</button>
             </div>
-            <div class="bar-chart" aria-label="普通逐次刷新和批处理刷新工作量比较">
-              <div class="bar-chart__head"><span>工作项目</span><span>逐次刷新</span><span>Kokaine batch</span></div>
+            <div class="bar-chart" aria-label="固定语义场景中逐次 settling 和 batch settling 比较">
+              <div class="bar-chart__head"><span>模拟事件</span><span>每次立即 settle</span><span>batch 后 settle</span></div>
               <div class="bar-row">
                 <strong>数据写入</strong>
                 <div class="bar-track"><i class="bar bar--naive" data-bar="naive-write"></i><b data-value="naive-write">1</b></div>
                 <div class="bar-track"><i class="bar bar--batch" data-bar="batch-write"></i><b data-value="batch-write">1</b></div>
               </div>
               <div class="bar-row">
-                <strong>中间计算</strong>
+                <strong>suffix 恢复</strong>
                 <div class="bar-track"><i class="bar bar--naive" data-bar="naive-compute"></i><b data-value="naive-compute">2</b></div>
                 <div class="bar-track"><i class="bar bar--batch" data-bar="batch-compute"></i><b data-value="batch-compute">2</b></div>
               </div>
               <div class="bar-row">
-                <strong>DOM 改动</strong>
+                <strong>effect publication</strong>
                 <div class="bar-track"><i class="bar bar--naive" data-bar="naive-dom"></i><b data-value="naive-dom">3</b></div>
                 <div class="bar-track"><i class="bar bar--batch" data-bar="batch-dom"></i><b data-value="batch-dom">3</b></div>
               </div>
             </div>
             <div class="batch-timeline">
               <div>
-                <span>逐次刷新</span>
-                <ol id="naive-timeline"><li>写</li><li>算</li><li>DOM</li></ol>
+                <span>每次立即 settle</span>
+                <ol id="naive-timeline"><li>写/notify</li><li>settle</li><li>publish</li></ol>
               </div>
               <div>
                 <span>batch</span>
-                <ol id="batch-timeline"><li>写</li><li>算</li><li>DOM</li></ol>
+                <ol id="batch-timeline"><li>写/notify</li><li>settle</li><li>publish</li></ol>
               </div>
             </div>
-            <p class="batch-result" id="batch-result">写 1 次时，两种方式工作量相同。</p>
+            <p class="batch-result" id="batch-result">在这条固定模拟路径中，写 1 次时两边相同。</p>
           </div>
         </section>
 
@@ -450,16 +453,16 @@
           <header class="section-heading section-heading--split">
             <div>
               <p class="section-number">06 / DYNAMIC DEPENDENCIES</p>
-              <h2>续体订阅会随代码分支变化</h2>
+              <h2>代码分支会生成不同的嵌套 continuation trace</h2>
             </div>
-            <p>“本轮读到了谁”比“代码里出现过谁”更精确。切换显示模式，观察旧 generation 取消、新 generation 重新订阅。</p>
+            <p>“本轮执行到哪个 read occurrence”比静态扫描更精确。切换模式时，旧 child trace 变成 Dead，新 suffix 在 Draft frame 内按真实分支捕获。</p>
           </header>
 
           <div class="dynamic-lab" id="dynamic-lab">
             <div class="dynamic-preview">
               <p class="dynamic-preview__label">当前卡片标题</p>
               <strong id="dynamic-output">访客 Koka</strong>
-              <small id="dynamic-render-count">页面动作运行 1 次</small>
+              <small id="dynamic-render-count">页面 suffix 运行 1 次</small>
             </div>
             <div class="dynamic-switcher">
               <span>显示模式</span>
@@ -480,7 +483,7 @@
               <span class="dynamic-edge dynamic-edge--count is-hidden" id="dynamic-count-edge"></span>
             </div>
             <div class="dynamic-log" id="dynamic-log" aria-live="polite">
-              <span>当前 token 已订阅：mode、name</span>
+              <span>Live trace：Trace-read(mode) → Trace-read(name)</span>
             </div>
           </div>
         </section>
@@ -488,8 +491,8 @@
         <section class="report-section" id="ownership" data-section="07">
           <header class="section-heading">
             <p class="section-number">07 / OWNERSHIP &amp; CLEANUP</p>
-            <h2>UI 消失时，谁来拔掉它留下的线？</h2>
-            <p>响应式系统不只要会创建，还必须知道监听器、计算与 DOM 范围属于谁。</p>
+            <h2>新 suffix 何时能取代旧 generation？</h2>
+            <p>传播依赖 source-local capture；资源释放依赖结构化 frame/owner ledger。两者用途不同，不能把 ownership tree 当成 dependency graph。</p>
           </header>
 
           <div class="ownership-lab" id="ownership-lab">
@@ -521,14 +524,14 @@
             <figcaption id="dispose-title" class="figure-title"><span>图 3</span><strong>安全清理分两段完成</strong></figcaption>
             <div>
               <span class="phase-number">1</span>
-              <h3>先封锁整棵旧树</h3>
-              <p>把所有后代标为“已销毁”，从队列移除并取消各自 generation token 的 source-local links。此时清理代码即使写入 signal，也叫不醒正在拆除的兄弟节点。</p>
+              <h3>先把旧 branch 设为 Dead</h3>
+              <p>退役完整 child trace 与结构后代，source 本地索引在 compact 时移除失效 capture。已在队列中的 stale ticket 可以保留到 frontier 扫描时被跳过。</p>
             </div>
             <div class="dispose-phases__arrow">→</div>
             <div>
               <span class="phase-number">2</span>
-              <h3>再逐项执行清理</h3>
-              <p>移除事件监听、删掉 DOM 区间、运行用户 cleanup。某一项失败，后面的清理仍会继续。</p>
+              <h3>再发布新 Draft</h3>
+              <p>恢复 Pending trace 时，新 capture 和结构孩子先属于 Draft frame。旧 generation 的 finalizer、用户 cleanup、计算与 publication 都成功后才激活新 trace；失败或 abortive final control 会同步清理 Draft，并让原 capability 保持 Pending 以供重试。触发本轮的 source write 已经提交，不会随 Draft 一起回滚。</p>
             </div>
           </figure>
         </section>
@@ -574,11 +577,11 @@
               <div class="work-meter"><span>本场景抽象工作范围</span><i><b data-work="22"></b></i><em>绑定节点</em></div>
             </article>
             <article class="framework-card framework-card--kokaine" data-framework="kokaine">
-              <header><span class="framework-logo framework-logo--kokaine">K</span><div><h3>Kokaine</h3><small>source-local trace + 效应处理器</small></div></header>
+              <header><span class="framework-logo framework-logo--kokaine">K</span><div><h3>Kokaine</h3><small>source-local capture + 精确续体</small></div></header>
               <div class="route" data-route>
-                <span>write 操作</span><i>→</i><span>本地 token 唤醒</span><i>→</i><span>derivation 先恢复</span><i>→</i><span>改目标 DOM</span>
+                <span>write operation</span><i>→</i><span>Resume-work(trace)</span><i>→</i><span>恢复 suffix</span><i>→</i><span>发布 DOM effect</span>
               </div>
-              <p data-route-note>source 保存本地订阅与版本；generation token 捕获 producer checkpoint，handler 递归验证后定向拉取，memo 不相等提交才唤醒页面续体。</p>
+              <p data-route-note>source 索引实际 capture；pure plane 先恢复精确后缀，memo 不相等发布才让 effect-plane capture 进入 Pending。</p>
               <div class="work-meter"><span>本场景抽象工作范围</span><i><b data-work="22"></b></i><em>绑定节点</em></div>
             </article>
           </div>
@@ -593,10 +596,10 @@
                   <th>主要更新单位</th><td>组件返回结果</td><td>组件渲染 effect</td><td>细粒度计算 / DOM 绑定</td><td>细粒度计算 / DOM 绑定</td>
                 </tr>
                 <tr>
-                  <th>依赖如何发现</th><td>state 所在组件与 props 流向</td><td>运行时拦截属性读取</td><td>运行时 signal 读取</td><td>signal-read 把 token 订阅到 source</td>
+                  <th>联系如何建立</th><td>state 所在组件与 props 流向</td><td>运行时拦截属性读取</td><td>运行时 signal 读取</td><td>每个 signal-read occurrence 捕获 K，并索引到 source</td>
                 </tr>
                 <tr>
-                  <th>页面结构</th><td>重新得到元素描述并比较</td><td>编译提示 + 虚拟 DOM 补丁</td><td>静态结构建立一次</td><td>HTML DSL 建立结构，绑定单独更新</td>
+                  <th>页面结构</th><td>重新得到元素描述并比较</td><td>编译提示 + 虚拟 DOM 补丁</td><td>静态结构建立一次</td><td><code>html.emit</code> 同步建立 view，DOM adapter 为 live binding 建 effect</td>
                 </tr>
                 <tr>
                   <th>“只读不能写”</th><td>靠规则与工具检查</td><td>靠 API 约定</td><td>靠 API 约定</td><td>可出现在 Koka 函数的效应类型里</td>
@@ -611,7 +614,7 @@
           <aside class="comparison-takeaway">
             <span>关键结论</span>
             <p>
-              Kokaine 与 SolidJS 在“沿细粒度联系直接更新目标”上最接近。Kokaine 不集中保存这些联系：<strong>handler 把一次性续体 token 与 producer checkpoint 留在 source-local 轨迹里</strong>，并让读、写和宿主 UI 成为能被类型看见的能力。
+              Kokaine 与 SolidJS 都追求细粒度目标更新，但内部模型不同：<strong>Kokaine 的 source-local index 保存实际 continuation capability，而不是另建 Observer 节点再映射回 retained action</strong>。它仍然存在图状关系与调度状态，所以准确说法是“没有第二套 Observer dependency graph”，不是“完全没有 graph”。
             </p>
           </aside>
         </section>
@@ -625,68 +628,83 @@
 
           <div class="code-tabs" id="code-tabs">
             <div class="code-tabs__list" role="tablist" aria-label="选择 Koka 代码示例">
-              <button role="tab" aria-selected="true" aria-controls="code-panel-signal" id="code-tab-signal" type="button">信号与计算</button>
-              <button role="tab" aria-selected="false" aria-controls="code-panel-effect" id="code-tab-effect" type="button">读取处理器</button>
-              <button role="tab" aria-selected="false" aria-controls="code-panel-batch" id="code-tab-batch" type="button">批处理</button>
-              <button role="tab" aria-selected="false" aria-controls="code-panel-view" id="code-tab-view" type="button">无 JSX 的 UI</button>
+              <button role="tab" aria-selected="true" aria-controls="code-panel-signal" id="code-tab-signal" type="button">精确后缀</button>
+              <button role="tab" aria-selected="false" aria-controls="code-panel-effect" id="code-tab-effect" type="button">capture handler</button>
+              <button role="tab" aria-selected="false" aria-controls="code-panel-batch" id="code-tab-batch" type="button">memo(previous)</button>
+              <button role="tab" aria-selected="false" aria-controls="code-panel-view" id="code-tab-view" type="button">HTML 到 DOM</button>
             </div>
 
             <section class="code-panel" role="tabpanel" id="code-panel-signal" aria-labelledby="code-tab-signal">
-              <pre><code><span class="code-comment">// 原始数据：外部可以写</span>
-val count = signal(root,0)
-
-<span class="code-comment">// 中间结果：这里只允许读取 signal</span>
-val square = memo(root,0,fn(_)
-  val value = count.get
-  value * value
+              <pre><code>val output = derive(root,0,fn()
+  prefix()                  <span class="code-comment">// 不在 Kx 中</span>
+  val x = source-x.get      <span class="code-comment">// 捕获 Kx</span>
+  middle(x)                 <span class="code-comment">// 在 Kx 中</span>
+  val y = source-y.get      <span class="code-comment">// 捕获嵌套的 Ky</span>
+  suffix(x,y)               <span class="code-comment">// 同时在 Kx 与 Ky 中</span>
 )
 
-<span class="code-comment">// 写入会由根处理器统一接管</span>
-count.modify(fn(value) value + 1)</code></pre>
-              <aside><strong>对应轨迹中的三件事</strong><span>source 保存本地订阅</span><span>读取捕获 generation token</span><span>写入直接触发本地 token</span></aside>
+<span class="code-comment">// Trace-read(x, child = Trace-read(y, child = Trace-end))
+// x 写入恢复 Kx；prefix() 不会重放。
+// y 写入恢复更窄的 Ky。</span></code></pre>
+              <aside><strong>捕获按 occurrence 发生</strong><span>同一 source 连续 get 两次也产生两个嵌套 Trace-read</span><span>动态分支只留下实际执行到的 read</span><span>初次 calculation closure 仅存于 one-shot bootstrap slot</span></aside>
             </section>
 
             <section class="code-panel" role="tabpanel" id="code-panel-effect" aria-labelledby="code-tab-effect" hidden>
-              <pre><code><span class="code-comment">// 应用看到的能力接口</span>
+              <pre><code><span class="code-comment">// 应用看到的是能力接口</span>
 pub effect signal-read
-  fun read-source(source : source&lt;a&gt;, tracked : bool) : a
+  fun validate-derived(producer : derive-producer) : ()
+  ctl read-source(source : source&lt;a&gt;,
+                  mode : read-mode,
+                  producer : maybe&lt;derive-producer&gt;) : a
 
-<span class="code-comment">// 根处理器给“读取”赋予运行时含义</span>
-with fun read-source(source,tracked)
-  settle-source(root,source) <span class="code-comment">// 递归验证 checkpoint，必要时定向拉取</span>
-  val value = load(source.source-cell)
-  val version = load(source.source-version) <span class="code-comment">// 写效应被 mask：稳定快照</span>
-  if tracked then
-    match load(root.root-current-token)
-      Just(token) -&gt; subscribe-source(token,source,version) <span class="code-comment">// 本地 link + observed version / producer</span>
-      Nothing -&gt; ()
-  value</code></pre>
-              <aside><strong>为什么交给 handler？</strong><span>所有读取共享同一套正确性规则</span><span>token 捕获与局部覆盖可以组合</span><span>根无需保存 source / observer 注册表</span></aside>
+<span class="code-comment">// 实现轮廓；真实节点还记录 gate、frame 与 finalizer</span>
+raw ctl read-source(source,Track-read,producer)
+  val current = Trace-read(
+    resume = fn(_) rcontext.resume(load(source.source-cell)),
+    child = cell(Trace-end), ...)
+  source.source-captures.prepend(
+    pack-capture(plane,target,current))
+  val nested = rcontext.resume(load(source.source-cell))
+  current.child := nested.built-root
+  Built-trace(current,nested.built-publish)</code></pre>
+              <aside><strong>handler 与 K 分工</strong><span>handler 选择 Track / Sample / State-entry 解释</span><span>raw ctl 提供实际同步后缀</span><span>source 保存 rank-2 packed capture，不保存 callback 或 action</span></aside>
             </section>
 
             <section class="code-panel" role="tabpanel" id="code-panel-batch" aria-labelledby="code-tab-batch" hidden>
-              <pre><code>batch(root,fn()
-  count.set(1) <span class="code-comment">// 值立刻写入，暂不刷新</span>
-  count.set(2)
-  count.set(3)
+              <pre><code>val changes = memo(root,0,fn(previous)
+  val value = count.get
+  previous + 1
 )
-<span class="code-comment">// 离开最外层 batch：按最终值统一刷新一次</span></code></pre>
-              <aside><strong>处理器保管深度</strong><span>进入：batch depth +1</span><span>写入：只排队</span><span>离开最外层：flush</span></aside>
+
+<span class="code-comment">// 内部入口，不把 memo 订阅回自己的 source：</span>
+val track = fn() calculate(
+  read-source(output,State-entry-read,Nothing))
+
+<span class="code-comment">// State-entry-read 捕获 Trace-entry。
+// 每次恢复都注入最近一次成功提交的 previous；
+// 失败的 Draft 不会污染下一次 previous。</span></code></pre>
+              <aside><strong>Trace-entry 解决什么</strong><span>保存的是 entry continuation，不是 calculate 闭包</span><span>entry target 在 input 与 child settle 前后都会复查</span><span>状态只在成功 publish 后前进</span></aside>
             </section>
 
             <section class="code-panel" role="tabpanel" id="code-panel-view" aria-labelledby="code-tab-view" hidden>
-              <pre><code>val page = view fn()
+              <pre><code><span class="code-comment">// 阶段 1：html.emit 只收集 backend-neutral view</span>
+val page = view fn()
   main-tag([class("instrument")],fn()
     h1([],fn() text("Signal console"))
-    button([
-      on-click(fn(_) count.modify(fn(n) n + 1))
-    ],fn() text("+1"))
     p([],fn()
       text("平方：")
       text-live(fn() square.get.show)
     )
-  )</code></pre>
-              <aside><strong>没有 JSX</strong><span>普通 Koka 函数表达嵌套</span><span><code>text-live</code> 创建小型 DOM 绑定</span><span>静态结构只挂载一次</span></aside>
+  )
+
+<span class="code-comment">// 阶段 2：DOM adapter 解释 view
+// Text      → 一次创建 Text node
+// Live-text → create-effect(track = read, apply = set Text.data)
+// Region    → create-effect + 结构化 child frame
+// Listener  → 普通 JS callback + captured reentry</span>
+
+val dispose = mount(root,body(),page)</code></pre>
+              <aside><strong>HTML effect 不直接传播更新</strong><span><code>html.emit</code> 是同步 tail-resumptive builder</span><span>动态 UI 由 DOM adapter 创建的 continuation-backed effect 更新</span><span>region 当前是整段替换，不宣称 keyed diff</span></aside>
             </section>
           </div>
         </section>
@@ -694,38 +712,38 @@ with fun read-source(source,tracked)
         <section class="report-section" id="wasm" data-section="10">
           <header class="section-heading">
             <p class="section-number">10 / THE BROWSER BOUNDARY</p>
-            <h2>框架跑进浏览器，还要跨过一道边界</h2>
-            <p>Koka 的响应式核心不依赖浏览器；DOM 解释器负责把“页面动作”翻译成真实节点操作。</p>
+            <h2>同步 continuation 与异步 callback 不能混为一谈</h2>
+            <p>tracked computation 中的 <code>get</code> 发生在 handler 动态范围内，因此能捕获同步 K；浏览器稍后触发的事件只有普通 JS callback，不能恢复一个并不存在的“事件 continuation”。</p>
           </header>
 
           <figure class="runtime-layers" aria-labelledby="runtime-layers-title">
-            <figcaption id="runtime-layers-title" class="figure-title"><span>图 4</span><strong>同一套数据流，两种浏览器落点</strong></figcaption>
+            <figcaption id="runtime-layers-title" class="figure-title"><span>图 4</span><strong>同步捕获与宿主异步回调的边界</strong></figcaption>
             <div class="runtime-core">
               <span>KOKAINE CORE</span>
-              <strong>signals · memos · scheduler · ownership</strong>
-              <small>不认识 document，也不认识 WebAssembly</small>
+              <strong>exact read K · source-local index · structural frames</strong>
+              <small>响应式核心不认识 document；DOM adapter 负责宿主落点</small>
             </div>
             <div class="runtime-split" aria-hidden="true"><i></i><i></i></div>
             <div class="runtime-targets">
               <article>
-                <span class="target-badge">JSWEB</span>
-                <h3>直接持有 DOM 对象</h3>
-                <p>Koka 值可包装 JavaScript 对象，事件回调重新安装读取、写入与异常处理器。</p>
-                <div class="target-route"><span>Koka callback</span><b>→</b><span>DOM API</span></div>
+                <span class="target-badge">SYNCHRONOUS GET</span>
+                <h3>捕获并恢复 actual K</h3>
+                <p><code>raw ctl</code> 截取 read operation 之后的同步控制流；source 写入最终安排 <code>Resume-work(trace)</code>。</p>
+                <div class="target-route"><span>prefix</span><b>→</b><span>get / capture K</span><b>→</b><span>suffix</span></div>
               </article>
               <article>
-                <span class="target-badge target-badge--wasm">WASMWEB PROOF</span>
-                <h3>用整数句柄过桥</h3>
-                <p>JavaScript 保存真实对象，WASM 侧只拿 ID；持久回调必须正确保留和释放。</p>
-                <div class="target-route"><span>WASM ID</span><b>↔</b><span>JS object table</span><b>→</b><span>DOM API</span></div>
+                <span class="target-badge target-badge--wasm">ASYNCHRONOUS EVENT</span>
+                <h3>普通 callback + structural reentry</h3>
+                <p>listener 只保存 JS callback 与 opaque <code>reentry</code>：root、continuation gate、generation frame。它可在 frame 存活时重复调用，但不是 parked affine continuation。</p>
+                <div class="target-route"><span>JS event</span><b>→</b><span>reenter</span><b>→</b><span>fresh reactive handlers</span></div>
               </article>
             </div>
           </figure>
 
           <div class="boundary-note">
-            <h3>为什么浏览器事件要“重新进入”处理器？</h3>
+            <h3>structural reentry 恢复什么，又不恢复什么？</h3>
             <p>
-              页面首次挂载结束后，Koka 的 <code>main</code> 已返回。用户几秒后点击按钮，是一条全新的调用栈。如果直接执行 <code>count.set</code>，当初包在外面的处理器已不在栈上。Kokaine 的事件跳板会先建立新的异常边界，再用 root 重新安装读写处理器，然后才运行回调。
+              <code>reenter</code> 检查安装 listener 的 frame 仍存活，恢复 effect-plane gate 与 frame，清除 state-entry target，重新安装 Kokaine 的读写 handler，并把整个 callback 作为一个 batch 执行。这样，callback 内新建的 effect 与 cleanup 归属于准确的 DOM generation。它不会伪造已经返回的任意用户 handler，也不会把宿主事件投递说成 continuation resume。wasmweb 若使用对象句柄，仍须另行管理 JS 对象与持久 callback 的保留和释放。
             </p>
           </div>
         </section>
@@ -736,18 +754,18 @@ with fun read-source(source,tracked)
               <p class="section-number">11 / REAL KOKA DEMO</p>
               <h2>不是模拟器：这里运行真实的 Kokaine 示例</h2>
             </div>
-            <p>计数、平方、奇偶样式、输入绑定和条件区域都来自 Koka 源码，并编译到浏览器。</p>
+            <p>下面的控件、派生值、动态分支、事件与 cleanup 都来自拆分成多个模块的 Koka 源码，并编译到浏览器。</p>
           </header>
 
           <div class="demo-frame-wrap">
             <div class="demo-frame__bar">
               <span><i></i><i></i><i></i></span>
-              <code>examples/counter.kk → jsweb</code>
+              <code>examples/counter/*.kk + counter.kk → jsweb</code>
               <button class="button button--quiet" id="demo-reload" type="button">重新载入</button>
             </div>
             <iframe
               id="koka-demo"
-              title="Kokaine 真实计数器示例"
+              title="Kokaine 真实 Continuation Lab 示例"
               src="../../examples/counter/index.html"
               loading="lazy"
             ></iframe>
@@ -768,10 +786,11 @@ with fun read-source(source,tracked)
               <span>这套核心负责</span>
               <ul>
                 <li>按实际读取建立细粒度数据流</li>
-                <li>按正确顺序刷新，并用相等判断截断变化</li>
-                <li>合并批量写入，避免重复 DOM 工作</li>
+                <li>恢复 tracked get 的精确同步后缀，而非重跑 retained action</li>
+                <li>以 pure/effect plane 排序，并用相等判断截断发布</li>
+                <li>batch 延迟 settling；写值、版本递增与 notify 仍逐次发生</li>
                 <li>让读、写、UI 能力进入 Koka 的效应类型</li>
-                <li>让条件 UI、监听器与绑定跟随所有者清理</li>
+                <li>让 Draft、listener 与 DOM range 跟随 continuation frame 清理</li>
               </ul>
             </article>
             <article class="limits-grid__not-yet">
@@ -782,16 +801,17 @@ with fun read-source(source,tracked)
                 <li>异步资源、Suspense 与并发调度</li>
                 <li>跨线程更新</li>
                 <li>生产级 wasmweb DOM 适配器</li>
+                <li>恢复 mount 外已经返回的任意用户 handler 栈</li>
               </ul>
             </article>
           </div>
 
           <blockquote class="final-thesis">
             <p>
-              增量 UI 的本质，不是“让组件自动重渲染”，而是让每轮计算留下<strong>分散在 source 本地的一次性续体轨迹与 producer checkpoints</strong>，并在变化到来时，只验证、拉取和唤醒必要工作。
+              在 Kokaine 中，增量 UI 的关键不是给订阅队列换名字，而是让 tracked <code>get</code> 留下<strong>可直接恢复的精确同步后缀</strong>；source 本地索引这些 capability，写入安排 <code>Resume-work(trace)</code>，成功的 Draft 才替换旧 generation。
             </p>
             <footer>
-              Kokaine 的代数效应让捕获、读取、写入、memo 提交与批次边界从散落的内部约定，变成可处理的语言能力。
+              代数效应让读、写、HTML builder 与局部 override 成为可组合的语言能力；continuation 才是传播时被恢复的执行单位。bootstrap 的 calculation closure 只消费一次：首次 bootstrap 失败会 retire scope，不能用已消费 closure 重试；已经捕获的 replacement K 失败时则保持 Pending，可在后续 flush 重试。
             </footer>
           </blockquote>
 
@@ -807,7 +827,7 @@ with fun read-source(source,tracked)
               <a href="../architecture.md">Kokaine · Architecture</a>
               <a href="../../src/kokaine/reactive.kk">Kokaine · Reactive source</a>
             </div>
-            <p>框架对比以各项目官方文档描述的基础模型为准；图中“工作范围”是帮助理解路线的示意值，不是 benchmark。</p>
+            <p>框架对比以各项目官方文档描述的基础模型为准；所有队列动画、工作范围和次数都是 semantic simulation，用于解释状态转换，不是 runtime instrumentation 或 benchmark。</p>
           </section>
         </section>
 

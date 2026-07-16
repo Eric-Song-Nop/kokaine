@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 REPORT = ROOT / "docs" / "algebraic-effects-ui-report" / "index.html"
+REPORT_SCRIPT = REPORT.with_name("report.js")
 VOID_ELEMENTS = {
     "area",
     "base",
@@ -115,8 +116,10 @@ class ReportParser(HTMLParser):
 
 
 def main() -> int:
+    report_text = REPORT.read_text(encoding="utf-8")
+    script_text = REPORT_SCRIPT.read_text(encoding="utf-8")
     parser = ReportParser()
-    parser.feed(REPORT.read_text(encoding="utf-8"))
+    parser.feed(report_text)
     parser.close()
 
     errors = list(parser.errors)
@@ -151,6 +154,72 @@ def main() -> int:
     missing_sources = expected_sources - parser.external_hosts
     if missing_sources:
         errors.append(f"missing official comparison sources: {', '.join(sorted(missing_sources))}")
+
+    required_semantics = {
+        "Trace-read",
+        "Trace-entry",
+        "Resume-work(trace)",
+        "source-local",
+        "prefix",
+        "suffix",
+        "Draft",
+        "Live",
+        "Pending",
+        "Running",
+        "Dead",
+        "pure plane",
+        "effect plane",
+        "targeted settle",
+        "State-entry-read",
+        "memo(previous)",
+        "final control",
+        "html.emit",
+        "structural reentry",
+        "普通 JS callback",
+        "semantic simulation",
+    }
+    missing_semantics = {
+        term for term in required_semantics if term not in report_text
+    }
+    if missing_semantics:
+        errors.append(
+            "missing continuation-native concepts: "
+            + ", ".join(sorted(missing_semantics))
+        )
+
+    forbidden_legacy = {
+        "fired latch",
+        "root.root-current-token",
+        "subscribe-source(",
+        "settle-source(",
+        "one-shot generation token",
+        "旧 generation token",
+        "当前 token",
+        "标脏并排入",
+    }
+    combined_text = report_text + "\n" + script_text
+    legacy_hits = {term for term in forbidden_legacy if term in combined_text}
+    if legacy_hits:
+        errors.append(
+            "legacy observer/token semantics remain: "
+            + ", ".join(sorted(legacy_hits))
+        )
+
+    required_simulation_behaviors = {
+        "summary@double-old",
+        "stale ticket",
+        "capability 保持 Pending",
+        "write/version/notify",
+        "旧 child 变 Dead",
+    }
+    missing_behaviors = {
+        term for term in required_simulation_behaviors if term not in script_text
+    }
+    if missing_behaviors:
+        errors.append(
+            "report simulator misses continuation behavior: "
+            + ", ".join(sorted(missing_behaviors))
+        )
 
     if errors:
         print("report HTML checks failed:", file=sys.stderr)

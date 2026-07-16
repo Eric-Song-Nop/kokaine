@@ -5,10 +5,26 @@ Status: implemented, with the host-event boundary explicitly limited below.
 ## Decision
 
 Kokaine implements fine-grained propagation by capturing the real synchronous
-continuation suffix at each tracked `get`. A source indexes those continuation
-capabilities directly. Writes schedule and resume the affected suffixes; they do
-not wake an Observer whose retained action reruns a reactive function from its
-beginning.
+continuation suffix at each `get` occurrence in a calculator or binding running
+under `reify-trace`. A source indexes those continuation capabilities directly.
+Writes schedule and resume the affected suffixes; they do not wake an Observer
+whose retained action reruns a reactive function from its beginning. Sampled
+and ordinary dispatched reads return a cell value without leaving a trace.
+
+Algebraic effects provide the typed operation and handler boundaries around
+this mechanism; they are not, by themselves, the incremental mechanism. The
+decision therefore has two independent parts:
+
+1. keep `signal-read`, `signal-write`, and `html<e>` as composable capability
+   interfaces; and
+2. make the `raw ctl` continuation of synchronous `Track-read` the necessary
+   unit of propagation.
+
+An effect row records operations left unhandled by a function. A local handler
+can discharge an operation before it reaches that boundary, so the design does
+not claim that types alone detect a hidden or "smuggled" write handler. The
+continuation-native claim rests on stored runtime capabilities and behavioral
+mutation canaries, not merely on API effect rows.
 
 ## Why this decision was necessary
 
@@ -50,10 +66,18 @@ delivery, where the host operation is inherently asynchronous.
 
 ### Capture the suffix of synchronous `get`
 
-Chosen. `read-source` is a control operation handled with `raw ctl`; its
-`rcontext` is the exact remainder of the calculation after that read. Nested
-reads naturally produce a trace, and dynamic branches are rebuilt by whatever
-suffix actually runs.
+Chosen. `read-source` is a control operation; inside `reify-trace` its raw
+handler receives an `rcontext` that is the exact remainder of the calculation
+after that read. Nested reads naturally produce a trace, and dynamic branches
+are rebuilt by whatever suffix actually runs.
+
+Every tracked read occurrence inside that reified calculation is captured. Two
+consecutive `get`s of the same source do not share a token: the second read is a
+child trace inside the first read's suffix. If one write makes both pending, the
+parent is the runnable frontier. Resuming it executes only code after the first
+read, captures a new second-read child if control still reaches that operation,
+and retires the old child on successful replacement. This is essential both for
+the exact prefix/suffix guarantee and for branch-sensitive dependencies.
 
 ## Capability assessment
 
@@ -75,16 +99,21 @@ is pure. Kokaine avoids that conversion instead of casting it:
 Cross-plane owner relationships retain only a non-effectful continuation gate.
 They can validate state or defer work, but cannot resume an erased effectful K.
 
-The design does not require a public affine abstraction. A trace owns its typed
-resume and finalize capabilities, and state transitions prevent scheduling a
-retired generation. Retry semantics reuse the retained continuation capability;
-they do not retain the original calculation as a fallback.
+The design is explicitly **not affine**. A live trace retains typed resume and
+finalize capabilities and can be invalidated and resumed on multiple turns;
+state transitions prevent concurrent use or scheduling after retirement.
+Failure while replacing an already captured generation leaves that same
+continuation pending for retry instead of retaining the original calculation as
+a fallback. The bootstrap closure is separately one-shot: it is cleared before
+its first run, and an initial bootstrap failure retires the scope rather than
+replaying that closure.
 
 ## Runtime invariants
 
 The implementation is accepted only while all of the following remain true:
 
-1. `Track-read` captures the raw suffix at the synchronous read.
+1. A `Track-read` handled inside `reify-trace` captures the raw suffix at that
+   synchronous read; sampled or ordinary dispatched reads leave no trace.
 2. A source entry contains an actual typed plane, target trace, and owning read
    trace, not a wake callback.
 3. A resume ticket contains a trace. It never contains an observer plus action.
@@ -96,13 +125,16 @@ The implementation is accepted only while all of the following remain true:
    still a draft.
 7. Draft traces are activated only after publication succeeds. Failed or
    abandoned drafts are finalized.
-8. A pending K remains retryable after failure or final control without replaying
-   the prefix before its read.
+8. A pending replacement K remains retryable after failure or final control
+   without replaying the prefix before its read; an initial bootstrap failure
+   instead retires its one-shot scope.
 9. Synchronous memo validation follows only typed pure-producer capabilities.
 10. Structural children belong to the continuation frame that created them and
     cannot register from a retired frame.
 11. Re-entry restores a captured effect-plane gate and frame, resets the
     state-entry target, and executes one batched turn.
+12. Repeated tracked read occurrences are distinct nested traces; the scheduler
+    runs only the earliest pending ancestor on the current frontier.
 
 ## What “no dependency graph” means here
 
@@ -118,7 +150,35 @@ stand in for computations. Documentation should say “no separate Observer
 dependency graph,” not claim that the runtime contains no relationships or
 queues at all.
 
-## Stateful derivations
+## Frontier scheduling and typed settlement
+
+An unequal source commit increments its version, walks the source-local packed
+captures, and queues `Resume-work(target)` for each newly pending target. The
+package also retains the owning read so dead generations can be ignored and a
+state-entry target can be distinguished from the read that indexed it. Equality
+cuts propagation before this walk.
+
+The queue does not make every ticket immediately runnable. A pending trace whose
+parent is also pending or running is below the current continuation frontier
+and is deferred. The earliest pending ancestor resumes first and replaces the
+nested generation; stale descendant tickets are later skipped by state. This
+is the continuation equivalent of ordering work, without observer ranks or
+dirty/action pairs.
+
+Each root has a pure `plane<total>` for derivations and a `plane<e>` for user
+effects. Full flushes advance the runnable pure frontier before effect work.
+More importantly, a synchronous derived read calls `validate-derived` and
+settles only that producer's typed parent gates, input producers, entry target,
+and child trace. It cannot drain unrelated pure work or resume an effectful UI
+continuation through an erased row. `ok`, `deferred`, and `failed` results plus
+a per-producer guard make dependency ordering and cycle behavior explicit.
+
+## Stateless and stateful derivations
+
+`derive` is stateless. Its bootstrap invokes the calculator once, then retained
+read continuations calculate future values from current sources. Publication
+passes through the derived source's equality function, so equal results do not
+invalidate downstream traces.
 
 `memo(previous)` cannot subscribe to its own output and then behave like an
 ordinary acyclic memo. It instead captures a distinct state-entry continuation.
@@ -126,6 +186,20 @@ Each entry resume injects the latest committed value. Reads under that entry
 target the entry K so a change restarts the correct stateful suffix. Targeted
 settlement checks the entry before and after nested work to discard obsolete
 branch failures and deferrals.
+
+## Frames and lifetime
+
+A trace is both an execution boundary and the parent of a structural
+generation. Each replacement resume runs in a draft frame that records child
+effects, derived scopes, and cleanup actions for listeners and region contents
+created by that suffix. Only a successful publication activates the draft.
+Replacement marks the previous frame subtree dead before running its
+finalizers, so cleanup cannot register new work into a half-retired generation.
+
+This explicit owner ledger is necessary even though the Observer graph was
+removed. It answers "what must be finalized with this continuation generation,"
+not "which calculations should a source wake." Root disposal walks the same
+structure and is exhaustive and idempotent.
 
 ## Failure and final control
 
@@ -138,12 +212,34 @@ The triggering source commit remains committed. The affected trace remains
 pending, so a later flush retries the same captured suffix with current source
 state. This is deliberately not rollback to a retained old action.
 
+That retry rule applies after a live trace has been invalidated. Initial
+bootstrap is different: its slot is cleared before invocation, and bootstrap
+failure or abort retires the starting scope. There is no initial calculation
+closure left to replay.
+
+## HTML and UI consequence
+
+The `html<e>` handler and the reactive continuation runtime are complementary,
+not the same mechanism. `view` and nested tag handlers synchronously consume
+`emit` operations to build a backend-neutral tree. The HTML builder
+continuation is not retained as a component render loop.
+
+At DOM mount time, each live text, attribute, property, or region is translated
+into `create-effect(track, apply)`. The tracked half runs inside `reify-trace`
+and captures its synchronous signal-read suffixes; the apply half mutates the
+DOM without adding dependencies. A region keeps a persistent marker pair; its
+generation owns the mounted children and cleanup that clears between those
+markers. Replacing the binding's continuation generation retires those children
+and clears the old contents before mounting the replacement. This is
+fine-grained live binding plus whole-region replacement, not virtual-DOM
+reconciliation.
+
 ## Host re-entry decision
 
 Browser listeners must outlive the lexical call to `mount`, but a normal host
 callback does not preserve Koka's dynamic handler stack. The implemented
 `reentry<e>` therefore stores only the typed structural capability needed by the
-reactive runtime: root, continuation checkpoint, and generation frame.
+reactive runtime: root, generation gate, and generation frame.
 
 On invocation it reinstalls Kokaine's signal handlers and structural context,
 then batches the whole callback. This makes callback-created memos, effects, and
@@ -157,16 +253,17 @@ finalizing the parked K on retirement. That remains a separate future decision.
 
 ## Consequences
 
-- Prefix side effects before a tracked read run once; suffix side effects run on
-  that read's invalidations. Tests must assert this exact boundary.
+- Invalidating a captured read does not replay code before that capture. Such a
+  prefix can still lie inside an ancestor read's suffix and run when that
+  ancestor is invalidated; tests assert each exact boundary.
 - Source invalidation is local, but source capture compaction and deep retirement
   still have costs that should be measured under large traces.
 - The structural ownership ledger remains explicit because raw continuations,
   cleanup actions, DOM ranges, and listeners require deterministic retirement.
 - Arbitrary application effects used by an asynchronous callback need a handler
   installed inside that callback or at a new host runner.
-- Region updates replace their owned DOM range; the continuation runtime does
-  not imply keyed reconciliation.
+- Region updates replace contents between persistent marker nodes; the
+  continuation runtime does not imply keyed reconciliation.
 
 ## Verification and mutation canaries
 
