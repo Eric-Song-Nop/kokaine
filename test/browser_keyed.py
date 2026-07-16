@@ -1,4 +1,4 @@
-"""Browser contract tests for keyed ``For`` reconciliation."""
+"""Keyed example smoke and reconciliation contract tests."""
 
 from contextlib import contextmanager
 from functools import partial
@@ -60,6 +60,7 @@ with serve_project() as origin:
         page = browser.new_page()
         page_errors: list[str] = []
         console_errors: list[str] = []
+        response_errors: list[str] = []
         page.on("pageerror", lambda error: page_errors.append(str(error)))
         page.on(
             "console",
@@ -67,8 +68,46 @@ with serve_project() as origin:
             if message.type == "error"
             else None,
         )
+        page.on(
+            "response",
+            lambda response: response_errors.append(
+                f"{response.status} {response.url}"
+            )
+            if response.status >= 400
+            else None,
+        )
 
-        page.goto(f"{origin}/examples/counter/")
+        example_response = page.goto(f"{origin}/examples/keyed/")
+        assert example_response is not None and example_response.ok
+        page.wait_for_load_state("networkidle")
+
+        rows = page.locator("#keyed-list > .specimen-row")
+        expect(rows).to_have_count(3)
+        row_seventeen = rows.filter(has_text="STABLE KEY / 17")
+        expect(row_seventeen).to_have_count(1)
+        row_handle = row_seventeen.element_handle()
+        input_handle = row_seventeen.locator("input").element_handle()
+        assert row_handle is not None
+        assert input_handle is not None
+
+        row_seventeen.locator("input").fill("retained-note")
+        page.locator("#keyed-reverse").click()
+        expect(page.locator(".specimen-row h2")).to_have_text(
+            ["DOM range", "Structural owner", "Continuation"]
+        )
+        assert row_handle.evaluate(
+            "node => node === document.querySelector('.specimen-row:last-child')"
+        )
+        assert input_handle.evaluate("node => node.value") == "retained-note"
+
+        page.locator("#keyed-clear").click()
+        expect(page.locator("#keyed-empty")).to_be_visible()
+        expect(page.locator("#keyed-list")).to_have_count(0)
+        page.locator("#keyed-reset").click()
+        expect(page.locator("#keyed-list > .specimen-row")).to_have_count(3)
+
+        counter_response = page.goto(f"{origin}/examples/counter/")
+        assert counter_response is not None and counter_response.ok
         page.wait_for_load_state("networkidle")
         page.evaluate(
             """() => {
@@ -435,4 +474,5 @@ with serve_project() as origin:
 
         assert page_errors == [], f"uncaught browser errors: {page_errors!r}"
         assert console_errors == [], f"console errors: {console_errors!r}"
+        assert response_errors == [], f"HTTP resource errors: {response_errors!r}"
         browser.close()

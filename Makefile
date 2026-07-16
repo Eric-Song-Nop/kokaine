@@ -47,7 +47,7 @@ build-report:
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
 		--buildname=report examples/report.kk
 
-build-browser-fixtures: build-counter
+build-browser-fixtures: build-counter build-keyed
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
 		--buildname=dom-errors test/dom-errors.kk
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
