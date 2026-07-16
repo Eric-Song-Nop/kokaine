@@ -180,28 +180,29 @@ pub fun main()
     val doubled = derive(root,0,fn() count.get * 2)
     (count,doubled)
 
-  val page = view fn()
-    div([class("counter")],fn()
-      button([kind("button"),
-              on-click(fn(_) count.modify(fn(n) n + 1))],fn()
-        text("Increment")
-      )
-      strong([],fn()
-        text-live(fn() doubled.get.show)
-      )
-    )
+  val page = view
+    div(attrs=[class("counter")])
+      button("Increment",attrs=[
+        kind("button"),
+        on-click(fn(_) count.modify(fn(n) n + 1))
+      ])
+      strong
+        text { doubled.get.show }
 
   val stop = mount(root,query("#app"),page)
   ()
 ```
 
-The `view fn() ...` block is normal Koka syntax. Tag helpers delimit nested
-`html` handlers. This synchronous builder algebraic effect produces a `view`
-without retaining its continuation as the propagation engine. When mounted,
-`text-live`, live attributes/properties, and `region` become
-continuation-backed effects. Static
+The indented `view` and tag blocks are normal Koka trailing-lambda syntax. Pass
+attributes through the optional `attrs` argument; a single static text child
+can use the string overload directly. A trailing lambda selects a live binding,
+as in `text { doubled.get.show }`, while `dynamic` delimits live structure.
+Tag helpers delimit nested `html` handlers. This synchronous builder algebraic
+effect produces a `view` without retaining its continuation as the propagation
+engine. When mounted, live text, attributes/properties, and dynamic regions
+become continuation-backed effects. Static
 structure is created once; each live binding owns the continuation-backed
-effect targeting its node, while mount and region scopes own DOM ranges.
+effect targeting its node, while mount and dynamic scopes own DOM ranges.
 
 For deterministic snapshots or server output, replace the DOM import with
 `kokaine/ssr` and call `render(root,page)`.

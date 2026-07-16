@@ -346,7 +346,7 @@ with serve_project() as origin:
         assert_active_state(desktop, -14)
         expect(desktop.locator("#peak-value")).to_have_text("14")
 
-        # checked-live and disabled-live update actual DOM properties.
+        # Live checked and disabled bindings update actual DOM properties.
         desktop.locator("#freeze-toggle").check()
         expect(desktop.locator("#freeze-toggle")).to_be_checked()
         expect(desktop.locator("#active-inc")).to_be_disabled()

@@ -144,10 +144,6 @@ fun text-tag(name : string, content : string,
              attributes : list<attribute<e>>) : html<e> ()
   emit(Element(name,attributes,[Text(content)]))
 
-pub fun element(name : string, attributes : list<attribute<e>>,
-                children : () -> <html<e>|p> ()) : <html<e>|p> ()
-  container-tag(name,attributes,children)
-
 pub fun void/element-empty(name : string,
                            attrs : list<attribute<e>> = []) : html<e> ()
   emit(Element(name,attrs,[]))
@@ -158,23 +154,16 @@ pub fun fragment(children : () -> <html<e>|p> ()) : <html<e>|p> ()
 pub fun text(content : string) : html<e> ()
   emit(Text(content))
 
-pub fun text-live(read : () -> signal-read string) : html<e> ()
-  emit(Live-text(read))
-
 // Static overloading lets static and live text share the plain `text` name.
 pub fun live/text(read : () -> signal-read string) : html<e> ()
   emit(Live-text(read))
 
-pub fun region-view(read : () -> signal-read view<e>) : html<e> ()
+fun emit-region(read : () -> signal-read view<e>) : html<e> ()
   emit(Region(read))
-
-// Compatibility entry while repository callers migrate to `dynamic`.
-pub fun region(read : () -> signal-read view<e>) : html<e> ()
-  region-view(read)
 
 // Dynamic structure reads signals and rebuilds just this region.
 pub fun dynamic(children : () -> <html<e>,signal-read> ()) : html<e> ()
-  region-view(fn() view(children))
+  emit-region(fn() view(children))
 
 pub fun trusted(content : trusted-html) : html<e> ()
   emit(Raw-html(content))
@@ -190,10 +179,6 @@ pub fun attr(name : string, value : string) : attribute<e>
 pub fun attr-if(name : string, enabled : bool) : attribute<e>
   Boolean-attribute(name,enabled)
 
-pub fun attr-live(name : string,
-                  read : () -> signal-read maybe<string>) : attribute<e>
-  Live-attribute(name,read)
-
 pub fun live/attr(name : string,
                   read : () -> signal-read maybe<string>) : attribute<e>
   Live-attribute(name,read)
@@ -204,10 +189,6 @@ pub fun live-string/attr(name : string,
 
 pub fun prop(name : string, value : property-value) : attribute<e>
   Property(name,value)
-
-pub fun prop-live(name : string,
-                  read : () -> signal-read property-value) : attribute<e>
-  Live-property(name,read)
 
 pub fun live/prop(name : string,
                   read : () -> signal-read property-value) : attribute<e>
@@ -280,26 +261,17 @@ pub fun live/data(label : string,
 pub fun value(value : string) : attribute<e>
   prop("value",String-property(value))
 
-pub fun value-live(read : () -> signal-read string) : attribute<e>
-  prop-live("value",fn() String-property(read()))
-
 pub fun live/value(read : () -> signal-read string) : attribute<e>
   Live-property("value",fn() String-property(read()))
 
 pub fun checked(value : bool) : attribute<e>
   prop("checked",Bool-property(value))
 
-pub fun checked-live(read : () -> signal-read bool) : attribute<e>
-  prop-live("checked",fn() Bool-property(read()))
-
 pub fun live/checked(read : () -> signal-read bool) : attribute<e>
   Live-property("checked",fn() Bool-property(read()))
 
 pub fun disabled(value : bool) : attribute<e>
   attr-if("disabled",value)
-
-pub fun disabled-live(read : () -> signal-read bool) : attribute<e>
-  attr-live("disabled",fn() if read() then Just("") else Nothing)
 
 pub fun live/disabled(read : () -> signal-read bool) : attribute<e>
   Live-attribute("disabled",fn() if read() then Just("") else Nothing)
@@ -447,72 +419,3 @@ pub fun void/hr(attrs : list<attribute<e>> = []) : html<e> ()
 
 pub fun void/br(attrs : list<attribute<e>> = []) : html<e> ()
   emit(Element("br",attrs,[]))
-
-
-// --------------------------------------------------------------------------
-// Legacy element surface (removed after repository migration)
-// --------------------------------------------------------------------------
-
-pub fun div(attributes : list<attribute<e>>,
-            children : () -> <html<e>|p> ()) : <html<e>|p> ()
-  element("div",attributes,children)
-
-pub fun span(attributes : list<attribute<e>>,
-             children : () -> <html<e>|p> ()) : <html<e>|p> ()
-  element("span",attributes,children)
-
-pub fun main-tag(attributes : list<attribute<e>>,
-                 children : () -> <html<e>|p> ()) : <html<e>|p> ()
-  element("main",attributes,children)
-
-pub fun section(attributes : list<attribute<e>>,
-                children : () -> <html<e>|p> ()) : <html<e>|p> ()
-  element("section",attributes,children)
-
-pub fun header(attributes : list<attribute<e>>,
-               children : () -> <html<e>|p> ()) : <html<e>|p> ()
-  element("header",attributes,children)
-
-pub fun footer(attributes : list<attribute<e>>,
-               children : () -> <html<e>|p> ()) : <html<e>|p> ()
-  element("footer",attributes,children)
-
-pub fun h1(attributes : list<attribute<e>>,
-           children : () -> <html<e>|p> ()) : <html<e>|p> ()
-  element("h1",attributes,children)
-
-pub fun h2(attributes : list<attribute<e>>,
-           children : () -> <html<e>|p> ()) : <html<e>|p> ()
-  element("h2",attributes,children)
-
-pub fun p(attributes : list<attribute<e>>,
-          children : () -> <html<e>|p> ()) : <html<e>|p> ()
-  element("p",attributes,children)
-
-pub fun strong(attributes : list<attribute<e>>,
-               children : () -> <html<e>|p> ()) : <html<e>|p> ()
-  element("strong",attributes,children)
-
-pub fun ul(attributes : list<attribute<e>>,
-           children : () -> <html<e>|p> ()) : <html<e>|p> ()
-  element("ul",attributes,children)
-
-pub fun ol(attributes : list<attribute<e>>,
-           children : () -> <html<e>|p> ()) : <html<e>|p> ()
-  element("ol",attributes,children)
-
-pub fun li(attributes : list<attribute<e>>,
-           children : () -> <html<e>|p> ()) : <html<e>|p> ()
-  element("li",attributes,children)
-
-pub fun button(attributes : list<attribute<e>>,
-               children : () -> <html<e>|p> ()) : <html<e>|p> ()
-  element("button",attributes,children)
-
-pub fun label(attributes : list<attribute<e>>,
-              children : () -> <html<e>|p> ()) : <html<e>|p> ()
-  element("label",attributes,children)
-
-pub fun a(attributes : list<attribute<e>>,
-          children : () -> <html<e>|p> ()) : <html<e>|p> ()
-  element("a",attributes,children)
