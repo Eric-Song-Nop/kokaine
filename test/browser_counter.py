@@ -1,8 +1,9 @@
-"""End-to-end checks for the jsweb counter example.
+"""End-to-end checks for the jsweb Continuation Lab example.
 
-The checks deliberately inspect DOM state rather than implementation details,
-so they exercise event dispatch, signals, memos, live bindings, and reactive
-region cleanup together.
+The public example exercises dynamic tracked suffixes, equality publication
+boundaries, stateful memo entries, untracked sampling, explicit batching,
+host re-entry, and structural cleanup. The separate lifecycle fixture keeps
+the lower-level disposal and stale-listener stress checks.
 """
 
 from contextlib import contextmanager
@@ -45,28 +46,22 @@ def assert_no_horizontal_overflow(page) -> None:
     ), "the responsive layout overflows the viewport"
 
 
-def assert_counter_state(page, value: int) -> None:
-    """Assert every public projection of the counter's current value."""
+def read_int(page, selector: str) -> int:
+    return int(page.locator(selector).text_content())
+
+
+def assert_active_state(page, value: int) -> None:
+    """Assert the direct public projections of the selected source."""
     parity = "EVEN" if value % 2 == 0 else "ODD"
-    phase = (
-        "System at rest"
-        if value == 0
-        else "Positive phase"
-        if value > 0
-        else "Negative phase"
+    expect(page.locator("#active-value")).to_have_text(str(value))
+    expect(page.locator("#square-value")).to_have_text(str(value * value))
+    expect(page.locator("#parity-value")).to_have_text(parity)
+    expect(page.locator("#reading-panel")).to_have_class(
+        f"reading-card reading-card--{parity.lower()}"
     )
-    expect(page.locator(".reading__number")).to_have_text(str(value))
-    expect(page.locator(".reading__derived strong").nth(0)).to_have_text(
-        str(value * value)
-    )
-    expect(page.locator(".reading__derived strong").nth(1)).to_have_text(parity)
-    expect(page.locator(".status p")).to_contain_text(phase)
-    expect(page.locator(".reading")).to_have_class(
-        f"reading reading--{parity.lower()}"
-    )
-    expect(page.locator(".reading")).to_have_attribute(
-        "style", f"--level: {abs(value) % 9}"
-    )
+    assert page.locator("#reading-panel").evaluate(
+        "node => node.style.getPropertyValue('--level').trim()"
+    ) == str(abs(value) % 9)
 
 
 with serve_project() as origin:
@@ -201,26 +196,172 @@ with serve_project() as origin:
         assert desktop.evaluate("__kokaineLifecycle.childRuns()") == 1
         assert desktop.evaluate("__kokaineLifecycle.childCleanups()") == 1
 
-        reading = desktop.locator(".reading__number")
-        assert_counter_state(desktop, 0)
+        # Initial bootstrap publishes each stateful/effect entry exactly once.
+        assert_active_state(desktop, 0)
+        expect(desktop.locator("#channel-a")).to_have_text("0")
+        expect(desktop.locator("#channel-b")).to_have_text("10")
+        expect(desktop.locator("#total-value")).to_have_text("10")
+        expect(desktop.locator("#peak-value")).to_have_text("0")
+        expect(desktop.locator("#band-index")).to_have_text("ZERO")
+        expect(desktop.locator("#band-entered-at")).to_have_text("0")
+        expect(desktop.locator("#band-revisions")).to_have_text("1")
+        expect(desktop.locator("#sampled-operator")).to_have_text("Koka")
+        expect(desktop.locator("#heartbeat")).to_have_text("0")
+        expect(desktop.locator("#heartbeat-runs")).to_have_text("1")
+        expect(desktop.locator("#effect-runs")).to_have_text("1")
+        expect(desktop.locator("#effect-snapshot")).to_have_text("A → 0")
+        expect(desktop.locator("#probe-active")).to_have_text("NO")
+        expect(desktop.locator("#probe-runs")).to_have_text("0")
+        expect(desktop.locator("#probe-cleanups")).to_have_text("0")
 
-        increase = desktop.get_by_role("button", name="Increase value")
-        decrease = desktop.get_by_role("button", name="Decrease value")
-        increase.click()
-        increase.click()
-        if reading.text_content() != "2":
-            raise AssertionError(
-                "click handler did not propagate; "
-                f"page errors={page_errors!r}, console errors={console_errors!r}"
-            )
-        assert_counter_state(desktop, 2)
+        # An inactive source updates fan-in but cannot resume the selected suffix.
+        initial_scope = desktop.locator("#channel-scope").element_handle()
+        desktop.locator("#channel-b-inc").click()
+        expect(desktop.locator("#channel-b")).to_have_text("11")
+        expect(desktop.locator("#total-value")).to_have_text("11")
+        assert_active_state(desktop, 0)
+        expect(desktop.locator("#effect-runs")).to_have_text("1")
+        expect(desktop.locator("#band-revisions")).to_have_text("1")
+        assert initial_scope.evaluate("node => node.isConnected"), (
+            "an inactive source write rebuilt the structural region"
+        )
 
-        decrease.click()
-        decrease.click()
-        decrease.click()
-        assert_counter_state(desktop, -1)
+        # Switching the selector retires the old branch and captures channel B.
+        desktop.locator("#active-b").check()
+        assert_active_state(desktop, 11)
+        expect(desktop.locator("#effect-runs")).to_have_text("2")
+        expect(desktop.locator("#effect-snapshot")).to_have_text("B → 11")
+        expect(desktop.locator("#band-index")).to_have_text("POSITIVE")
+        expect(desktop.locator("#band-entered-at")).to_have_text("11")
+        expect(desktop.locator("#band-revisions")).to_have_text("2")
+        assert not initial_scope.evaluate("node => node.isConnected"), (
+            "the old selected-channel region generation stayed connected"
+        )
 
+        # Channel A is now absent from the active continuation suffix.
+        desktop.locator("#channel-a-inc").click()
+        expect(desktop.locator("#channel-a")).to_have_text("1")
+        expect(desktop.locator("#total-value")).to_have_text("12")
+        assert_active_state(desktop, 11)
+        expect(desktop.locator("#effect-runs")).to_have_text("2")
+
+        # derive-by recomputes but its equality boundary suppresses publication.
+        desktop.locator("#active-inc").click()
+        assert_active_state(desktop, 12)
+        expect(desktop.locator("#band-index")).to_have_text("POSITIVE")
+        expect(desktop.locator("#band-entered-at")).to_have_text("11")
+        expect(desktop.locator("#band-revisions")).to_have_text("2")
+        expect(desktop.locator("#peak-value")).to_have_text("12")
+
+        # The greeting tracks input, while the untracked sample waits for active.
+        operator = desktop.get_by_label("OPERATOR")
+        unsafe_name = "Ada <effect> & 李 λ"
+        operator.fill(unsafe_name)
+        expect(operator).to_have_value(unsafe_name)
+        expect(desktop.locator("#greeting")).to_have_text(
+            f"Signal received, {unsafe_name}."
+        )
+        assert desktop.locator("#greeting").evaluate(
+            "node => node.childElementCount"
+        ) == 0, "an operator name was interpreted as HTML"
+        expect(desktop.locator("#sampled-operator")).to_have_text("Koka")
+        desktop.locator("#active-inc").click()
+        assert_active_state(desktop, 13)
+        expect(desktop.locator("#sampled-operator")).to_have_text(unsafe_name)
+        expect(desktop.locator("#peak-value")).to_have_text("13")
+
+        # A same-value signal still resumes its downstream state entry.
+        effect_before_pulses = read_int(desktop, "#effect-runs")
+        desktop.locator("#pulse-heartbeat").click()
+        desktop.locator("#pulse-heartbeat").click()
+        expect(desktop.locator("#heartbeat")).to_have_text("0")
+        expect(desktop.locator("#heartbeat-runs")).to_have_text("3")
+        assert read_int(desktop, "#effect-runs") == effect_before_pulses
+
+        # The explicit swap batch exposes only its final coherent DOM state.
+        desktop.evaluate(
+            """() => {
+                const active = document.querySelector('#active-value');
+                const total = document.querySelector('#total-value');
+                globalThis.__labMutations = { active: [], total: [] };
+                globalThis.__labObservers = [
+                    new MutationObserver(records => {
+                        records.forEach(() => {
+                            globalThis.__labMutations.active.push(active.textContent);
+                        });
+                    }),
+                    new MutationObserver(records => {
+                        records.forEach(() => {
+                            globalThis.__labMutations.total.push(total.textContent);
+                        });
+                    })
+                ];
+                globalThis.__labObservers[0].observe(active, {
+                    characterData: true, childList: true, subtree: true
+                });
+                globalThis.__labObservers[1].observe(total, {
+                    characterData: true, childList: true, subtree: true
+                });
+            }"""
+        )
+        desktop.locator("#swap-batch").click()
+        expect(desktop.locator("#channel-a")).to_have_text("13")
+        expect(desktop.locator("#channel-b")).to_have_text("1")
+        expect(desktop.locator("#active-value")).to_have_text("1")
+        expect(desktop.locator("#total-value")).to_have_text("14")
+        desktop.evaluate("() => new Promise(resolve => setTimeout(resolve, 0))")
+        mutations = desktop.evaluate(
+            """() => {
+                globalThis.__labObservers.forEach(observer => observer.disconnect());
+                return globalThis.__labMutations;
+            }"""
+        )
+        assert mutations["active"] == ["1"], (
+            f"swap exposed intermediate active DOM states: {mutations!r}"
+        )
+        assert mutations["total"] == [], (
+            f"equal fan-in output republished during swap: {mutations!r}"
+        )
+        expect(desktop.locator("#peak-value")).to_have_text("13")
+
+        # Cross equality bands and verify previous state advances only there.
         zero = desktop.get_by_role("button", name="ZERO")
+        zero.click()
+        assert_active_state(desktop, 0)
+        expect(desktop.locator("#band-index")).to_have_text("ZERO")
+        expect(desktop.locator("#band-entered-at")).to_have_text("0")
+        expect(desktop.locator("#band-revisions")).to_have_text("3")
+        desktop.locator("#active-dec").click()
+        assert_active_state(desktop, -1)
+        expect(desktop.locator("#band-index")).to_have_text("NEGATIVE")
+        expect(desktop.locator("#band-entered-at")).to_have_text("-1")
+        expect(desktop.locator("#band-revisions")).to_have_text("4")
+        desktop.locator("#active-dec").click()
+        assert_active_state(desktop, -2)
+        expect(desktop.locator("#band-entered-at")).to_have_text("-1")
+        expect(desktop.locator("#band-revisions")).to_have_text("4")
+
+        for _ in range(12):
+            desktop.locator("#active-dec").click()
+        assert_active_state(desktop, -14)
+        expect(desktop.locator("#peak-value")).to_have_text("14")
+
+        # checked-live and disabled-live update actual DOM properties.
+        desktop.locator("#freeze-toggle").check()
+        expect(desktop.locator("#freeze-toggle")).to_be_checked()
+        expect(desktop.locator("#active-inc")).to_be_disabled()
+        expect(desktop.locator("#active-b")).to_be_disabled()
+        expect(desktop.locator("#operator")).to_be_disabled()
+        frozen_value = read_int(desktop, "#channel-b")
+        desktop.locator("#active-inc").evaluate("node => node.click()")
+        assert read_int(desktop, "#channel-b") == frozen_value
+        desktop.locator("#freeze-toggle").uncheck()
+        expect(desktop.locator("#active-inc")).to_be_enabled()
+        desktop.locator("#active-inc").click()
+        assert_active_state(desktop, -13)
+
+        # Full callback capability preserves preventDefault; equal sets do not
+        # publish or replace the stable structural branch.
         default_was_prevented = zero.evaluate(
             """button => {
                 const event = new MouseEvent('click', {
@@ -232,8 +373,81 @@ with serve_project() as origin:
             }"""
         )
         assert default_was_prevented, "the full callback lost its UI capability"
-        assert_counter_state(desktop, 0)
+        assert_active_state(desktop, 0)
+        stable_scope = desktop.locator("#channel-scope").element_handle()
+        stable_effect_runs = read_int(desktop, "#effect-runs")
+        stable_band_revisions = read_int(desktop, "#band-revisions")
+        reset_results = zero.evaluate(
+            """button => Array.from({length: 50}, () => {
+                const event = new MouseEvent('click', {
+                    bubbles: true,
+                    cancelable: true
+                });
+                const dispatched = button.dispatchEvent(event);
+                return event.defaultPrevented && !dispatched;
+            })"""
+        )
+        assert all(reset_results), "a repeated ZERO event lost preventDefault"
+        assert stable_scope.evaluate("node => node.isConnected"), (
+            "equal source writes rebuilt the stable region"
+        )
+        assert read_int(desktop, "#effect-runs") == stable_effect_runs
+        assert read_int(desktop, "#band-revisions") == stable_band_revisions
 
+        # Event-created child work belongs to this exact region generation.
+        armed_scope = desktop.locator("#channel-scope").element_handle()
+        old_arm = desktop.locator("#probe-arm").element_handle()
+        desktop.locator("#probe-arm").click()
+        expect(desktop.locator("#probe-active")).to_have_text("YES")
+        expect(desktop.locator("#probe-arm")).to_be_disabled()
+        expect(desktop.locator("#probe-runs")).to_have_text("1")
+        expect(desktop.locator("#probe-cleanups")).to_have_text("0")
+        desktop.locator("#active-inc").click()
+        expect(desktop.locator("#probe-runs")).to_have_text("2")
+        assert armed_scope.evaluate("node => node.isConnected"), (
+            "a selected source write rebuilt the region instead of its binding"
+        )
+        desktop.locator("#pulse-heartbeat").click()
+        expect(desktop.locator("#probe-runs")).to_have_text("3")
+
+        desktop.locator("#active-b").uncheck()
+        expect(desktop.locator("#probe-active")).to_have_text("NO")
+        expect(desktop.locator("#probe-cleanups")).to_have_text("1")
+        assert not armed_scope.evaluate("node => node.isConnected")
+        retired_runs = read_int(desktop, "#probe-runs")
+        old_arm.evaluate(
+            """node => node.dispatchEvent(new MouseEvent('click', {
+                bubbles: true,
+                cancelable: true
+            }))"""
+        )
+        desktop.locator("#pulse-heartbeat").click()
+        assert read_int(desktop, "#probe-runs") == retired_runs, (
+            "a retired event-created child resumed after branch replacement"
+        )
+        expect(desktop.locator("#probe-active")).to_have_text("NO")
+
+        desktop.locator("#probe-arm").click()
+        expect(desktop.locator("#probe-active")).to_have_text("YES")
+        assert read_int(desktop, "#probe-runs") == retired_runs + 1
+        second_scope = desktop.locator("#channel-scope").element_handle()
+        desktop.locator("#probe-toggle").uncheck()
+        expect(desktop.locator("#probe-active")).to_have_text("NO")
+        expect(desktop.locator("#probe-cleanups")).to_have_text("2")
+        assert not second_scope.evaluate("node => node.isConnected")
+        hidden_scope = desktop.locator("#channel-scope").element_handle()
+        desktop.locator("#probe-toggle").check()
+        assert not hidden_scope.evaluate("node => node.isConnected")
+        expect(desktop.locator("#probe-arm")).to_be_visible()
+
+        # Restore public defaults through a multi-source batch, then stress the
+        # captured read suffixes with synchronous browser event delivery.
+        desktop.locator("#reset-batch").click()
+        expect(desktop.locator("#channel-a")).to_have_text("0")
+        expect(desktop.locator("#channel-b")).to_have_text("10")
+        expect(desktop.locator("#active-b")).not_to_be_checked()
+        expect(desktop.locator("#operator")).to_have_value("Koka")
+        assert_active_state(desktop, 0)
         desktop.evaluate(
             """() => {
                 const increase = document.querySelector(
@@ -251,66 +465,22 @@ with serve_project() as origin:
                 }
             }"""
         )
-        assert_counter_state(desktop, 100)
-
-        desktop.evaluate(
-            """() => {
-                const decrease = document.querySelector(
-                    '[aria-label="Decrease value"]'
-                );
-                const increase = document.querySelector(
-                    '[aria-label="Increase value"]'
-                );
-                for (let index = 0; index < 143; index += 1) {
-                    decrease.dispatchEvent(new MouseEvent('click', {bubbles: true}));
-                }
-                for (let index = 0; index < 31; index += 1) {
-                    increase.dispatchEvent(new MouseEvent('click', {bubbles: true}));
-                }
-            }"""
-        )
-        assert_counter_state(desktop, -12)
-
-        operator = desktop.get_by_label("OPERATOR")
-        unsafe_name = "Ada <effect> & 李 λ"
-        operator.fill("")
-        operator.fill(unsafe_name)
-        expect(operator).to_have_value(unsafe_name)
-        expect(desktop.locator("#greeting")).to_have_text(
-            f"Signal received, {unsafe_name}."
-        )
-        assert desktop.locator("#greeting").evaluate(
-            "node => node.childElementCount"
-        ) == 0, "an operator name was interpreted as HTML"
-        increase.click()
-        assert_counter_state(desktop, -11)
-        expect(desktop.locator("#greeting")).to_have_text(
-            f"Signal received, {unsafe_name}."
-        )
-
-        zero.click()
-        assert_counter_state(desktop, 0)
-        stable_status = desktop.locator(".status p").element_handle()
-        reset_results = zero.evaluate(
-            """button => Array.from({length: 50}, () => {
-                const event = new MouseEvent('click', {
-                    bubbles: true,
-                    cancelable: true
-                });
-                const dispatched = button.dispatchEvent(event);
-                return event.defaultPrevented && !dispatched;
-            })"""
-        )
-        assert all(reset_results), "a repeated ZERO event lost preventDefault"
-        assert stable_status.evaluate("node => node.isConnected"), (
-            "no-op reset callbacks rebuilt a stable reactive region"
-        )
-        assert stable_status.text_content().startswith("System at rest")
-        assert_counter_state(desktop, 0)
+        assert_active_state(desktop, 100)
+        expect(desktop.locator("#channel-a")).to_have_text("100")
+        expect(desktop.locator("#channel-b")).to_have_text("10")
+        expect(desktop.locator("#total-value")).to_have_text("110")
         assert_no_horizontal_overflow(desktop)
 
+        source_box = desktop.locator("#source-board").bounding_box()
+        ledger_box = desktop.locator("#continuation-ledger").bounding_box()
+        assert ledger_box["x"] >= source_box["x"] + source_box["width"] - 2, (
+            "the desktop continuation ledger did not sit beside the source board"
+        )
+
         ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
-        desktop.screenshot(path=ARTIFACT_DIR / "counter-desktop.png", full_page=True)
+        desktop.screenshot(
+            path=ARTIFACT_DIR / "continuation-lab-desktop.png", full_page=True
+        )
 
         mobile = browser.new_page(viewport={"width": 375, "height": 812})
         mobile.on("pageerror", lambda error: page_errors.append(str(error)))
@@ -322,7 +492,7 @@ with serve_project() as origin:
         )
         mobile.goto(base_url)
         mobile.wait_for_load_state("networkidle")
-        assert_counter_state(mobile, 0)
+        assert_active_state(mobile, 0)
         mobile.evaluate(
             """() => {
                 const increase = document.querySelector(
@@ -339,36 +509,25 @@ with serve_project() as origin:
                 }
             }"""
         )
-        assert_counter_state(mobile, -16)
+        assert_active_state(mobile, -16)
         mobile.get_by_label("OPERATOR").fill("移动 λ")
         expect(mobile.locator("#greeting")).to_have_text("Signal received, 移动 λ.")
         assert_no_horizontal_overflow(mobile)
 
-        mobile.set_viewport_size({"width": 780, "height": 1000})
-        narrow_reading = mobile.locator(".reading").bounding_box()
-        narrow_controls = mobile.locator(".controls").bounding_box()
-        assert narrow_controls["y"] >= (
-            narrow_reading["y"] + narrow_reading["height"] - 2
-        ), "the 780px layout did not stack its controls"
-
-        mobile.set_viewport_size({"width": 781, "height": 1000})
-        wide_reading = mobile.locator(".reading").bounding_box()
-        wide_controls = mobile.locator(".controls").bounding_box()
-        assert wide_controls["x"] >= (
-            wide_reading["x"] + wide_reading["width"] - 2
-        ), "the 781px layout did not restore its two-column console"
-
-        mobile.set_viewport_size({"width": 375, "height": 812})
-        mobile.get_by_role("button", name="ZERO").click()
-        assert_counter_state(mobile, 0)
-        assert_no_horizontal_overflow(mobile)
-        mobile.screenshot(path=ARTIFACT_DIR / "counter-mobile.png", full_page=True)
+        mobile_source = mobile.locator("#source-board").bounding_box()
+        mobile_ledger = mobile.locator("#continuation-ledger").bounding_box()
+        assert mobile_ledger["y"] >= (
+            mobile_source["y"] + mobile_source["height"] - 2
+        ), "the mobile continuation ledger did not stack below the source board"
+        mobile.screenshot(
+            path=ARTIFACT_DIR / "continuation-lab-mobile.png", full_page=True
+        )
 
         browser.close()
 
         assert not page_errors, "browser exceptions:\n" + "\n".join(page_errors)
         assert not console_errors, "browser console errors:\n" + "\n".join(console_errors)
         print(
-            "browser: burst propagation, DOM safety, lifecycle churn, disposal, "
-            "and responsive layout passed"
+            "browser: continuation features, batching, host re-entry, lifecycle "
+            "churn, DOM safety, disposal, and responsive layout passed"
         )
