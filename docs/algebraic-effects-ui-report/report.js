@@ -4,19 +4,10 @@
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const tick = (duration = 220) => new Promise((resolve) => {
-    window.setTimeout(resolve, reducedMotion ? 12 : duration);
-  });
 
   function setText(selector, value, root = document) {
     const element = $(selector, root);
     if (element) element.textContent = String(value);
-  }
-
-  function setButtonsDisabled(buttons, disabled) {
-    buttons.filter(Boolean).forEach((button) => {
-      button.disabled = disabled;
-    });
   }
 
   // Reading progress, current section, and mobile table of contents.
@@ -65,137 +56,6 @@
       tocToggle.setAttribute("aria-expanded", "false");
     });
   });
-
-  // Semantic simulation: source-local capture index and exact suffix work.
-  const flow = { count: 2, version: 0, cycle: 0, running: false, links: [] };
-  const flowStage = $("#flow-graph");
-  const flowButtons = [$("#flow-plus"), $("#flow-batch"), $("#flow-reset")];
-  const flowConnections = [
-    ["node-count", "node-square", "count-square"],
-    ["node-count", "node-parity", "count-parity"],
-    ["node-count", "node-dom-number", "count-number"],
-    ["node-square", "node-dom-square", "square-dom"],
-    ["node-parity", "node-dom-theme", "parity-dom"],
-  ];
-
-  function drawConnection(fromId, toId, name) {
-    const from = $(`#${fromId}`);
-    const to = $(`#${toId}`);
-    let edge = $(`.graph-edge[data-edge="${name}"]`, flowStage);
-    if (!edge) {
-      edge = document.createElement("span");
-      edge.className = "graph-edge";
-      edge.dataset.edge = name;
-      edge.setAttribute("aria-hidden", "true");
-      flowStage.appendChild(edge);
-    }
-    const stageRect = flowStage.getBoundingClientRect();
-    const fromRect = from.getBoundingClientRect();
-    const toRect = to.getBoundingClientRect();
-    const startX = fromRect.left - stageRect.left + fromRect.width;
-    const startY = fromRect.top - stageRect.top + fromRect.height / 2;
-    const endX = toRect.left - stageRect.left;
-    const endY = toRect.top - stageRect.top + toRect.height / 2;
-    edge.style.left = `${startX}px`;
-    edge.style.top = `${startY}px`;
-    edge.style.width = `${Math.hypot(endX - startX, endY - startY)}px`;
-    edge.style.transform = `rotate(${Math.atan2(endY - startY, endX - startX) * (180 / Math.PI)}deg)`;
-    return edge;
-  }
-
-  function redrawFlowTrace() {
-    flow.links = flowConnections.map(([from, to, name]) => ({
-      name,
-      element: drawConnection(from, to, name),
-    }));
-  }
-
-  function clearFlowActivity() {
-    $$(".is-active", flowStage).forEach((element) => element.classList.remove("is-active"));
-  }
-
-  function activateFlow(nodes, links) {
-    clearFlowActivity();
-    nodes.forEach((name) => $(`[data-node="${name}"]`, flowStage)?.classList.add("is-active"));
-    links.forEach((name) => flow.links.find((link) => link.name === name)?.element.classList.add("is-active"));
-  }
-
-  function renderTrace(items) {
-    const trace = $("#flow-trace");
-    trace.replaceChildren();
-    items.forEach((item, index) => {
-      const li = document.createElement("li");
-      const number = document.createElement("span");
-      number.textContent = String(index + 1).padStart(2, "0");
-      li.append(number, document.createTextNode(item));
-      trace.appendChild(li);
-    });
-  }
-
-  async function runFlow(writes, reset = false) {
-    if (flow.running) return;
-    const next = reset ? 2 : flow.count + writes;
-    if (next === flow.count) {
-      renderTrace(["新旧值相等：write handler 不提交 cell、不增加 version，也不 notify source-local captures。"]);
-      return;
-    }
-
-    flow.running = true;
-    setButtonsDisabled(flowButtons, true);
-    flow.cycle += 1;
-    const previous = flow.count;
-    const writeCount = reset ? 1 : writes;
-    const parityChanged = previous % 2 !== next % 2;
-    flow.count = next;
-    flow.version += writeCount;
-    setText("#flow-cycle", `cycle ${String(flow.cycle).padStart(2, "0")}`);
-    setText("#flow-write-count", writeCount);
-    setText("#flow-compute-count", 0);
-    setText("#flow-dom-count", 0);
-    setText("#flow-count", flow.count);
-
-    const firstLine = writeCount > 1
-      ? `batch 内逐次提交 ${writeCount} 次 cell/version/notify（${previous} → ${next}，模拟 version=${flow.version}）；第一次 notify 已把 Live captures 变为 Pending，后续 notify 不复制同一 resumption。`
-      : `count 从 ${previous} 提交为 ${next}（模拟 version=${flow.version}）；source-local index 把对应 Live captures 转为 Pending，并排入 Resume-work(trace)。`;
-    activateFlow(["count"], []);
-    renderTrace([firstLine]);
-    await tick();
-
-    const deriveLine = `pure plane 先恢复 square 与 parity 的精确 suffix；每次恢复都在 Draft frame 中捕获新的 child trace，prefix 不重放。`;
-    activateFlow(["count", "square", "parity"], ["count-square", "count-parity"]);
-    setText("#flow-square", flow.count * flow.count);
-    setText("#flow-parity", flow.count % 2 === 0 ? "偶数" : "奇数");
-    setText("#flow-compute-count", 2);
-    renderTrace([firstLine, deriveLine]);
-    await tick();
-
-    const domNodes = ["dom-number", "dom-square"];
-    const domEdges = ["count-number", "square-dom"];
-    if (parityChanged) {
-      domNodes.push("dom-theme");
-      domEdges.push("parity-dom");
-    }
-    activateFlow(["count", "square", "parity", ...domNodes], domEdges);
-    setText("#flow-dom-count", parityChanged ? 3 : 2);
-    renderTrace([
-      firstLine,
-      deriveLine,
-      parityChanged
-        ? "square 与 parity 都发布不相等结果；输出 source notify 对应 effect-plane captures。"
-        : "parity 的 equality 截断 publication：它的输出 version 不变，也不唤醒 parity 后面的 UI suffix。",
-      `effect plane 恢复此固定教学场景中的 ${parityChanged ? 3 : 2} 段 UI suffix；这些数字是模拟结果，不是框架对任意应用的固定保证。`,
-    ]);
-    await tick(320);
-    clearFlowActivity();
-    flow.running = false;
-    setButtonsDisabled(flowButtons, false);
-  }
-
-  $("#flow-plus").addEventListener("click", () => runFlow(1));
-  $("#flow-batch").addEventListener("click", () => runFlow(3));
-  $("#flow-reset").addEventListener("click", () => runFlow(0, true));
-  window.addEventListener("resize", redrawFlowTrace, { passive: true });
-  window.requestAnimationFrame(redrawFlowTrace);
 
   // Semantic simulation: frontier, nested effect captures, and stale tickets.
   const scheduler = {
@@ -363,7 +223,11 @@
     const step = scheduler.steps[scheduler.index];
     renderSchedulerStep(step);
     if (step.commit) Object.assign(scheduler, step.commit);
-    if (scheduler.auto) scheduler.timer = window.setTimeout(schedulerNext, reducedMotion ? 90 : 900);
+    if (scheduler.auto && scheduler.index >= scheduler.steps.length - 1) {
+      stopSchedulerAuto();
+    } else if (scheduler.auto) {
+      scheduler.timer = window.setTimeout(schedulerNext, reducedMotion ? 90 : 900);
+    }
   }
 
   function startSchedulerScenario(delta) {
@@ -413,7 +277,9 @@
 
   function renderBatch(writes) {
     batchButtons.forEach((button) => {
-      button.classList.toggle("is-active", Number(button.dataset.writes) === writes);
+      const active = Number(button.dataset.writes) === writes;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-pressed", String(active));
     });
     const immediate = { write: writes, compute: writes * 2, dom: writes * 3 };
     const batched = { write: writes, compute: 2, dom: 3 };
@@ -446,155 +312,6 @@
   });
   renderBatch(1);
 
-  // Dynamic nested trace simulation.
-  const dynamic = { mode: "name", renders: 1 };
-  const modeName = $("#mode-name");
-  const modeCount = $("#mode-count");
-  const dynamicName = $("#dynamic-name");
-  const dynamicCount = $("#dynamic-count");
-
-  function currentDynamicOutput() {
-    return dynamic.mode === "name"
-      ? `访客 ${dynamicName.value || "—"}`
-      : `第 ${dynamicCount.value || "0"} 次访问`;
-  }
-
-  function renderDynamic(reason, didRun = true) {
-    if (didRun) dynamic.renders += 1;
-    setText("#dynamic-output", currentDynamicOutput());
-    setText("#dynamic-render-count", `页面 suffix 运行 ${dynamic.renders} 次`);
-    modeName.classList.toggle("is-active", dynamic.mode === "name");
-    modeCount.classList.toggle("is-active", dynamic.mode === "count");
-    $("#dynamic-name-node").classList.toggle("is-muted", dynamic.mode !== "name");
-    $("#dynamic-count-node").classList.toggle("is-muted", dynamic.mode !== "count");
-    $("#dynamic-name-edge").classList.toggle("is-hidden", dynamic.mode !== "name");
-    $("#dynamic-count-edge").classList.toggle("is-hidden", dynamic.mode !== "count");
-    setText("#dynamic-log span", reason);
-  }
-
-  function switchDynamicMode(mode) {
-    if (mode === dynamic.mode) return;
-    const oldSource = dynamic.mode;
-    dynamic.mode = mode;
-    renderDynamic(`恢复外层 Trace-read(mode) 的 K；旧 ${oldSource} child 变 Dead，新 Draft 捕获 Trace-read(${mode})，发布后整条 trace 转 Live。`);
-  }
-
-  modeName.addEventListener("click", () => switchDynamicMode("name"));
-  modeCount.addEventListener("click", () => switchDynamicMode("count"));
-  dynamicName.addEventListener("input", () => {
-    renderDynamic(
-      dynamic.mode === "name"
-        ? "name 的窄 suffix 被恢复；更早的 mode.get 不重放。"
-        : "name 没有属于当前 Live generation 的 capture；值改变但页面 suffix 不运行。",
-      dynamic.mode === "name",
-    );
-  });
-  dynamicCount.addEventListener("input", () => {
-    renderDynamic(
-      dynamic.mode === "count"
-        ? "count 的窄 suffix 被恢复；更早的 mode.get 不重放。"
-        : "count 没有属于当前 Live generation 的 capture；值改变但页面 suffix 不运行。",
-      dynamic.mode === "count",
-    );
-  });
-
-  // Structural ownership and draft publication simulation.
-  const ownership = { mounted: true, branch: "A", busy: false, cleanups: 0 };
-  const ownershipButtons = [$("#ownership-toggle"), $("#ownership-unmount"), $("#ownership-reset")];
-
-  function ownerNodes(names) {
-    return names.map((name) => $(`[data-owner="${name}"]`)).filter(Boolean);
-  }
-
-  function writeCleanupLog(lines) {
-    const list = $("#cleanup-log");
-    list.replaceChildren();
-    lines.forEach((line) => {
-      const li = document.createElement("li");
-      li.textContent = line;
-      list.appendChild(li);
-    });
-    setText("#cleanup-count", `${ownership.cleanups} 项`);
-  }
-
-  async function runOwnership(kind) {
-    if (ownership.busy) return;
-    if (kind === "toggle" && !ownership.mounted) {
-      writeCleanupLog(["卡片已经卸载；先点击“重新挂载”。"]);
-      return;
-    }
-    if (kind === "unmount" && !ownership.mounted) {
-      writeCleanupLog(["scope 已经 Dead；重复 disposer 不再做结构工作。"]);
-      return;
-    }
-    ownership.busy = true;
-    setButtonsDisabled(ownershipButtons, true);
-    const allNames = ["root", "card", "text", "detail", "listener"];
-    const targets = kind === "toggle" ? ownerNodes(["detail"]) : ownerNodes(allNames);
-
-    if (kind === "reset") {
-      targets.forEach((node) => {
-        node.classList.remove("is-disposed", "is-disposing");
-        node.classList.add("is-new");
-      });
-      ownership.mounted = true;
-      ownership.branch = "A";
-      setText("#owner-detail-label", "详情 A");
-      writeCleanupLog(["新的 mount bootstrap scope 启动。", "bootstrap closure 只消费一次；成功后 trace 与 frame 变 Live。"]);
-      await tick(360);
-      targets.forEach((node) => node.classList.remove("is-new"));
-      ownership.busy = false;
-      setButtonsDisabled(ownershipButtons, false);
-      return;
-    }
-
-    targets.forEach((node) => node.classList.add("is-disposing"));
-    writeCleanupLog([
-      kind === "toggle" ? "replacement K 进入 Running，并建立新 Draft branch。" : "disposer 先把完整结构子树标记为 Dead。",
-      "旧 capture 不再 runnable；队列中的旧票据由 frontier 视为 stale。",
-    ]);
-    await tick(420);
-    targets.forEach((node) => {
-      node.classList.remove("is-disposing");
-      node.classList.add("is-disposed");
-    });
-
-    if (kind === "toggle") {
-      ownership.cleanups += 1;
-      writeCleanupLog([
-        "旧 generation 的 DOM range、listener 与 child effects 已 finalise。",
-        `cleanup #${ownership.cleanups} 完成；新 Draft 尚未对 source 可见。`,
-        "计算与 publication 成功后，Draft 才变 Live。",
-      ]);
-      await tick(300);
-      ownership.branch = ownership.branch === "A" ? "B" : "A";
-      const detail = $("[data-owner=\"detail\"]");
-      detail.classList.remove("is-disposed");
-      detail.classList.add("is-new");
-      setText("#owner-detail-label", `详情 ${ownership.branch}`);
-      writeCleanupLog([
-        `详情 ${ownership.branch} 已发布为新的 Live branch。`,
-        "若 replacement 计算、cleanup、publish 或 final control 中止，Draft 会被清理，原 K 保持 Pending 等待重试。",
-      ]);
-      await tick(360);
-      detail.classList.remove("is-new");
-    } else {
-      ownership.cleanups += 3;
-      ownership.mounted = false;
-      writeCleanupLog([
-        "所有 continuation gates 与 frames 已变 Dead。",
-        "事件 listener、live text effect 与 region range 按结构 ledger 清理。",
-        "source-local capture index 会压缩掉 Dead entries。",
-      ]);
-    }
-    ownership.busy = false;
-    setButtonsDisabled(ownershipButtons, false);
-  }
-
-  $("#ownership-toggle").addEventListener("click", () => runOwnership("toggle"));
-  $("#ownership-unmount").addEventListener("click", () => runOwnership("unmount"));
-  $("#ownership-reset").addEventListener("click", () => runOwnership("reset"));
-
   // Framework route comparison. Work widths are explanatory, not benchmarks.
   const comparisonScenarios = {
     leaf: {
@@ -619,7 +336,11 @@
   const scenarioButtons = $$("[data-scenario]", $("#comparison"));
 
   function renderComparison(scenario) {
-    scenarioButtons.forEach((button) => button.classList.toggle("is-active", button.dataset.scenario === scenario));
+    scenarioButtons.forEach((button) => {
+      const active = button.dataset.scenario === scenario;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-pressed", String(active));
+    });
     Object.entries(comparisonScenarios[scenario]).forEach(([framework, details]) => {
       const card = $(`[data-framework="${framework}"]`);
       const route = $("[data-route]", card);
@@ -677,5 +398,4 @@
     frame.src = frame.getAttribute("src");
   });
 
-  window.addEventListener("load", redrawFlowTrace, { once: true });
 })();
