@@ -43,9 +43,10 @@ extern publish-adapter-controls(
   detached-popover-target : () -> ui string,
   invalid-popover-event : () -> ui string,
   read-toggle-event : (any) -> ui string,
-  read-dialog-event : (any) -> ui string
+  read-dialog-event : (any) -> ui string,
+  detached-set-closed : () -> ui string
 ) : ui ()
-  js inline "(Object.assign(globalThis.__kokaineTopLayer.dialog,{ setCancelBlocked:#1, invalidEvent:#2, readEvent:#7 }), Object.assign(globalThis.__kokaineTopLayer.popover,{ beforeState:#3, detached:#4, invalidEvent:#5, readEvent:#6 }))"
+  js inline "(Object.assign(globalThis.__kokaineTopLayer.dialog,{ setCancelBlocked:#1, invalidEvent:#2, readEvent:#7 }), Object.assign(globalThis.__kokaineTopLayer.popover,{ beforeState:#3, detached:#4, invalidEvent:#5, readEvent:#6, detachedSetClosed:#8 }))"
 
 extern publish-owned-controls(
   open-dialog : () -> ui string,
@@ -239,7 +240,10 @@ pub fun main()
     fn() unit-result(fn() popover/show(detached-popover())),
     fn() invalid-toggle-result(),
     fn(original) toggle-event-result(original),
-    fn(original) dialog-event-result(original)
+    fn(original) dialog-event-result(original),
+    fn() unit-result(fn()
+      popover/set-open(detached-popover(),False)
+    )
   )
 
   publish-owned-controls(
