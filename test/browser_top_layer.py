@@ -377,54 +377,64 @@ with serve_project() as origin:
             fixture.evaluate(f"{controls}.popover.detachedSetClosed()"),
             "browser dom exception",
         )
-        # Firefox retains the child Window after an ancestor iframe navigates.
-        # Model that observable topology so Chromium CI also proves that the
-        # adapter walks ancestor container documents before taking its no-op.
-        ancestor_validity = fixture.evaluate(
+        # A cross-origin parent hides frameElement even while the child Window
+        # is active. Model both live and stale parent.frames membership so the
+        # adapter neither rejects the former nor misses the latter.
+        ancestor_membership = fixture.evaluate(
             f"""() => {{
-                const target = document.body.appendChild(
-                    document.createElement('div')
-                );
-                target.popover = 'manual';
-                const staleParentDocument = {{
-                    defaultView: {{ document: {{}} }}
-                }};
-                const childDocument = {{}};
-                childDocument.defaultView = {{
-                    document: childDocument,
-                    frameElement: {{
-                        isConnected: true,
-                        ownerDocument: staleParentDocument
-                    }}
-                }};
-                Object.defineProperty(target, 'ownerDocument', {{
-                    configurable: true,
-                    value: childDocument
-                }});
-                let nativeCalls = 0;
-                target.togglePopover = function() {{
-                    nativeCalls += 1;
-                    throw new DOMException(
-                        'document is not fully active',
-                        'InvalidStateError'
+                function probe(listedInParent) {{
+                    const target = document.body.appendChild(
+                        document.createElement('div')
                     );
-                }};
-                try {{
-                    return {{
-                        adapter:
-                            {controls}.popover.setClosedTarget(target),
-                        nativeCalls
+                    target.popover = 'manual';
+                    const parentView = {{ length: listedInParent ? 1 : 0 }};
+                    parentView.parent = parentView;
+                    parentView.top = parentView;
+                    const childDocument = {{}};
+                    const childView = {{
+                        document: childDocument,
+                        frameElement: null,
+                        parent: parentView,
+                        top: parentView
                     }};
-                }} finally {{
-                    delete target.ownerDocument;
-                    delete target.togglePopover;
-                    target.remove();
+                    childDocument.defaultView = childView;
+                    if (listedInParent) parentView[0] = childView;
+                    Object.defineProperty(target, 'ownerDocument', {{
+                        configurable: true,
+                        value: childDocument
+                    }});
+                    let nativeCalls = 0;
+                    target.togglePopover = function() {{
+                        nativeCalls += 1;
+                        throw new DOMException(
+                            'document is not fully active',
+                            'InvalidStateError'
+                        );
+                    }};
+                    try {{
+                        return {{
+                            adapter:
+                                {controls}.popover.setClosedTarget(target),
+                            nativeCalls
+                        }};
+                    }} finally {{
+                        delete target.ownerDocument;
+                        delete target.togglePopover;
+                        target.remove();
+                    }}
                 }}
+                return {{
+                    active: probe(true),
+                    stale: probe(false)
+                }};
             }}"""
         )
-        assert ancestor_validity["nativeCalls"] == 1
+        assert_ok(ancestor_membership["active"]["adapter"])
+        assert ancestor_membership["active"]["nativeCalls"] == 0
+        assert ancestor_membership["stale"]["nativeCalls"] == 1
         assert_error(
-            ancestor_validity["adapter"], "browser dom exception"
+            ancestor_membership["stale"]["adapter"],
+            "browser dom exception",
         )
         # isConnected alone does not imply a fully-active document. Navigating
         # an ancestor iframe leaves the old nested tree connected to its stale
