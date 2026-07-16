@@ -377,6 +377,44 @@ with serve_project() as origin:
             fixture.evaluate(f"{controls}.popover.detachedSetClosed()"),
             "browser dom exception",
         )
+        # WebKit retargets :fullscreen across a shadow boundary, so a host can
+        # match even though only its shadow descendant has the fullscreen flag.
+        # Popover validity checks must use the target's own modal state.
+        retargeted_fullscreen = fixture.evaluate(
+            f"""() => {{
+                const target = document.body.appendChild(
+                    document.createElement('div')
+                );
+                target.popover = 'manual';
+                target.attachShadow({{ mode: 'open' }}).appendChild(
+                    document.createElement('div')
+                );
+                const nativeMatches = target.matches;
+                target.matches = function(selector) {{
+                    if (selector === ':fullscreen') return true;
+                    return nativeMatches.call(this, selector);
+                }};
+                try {{
+                    return {{
+                        adapter:
+                            {controls}.popover.setClosedTarget(target),
+                        modal: nativeMatches.call(target, ':modal'),
+                        open: nativeMatches.call(target, ':popover-open')
+                    }};
+                }} finally {{
+                    if (nativeMatches.call(target, ':popover-open')) {{
+                        target.hidePopover();
+                    }}
+                    delete target.matches;
+                    target.remove();
+                }}
+            }}"""
+        )
+        assert_ok(retargeted_fullscreen["adapter"])
+        assert not retargeted_fullscreen["modal"]
+        assert not retargeted_fullscreen["open"], (
+            "set-open(false) opened a retargeted fullscreen shadow host"
+        )
         # A cross-origin parent hides frameElement even while the child Window
         # is active. Model both live and stale parent.frames membership so the
         # adapter neither rejects the former nor misses the latter.
