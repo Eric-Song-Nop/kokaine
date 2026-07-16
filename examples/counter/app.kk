@@ -11,28 +11,24 @@ import examples/counter/probe
 
 
 pub fun lab-page(root, model : lab-model)
-  view fn()
-    main-tag([class("lab-shell")],fn()
-      header([class("lab-header")],fn()
-        div([],fn()
-          p([class("wordmark")],fn() text("KOKAINE / CONTINUATION LAB"))
-          h1([],fn() text("Incremental UI from captured computation."))
+  view
+    main-tag(attrs=[class("lab-shell")])
+      header(attrs=[class("lab-header")])
+        div
+          p("KOKAINE / CONTINUATION LAB",attrs=[class("wordmark")])
+          h1("Incremental UI from captured computation.")
+        p(
+          "Change the sources, then watch equality boundaries, state entries, effects, and structural lifetimes move independently.",
+          attrs=[class("lab-header__copy")]
         )
-        p([class("lab-header__copy")],fn()
-          text("Change the sources, then watch equality boundaries, state entries, effects, and structural lifetimes move independently.")
-        )
-      )
 
-      div([class("lab-grid")],fn()
+      div(attrs=[class("lab-grid")])
         render-controls(root,model)
         render-meter(model)
-      )
 
       render-probe(root,model)
 
-      footer([class("lab-footer")],fn()
-        p([],fn() text("ALGEBRAIC EFFECTS DEFINE OPERATIONS"))
-        p([],fn() text("CONTINUATIONS DEFINE INCREMENTAL WORK"))
-        p([],fn() text("FRAMES DEFINE LIFETIME"))
-      )
-    )
+      footer(attrs=[class("lab-footer")])
+        p("ALGEBRAIC EFFECTS DEFINE OPERATIONS")
+        p("CONTINUATIONS DEFINE INCREMENTAL WORK")
+        p("FRAMES DEFINE LIFETIME")

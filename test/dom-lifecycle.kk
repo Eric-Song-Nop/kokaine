@@ -36,44 +36,40 @@ pub fun main()
     create-root fn(root)
       (signal(root,True),signal(root,0),signal(root,0),signal(root,0))
 
-  val page = view fn()
-    div([id("lifecycle-fixture")],fn()
-      button([id("branch-toggle"),kind("button"),
-              on-click(fn(_)
-                first-branch.modify(fn(value) !value)
-              )],fn()
-        text("switch")
-      )
-      span([kokaine/html/id("lifecycle-count")],fn()
-        text-live(fn() clicks.get.show)
-      )
-      region fn()
-        view fn()
-          if first-branch.get then
-            button([id("old-branch"),kind("button"),
-                    on("click",fn(_)
-                      clicks.modify(fn(value) value + 1)
-                      // This child is created asynchronously, after mount has
-                      // returned. DOM re-entry must still attach it to this
-                      // exact region continuation generation.
-                      val child = create-effect(root,fn() clicks.get,fn(_)
-                        child-runs.modify(fn(value) value + 1)
-                        on-cleanup(root,fn()
-                          child-cleanups.modify(fn(value) value + 1)
-                        )
-                      )
-                      ()
-                    )],fn()
-              text("old")
+  val page = view
+    div(attrs=[id("lifecycle-fixture")])
+      button("switch",attrs=[
+        id("branch-toggle"),
+        kind("button"),
+        on-click(fn(_) first-branch.modify(fn(value) !value))
+      ])
+      span(attrs=[id("lifecycle-count")])
+        text { clicks.get.show }
+      dynamic
+        if first-branch.get then
+          button("old",attrs=[
+            id("old-branch"),
+            kind("button"),
+            on("click",fn(_)
+              clicks.modify(fn(value) value + 1)
+              // This child is created asynchronously, after mount has
+              // returned. DOM re-entry must still attach it to this
+              // exact region continuation generation.
+              val child = create-effect(root,fn() clicks.get,fn(_)
+                child-runs.modify(fn(value) value + 1)
+                on-cleanup(root,fn()
+                  child-cleanups.modify(fn(value) value + 1)
+                )
+              )
+              ()
             )
-          else
-            button([id("new-branch"),kind("button"),
-                    on-click(fn(_)
-                      clicks.modify(fn(value) value + 1)
-                    )],fn()
-              text("new")
-            )
-    )
+          ])
+        else
+          button("new",attrs=[
+            id("new-branch"),
+            kind("button"),
+            on-click(fn(_) clicks.modify(fn(value) value + 1))
+          ])
 
   val dispose = mount(root,query("#lifecycle-root"),page)
   publish-controls(
