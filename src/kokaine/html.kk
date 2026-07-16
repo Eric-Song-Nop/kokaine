@@ -136,9 +136,17 @@ fun nested(make : list<view<e>> -> view<e>,
       emit(make(final-nodes))
   children()
 
+fun container-tag(name : string, attributes : list<attribute<e>>,
+                  children : () -> <html<e>|p> ()) : <html<e>|p> ()
+  nested(fn(nodes) Element(name,attributes,nodes),children)
+
+fun text-tag(name : string, content : string,
+             attributes : list<attribute<e>>) : html<e> ()
+  emit(Element(name,attributes,[Text(content)]))
+
 pub fun element(name : string, attributes : list<attribute<e>>,
                 children : () -> <html<e>|p> ()) : <html<e>|p> ()
-  nested(fn(nodes) Element(name,attributes,nodes),children)
+  container-tag(name,attributes,children)
 
 pub fun element-empty(name : string,
                       attributes : list<attribute<e>>) : html<e> ()
