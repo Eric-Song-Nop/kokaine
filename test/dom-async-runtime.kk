@@ -213,7 +213,11 @@ pub fun main()
             },
             fn() {
               finally(
-                fn() finish-count(finalizers,"race-loser-finally"),
+                fn() {
+                  in-parent-scope(fn() sleep(0.milli-seconds))
+                  append-log("race-loser-after-cleanup-await")
+                  finish-count(finalizers,"race-loser-finally")
+                },
                 fn() {
                   sleep(150.milli-seconds)
                   "slow"

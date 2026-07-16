@@ -319,6 +319,38 @@ fun test-parallel-prefers-cleanup-error()
     Ok(_) -> check(False,"parallel swallowed a cleanup exception")
   check(load(disposed),"parallel disposes a sibling before cleanup throws")
 
+fun test-race-resumes-awaits-in-loser-cleanup()
+  val disposed = hidden(False)
+  val cleanup-value = hidden(0)
+  val cleanup-tail = hidden(False)
+  val cleanup-finalized = hidden(False)
+  val result = run-async(fn()
+    race(
+      fn() immediate(61),
+      fn() finally(
+        fn() finally(
+          fn() store(cleanup-finalized,True),
+          fn()
+            val first = in-parent-scope(fn() immediate(21))
+            val second = in-parent-scope(fn() immediate(22))
+            store(cleanup-value,first + second)
+            store(cleanup-tail,True)
+        ),
+        fn() never(disposed,"awaiting race loser cleanup")
+      )
+    )
+  )
+  check(result == Just(61),
+        "race preserves its winner while loser cleanup awaits")
+  check(load(disposed),"race disposes the awaiting loser")
+  check(load(cleanup-value) == 43,
+        "race resumes every parent-scope cleanup await")
+  check(load(cleanup-tail),"race executes the tail after cleanup awaits")
+  check(load(cleanup-finalized),"race finalizes the async cleanup extent")
+  check(load(pending).is-nil,"async cleanup leaves no pending await")
+  check(load(canceled).is-nil,
+        "async cleanup releases its cancellation marker")
+
 pub fun main()
   test-parallel()
   test-sequential-awaits-keep-group-scope()
@@ -330,4 +362,5 @@ pub fun main()
   test-parallel-error-cancels-queued-result()
   test-race-propagates-loser-cleanup-error()
   test-parallel-prefers-cleanup-error()
+  test-race-resumes-awaits-in-loser-cleanup()
   println("structured-async: all checks passed")

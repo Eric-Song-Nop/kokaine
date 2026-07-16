@@ -239,6 +239,9 @@ with serve_project() as origin:
         expect(page.locator("#async-finalizers")).to_have_text("1")
         assert page.evaluate("__kokaineAsyncRuntime.outstanding()") == 0
         assert page.evaluate("__kokaineAsyncRuntime.log").count(
+            "race-loser-after-cleanup-await"
+        ) == 1
+        assert page.evaluate("__kokaineAsyncRuntime.log").count(
             "race-loser-finally"
         ) == 1
 

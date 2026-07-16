@@ -94,17 +94,28 @@ pub fun resume-queue/take(queue : resume-queue<a>) : async a
 // The host callback stores, but never directly executes, the captured suffix.
 // The suffix is resumed only when the structured driver consumes the queue.
 pub fun route-awaits(queue,action)
+  // A structured loser is synthetically canceled at most once. Once its
+  // strand is unwinding, later awaits belong to cleanup and must receive the
+  // real host result (including a real Cancel from their own scope).
+  val cancel-started = cell(False)
   with override
     raw ctl do-await(setup,scope,label)
       no-await(setup,scope,"structured: " ++ label,fn(result)
-        // The second thunk is retained cancellation authority. A parent
-        // retirement can therefore discontinue this strand even after its
-        // ordinary result has been delivered but before the driver consumes
-        // it in a later browser turn.
-        queue.push-from-host((
-          fn() rcontext.resume(result),
-          fn() rcontext.resume(Cancel)
-        ))
+        // The selector retains cancellation authority. A parent retirement
+        // can therefore discontinue a running strand even after its ordinary
+        // result has arrived, without repeatedly canceling cleanup awaits.
+        queue.push-from-host(fn(force-cancel)
+          match result
+            Cancel ->
+              store(cancel-started,True)
+              rcontext.resume(Cancel)
+            _ ->
+              if force-cancel && !load(cancel-started) then
+                store(cancel-started,True)
+                rcontext.resume(Cancel)
+              else
+                rcontext.resume(result)
+        )
       )
       ()
     fun no-await(setup,scope,label,callback)

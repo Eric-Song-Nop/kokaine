@@ -422,12 +422,17 @@ generation runtime, not permission to resume user code directly.
 `parallel` and `race` do not expose detached child tasks. Each invocation owns
 an isolated strand group and a child cancellation scope. `route-awaits` turns a
 child's suspension into a registered non-blocking await whose completion
-enqueues paired normal/cancellation resumptions. The parent driver consumes
-them one at a time under its active async interpreter, preserving
+enqueues a phase-aware resumption selector. The parent driver consumes them
+one at a time under its active async interpreter, preserving
 browser-observed completion order without letting a host callback execute a
 child suffix. Values are buffered before the driver is woken, so parent
 retirement in the intervening microtask gap can still consume the cancellation
 path and unwind the child.
+
+The selector injects at most one synthetic `Cancel` into a losing strand. Once
+that strand is unwinding, an await performed by its cleanup receives its real
+host result; cleanup in a parent scope can therefore finish, while a real
+`Cancel` from a canceled scope still discontinues it.
 
 `parallel` waits for both values and preserves argument order. The first child
 exception cancels its siblings, but the group continues driving until every

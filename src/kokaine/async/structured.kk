@@ -182,16 +182,17 @@ fun run-strand(
           cancel-outstanding()
   )
 
-// Every queued item carries the ordinary resumption and a cancellation
-// override. Parent retirement enters this drain through the driver's `finally`
-// while the async interpreter is still installed, so no later browser turn or
-// live structural frame is needed to unwind child finalizers. `noinline` also
-// keeps this higher-rank queue row out of Koka 3.2's cached inline printer.
-noinline fun cancel-queued(queue : resume-queue<(a,() -> e ())>) : <div|e> ()
+// Every queued item selects between its real completion and a first synthetic
+// cancellation. Parent retirement enters this drain through the driver's
+// `finally` while the async interpreter is still installed, so no later
+// browser turn or live structural frame is needed to unwind child finalizers.
+// `noinline` also keeps this higher-rank queue row out of Koka 3.2's cached
+// inline printer.
+noinline fun cancel-queued(queue : resume-queue<(bool) -> e ()>) : <div|e> ()
   while { queue.has-value }
     match queue.try-take
       Nothing -> ()
-      Just((_resume,cancel)) -> group-lift-div(fn() cancel())
+      Just(select) -> group-lift-div(fn() select(True))
 
 fun drive-strands(actions : list<() -> <async,exn|e> a>, require-all : bool,
                    group : strand-group<a>) : <async|e> ()
@@ -219,9 +220,8 @@ fun drive-strands(actions : list<() -> <async,exn|e> a>, require-all : bool,
       fn() {
         while { group-lift-div(fn() group.active) }
           group-lift-div(fn()
-            match queue.take()
-              (resume,cancel) ->
-                if group.is-settled then cancel() else resume()
+            val select = queue.take()
+            select(group.is-settled)
           )
       }
     )
