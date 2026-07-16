@@ -7,6 +7,10 @@ capabilities, and writes schedule the affected resumptions. There is no retained
 calculation action or separate Observer graph used to recompute a reactive
 function from its beginning.
 
+The async layer described here is deliberately a Web UI surface. It binds
+browser completions to the same structural generations, cancellation, and
+batched re-entry rules as DOM listeners and reactive effects.
+
 The architecture deliberately separates three concerns: algebraic effects name
 and delimit capabilities, raw continuations provide the precise incremental
 execution unit, and frames plus the scheduler order and retire those units.
@@ -16,7 +20,8 @@ property; the previous Observer implementation already had such an API.
 ## Module boundaries
 
 The public module, `src/kokaine/reactive.kk`, exposes opaque roots, signals,
-memos, and re-entry capabilities. Its implementation is split by responsibility:
+memos, re-entry capabilities, and the `run-async` delimiter. Its implementation
+is split by responsibility:
 
 | Module | Responsibility |
 | --- | --- |
@@ -27,9 +32,16 @@ memos, and re-entry capabilities. Its implementation is split by responsibility:
 | `internal/scheduler.kk` | invalidation, queueing, resumption, and targeted settle |
 | `internal/handlers.kk` | write interpretation, sampled reads, and dispatch |
 | `internal/reentry.kk` | continuation-derived host re-entry |
+| `internal/async-runtime.kk` | generation-owned Web awaits and continuation turns |
 | `kokaine/internal/event-runtime.kk` | guarded multi-shot browser-event continuation |
 | `internal/runtime.kk` | roots and high-level signal, memo, and effect operations |
 | `internal/bridge.kk` | unambiguous calls from the opaque facade |
+| `kokaine/async.kk` | public structured-async facade |
+| `kokaine/async/effects.kk` | await, cancellation, and scope algebra |
+| `kokaine/async/channel.kk` | queued structured-strand resumptions |
+| `kokaine/async/structured.kk` | `parallel`, `race`, and timeout composition |
+| `kokaine/async/web.kk` | browser timer, Promise, and Fetch adapters |
+| `kokaine/resource.kk` | tracked-source, generation-bound async Resource |
 
 Koka has no package-private visibility. Concrete internal types are therefore
 public inside their modules so sibling modules can share them; the facade wraps
@@ -37,10 +49,12 @@ them in abstract public values so application code cannot inspect the runtime.
 
 ## Semantic division of labor
 
-`signal-read`, `signal-write`, and `html<e>` are algebraic effect interfaces.
-They let callers express requirements in effect rows and let scopes override
-interpretation: `untrack` changes tracked reads to samples, `batch` changes when
-writes settle, and nested HTML handlers collect only their own emitted children.
+`signal-read`, `signal-write`, `html<e>`, and the four-label `async` alias are
+algebraic effect interfaces. They let callers express requirements in effect
+rows and let scopes override interpretation: `untrack` changes tracked reads to
+samples, `batch` changes when writes settle, nested HTML handlers collect only
+their own emitted children, and `run-async` interprets each Web suspension under
+the structural generation current at its call site.
 
 An effect row reports operations that escape a function after local handling.
 It does not attest that an operation was never performed inside the function,
@@ -274,6 +288,187 @@ its structural children before one of its writes can retire the registering
 generation. At batch exit, an invalidated generation and every child created
 during the callback are retired together.
 
+## Browser async turn boundary
+
+`run-async(root, action)` is the explicit boundary between a synchronous
+reactive turn and direct-style Web async. It is installed only while a Kokaine
+generation is current—for example, inside the re-entry batch which resumes a
+DOM event continuation. The action runs normally until it returns or performs
+`do-await`.
+
+At an await, the raw async handler captures the suffix, registers it with the
+current structural frame, and returns without resuming it. This is the turn
+boundary: the event continuation returns, the re-entry batch closes, and
+reactive work produced before the await can settle without a browser operation
+holding that batch open.
+
+The host completion callback never resumes the suffix on its own stack. The
+first completion changes the task from `Task-pending` to `Task-scheduled` and
+queues a microtask. This applies even when setup invokes the completion callback
+synchronously. The microtask then:
+
+1. wins only if the task is still scheduled;
+2. moves the continuation, result, and structural portal into local values and
+   clears every retained slot;
+3. validates and re-enters the captured generation; and
+4. installs a fresh async interpreter inside that re-entry batch before
+   resuming the suffix.
+
+Every continuation segment therefore runs in a finite, generation-validated
+reactive turn. A later await repeats the same protocol. If retirement wins
+before the microtask, the scheduled task is revoked and the microtask becomes
+inert before it can touch reactive or user state.
+
+The parked suffix is resumed shallowly and the primitive await prompt is the
+innermost runtime prompt. Consequently none of the previous turn's base async
+handlers are restored with the suffix: the interpreter installed by the new
+re-entry turn is the nearest handler for its next operation. Fresh turn-local
+handler state shares only a typed task family, so cancellation can still find
+structured siblings which suspended in an earlier turn.
+
+`async-host` performs a synchronous browser operation through the active
+interpreter; `async-schedule` turns a browser action into another owned
+microtask. These operations keep adapter work inside the same generation and
+turn rules instead of letting a delayed callback retain an unguarded Koka
+closure.
+
+## Async generation ownership and cancellation
+
+Every primitive await is represented by a one-shot generation task. Before
+calling adapter setup, registration captures a `reentry<<ui|e>>`, links an
+`on-cleanup` finalizer into the active frame, and records the task in its lexical
+cancellation scope. Only after that owner link is durable may setup retain the
+completion callback. A synchronous setup failure follows the same scheduled
+completion path as an asynchronous exception.
+
+The task state machine is:
+
+```text
+Task-pending -> Task-scheduled -> Task-running -> Task-completed
+       |              |
+       +--------------+-----> Task-canceled | Task-retired
+```
+
+Completion and cancellation race on this state, so only one path owns the
+continuation. Both terminal paths revoke the result, portal, resumption, and
+host disposer slots before invoking any callback or disposer. A patched or
+hostile disposer may synchronously call the old completion function, but it
+then observes a terminal task with no Koka payload. Timer cancellation clears
+its handle, Promise cancellation clears its callback cell, and Fetch
+cancellation clears both callbacks before aborting its controller.
+
+The shared family contains active capabilities only. A terminal task is pruned
+before user code is resumed, and its structural owner link is cleared through
+a one-shot indirection. The long-lived owner ledger is left with only an empty
+cell: it can no longer reach the family, task identity, continuation, portal,
+or disposer after settlement. This keeps cross-turn structured cancellation
+without turning either the family or owner ledger into a completed-task log.
+
+`Cancel` is distinct from `Exception`. Public await wrappers translate it to
+the final `discontinue` operation, so ordinary `catch` cannot turn cancellation
+into a value. Final control still unwinds Koka `finally` clauses. During owner
+retirement, a private retirement re-entry supplies only the handlers needed to
+discontinue the already-owned strand; new async registration still sees the
+dead frame and is rejected.
+
+Cancellation scopes form an ancestor chain. `cancelation-scope` creates a
+child, `cancel-outstanding` cancels its current scope, and a scope cancellation
+visits only active descendant tasks. A task installed after its scope has been
+canceled is retired immediately. The cancellation marker remains visible while
+the lexical scope and its cancellation finalizers unwind, then is released;
+structured groups release theirs only after every queued Cancel resumption has
+drained. Root disposal and reactive generation replacement reach the same task
+cleanup through the ordinary structural owner ledger, so explicit cancellation
+and structural retirement share the one-shot finalization path.
+
+Each resumed async turn also installs a fresh exception boundary. An exception
+which is not handled by the resumed strand is reported as an uncaught Kokaine
+async exception after its turn unwinds; it does not escape into a later browser
+callback without a Koka handler.
+
+## Web adapters
+
+`kokaine/async/web` exposes direct-style operations over the primitive await
+protocol:
+
+- `sleep` and `yield` use a revocable timer subscription;
+- `promise.await` wraps fulfillment and rejection in a callback cell which can
+  be cleared even though settlement itself cannot be stopped;
+- `fetch` owns an `AbortController`; `response.text` and `response.json`
+  transfer that controller into the body await so retirement after headers
+  still aborts a streaming body, while `response.require-ok` aborts and cancels
+  an unconsumed non-OK body before raising the HTTP exception; and
+- `timeout` composes a timer and action through structured `race`.
+
+All setup boundaries catch browser setup failures and turn them into Koka
+exceptions. One-shot task state also rejects duplicate completion from a
+misbehaving source. `unsafe-promise` is intentionally named: the adapter cannot
+prove that a JavaScript value matches its asserted Koka type. JSON likewise
+remains `any` until a domain boundary validates it.
+
+Adapter authors use `setup/await` when setup can fail and returns a disposer,
+or the smaller `await0`/`await1` variants. The completion callback carries an
+explicit `Result`, `Exception`, or `Cancel`; it is transport into the
+generation runtime, not permission to resume user code directly.
+
+## Structured concurrency
+
+`parallel` and `race` do not expose detached child tasks. Each invocation owns
+an isolated strand group and a child cancellation scope. `route-awaits` turns a
+child's suspension into a registered non-blocking await whose completion
+enqueues paired normal/cancellation resumptions. The parent driver consumes
+them one at a time under its active async interpreter, preserving
+browser-observed completion order without letting a host callback execute a
+child suffix. Values are buffered before the driver is woken, so parent
+retirement in the intervening microtask gap can still consume the cancellation
+path and unwind the child.
+
+`parallel` waits for both values and preserves argument order. The first child
+exception cancels its siblings, but the group continues driving until every
+child has returned or completed cancellation unwinding. `race` records the
+first terminal result, cancels the loser, and likewise drains the loser before
+returning the winner. This makes loser disposers and `finally` clauses part of
+the combinator's completion contract. `timeout-with` and the Web `timeout`
+adapter are ordinary `race` compositions and inherit the same draining rule.
+
+## Resource source and loader boundary
+
+`kokaine/resource` binds a synchronous reactive source to a generation-owned
+async loader. Its public state is one atomic signal:
+
+```text
+Unresolved
+Pending(previous : maybe<a>)
+Ready(value : a)
+Failed(error : exception, previous : maybe<a>)
+```
+
+The source has the closed shape `() -> signal-read maybe<s>`. A `derive-by`
+first applies source equality, then a `create-effect` tracks only that derived
+snapshot and the Resource's private refresh/cancel signal. If an upstream write
+produces an equal snapshot, the equality cut prevents effect invalidation, so
+the current request generation and its host operation remain live.
+
+The loader has the deliberately different shape
+`s -> <async,ui,exn> a`. It receives the immutable selected snapshot and has no
+`signal-read` capability. Reads before or after suspension therefore cannot
+silently become dependencies; the compile-time boundary rejects an async
+source and rejects async work inside pure `derive` or `memo` calculators.
+
+Each unequal source change or refresh advances a logical request generation and
+publishes `Pending(latest-success)`. The active loader is also structurally
+owned by the corresponding effect generation, so replacement or root disposal
+cancels its awaits and runs its finalizers. A numeric generation guard remains
+at completion as defense against a host which invokes an already retired
+callback. Only the winning generation may publish `Ready` or `Failed`.
+
+The last successful value is retained across refresh and failure and is exposed
+by `resource.latest`. Explicit `resource.cancel` retires an active loader and
+restores `Ready(previous)` or `Unresolved`; a later unequal source change can
+start work again. A `Nothing` source publishes `Unresolved` and clears the
+cached success. State publication is atomic, so observers never have to combine
+independent loading, value, and error signals into a possibly torn snapshot.
+
 ## HTML builder and DOM live bindings
 
 The `html<e>` effect is a synchronous, tail-resumptive view builder. `emit`
@@ -326,13 +521,15 @@ Listener installation captures both an opaque `reentry<e>` and an opaque
 `event-continuation`. The latter is a real raw continuation parked at the
 handled `await-browser-event` operation; its suffix contains the user action.
 The retained JavaScript function is only the transport/ABI trampoline. When the
-browser invokes it, the adapter snapshots the event and `reenter`:
+browser invokes it, the adapter snapshots the event, `reenter`s, and installs
+`run-async` around the event-K resume:
 
 1. rejects a retired or disposed frame;
 2. sets the state-entry target to `Nothing`;
 3. restores the captured effect-plane gate and frame;
 4. installs fresh signal read/write handlers; and
-5. synchronously resumes the event continuation as one batch.
+5. synchronously resumes the event continuation as one batch until its first
+   Web suspension.
 
 Reactive work created inside the callback is therefore owned by the exact DOM
 generation that installed the listener and is retired with that region or
@@ -355,12 +552,11 @@ This boundary is intentionally precise. Browser delivery begins with an ABI
 callback, then performs structural re-entry and an actual event-continuation
 resume. It still cannot reconstruct arbitrary user-defined handlers whose
 lexical extent around `mount` has already returned. Accordingly, `callback` has
-the closed
-`<signal-read,signal-write,ui,pure>` capability row. An unsupported application
-effect must be handled inside the callback and is otherwise rejected during
-type checking; it cannot silently become a delayed missing-handler failure. A
-future fresh application runner installed at the host boundary could expose a
-wider row explicitly.
+the closed `<signal-read,signal-write,ui,async,pure>` capability row. Kokaine
+reinstalls the async handlers for every continuation turn. Any other
+application effect must be handled inside the callback and is otherwise
+rejected during type checking; it cannot silently become a delayed
+missing-handler failure.
 
 Koka's `pure` row includes modeled `exn`/`div`; such exceptions are reported by
 the event boundary and unwind the batch normally. A native JavaScript throw from
@@ -369,6 +565,10 @@ Koka handlers and `finally`. Adapter externs must catch native failures at their
 innermost boundary and translate them to Koka `exn`, as the DOM adapter does.
 
 ## Verification map
+
+Run the complete algebra and compile-time checks with `make test`. Install the
+browser once with `make browser-install`, then run all real-browser lifecycle,
+async, and Resource checks with `make test-browser`.
 
 - `trace-semantics.kk` checks exact suffix capture and dynamic branches.
 - `targeted-settle*.kk` and `execution-planes.kk` check isolated producer
@@ -387,6 +587,20 @@ innermost boundary and translate them to Koka `exn`, as the DOM adapter does.
   non-destructive marker failure in native and real-browser paths.
 - `event_effect_boundary.py` checks that a lexical-only application effect
   cannot enter a retained callback.
+- `async-effects.kk` checks await result conversion, final cancellation, and
+  scope ancestry with a deterministic handler.
+- `structured-async.kk` checks ordered `parallel`, winning `race`, sibling
+  cancellation, and loser finalizer draining without timing dependence.
+- `derive-async-invalid.kk`, `memo-async-invalid.kk`,
+  `resource-source-async-invalid.kk`, and `async_effect_boundary.py` are
+  compile-time canaries for the tracked/untracked async capability boundary.
+- `dom-async-runtime.kk` plus `browser_async.py` check the microtask turn
+  boundary, Promise and Fetch adapters, structured combinators, duplicate and
+  late callbacks, setup failure, generation replacement, and root disposal in
+  Chromium.
+- `async-resource.kk` checks explicit equality, refresh/failure retention,
+  explicit cancellation, rapid source churn, stale completions, and owner
+  retirement in the browser.
 
 The browser renderer currently replaces all content between a region's
 persistent markers and does not provide keyed reconciliation, hydration,

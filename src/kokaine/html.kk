@@ -8,6 +8,7 @@
 module kokaine/html
 
 import kokaine/reactive
+import kokaine/async/effects
 
 
 // --------------------------------------------------------------------------
@@ -32,7 +33,7 @@ pub value struct event(
 // uncaught Koka exception and still unwinds its reactive batch. Native throws
 // from an extern declared only as `ui` violate that extern's effect contract;
 // adapters must translate them at the innermost FFI boundary (as DOM does).
-pub alias callback-effect = <signal-read,signal-write,ui,pure>
+pub alias callback-effect = <signal-read,signal-write,ui,async,pure>
 pub alias callback = (ev : event) -> callback-effect ()
 
 pub type property-value
@@ -221,7 +222,15 @@ pub fun on(name : string, action : callback) : attribute<e>
 pub fun on-write(name : string,
                  action : (event) -> signal-write ()) : attribute<e>
   Listener(name,fn(ev)
-    mask<signal-read>{ mask<ui>{ mask<exn>{ mask<div>{ action(ev) } } } }
+    mask<async-await>{
+      mask<async-cancel>{
+        mask<async-ioc>{
+          mask<discontinue>{
+            mask<signal-read>{ mask<ui>{ mask<exn>{ mask<div>{ action(ev) } } } }
+          }
+        }
+      }
+    }
   )
 
 pub fun id(value : string) : attribute<e>

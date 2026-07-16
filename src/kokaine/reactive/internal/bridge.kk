@@ -7,6 +7,8 @@ import kokaine/reactive/internal/model
 import kokaine/reactive/effects
 import kokaine/reactive/internal/runtime
 import kokaine/reactive/internal/reentry
+import kokaine/reactive/internal/async-runtime
+import kokaine/async/effects
 
 pub fun runtime-dispatch(root : root<e>,
                          action : () -> <signal-read,signal-write,pure|e> a)
@@ -20,7 +22,7 @@ pub fun runtime-create-root(action : (root<e>) -> <signal-write,pure|e> a)
 pub fun runtime-dispose-root(root : root<e>) : <exn|e> ()
   kokaine/reactive/internal/runtime/root/dispose(root)
 
-pub fun runtime-root-is-disposed(root : root<e>) : bool
+pub noinline fun runtime-root-is-disposed(root : root<e>) : bool
   kokaine/reactive/internal/runtime/root/is-disposed(root)
 
 pub fun runtime-update(root : root<e>,
@@ -88,3 +90,12 @@ pub fun runtime-run-reentry(value : reentry<e>,
                             action : () -> <signal-read,signal-write,pure|e> a)
                            : <exn|e> a
   kokaine/reactive/internal/reentry/run-reentry(value,action)
+
+// Browser async is interpreted only at explicit application/task boundaries.
+// Keeping this bridge separate from `dispatch` prevents async from entering
+// derivation or scheduler APIs merely because a root happens to carry `ui`.
+pub fun runtime-run-generation-async(
+    root : root<<ui|e>>,
+    action : () -> <async,signal-read,signal-write,pure,ui|e> ())
+    : <signal-read,signal-write,pure,ui|e> ()
+  kokaine/reactive/internal/async-runtime/run-generation-async(root,action)

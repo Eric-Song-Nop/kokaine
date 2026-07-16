@@ -99,7 +99,9 @@ pub fun root/dispose(root : root<e>) : <exn|e> ()
     retire-root-now(root)
   }
 
-pub fun root/is-disposed(root : root<e>) : bool
+// This stays noinline through the public bridge because Koka 3.2 cannot parse
+// the cached specialization it prints for the row-polymorphic Root fields.
+pub noinline fun root/is-disposed(root : root<e>) : bool
   load(root.root-disposed)
 
 pub fun update(root : root<e>, action : () -> <signal-write,pure|e> a)

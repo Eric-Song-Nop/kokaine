@@ -348,8 +348,13 @@ fun invoke-event(root : root<<ui|e>>, portal : reentry<<ui|e>>,
       // event capability then resumes the actual multi-shot user continuation.
       // Keeping resume synchronous preserves native nested `dispatchEvent` order.
       reenter(portal,fn()
-        val _ = continuation.resume(captured)
-        ()
+        // The async delimiter is inside this re-entry batch. Reaching await
+        // therefore returns here first, letting the batch close before any
+        // later browser completion starts its own generation-bound turn.
+        run-async(root,fn()
+          val _ = continuation.resume(captured)
+          ()
+        )
       )
     else ()
   else ()
@@ -375,7 +380,18 @@ fun retire-event-listener(
 
 fun capture-event-listener(root : root<<ui|e>>, action : callback)
                           : <ui,exn|e> event-continuation
-  dispatch(root,fn() capture-event(action))
+  val captured = transaction-cell(Nothing)
+  dispatch(root,fn()
+    run-async(root,fn()
+      // `capture-event` reaches its unconditional browser-event suspension
+      // before any user code or Web await, so the capability is published
+      // synchronously while the real async evidence remains installed.
+      transaction-store(captured,Just(capture-event(action)))
+    )
+  )
+  match transaction-load(captured)
+    Just(continuation) -> continuation
+    Nothing -> throw("event continuation capture did not complete synchronously")
 
 fun install-event-listener(root : root<<ui|e>>, target : element,
                            name : string, action : callback)

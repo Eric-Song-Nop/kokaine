@@ -27,7 +27,10 @@ test-native:
 	$(KOKA) $(KOKA_FLAGS) -e test/reactive-advanced.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/reactive-stress.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/html.kk
+	$(KOKA) $(KOKA_FLAGS) -e test/async-effects.kk
+	$(KOKA) $(KOKA_FLAGS) -e test/structured-async.kk
 	python3 test/event_effect_boundary.py $(KOKA)
+	python3 test/async_effect_boundary.py $(KOKA)
 
 build-counter:
 	mkdir -p dist
@@ -52,12 +55,17 @@ build-browser-fixtures: build-counter
 		--buildname=dom-ownership test/dom-ownership.kk
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
 		--buildname=dom-event-continuation test/dom-event-continuation.kk
+	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
+		--buildname=dom-async-runtime test/dom-async-runtime.kk
+	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
+		--buildname=async-resource test/async-resource.kk
 
 browser-install:
 	$(UV) run --with playwright python -m playwright install chromium
 
 test-browser: build-browser-fixtures
 	$(UV) run --with playwright python test/browser_counter.py
+	$(UV) run --with playwright python test/browser_async.py
 
 test-wasm:
 	./support/wasmweb-proof/run.sh test

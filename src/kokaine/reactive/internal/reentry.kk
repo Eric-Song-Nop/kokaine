@@ -52,3 +52,26 @@ pub fun run-reentry(value : reentry<e>,
           )
         )
       }
+
+// Structural retirement marks a frame dead before it enters owned
+// finalizers. Async cancellation still has to enter the parked strand so its
+// `finally` clauses run, but normal host re-entry must continue to reject this
+// frame. This internal path restores only the captured reactive context; it
+// deliberately does not open a new host batch or permit fresh registration.
+pub fun run-retirement-reentry(value : reentry<e>,
+                               action : () -> <signal-read,signal-write,pure|e> a)
+                              : <exn|e> a
+  check-not-pure-plane("reactive retirement re-entry")
+  match value
+    Reentry(root,checkpoint,current) ->
+      val plane = root.root-effect-plane
+      pretend-no-div{
+        with-entry(plane,Nothing,fn()
+          with-context(plane,checkpoint,current,
+            fn()
+              lift-div(fn()
+                dispatch-handled(root,action)
+              )
+          )
+        )
+      }

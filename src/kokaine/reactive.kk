@@ -10,6 +10,7 @@ module kokaine/reactive
 import kokaine/reactive/internal/model
 pub import kokaine/reactive/effects
 import kokaine/reactive/internal/bridge
+import kokaine/async/effects
 
 abstract value type root<e::E>
   Public-root(internal-root : kokaine/reactive/internal/model/root<e>)
@@ -57,7 +58,7 @@ pub fun create-root(action : (root<e>) -> <signal-write,pure|e> a)
 pub fun root/dispose(root : root<e>) : <exn|e> ()
   runtime-dispose-root(root.unwrap-root)
 
-pub fun root/is-disposed(root : root<e>) : bool
+pub noinline fun root/is-disposed(root : root<e>) : bool
   runtime-root-is-disposed(root.unwrap-root)
 
 pub fun update(root : root<e>, action : () -> <signal-write,pure|e> a)
@@ -153,3 +154,11 @@ pub fun reenter(value : reentry<e>,
                 action : () -> <signal-read,signal-write,pure|e> a)
                : <exn|e> a
   runtime-run-reentry(value.unwrap-reentry,action)
+
+// Run a direct-style browser task under the exact structural generation which
+// is current at the call site. Each suspension is registered with that owner;
+// later completion re-enters through a fresh Kokaine batch.
+pub fun run-async(root : root<<ui|e>>,
+                  action : () -> <async,signal-read,signal-write,pure,ui|e> ())
+                 : <signal-read,signal-write,pure,ui|e> ()
+  runtime-run-generation-async(root.unwrap-root,action)

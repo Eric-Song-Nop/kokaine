@@ -128,6 +128,26 @@ attempts.
   contains the user action. Re-entry restores the structural context and
   synchronously resumes that K; a retired generation rejects later delivery,
   so event-created reactive work cannot escape to the root.
+- A listener's `run-async` delimiter executes direct-style code only through
+  its first suspension. The initiating reactive batch then closes. Every
+  completion, including one reported synchronously during setup, continues in
+  a microtask which revalidates and re-enters the exact owning generation as a
+  fresh batched turn.
+- Every outstanding Web await is a one-shot, generation-owned capability.
+  Completion and retirement first revoke the retained continuation and host
+  callbacks. Cancellation is final control rather than an ordinary exception,
+  so it cannot be caught as a failure and still unwinds the strand's `finally`
+  clauses after the host disposer has been attempted. Fetch body reads retain
+  the request's controller, so retirement after headers also aborts a streaming
+  body.
+- `parallel`, `race`, and `timeout` are structured: a parent does not return
+  while a canceled child still has an outstanding await or finalizer. Timer,
+  Promise, and Fetch adapters all use the same revocable await protocol.
+- A Resource tracks only its synchronous source calculation. Its loader
+  receives an immutable source snapshot and has no `signal-read` capability;
+  equality can therefore preserve an active request, while refresh, source
+  replacement, cancellation, or owner retirement creates a clear generation
+  boundary for results.
 - Text and attributes are escaped in SSR. Inline `on*`, `srcdoc`, and
   markup-writing DOM properties are rejected; raw markup requires the explicit
   `unsafe-trusted-html` boundary. Native DOM exceptions become Koka `exn`.
@@ -144,6 +164,12 @@ make browser-install
 make test-browser
 make test-wasm
 ```
+
+`make test` includes the async algebra, structured-concurrency, and compile-time
+capability checks. `make test-browser` builds and exercises the Web adapters,
+turn boundary, generation retirement, hostile late completions, and Resource
+churn in Chromium. These aggregate commands are the authoritative async test
+entry points.
 
 To explore the responsive Continuation Lab:
 
@@ -220,6 +246,65 @@ effect targeting its node, while mount and dynamic scopes own DOM ranges.
 For deterministic snapshots or server output, replace the DOM import with
 `kokaine/ssr` and call `render(root,page)`.
 
+## Web async and Resource
+
+Import `kokaine/async/web` for browser adapters and structured combinators.
+DOM listeners already install `run-async`, so their callbacks can suspend in
+direct style:
+
+```koka
+on("click",fn(_)
+  val response = fetch(get("/api/value")).require-ok
+  val body = response.text
+  result.set(body)
+)
+```
+
+The event turn publishes `result` changes made before the first await, then
+returns to the browser. Code after the await runs in a later microtask turn
+only if the generation which installed the listener is still live. Use
+`sleep`, `yield`, `promise.await`, `fetch`, `parallel`, `race`, and `timeout`
+inside the same direct-style `async` row. `setup/await` is the lower-level
+boundary for another cancelable Web adapter: setup receives a completion
+callback and returns a disposer. Use the public `run-async(root, action)`
+delimiter when starting the same kind of task from another live reactive turn.
+Every resumed suffix uses a fresh base async interpreter; structured siblings
+share only their active cancellation family, and terminal operations detach
+from that family and their owner lookup. `response.require-ok` aborts and
+cancels an unconsumed error body before raising its HTTP exception.
+
+`kokaine/resource` packages the common tracked-source/load/state pattern:
+
+```koka
+val endpoint = signal(root,Just("/api/value"))
+val data = resource(
+  root,
+  fn() endpoint.get,
+  fn(url)
+    val response = fetch(get(url))
+    response.require-ok
+    response.text
+)
+```
+
+The source must finish synchronously as
+`() -> signal-read maybe<s>`. The loader is deliberately closed as
+`s -> <async,ui,exn> a`: it sees the selected snapshot but cannot create a
+reactive dependency before or after suspension. Observe the atomic
+`resource-state<a>` through `data.state`:
+
+```text
+Unresolved
+Pending(previous : maybe<a>)
+Ready(value : a)
+Failed(error : exception, previous : maybe<a>)
+```
+
+`data.latest` returns the current or last successful value. `data.refresh`
+starts a fresh generation without discarding that value, and `data.cancel`
+retires an active request. `resource-by` accepts explicit source equality;
+equal snapshots do not restart or cancel the active loader.
+
 ## API shape
 
 - `create-root`, `root.dispose`, `update`, `sample`, and `dispatch` delimit
@@ -239,10 +324,21 @@ For deterministic snapshots or server output, replace the DOM import with
   structure, not arbitrary lexical effect handlers. DOM listeners additionally
   park the user action in an opaque multi-shot event continuation; the host
   callback only snapshots the event and synchronously resumes that capability.
+- `run-async(root, action)` delimits one generation-bound browser task. Each
+  await returns control to close the current turn; completion resumes under a
+  newly installed async interpreter inside the captured generation.
+- `kokaine/async/web` supplies `sleep`, `yield`, `timeout`, Promise interop,
+  `request`/`get`/`post`/`fetch`, and response status/body operations; it
+  re-exports `parallel` and `race`. `kokaine/async/effects` supplies the
+  cancelable `setup/await` protocol and cancellation scopes for adapter and
+  combinator authors.
+- `resource` and `resource-by` expose a tracked synchronous source, an
+  untracked async loader, one atomic state signal, `latest`, `refresh`, and
+  `cancel`.
 - `view`, common tag helpers, live text/attributes/properties, `region`, and
   typed listeners form the HTML DSL. A listener callback has the closed
-  `<signal-read,signal-write,ui,pure>` capability row; unsupported application
-  effects are rejected instead of escaping into a later host turn.
+  `<signal-read,signal-write,ui,async,pure>` capability row; unsupported
+  application effects are rejected instead of escaping into a later host turn.
 - `mount`/`unmount` interpret a view into validated DOM ranges. A mount into a
   managed element inherits the exact same-root DOM generation which created
   that element, while `mount-independent` is the explicit opt-out. Mount
@@ -252,8 +348,8 @@ For deterministic snapshots or server output, replace the DOM import with
   root or generation portal. `render` safely interprets the same value to a
   string.
 
-See [the architecture notes](docs/architecture.md) for the scheduler, handler,
-browser re-entry, and WebAssembly design.
+See [the architecture notes](docs/architecture.md) for the scheduler, handlers,
+generation-bound browser async, and host re-entry design.
 
 The [continuation runtime decision record](docs/continuation-runtime-plan.md)
 records the capability assessment and invariants behind replacing the Observer
@@ -280,9 +376,16 @@ src/kokaine/reactive/internal/resource.kk  opaque parked resource continuations
 src/kokaine/reactive/internal/scheduler.kk invalidation, queues, targeted settle
 src/kokaine/reactive/internal/handlers.kk  signal interpreters and dispatch
 src/kokaine/reactive/internal/reentry.kk   batched structural host re-entry
+src/kokaine/reactive/internal/async-runtime.kk generation-owned Web awaits
 src/kokaine/reactive/internal/runtime.kk   roots and high-level reactive values
 src/kokaine/reactive/internal/bridge.kk    names used by the public facade
 src/kokaine/internal/event-runtime.kk      guarded multi-shot browser event K
+src/kokaine/async.kk                       structured async public facade
+src/kokaine/async/effects.kk               await, cancellation, and scope algebra
+src/kokaine/async/channel.kk               structured strand resumption queue
+src/kokaine/async/structured.kk            parallel, race, and timeout core
+src/kokaine/async/web.kk                   timer, Promise, and Fetch adapters
+src/kokaine/resource.kk                    tracked-source async Resource
 src/kokaine/html.kk                        handled backend-neutral view DSL
 src/kokaine/dom.kk                         jsweb renderer and event boundary
 src/kokaine/ssr.kk                         escaped deterministic string renderer
@@ -304,6 +407,12 @@ test/dom-mount-rollback.kk                 descendant bootstrap rollback fixture
 test/dom-ownership.kk                      physical same-root ownership fixture
 test/dom-range-safety.kk                   marker and re-entrant cleanup safety
 test/event_effect_boundary.py              closed callback-row compile canary
+test/async-effects.kk                      await, cancellation, and scope algebra
+test/structured-async.kk                   deterministic child draining semantics
+test/async_effect_boundary.py              async capability compile canaries
+test/dom-async-runtime.kk                  browser turn and retirement fixture
+test/async-resource.kk                     Resource churn and stale-result fixture
+test/browser_async.py                      real-browser async and Resource checks
 test/browser_counter.py                    browser events, churn, rollback, and disposal
 support/wasmweb-proof/                     retained-callback Emscripten ABI proof
 ```
@@ -329,9 +438,10 @@ closure behind.
 handlers, continuation gate, and owning frame around the event-K resume. It
 does not reconstruct arbitrary user-defined handlers that lexically surrounded
 `mount` and have since returned. The public listener type therefore keeps a
-closed capability row; handle additional effects inside the callback. A future
-explicit application runner could widen that row only by reinstalling its
-handlers at every host turn.
+closed capability row which now includes Kokaine's Web `async` algebra. Handle
+additional application effects inside the callback; `run-async` reinstalls the
+async handlers at every continuation turn, but does not reconstruct unrelated
+lexical handlers.
 
 ## Design references
 
