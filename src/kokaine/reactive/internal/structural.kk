@@ -124,9 +124,13 @@ fun bootstrap-structural-scope(scope : continuation-scope<e>)
                               : <div|e> error<bool>
   match load(scope.scope-state)
     Scope-starting ->
-      match run-bootstrap(scope)
-        Error(problem) -> Error(problem)
-        Ok(_) -> Ok(True)
+      if load(scope.scope-bootstrap-slot).is-nothing ||
+         invalidated-ancestor(scope.scope-parent)
+      then Ok(False)
+      else
+        match run-bootstrap(scope)
+          Error(problem) -> Error(problem)
+          Ok(_) -> Ok(True)
     _ -> bootstrap-structural-scope-rest(scope,False)
 
 fun bootstrap-structural-owned(values : owned<e>) : <div|e> error<bool>

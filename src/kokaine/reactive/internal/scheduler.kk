@@ -62,6 +62,25 @@ pub fun pending-ancestor-loop(parent : maybe<continuation-gate>) : <div> bool
 pub fun pending-ancestor(parent : maybe<continuation-gate>) : bool
   pretend-no-div{ pending-ancestor-loop(parent) }
 
+// Targeted structural bootstrap is deliberately allowed inside the effect
+// apply which is constructing that subtree, so a Running ancestor alone is
+// not a blocker. A self-write changes that same gate to Pending; descendants
+// of the invalidated generation must then wait for ordinary retirement.
+pub fun invalidated-ancestor-loop(parent : maybe<continuation-gate>)
+                                    : <div> bool
+  match parent
+    Nothing -> False
+    Just(gate) ->
+      match load(gate.gate-state)
+        Capture-pending -> True
+        Capture-running -> invalidated-ancestor-loop(gate.gate-parent)
+        Capture-dead -> False
+        Capture-draft -> invalidated-ancestor-loop(gate.gate-parent)
+        Capture-live -> invalidated-ancestor-loop(gate.gate-parent)
+
+pub fun invalidated-ancestor(parent : maybe<continuation-gate>) : bool
+  pretend-no-div{ invalidated-ancestor-loop(parent) }
+
 pub fun enqueue-trace(plane : plane<e>, current : trace<e>) : ()
   match current
     Trace-end -> ()
