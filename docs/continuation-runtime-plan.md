@@ -1,6 +1,6 @@
 # Continuation runtime decision record
 
-Status: implemented, with the host-event boundary explicitly limited below.
+Status: implemented, including a guarded host-event continuation boundary.
 
 ## Decision
 
@@ -61,8 +61,11 @@ and a write can resume it. It was rejected for ordinary signals because it
 changes synchronous `get` into a different programming model and gives up the
 desired direct-style API.
 
-An await-style continuation loop remains a possible future design for event
-delivery, where the host operation is inherently asynchronous.
+Event delivery does use an await-style capture, but not a one-shot loop. DOM
+dispatch is synchronous and can nest before the outer action returns, so a loop
+would not have parked its next K in time. Kokaine instead captures one
+multi-shot master at `await-browser-event` and exposes it through an opaque
+live/retired gate whose revocation is one-way.
 
 ### Capture the suffix of synchronous `get`
 
@@ -99,7 +102,7 @@ is pure. Kokaine avoids that conversion instead of casting it:
 Cross-plane owner relationships retain only a non-effectful continuation gate.
 They can validate state or defer work, but cannot resume an erased effectful K.
 
-The design is explicitly **not affine**. A live trace retains typed resume and
+Tracked propagation is explicitly **not affine**. A live trace retains typed resume and
 finalize capabilities and can be invalidated and resumed on multiple turns;
 state transitions prevent concurrent use or scheduling after retirement.
 Failure while replacing an already captured generation leaves that same
@@ -107,6 +110,12 @@ continuation pending for retry instead of retaining the original calculation as
 a fallback. The bootstrap closure is separately one-shot: it is cleared before
 its first run, and an initial bootstrap failure retires the scope rather than
 replaying that closure.
+
+The event boundary also uses a multi-shot raw resumption, but exposes it only
+through an opaque state cell. Retirement atomically replaces `Event-live(K)`
+with `Event-retired`. While live, the capability intentionally supports
+repeated and nested delivery; after the one-way transition, every resume is
+rejected even though the underlying raw K would have been reusable.
 
 ## Runtime invariants
 
@@ -133,7 +142,10 @@ The implementation is accepted only while all of the following remain true:
     cannot register from a retired frame.
 11. Re-entry restores a captured effect-plane gate and frame, resets the
     state-entry target, and executes one batched turn.
-12. Repeated tracked read occurrences are distinct nested traces; the scheduler
+12. A DOM callback snapshots the event and resumes `Event-live(K)` under that
+    re-entry; retirement drops K before listener removal, and `Event-retired`
+    rejects every later callback.
+13. Repeated tracked read occurrences are distinct nested traces; the scheduler
     runs only the earliest pending ancestor on the current frontier.
 
 ## What “no dependency graph” means here
@@ -217,6 +229,12 @@ bootstrap is different: its slot is cleared before invocation, and bootstrap
 failure or abort retires the starting scope. There is no initial calculation
 closure left to replay.
 
+The public construction boundaries add one more transaction layer. `create-root`
+keeps its initial batch unpublished until the action and first drain succeed;
+failure retires the candidate root instead of flushing queued work during
+unwind. DOM `mount` retains its outer disposer before flushing descendants and
+uses it to roll back the whole mount if a later child bootstrap fails.
+
 ## HTML and UI consequence
 
 The `html<e>` handler and the reactive continuation runtime are complementary,
@@ -237,19 +255,31 @@ reconciliation.
 ## Host re-entry decision
 
 Browser listeners must outlive the lexical call to `mount`, but a normal host
-callback does not preserve Koka's dynamic handler stack. The implemented
-`reentry<e>` therefore stores only the typed structural capability needed by the
-reactive runtime: root, generation gate, and generation frame.
+callback does not preserve Koka's dynamic handler stack. Listener installation
+therefore captures two separate capabilities:
 
-On invocation it reinstalls Kokaine's signal handlers and structural context,
-then batches the whole callback. This makes callback-created memos, effects, and
-cleanups retire with the listener's generation.
+- `reentry<e>` stores the structural capability needed by the reactive runtime:
+  root, generation gate, and generation frame; and
+- `event-continuation` stores the user action after a handled
+  `await-browser-event` operation as an opaque raw multi-shot resumption.
 
-This is not an event continuation loop. JavaScript still calls an ordinary Koka
-closure, and `reenter` does not reconstruct arbitrary outer user handlers. A
-strict continuation-driven event design would require a parked `await-event`
-resumption per listener, resuming it for one event, capturing the next K, and
-finalizing the parked K on retirement. That remains a separate future decision.
+On invocation the JavaScript callback snapshots the raw DOM event, reinstalls
+Kokaine's signal handlers and structural context, and synchronously resumes the
+event continuation inside one batch. This both preserves native nested
+`dispatchEvent` ordering and makes event-created memos, effects, and cleanups
+retire with the listener's generation.
+
+The raw master is deliberately multi-shot. A one-shot `await-event` loop cannot
+capture its next K until the current action returns, so a nested DOM dispatch
+would be delayed or reordered. An opaque `Event-live` / `Event-retired` cell
+makes retirement one-way while permitting repeated delivery when live. Cleanup
+gates it first, drops the sole stored resumption, and then removes the
+JavaScript listener. It also clears the trampoline's mutable action cell before
+that host call, so failed removal cannot retain the root/portal closure. The
+parked suffix has not begun the user action and owns no acquired finalizer, so
+dropping it is cancellation rather than an unrun cleanup. `reentry` still does
+not fabricate arbitrary outer user handlers; that is why the callback row
+remains closed.
 
 ## Consequences
 
@@ -260,10 +290,21 @@ finalizing the parked K on retirement. That remains a separate future decision.
   still have costs that should be measured under large traces.
 - The structural ownership ledger remains explicit because raw continuations,
   cleanup actions, DOM ranges, and listeners require deterministic retirement.
-- Arbitrary application effects used by an asynchronous callback need a handler
-  installed inside that callback or at a new host runner.
+- JavaScript remains the event transport ABI, while the user action is entered
+  only by resuming the guarded event continuation under structural re-entry.
+- The public callback row is closed over the capabilities reinstalled by this
+  boundary. Arbitrary application effects need a handler inside the callback;
+  otherwise type checking rejects the listener. A future host runner may widen
+  this contract explicitly.
+- Modeled Koka `exn` (included by `pure`) unwinds and closes the host batch. A
+  raw JavaScript throw from an extern declared merely `ui` violates its FFI
+  effect contract; adapters must translate such failures at the innermost host
+  boundary instead of relying on a top-level listener catch.
 - Region updates replace contents between persistent marker nodes; the
   continuation runtime does not imply keyed reconciliation.
+- Later mounts into same-root managed DOM inherit the creating continuation
+  generation. Explicit `mount-independent` is required to opt into a separately
+  owned nested lifetime.
 
 ## Verification and mutation canaries
 
@@ -278,6 +319,11 @@ The important tests are behavioral rather than source-string checks:
 - `continuation-reentry.kk` fails if re-entry is changed to plain root dispatch.
 - `dom-lifecycle.kk` and `browser_counter.py` prove event-created work retires
   with the DOM generation that registered its listener.
+- `dom-event-continuation.kk` proves repeated and nested browser dispatches
+  synchronously resume event K, including `preventDefault`, and that retirement
+  closes the capability.
+- `event_effect_boundary.py` proves a lexical-only effect cannot escape into a
+  retained listener and fail later at the JavaScript host turn.
 
 A mutation that replaces trace resume with a retained full-action call must not
 be possible without adding a new forbidden runtime path. A mutation that drops

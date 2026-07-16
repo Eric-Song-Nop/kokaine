@@ -112,9 +112,10 @@ smuggling" guarantee.
 - Nested batches delay settling while making newly committed source values
   immediately readable. Host re-entry is also one atomic batched turn.
 - Browser listeners capture a typed `reentry<e>` containing their registering
-  generation's root, gate, and frame. Re-entry restores that structural context
-  and rejects a retired generation, so callback-created reactive work cannot
-  escape to the root.
+  generation's root, gate, and frame, plus a guarded multi-shot event K that
+  contains the user action. Re-entry restores the structural context and
+  synchronously resumes that K; a retired generation rejects later delivery,
+  so event-created reactive work cannot escape to the root.
 - Text and attributes are escaped in SSR. Inline `on*`, `srcdoc`, and
   markup-writing DOM properties are rejected; raw markup requires the explicit
   `unsafe-trusted-html` boundary. Native DOM exceptions become Koka `exn`.
@@ -210,7 +211,9 @@ For deterministic snapshots or server output, replace the DOM import with
 ## API shape
 
 - `create-root`, `root.dispose`, `update`, `sample`, and `dispatch` delimit
-  root-scoped reactive capabilities.
+  root-scoped reactive capabilities. Root construction commits only after its
+  initial queue drains successfully; a failed action or bootstrap retires the
+  unpublished root and its registered resources.
 - `signal`, `signal-by`, and `signal-always` select equality behavior.
 - `derive`, `derive-by`, and `derive-always` cache stateless derived values.
 - `memo`, `memo-by`, and `memo-always` add a state entry that receives the
@@ -221,11 +224,19 @@ For deterministic snapshots or server output, replace the DOM import with
   `create-effect` remove the complete owned subtree.
 - `capture-reentry` and `reenter` let a host callback re-enter the exact
   continuation generation that registered it. They restore Kokaine's reactive
-  structure, not arbitrary lexical effect handlers.
+  structure, not arbitrary lexical effect handlers. DOM listeners additionally
+  park the user action in an opaque multi-shot event continuation; the host
+  callback only snapshots the event and synchronously resumes that capability.
 - `view`, common tag helpers, live text/attributes/properties, `region`, and
-  typed listeners form the HTML DSL.
-- `mount`/`unmount` interpret a view into DOM ranges; `render` safely interprets
-  the same value to a string.
+  typed listeners form the HTML DSL. A listener callback has the closed
+  `<signal-read,signal-write,ui,pure>` capability row; unsupported application
+  effects are rejected instead of escaping into a later host turn.
+- `mount`/`unmount` interpret a view into validated DOM ranges. A mount into a
+  managed element inherits the exact same-root DOM generation which created
+  that element, while `mount-independent` is the explicit opt-out. Mount
+  construction is transactional, so a descendant bootstrap failure cannot
+  leave caller-inaccessible DOM or listeners. `render` safely interprets the
+  same value to a string.
 
 See [the architecture notes](docs/architecture.md) for the scheduler, handler,
 browser re-entry, and WebAssembly design.
@@ -254,6 +265,7 @@ src/kokaine/reactive/internal/handlers.kk  signal interpreters and dispatch
 src/kokaine/reactive/internal/reentry.kk   batched structural host re-entry
 src/kokaine/reactive/internal/runtime.kk   roots and high-level reactive values
 src/kokaine/reactive/internal/bridge.kk    names used by the public facade
+src/kokaine/internal/event-runtime.kk      guarded multi-shot browser event K
 src/kokaine/html.kk                        handled backend-neutral view DSL
 src/kokaine/dom.kk                         jsweb renderer and event boundary
 src/kokaine/ssr.kk                         escaped deterministic string renderer
@@ -268,7 +280,13 @@ test/continuation-reentry.kk               callback-created ownership and stalen
 test/reactive*.kk                          compatibility, advanced, and stress suites
 test/html.kk                               builder, escaping, and validation checks
 test/dom-lifecycle.kk                      listener, region, and re-entry fixture
-test/browser_counter.py                    browser events, churn, and disposal
+test/dom-event-continuation.kk              nested synchronous event-K fixture
+test/root-construction.kk                  unpublished-root rollback checks
+test/dom-mount-rollback.kk                 descendant bootstrap rollback fixture
+test/dom-ownership.kk                      physical same-root ownership fixture
+test/dom-range-safety.kk                   marker and re-entrant cleanup safety
+test/event_effect_boundary.py              closed callback-row compile canary
+test/browser_counter.py                    browser events, churn, rollback, and disposal
 support/wasmweb-proof/                     retained-callback Emscripten ABI proof
 ```
 
@@ -279,13 +297,23 @@ or a complete WASM DOM renderer. The current `region` primitive intentionally
 replaces the contents between persistent marker nodes; it is the correct
 building block for conditional structure, not an optimized list diff.
 
-Browser event delivery still begins with an ordinary host callback; it does not
-resume a parked event continuation. `reentry<e>` is
-**continuation-derived structural re-entry**: it restores Kokaine's signal
-handlers, continuation gate, and owning frame, then executes the callback as a
-batched turn. It does not reconstruct arbitrary user-defined handlers that
-lexically surrounded `mount` and have since returned. Handle such effects
-inside the callback, or install a fresh application runner at the host boundary.
+Browser delivery still begins at an ordinary host ABI callback, but that
+callback no longer calls the user action directly. Listener installation parks
+the action behind `await-browser-event`; delivery snapshots the event, restores
+the structural/reactive context with `reentry<e>`, and synchronously resumes the
+opaque multi-shot event K. Multi-shot is required because DOM dispatch may nest
+before the outer action returns. Retirement changes the capability to
+`Event-retired`, clears the trampoline's retained action cell, and only then
+attempts host listener removal; even a host removal failure leaves no live Koka
+closure behind.
+
+`capture-reentry` itself remains non-resumptive: it restores Kokaine's signal
+handlers, continuation gate, and owning frame around the event-K resume. It
+does not reconstruct arbitrary user-defined handlers that lexically surrounded
+`mount` and have since returned. The public listener type therefore keeps a
+closed capability row; handle additional effects inside the callback. A future
+explicit application runner could widen that row only by reinstalling its
+handlers at every host turn.
 
 ## Design references
 

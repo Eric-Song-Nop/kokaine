@@ -9,6 +9,8 @@ module kokaine/dom
 
 import kokaine/reactive
 import kokaine/html
+import kokaine/internal/event-runtime
+import std/core/unsafe
 
 
 // --------------------------------------------------------------------------
@@ -27,6 +29,17 @@ abstract type raw-event
 abstract type dom-listener
   Dom-listener(value : any)
 
+// Transaction state must survive abortive control while mount bootstraps are
+// flushing. Keep this adapter-local and inaccessible to user code.
+fun transaction-cell(value : a) : ref<global,a>
+  unsafe-total { ref(value) }
+
+fun transaction-load(value : ref<global,a>) : a
+  unsafe-total { !value }
+
+fun transaction-store(target : ref<global,a>, value : a) : ()
+  unsafe-total { target := value }
+
 
 // --------------------------------------------------------------------------
 // JavaScript primitives
@@ -39,6 +52,9 @@ extern any-is-null(value : any) : bool
   js inline "(#1 == null)"
 
 extern any-node(value : any) : node
+  js inline "#1"
+
+extern any-reentry(value : any) : reentry<e>
   js inline "#1"
 
 // JavaScript DOM APIs throw native exceptions, which do not automatically
@@ -68,11 +84,32 @@ extern dom-create-comment(value : string) : ui node
 extern element-node(value : element) : node
   js inline "#1"
 
+// Nodes created by a managed generation remember its structural re-entry
+// capability. A later mount into such a node can then become a child of the
+// exact region/mount generation even though the original `mount` call has
+// already returned. The root identity check prevents cross-root adoption.
+extern dom-record-owner(value : node, root : root<e>, portal : reentry<e>)
+                       : ui ()
+  js inline "(function(){ var key=Symbol.for('kokaine.dom.owners'); var owners=globalThis[key]; if(!owners){ owners=new WeakMap(); globalThis[key]=owners; } owners.set(#1,{ root:#2, portal:#3 }); })()"
+
+extern dom-find-owner(value : node, root : root<e>) : ui any
+  js inline "(function(){ var owners=globalThis[Symbol.for('kokaine.dom.owners')]; if(!owners) return null; var current=#1; while(current){ var entry=owners.get(current); if(entry && entry.root===#2) return entry.portal; current=current.parentNode || current.host || null; } return null; })()"
+
 extern dom-append(parent : node, child : node) : ui ()
   js inline "(#1).appendChild(#2)"
 
 extern dom-insert-before(parent : node, child : node, before : node) : ui ()
   js inline "(#1).insertBefore(#2,#3)"
+
+// Assemble boundary markers off-tree and publish them with one host mutation.
+// If the final append/insert throws, neither endpoint has become observable in
+// the target DOM.
+extern dom-append-marker-pair(parent : node, first : node, last : node) : ui ()
+  js inline "(function(){ var rangeFirst=#2; var rangeLast=#3; var fragment=document.createDocumentFragment(); fragment.appendChild(rangeFirst); fragment.appendChild(rangeLast); try { (#1).appendChild(fragment); } catch(error) { try { if(rangeFirst.parentNode) Node.prototype.removeChild.call(rangeFirst.parentNode,rangeFirst); } catch(_) {} try { if(rangeLast.parentNode) Node.prototype.removeChild.call(rangeLast.parentNode,rangeLast); } catch(_) {} throw error; } })()"
+
+extern dom-insert-marker-pair-before(parent : node, first : node, last : node,
+                                     before : node) : ui ()
+  js inline "(function(){ var rangeFirst=#2; var rangeLast=#3; var fragment=document.createDocumentFragment(); fragment.appendChild(rangeFirst); fragment.appendChild(rangeLast); try { (#1).insertBefore(fragment,#4); } catch(error) { try { if(rangeFirst.parentNode) Node.prototype.removeChild.call(rangeFirst.parentNode,rangeFirst); } catch(_) {} try { if(rangeLast.parentNode) Node.prototype.removeChild.call(rangeLast.parentNode,rangeLast); } catch(_) {} throw error; } })()"
 
 extern dom-set-text(value : node, content : string) : ui ()
   js inline "((#1).data = #2)"
@@ -97,21 +134,29 @@ extern dom-set-int-property(value : element, name : string,
   js inline "((#1)[#2] = Number(#3))"
 
 extern dom-clear-between(first : node, last : node) : ui ()
-  js inline "(function(){ var n=(#1).nextSibling; while(n && n!==#2){ var next=n.nextSibling; n.remove(); n=next; } })()"
+  js inline "(function(){ var rangeFirst=#1; var rangeLast=#2; var firstParent=rangeFirst && rangeFirst.parentNode; var lastParent=rangeLast && rangeLast.parentNode; if(!firstParent && !lastParent) return; if(!firstParent || firstParent!==lastParent || rangeFirst===rangeLast){ throw new Error('invalid Kokaine DOM range: endpoints do not share a parent'); } var nodes=[]; var n=rangeFirst.nextSibling; while(n && n!==rangeLast){ nodes.push(n); n=n.nextSibling; } if(n!==rangeLast){ throw new Error('invalid Kokaine DOM range: closing marker is not reachable after opening marker'); } var passes=Math.max(2,nodes.length+2); while(passes-- > 0){ var attached=false; for(var i=0;i<nodes.length;i++){ var parent=nodes[i].parentNode; if(parent){ attached=true; Node.prototype.removeChild.call(parent,nodes[i]); } } if(!attached) return; } for(var j=0;j<nodes.length;j++){ if(nodes[j].parentNode){ throw new Error('invalid Kokaine DOM cleanup: a removed node was synchronously reinserted'); } } })()"
 
 extern dom-remove-range(first : node, last : node) : ui ()
-  js inline "(function(){ var n=#1; var end=#2; var parent=n.parentNode; while(parent && n){ var next=n.nextSibling; parent.removeChild(n); if(n===end) break; n=next; } })()"
+  js inline "(function(){ var rangeFirst=#1; var rangeLast=#2; var firstParent=rangeFirst && rangeFirst.parentNode; var lastParent=rangeLast && rangeLast.parentNode; if(!firstParent && !lastParent) return; if(!firstParent || firstParent!==lastParent || rangeFirst===rangeLast){ throw new Error('invalid Kokaine DOM range: endpoints do not share a parent'); } var nodes=[]; var n=rangeFirst; while(n && n!==rangeLast){ nodes.push(n); n=n.nextSibling; } if(n!==rangeLast){ throw new Error('invalid Kokaine DOM range: closing marker is not reachable after opening marker'); } nodes.push(rangeLast); var passes=Math.max(2,nodes.length+2); while(passes-- > 0){ var attached=false; for(var i=0;i<nodes.length;i++){ var parent=nodes[i].parentNode; if(parent){ attached=true; Node.prototype.removeChild.call(parent,nodes[i]); } } if(!attached) return; } for(var j=0;j<nodes.length;j++){ if(nodes[j].parentNode){ throw new Error('invalid Kokaine DOM cleanup: a removed node was synchronously reinserted'); } } })()"
 
-extern dom-append-html(parent : node, content : string) : ui ()
-  js inline "(function(){ var t=document.createElement('template'); t.innerHTML=#2; (#1).appendChild(t.content); })()"
+extern dom-append-html(parent : node, content : string,
+                       root : root<e>, portal : reentry<e>) : ui ()
+  js inline "(function(){ var template=document.createElement('template'); template.innerHTML=#2; var owners=globalThis[Symbol.for('kokaine.dom.owners')]; if(!owners){ owners=new WeakMap(); globalThis[Symbol.for('kokaine.dom.owners')]=owners; } Array.from(template.content.childNodes).forEach(function(child){ owners.set(child,{ root:#3, portal:#4 }); }); (#1).appendChild(template.content); })()"
 
 extern dom-insert-html-before(parent : node, before : node,
-                              content : string) : ui ()
-  js inline "(function(){ var t=document.createElement('template'); t.innerHTML=#3; (#1).insertBefore(t.content,#2); })()"
+                              content : string, root : root<e>,
+                              portal : reentry<e>) : ui ()
+  js inline "(function(){ var template=document.createElement('template'); template.innerHTML=#3; var owners=globalThis[Symbol.for('kokaine.dom.owners')]; if(!owners){ owners=new WeakMap(); globalThis[Symbol.for('kokaine.dom.owners')]=owners; } Array.from(template.content.childNodes).forEach(function(child){ owners.set(child,{ root:#4, portal:#5 }); }); (#1).insertBefore(template.content,#2); })()"
 
 extern dom-listen(value : element, name : string,
                   action : raw-event -> <ui|e> ()) : ui dom-listener
-  js inline "(function(){ var f=function(ev){ return (#3)(ev); }; (#1).addEventListener(#2,f); return f; })()"
+  js inline "(function(){ var state={ action:#3 }; var f=function(ev){ var current=state.action; return current ? current(ev) : undefined; }; f.__kokaineListenerState=state; try { (#1).addEventListener(#2,f); return f; } catch(error) { state.action=null; try { (#1).removeEventListener(#2,f); } catch(_) {} throw error; } })()"
+
+// Drop the Koka closure before asking an unreliable host to detach the ABI
+// trampoline. A callback retained after failed removal is then inert and no
+// longer keeps the root, structural portal, or event K reachable.
+extern dom-retire-listener(listener : dom-listener) : ui ()
+  js inline "(function(){ var state=(#1).__kokaineListenerState; if(state) state.action=null; })()"
 
 extern dom-unlisten(value : element, name : string,
                     listener : dom-listener) : ui ()
@@ -179,17 +224,40 @@ fun reactive-ui-exn(action : () -> <ui,exn> a)
                     : <signal-write,pure,ui|e> a
   mask<signal-write>{ mask<div>{ action() } }
 
+fun reactive-ui-exn-open(action : () -> <ui,exn|e> a)
+                         : <signal-write,pure,ui|e> a
+  mask<signal-write>{ mask<div>{ action() } }
+
 fun insert(parent : node, before : maybe<node>, child : node) : <ui,exn> ()
   match before
     Nothing -> dom-attempt{ dom-append(parent,child) }
     Just(anchor) -> dom-attempt{ dom-insert-before(parent,child,anchor) }
 
-fun insert-html(parent : node, before : maybe<node>, content : string)
-                : <ui,exn> ()
+fun insert-marker-pair(parent : node, before : maybe<node>,
+                       first : node, last : node) : <ui,exn> ()
   match before
-    Nothing -> dom-attempt{ dom-append-html(parent,content) }
+    Nothing -> dom-attempt{ dom-append-marker-pair(parent,first,last) }
     Just(anchor) ->
-      dom-attempt{ dom-insert-html-before(parent,anchor,content) }
+      dom-attempt{ dom-insert-marker-pair-before(parent,first,last,anchor) }
+
+fun record-owner(root : root<e>, value : node) : <ui,exn> ()
+  val portal = capture-reentry(root)
+  dom-attempt{ dom-record-owner(value,root,portal) }
+
+fun find-owner(root : root<e>, value : node) : <ui,exn> maybe<reentry<e>>
+  val found = dom-attempt{ dom-find-owner(value,root) }
+  if found.any-is-null then Nothing else Just(any-reentry(found))
+
+fun insert-html(root : root<e>, parent : node, before : maybe<node>,
+                content : string)
+                : <ui,exn> ()
+  val portal = capture-reentry(root)
+  match before
+    Nothing -> dom-attempt{ dom-append-html(parent,content,root,portal) }
+    Just(anchor) ->
+      dom-attempt{
+        dom-insert-html-before(parent,anchor,content,root,portal)
+      }
 
 fun set-attribute(value : element, name : string,
                   content : maybe<string>) : <ui,exn> ()
@@ -217,17 +285,82 @@ fun snapshot(value : raw-event) : <ui,exn> event
           raw-event-any(value))
 
 fun invoke-event(root : root<<ui|e>>, portal : reentry<<ui|e>>,
-                 action : callback<e>, value : raw-event)
+                 continuation : event-continuation,
+                 value : raw-event)
                 : <ui|e> ()
   // A browser event runs after `main` has returned, so its dynamic exception
   // stack is fresh. Install the boundary before `dispatch` performs even its
   // root validity check; otherwise an asynchronous throw has no Koka handler.
   with catch fn(problem)
     dom-report-error("uncaught Kokaine event exception: " ++ problem.show)
-  val captured = snapshot(value)
-  // Re-entry itself is an atomic turn: callback-created children join the
-  // registering continuation extent before writes are allowed to settle.
-  reenter(portal,fn() action(captured))
+  // Closing the gate must make even a retained/undetachable JavaScript
+  // trampoline inert: do not snapshot or touch a stale structural frame.
+  if continuation.is-live then
+    val captured = snapshot(value)
+    // A custom event target getter can synchronously dispose during snapshot.
+    // Recheck before touching the structural portal; resume checks once more.
+    if continuation.is-live then
+      // Re-entry restores Kokaine's structural/reactive handlers; the opaque
+      // event capability then resumes the actual multi-shot user continuation.
+      // Keeping resume synchronous preserves native nested `dispatchEvent` order.
+      reenter(portal,fn()
+        val _ = continuation.resume(captured)
+        ()
+      )
+    else ()
+  else ()
+
+fun retire-event-listener(
+      target : element, name : string,
+      continuation : event-continuation,
+      listener : ref<global,maybe<dom-listener>>)
+    : <ui,exn> ()
+  // Gate the continuation before detaching the host callback. Even if a
+  // patched DOM removal throws, the retained callback can no longer resume K.
+  finally(
+    fn() {
+      match transaction-load(listener)
+        Nothing -> ()
+        Just(value) ->
+          transaction-store(listener,Nothing)
+          dom-retire-listener(value)
+          dom-attempt{ dom-unlisten(target,name,value) }
+    },
+    fn() continuation.close
+  )
+
+fun capture-event-listener(root : root<<ui|e>>, action : callback)
+                          : <ui,exn|e> event-continuation
+  dispatch(root,fn() capture-event(action))
+
+fun install-event-listener(root : root<<ui|e>>, target : element,
+                           name : string, action : callback)
+                          : <ui,exn|e> ()
+  // Capture the action before JavaScript retains its ABI trampoline. The
+  // short nested dispatch installs the full reactive handler set required by
+  // the parked continuation, but no user action executes during capture.
+  val continuation = capture-event-listener(root,action)
+  val portal = capture-reentry(root)
+  val listener : ref<global,maybe<dom-listener>> = transaction-cell(Nothing)
+  val committed = transaction-cell(False)
+  finally(
+    fn() {
+      if transaction-load(committed) then () else
+        retire-event-listener(target,name,continuation,listener)
+    },
+    fn()
+      val installed = dom-attempt fn()
+        dom-listen(target,name,fn(value)
+          invoke-event(root,portal,continuation,value)
+        )
+      transaction-store(listener,Just(installed))
+      on-cleanup(root,fn()
+        reactive-ui-exn{
+          retire-event-listener(target,name,continuation,listener)
+        }
+      )
+      transaction-store(committed,True)
+  )
 
 
 // --------------------------------------------------------------------------
@@ -253,18 +386,12 @@ fun mount-attribute(root : root<<ui|e>>, target : element,
       )
       ()
     Listener(name,action) ->
-      if !name.is-valid-event-name then throw("invalid DOM event name: " ++ name)
-      else
-        val portal = capture-reentry(root)
-        val listener = dom-attempt fn()
-          dom-listen(target,name,fn(value)
-            invoke-event(root,portal,action,value)
-          )
-        on-cleanup(root,fn()
-          reactive-ui-exn{
-            dom-attempt{ dom-unlisten(target,name,listener) }
-          }
-        )
+      if !name.is-valid-event-name
+      then throw("invalid DOM event name: " ++ name)
+      else ()
+      reactive-ui-exn-open{
+        install-event-listener(root,target,name,action)
+      }
 
 fun mount-view(root : root<<ui|e>>, parent : node,
                before : maybe<node>, tree : view<e>)
@@ -286,6 +413,7 @@ fun mount-view(root : root<<ui|e>>, parent : node,
       then throw("invalid HTML element name: " ++ name)
       else
         val target = dom-attempt{ dom-create-element(name) }
+        record-owner(root,element-node(target))
         attributes.foreach fn(attribute)
           mount-attribute(root,target,attribute)
         children.foreach fn(child)
@@ -296,8 +424,7 @@ fun mount-view(root : root<<ui|e>>, parent : node,
     Region(read) ->
       val first = dom-attempt{ dom-create-comment("kokaine:region") }
       val last = dom-attempt{ dom-create-comment("/kokaine:region") }
-      insert(parent,before,first)
-      insert(parent,before,last)
+      insert-marker-pair(parent,before,first,last)
       val dispose = create-effect(root,fn() tracked(read),fn(next)
         on-cleanup(root,fn()
           reactive-ui-exn{
@@ -307,24 +434,66 @@ fun mount-view(root : root<<ui|e>>, parent : node,
         mount-view(root,parent,Just(last),next)
       )
       ()
-    Raw-html(content) -> insert-html(parent,before,trusted-content(content))
+    Raw-html(content) ->
+      insert-html(root,parent,before,trusted-content(content))
+
+fun mount-effect(root : root<<ui|e>>, parent : node, tree : view<e>)
+                 : <signal-write,ui,pure|e> disposer<<ui|e>>
+  create-effect(root,constant-track,fn(_)
+    val first = dom-attempt{ dom-create-comment("kokaine:mount") }
+    val last = dom-attempt{ dom-create-comment("/kokaine:mount") }
+    insert-marker-pair(parent,Nothing,first,last)
+    on-cleanup(root,fn()
+      reactive-ui-exn{
+        dom-attempt{ dom-remove-range(first,last) }
+      }
+    )
+    mount-view(root,parent,Just(last),tree)
+  )
+
+fun mount-transaction(root : root<<ui|e>>, parent : node, tree : view<e>,
+                      inherit-owner : bool)
+                     : <ui,exn|e> disposer<<ui|e>>
+  val pending = transaction-cell(Nothing)
+  val committed = transaction-cell(False)
+  finally(
+    fn() {
+      if transaction-load(committed) then () else
+        match transaction-load(pending)
+          Nothing -> ()
+          Just(dispose) -> dispose()
+    },
+    fn()
+      val register = fn()
+        val dispose = mount-effect(root,parent,tree)
+        // `mount-effect` only queues its bootstrap while the surrounding batch
+        // is open. Remember the disposer before that batch is allowed to flush.
+        transaction-store(pending,Just(dispose))
+        dispose
+      val result =
+        if !inherit-owner then
+          update(root){ batch(root,register) }
+        else match find-owner(root,parent)
+          Nothing -> update(root){ batch(root,register) }
+          Just(portal) -> reenter(portal,fn()
+            // Re-entry exposes the full reactive turn row even though mount
+            // registration itself performs no reads.
+            mask<signal-read>{ register() }
+          )
+      transaction-store(committed,True)
+      result
+  )
 
 pub fun mount(root : root<<ui|e>>, parent : node, tree : view<e>)
              : <ui,exn|e> disposer<<ui|e>>
-  update(root)
-    batch(root)
-      create-effect(root,constant-track,fn(_)
-        val first = dom-attempt{ dom-create-comment("kokaine:mount") }
-        val last = dom-attempt{ dom-create-comment("/kokaine:mount") }
-        dom-attempt{ dom-append(parent,first) }
-        dom-attempt{ dom-append(parent,last) }
-        on-cleanup(root,fn()
-          reactive-ui-exn{
-            dom-attempt{ dom-remove-range(first,last) }
-          }
-        )
-        mount-view(root,parent,Just(last),tree)
-      )
+  mount-transaction(root,parent,tree,True)
+
+// Opt out of physical DOM ownership inheritance for intentionally independent
+// roots mounted inside a managed subtree. The caller then owns the returned
+// disposer and must retire it explicitly.
+pub fun mount-independent(root : root<<ui|e>>, parent : node, tree : view<e>)
+                         : <ui,exn|e> disposer<<ui|e>>
+  mount-transaction(root,parent,tree,False)
 
 pub fun unmount(dispose : disposer<<ui|e>>) : <ui,exn|e> ()
   dispose()

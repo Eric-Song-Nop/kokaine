@@ -94,6 +94,355 @@ with serve_project() as origin:
 
         desktop.evaluate(
             """() => {
+                for (const id of [
+                    'range-region-root',
+                    'range-remove-root',
+                    'range-remove-parking',
+                    'range-moving-root',
+                    'range-detached-root',
+                    'range-atomic-root'
+                ]) {
+                    const host = document.createElement('div');
+                    host.id = id;
+                    document.body.append(host);
+                }
+
+                // Model a host method that commits its mutation and then
+                // throws. Atomic marker installation must compensate both
+                // endpoints before translating the exception to Koka.
+                const atomicHost = document.querySelector('#range-atomic-root');
+                const nativeAppend = atomicHost.appendChild;
+                atomicHost.appendChild = function appendThenThrow(child) {
+                    nativeAppend.call(this, child);
+                    throw new Error('forced marker-pair append failure');
+                };
+
+                // Removing this element synchronously moves a later owned
+                // node out of the validated range. Cleanup must follow the
+                // snapshot node to its actual parent instead of half-removing.
+                if (!customElements.get('x-kokaine-range-mutator')) {
+                    customElements.define('x-kokaine-range-mutator', class extends HTMLElement {
+                        disconnectedCallback() {
+                            const owned = document.querySelector('#range-moving-owned');
+                            const parking = document.querySelector('#range-remove-parking');
+                            if (owned && parking) parking.append(owned);
+                        }
+                    });
+                }
+            }"""
+        )
+        desktop.evaluate(
+            """async () => {
+                await import('/dist/test_dom_dash_range_dash_safety__main.mjs');
+            }"""
+        )
+
+        atomic_failed = desktop.evaluate("__kokaineRangeSafety.mountAtomic()")
+        assert atomic_failed, "the injected atomic marker append did not fail"
+        assert desktop.locator("#range-atomic-root").evaluate(
+            "node => node.childNodes.length"
+        ) == 0, "a failed marker-pair append leaked a partial boundary"
+
+        region_result = desktop.evaluate(
+            """() => {
+                const parent = document.querySelector('#range-region-parent');
+                const closing = Array.from(parent.childNodes).find(node =>
+                    node.nodeType === Node.COMMENT_NODE &&
+                    node.data === '/kokaine:region'
+                );
+                closing.remove();
+                const foreign = document.createElement('span');
+                foreign.id = 'range-region-foreign';
+                foreign.textContent = 'foreign';
+                parent.append(foreign);
+                const failed = __kokaineRangeSafety.toggleRegion();
+                return {
+                    failed,
+                    foreignConnected: foreign.isConnected,
+                    oldConnected: !!document.querySelector('#range-region-old')
+                };
+            }"""
+        )
+        assert region_result == {
+            "failed": True,
+            "foreignConnected": True,
+            "oldConnected": True,
+        }, f"invalid region markers caused a destructive cleanup: {region_result!r}"
+
+        remove_result = desktop.evaluate(
+            """() => {
+                const host = document.querySelector('#range-remove-root');
+                const closing = Array.from(host.childNodes).find(node =>
+                    node.nodeType === Node.COMMENT_NODE &&
+                    node.data === '/kokaine:mount'
+                );
+                closing.remove();
+                const foreign = document.createElement('span');
+                foreign.id = 'range-remove-foreign';
+                foreign.textContent = 'foreign';
+                host.append(foreign);
+                const failed = __kokaineRangeSafety.disposeRange();
+                return {
+                    failed,
+                    foreignConnected: foreign.isConnected,
+                    ownedConnected: !!document.querySelector('#range-remove-owned'),
+                    openingPresent: Array.from(host.childNodes).some(node =>
+                        node.nodeType === Node.COMMENT_NODE &&
+                        node.data === 'kokaine:mount'
+                    )
+                };
+            }"""
+        )
+        assert remove_result == {
+            "failed": True,
+            "foreignConnected": True,
+            "ownedConnected": True,
+            "openingPresent": True,
+        }, f"invalid mount markers caused a destructive cleanup: {remove_result!r}"
+
+        detached_failed = desktop.evaluate(
+            """() => {
+                document.querySelector('#range-detached-root').replaceChildren();
+                return __kokaineRangeSafety.disposeDetached();
+            }"""
+        )
+        assert not detached_failed, (
+            "cleanup rejected a range whose endpoints were both already detached"
+        )
+
+        moving_cleanup = desktop.evaluate(
+            """() => {
+                const owned = document.querySelector('#range-moving-owned');
+                const failed = __kokaineRangeSafety.disposeMoving();
+                return {
+                    failed,
+                    ownedConnected: owned.isConnected,
+                    hostChildren: document.querySelector('#range-moving-root').childNodes.length,
+                    parkingChildren: document.querySelector('#range-remove-parking').childNodes.length
+                };
+            }"""
+        )
+        assert moving_cleanup == {
+            "failed": False,
+            "ownedConnected": False,
+            "hostChildren": 0,
+            "parkingChildren": 0,
+        }, f"synchronous disconnectedCallback broke range cleanup: {moving_cleanup!r}"
+
+        # A descendant bootstrap may fail after its parent mount scope has
+        # already published. `mount` must retire that scope before returning
+        # the error so no caller-inaccessible DOM or listener survives.
+        desktop.evaluate(
+            """() => {
+                const host = document.createElement('div');
+                host.id = 'mount-rollback-root';
+                document.body.append(host);
+                if (!customElements.get('x-kokaine-fail')) {
+                    customElements.define('x-kokaine-fail', class extends HTMLElement {
+                        connectedCallback() {
+                            globalThis.__kokaineRollbackTarget = this;
+                        }
+                        set boom(_value) {
+                            throw new Error('forced descendant bootstrap failure');
+                        }
+                    });
+                }
+            }"""
+        )
+        desktop.evaluate(
+            """async () => {
+                await import('/dist/test_dom_dash_mount_dash_rollback__main.mjs');
+            }"""
+        )
+        assert desktop.evaluate("__kokaineMountRollback.failed"), (
+            "the injected descendant bootstrap did not fail mount"
+        )
+        assert desktop.locator("#mount-rollback-root").evaluate(
+            "node => node.childNodes.length"
+        ) == 0, "a failed mount left committed DOM behind"
+        assert desktop.evaluate(
+            "__kokaineRollbackTarget && !__kokaineRollbackTarget.isConnected"
+        ), "the failed mount target remained connected"
+        desktop.evaluate(
+            """() => {
+                __kokaineRollbackTarget.dispatchEvent(
+                    new MouseEvent('click', {bubbles: true})
+                );
+            }"""
+        )
+        assert desktop.evaluate("__kokaineMountRollback.read()") == 0, (
+            "a listener survived failed-mount rollback"
+        )
+        desktop.evaluate("__kokaineMountRollback.disposeRoot()")
+
+        # A later mount into a managed element inherits the exact physical DOM
+        # generation that created its host. Region replacement and outer
+        # unmount must therefore retire nested listeners/live bindings.
+        desktop.evaluate(
+            """() => {
+                const host = document.createElement('div');
+                host.id = 'ownership-root';
+                document.body.append(host);
+            }"""
+        )
+        desktop.evaluate(
+            """async () => {
+                await import('/dist/test_dom_dash_ownership__main.mjs');
+            }"""
+        )
+        region_button = desktop.locator("#owned-region-button").element_handle()
+        region_count = desktop.locator("#owned-region-count").element_handle()
+        top_button = desktop.locator("#owned-top-button").element_handle()
+        top_count = desktop.locator("#owned-top-count").element_handle()
+        assert desktop.evaluate("__kokaineOwnership.read()") == 0
+
+        desktop.evaluate("__kokaineOwnership.toggle()")
+        expect(desktop.locator("#owned-region-replacement")).to_be_visible()
+        assert not region_button.evaluate("node => node.isConnected")
+        region_button.evaluate(
+            "node => node.dispatchEvent(new MouseEvent('click', {bubbles: true}))"
+        )
+        assert desktop.evaluate("__kokaineOwnership.read()") == 0, (
+            "a nested region mount survived replacement"
+        )
+
+        desktop.locator("#owned-top-button").click()
+        assert desktop.evaluate("__kokaineOwnership.read()") == 1
+        assert top_count.text_content() == "1"
+        assert region_count.text_content() == "0", (
+            "a retired nested live binding reacted to a later source write"
+        )
+
+        desktop.evaluate("__kokaineOwnership.disposeOuter()")
+        expect(desktop.locator("#ownership-root")).to_be_empty()
+        assert not top_button.evaluate("node => node.isConnected")
+        top_button.evaluate(
+            "node => node.dispatchEvent(new MouseEvent('click', {bubbles: true}))"
+        )
+        assert desktop.evaluate("__kokaineOwnership.read()") == 1, (
+            "a nested top-level mount survived its physical owner"
+        )
+        assert top_count.text_content() == "1"
+        desktop.evaluate("__kokaineOwnership.disposeChildren()")
+
+        # The retained JavaScript function is only an ABI trampoline. Each
+        # browser turn synchronously resumes the same guarded multi-shot K, so
+        # a nested dispatch must finish its Koka action (including
+        # preventDefault) before the outer dispatch returns.
+        desktop.evaluate(
+            """() => {
+                const host = document.createElement('div');
+                host.id = 'event-continuation-root';
+                document.body.append(host);
+            }"""
+        )
+        desktop.evaluate(
+            """async () => {
+                await import('/dist/test_dom_dash_event_dash_continuation__main.mjs');
+            }"""
+        )
+        event_outer = desktop.locator("#event-outer").element_handle()
+        event_inner = desktop.locator("#event-inner").element_handle()
+        event_count = desktop.locator("#event-count").element_handle()
+        event_raw_count = desktop.locator("#event-raw-count").element_handle()
+        for _ in range(2):
+            event_outer.evaluate(
+                "node => node.dispatchEvent(new MouseEvent('click', {bubbles: true}))"
+            )
+        event_log = desktop.evaluate("__kokaineEventContinuation.log")
+        one_nested_turn = [
+            "outer-start:1",
+            "outer-start:2",
+            "inner",
+            "inner-cancelled",
+            "outer-end:2",
+            "outer-nested-accepted",
+            "outer-end:1",
+        ]
+        expected_event_log = one_nested_turn * 2
+        assert event_log == expected_event_log, (
+            "nested DOM dispatch was not synchronously continuation-resumed: "
+            f"{event_log!r}; console={console_errors!r}; page={page_errors!r}"
+        )
+        assert desktop.evaluate("__kokaineEventContinuation.read()") == 2
+        assert event_count.text_content() == "2"
+
+        # Koka's modeled `exn` is part of `pure`. The adapter reports it, while
+        # all Koka finally clauses still close the re-entry batch; a subsequent
+        # turn and its live DOM binding must therefore continue to settle.
+        callback_failures = desktop.evaluate(
+            """() => {
+                const seen = [];
+                const original = console.error;
+                console.error = (...values) => seen.push(values.join(' '));
+                try {
+                    const target = document.querySelector('#event-throw');
+                    target.dispatchEvent(new MouseEvent('click', {bubbles:true}));
+                    target.dispatchEvent(new MouseEvent('click', {bubbles:true}));
+                } finally {
+                    console.error = original;
+                }
+                return seen;
+            }"""
+        )
+        assert len(callback_failures) == 2 and all(
+            "intentional event callback failure" in message
+            for message in callback_failures
+        ), f"modeled callback exceptions were not reported: {callback_failures!r}"
+        assert desktop.evaluate("__kokaineEventContinuation.rawRead()") == 2
+        assert event_raw_count.text_content() == "2", (
+            "a modeled callback exception leaked the host re-entry batch"
+        )
+
+        assert desktop.evaluate("__kokaineEventContinuation.rawResume()") is True
+        assert desktop.evaluate("__kokaineEventContinuation.rawRead()") == 3
+        assert event_raw_count.text_content() == "3"
+        desktop.evaluate(
+            """() => {
+                __kokaineEventContinuation.rawClose();
+                __kokaineEventContinuation.rawClose();
+            }"""
+        )
+        assert desktop.evaluate("__kokaineEventContinuation.rawResume()") is False
+        assert desktop.evaluate("__kokaineEventContinuation.rawRead()") == 3, (
+            "Event-retired resumed while its root and structural frame were live"
+        )
+
+        listener_retirement_failures = desktop.evaluate(
+            """() => {
+                const target = document.querySelector('#event-outer');
+                target.removeEventListener = () => {
+                    throw new Error('forced listener removal failure');
+                };
+                const seen = [];
+                const original = console.error;
+                console.error = (...values) => seen.push(values.join(' '));
+                try {
+                    __kokaineEventContinuation.dispose();
+                    __kokaineEventContinuation.dispose();
+                } finally {
+                    console.error = original;
+                }
+                return seen;
+            }"""
+        )
+        assert len(listener_retirement_failures) == 1 and (
+            "forced listener removal failure" in listener_retirement_failures[0]
+        ), "the listener-removal fault was not translated and reported"
+        expect(desktop.locator("#event-continuation-root")).to_be_empty()
+        event_outer.evaluate(
+            "node => node.dispatchEvent(new MouseEvent('click', {bubbles: true}))"
+        )
+        event_inner.evaluate(
+            "node => node.dispatchEvent(new MouseEvent('click', {bubbles: true}))"
+        )
+        assert desktop.evaluate("__kokaineEventContinuation.read()") == 2
+        assert len(desktop.evaluate("__kokaineEventContinuation.log")) == 14, (
+            "a retired event continuation resumed through a retained DOM node"
+        )
+
+        desktop.evaluate(
+            """() => {
                 const host = document.createElement('div');
                 host.id = 'lifecycle-root';
                 document.body.append(host);
@@ -360,7 +709,8 @@ with serve_project() as origin:
         desktop.locator("#active-inc").click()
         assert_active_state(desktop, -13)
 
-        # Full callback capability preserves preventDefault; equal sets do not
+        # The closed callback row preserves its supported UI capability;
+        # equal sets do not
         # publish or replace the stable structural branch.
         default_was_prevented = zero.evaluate(
             """button => {
@@ -372,7 +722,7 @@ with serve_project() as origin:
                 return event.defaultPrevented && !dispatched;
             }"""
         )
-        assert default_was_prevented, "the full callback lost its UI capability"
+        assert default_was_prevented, "the event callback lost its UI capability"
         assert_active_state(desktop, 0)
         stable_scope = desktop.locator("#channel-scope").element_handle()
         stable_effect_runs = read_int(desktop, "#effect-runs")
