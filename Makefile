@@ -4,7 +4,7 @@ UV ?= uv
 
 KOKA_FLAGS := -j1 -i./src
 
-.PHONY: test test-native test-all test-wasm test-report build-counter build-report build-browser-fixtures browser-install test-browser serve serve-report
+.PHONY: test test-native test-all test-wasm test-report build-counter build-top-layer build-report build-browser-fixtures browser-install test-browser serve serve-top-layer serve-report
 
 test: test-native
 
@@ -41,12 +41,17 @@ build-counter:
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
 		--buildname=counter examples/counter.kk
 
+build-top-layer:
+	mkdir -p dist
+	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
+		--buildname=top-layer examples/top-layer.kk
+
 build-report:
 	mkdir -p dist
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
 		--buildname=report examples/report.kk
 
-build-browser-fixtures: build-counter
+build-browser-fixtures: build-counter build-top-layer
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
 		--buildname=dom-errors test/dom-errors.kk
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
@@ -59,12 +64,15 @@ build-browser-fixtures: build-counter
 		--buildname=dom-ownership test/dom-ownership.kk
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
 		--buildname=dom-event-continuation test/dom-event-continuation.kk
+	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
+		--buildname=dom-top-layer test/dom-top-layer.kk
 
 browser-install:
 	$(UV) run --with playwright python -m playwright install chromium
 
 test-browser: build-browser-fixtures
 	$(UV) run --with playwright python test/browser_counter.py
+	$(UV) run --with playwright python test/browser_top_layer.py
 
 test-wasm:
 	./support/wasmweb-proof/run.sh test
@@ -76,6 +84,10 @@ test-report: build-report
 test-all: test-native test-browser test-wasm test-report
 
 serve: build-counter
+	python3 -m http.server 4173 --bind 127.0.0.1
+
+serve-top-layer: build-top-layer
+	@echo "Kokaine top-layer example: http://127.0.0.1:4173/examples/top-layer/"
 	python3 -m http.server 4173 --bind 127.0.0.1
 
 serve-report: build-report build-counter
