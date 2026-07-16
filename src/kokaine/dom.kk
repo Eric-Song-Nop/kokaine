@@ -37,6 +37,10 @@ type owner-match<e::E>
   Owner-live(owner-portal : reentry<e>)
   Owner-retired
 
+pub type toggle-state
+  Toggle-open
+  Toggle-closed
+
 // Transaction state must survive abortive control while mount bootstraps are
 // flushing. Keep this adapter-local and inaccessible to user code.
 fun transaction-cell(value : a) : ref<global,a>
@@ -199,6 +203,55 @@ extern event-prevent-default(value : any) : ui ()
 extern event-stop-propagation(value : any) : ui ()
   js inline "(#1).stopPropagation()"
 
+// Validate and invoke within one host action. The surrounding `dom-attempt`
+// then translates both adapter validation failures and native DOM exceptions.
+extern dom-dialog-show(target : node) : ui ()
+  js inline "(function(target){ if(typeof HTMLDialogElement !== 'function') throw new Error('HTMLDialogElement is not supported by this browser'); if(!(target instanceof HTMLDialogElement)) throw new TypeError('dialog/show target must be an HTMLDialogElement'); if(typeof target.show !== 'function') throw new Error('HTMLDialogElement.show() is not supported by this browser'); target.show(); })(#1)"
+
+extern dom-dialog-show-modal(target : node) : ui ()
+  js inline "(function(target){ if(typeof HTMLDialogElement !== 'function') throw new Error('HTMLDialogElement is not supported by this browser'); if(!(target instanceof HTMLDialogElement)) throw new TypeError('dialog/show-modal target must be an HTMLDialogElement'); if(typeof target.showModal !== 'function') throw new Error('HTMLDialogElement.showModal() is not supported by this browser'); target.showModal(); })(#1)"
+
+extern dom-dialog-close(target : node, result : string) : ui ()
+  js inline "(function(target,result){ if(typeof HTMLDialogElement !== 'function') throw new Error('HTMLDialogElement is not supported by this browser'); if(!(target instanceof HTMLDialogElement)) throw new TypeError('dialog/close target must be an HTMLDialogElement'); if(typeof target.close !== 'function') throw new Error('HTMLDialogElement.close() is not supported by this browser'); target.close(result); })(#1,#2)"
+
+// `close()` cannot emulate the cancellable `cancel` event from requestClose.
+extern dom-dialog-request-close(target : node, result : string) : ui ()
+  js inline "(function(target,result){ if(typeof HTMLDialogElement !== 'function') throw new Error('HTMLDialogElement is not supported by this browser'); if(!(target instanceof HTMLDialogElement)) throw new TypeError('dialog/request-close target must be an HTMLDialogElement'); if(typeof target.requestClose !== 'function') throw new Error('HTMLDialogElement.requestClose() is not supported by this browser'); target.requestClose(result); })(#1,#2)"
+
+extern dom-dialog-is-open(target : node) : ui bool
+  js inline "(function(target){ if(typeof HTMLDialogElement !== 'function') throw new Error('HTMLDialogElement is not supported by this browser'); if(!(target instanceof HTMLDialogElement)) throw new TypeError('dialog/is-open target must be an HTMLDialogElement'); return !!target.open; })(#1)"
+
+extern dom-dialog-is-modal(target : node) : ui bool
+  js inline "(function(target){ if(typeof HTMLDialogElement !== 'function') throw new Error('HTMLDialogElement is not supported by this browser'); if(!(target instanceof HTMLDialogElement)) throw new TypeError('dialog/is-modal target must be an HTMLDialogElement'); if(typeof target.matches !== 'function') throw new Error('Element.matches() is not supported by this browser'); return target.matches(':modal'); })(#1)"
+
+extern dom-dialog-return-value(target : node) : ui string
+  js inline "(function(target){ if(typeof HTMLDialogElement !== 'function') throw new Error('HTMLDialogElement is not supported by this browser'); if(!(target instanceof HTMLDialogElement)) throw new TypeError('dialog/return-value target must be an HTMLDialogElement'); return String(target.returnValue); })(#1)"
+
+// A recognized reflected `popover` value distinguishes enabled elements from
+// arbitrary nodes. Do not infer state or simulate unsupported native methods.
+extern dom-popover-show(target : node) : ui ()
+  js inline "(function(target){ if(typeof Element !== 'function' || !(target instanceof Element)) throw new TypeError('popover/show target must be an Element'); if(typeof target.showPopover !== 'function' || !('popover' in target)) throw new Error('Element.showPopover() is not supported by this browser'); var mode=target.popover; if(mode!=='auto' && mode!=='manual' && mode!=='hint') throw new TypeError('popover/show target must have a valid popover attribute'); target.showPopover(); })(#1)"
+
+extern dom-popover-hide(target : node) : ui ()
+  js inline "(function(target){ if(typeof Element !== 'function' || !(target instanceof Element)) throw new TypeError('popover/hide target must be an Element'); if(typeof target.hidePopover !== 'function' || !('popover' in target)) throw new Error('Element.hidePopover() is not supported by this browser'); var mode=target.popover; if(mode!=='auto' && mode!=='manual' && mode!=='hint') throw new TypeError('popover/hide target must have a valid popover attribute'); target.hidePopover(); })(#1)"
+
+// Some older implementations return `undefined`; querying the selector after
+// the call gives Koka the authoritative post-toggle state in every case.
+extern dom-popover-toggle(target : node) : ui bool
+  js inline "(function(target){ if(typeof Element !== 'function' || !(target instanceof Element)) throw new TypeError('popover/toggle target must be an Element'); if(typeof target.togglePopover !== 'function' || !('popover' in target)) throw new Error('Element.togglePopover() is not supported by this browser'); var mode=target.popover; if(mode!=='auto' && mode!=='manual' && mode!=='hint') throw new TypeError('popover/toggle target must have a valid popover attribute'); target.togglePopover(); if(typeof target.matches !== 'function') throw new Error('Element.matches() is not supported by this browser'); return target.matches(':popover-open'); })(#1)"
+
+extern dom-popover-set-open(target : node, open : bool) : ui ()
+  js inline "(function(target,open){ if(typeof Element !== 'function' || !(target instanceof Element)) throw new TypeError('popover/set-open target must be an Element'); if(typeof target.togglePopover !== 'function' || !('popover' in target)) throw new Error('Element.togglePopover() is not supported by this browser'); var mode=target.popover; if(mode!=='auto' && mode!=='manual' && mode!=='hint') throw new TypeError('popover/set-open target must have a valid popover attribute'); target.togglePopover(open); })(#1,#2)"
+
+extern dom-popover-is-open(target : node) : ui bool
+  js inline "(function(target){ if(typeof Element !== 'function' || !(target instanceof Element)) throw new TypeError('popover/is-open target must be an Element'); if(!('popover' in target)) throw new Error('Popover API is not supported by this browser'); var mode=target.popover; if(mode!=='auto' && mode!=='manual' && mode!=='hint') throw new TypeError('popover/is-open target must have a valid popover attribute'); if(typeof target.matches !== 'function') throw new Error('Element.matches() is not supported by this browser'); return target.matches(':popover-open'); })(#1)"
+
+extern dom-toggle-state(value : any) : ui int
+  js inline "(function(event){ if(!event || typeof event!=='object') throw new TypeError('toggle/state requires a DOM event'); if(event.type!=='toggle' && event.type!=='beforetoggle') throw new TypeError('toggle/state requires a toggle or beforetoggle event'); var target=event.currentTarget; if(typeof Element !== 'function' || !(target instanceof Element)) throw new TypeError('toggle/state event must have an Element currentTarget'); if(event.newState==='open') return 1; if(event.newState==='closed') return 0; throw new TypeError('toggle/state event must have an open or closed newState'); })(#1)"
+
+extern dom-dialog-event-return-value(value : any) : ui string
+  js inline "(function(event){ if(!event || typeof event!=='object' || event.type!=='close') throw new TypeError('dialog/event-return-value requires a close event'); var target=event.currentTarget; if(typeof HTMLDialogElement !== 'function') throw new Error('HTMLDialogElement is not supported by this browser'); if(!(target instanceof HTMLDialogElement)) throw new TypeError('dialog/event-return-value event must have an HTMLDialogElement currentTarget'); return String(target.returnValue); })(#1)"
+
 extern dom-report-error(message : string) : ui ()
   js inline "console.error(#1)"
 
@@ -221,6 +274,52 @@ pub fun prevent-default(value : event) : <ui,exn> ()
 
 pub fun stop-propagation(value : event) : <ui,exn> ()
   dom-attempt{ event-stop-propagation(value.original) }
+
+pub fun dialog/show(target : node) : <ui,exn> ()
+  dom-attempt{ dom-dialog-show(target) }
+
+pub fun dialog/show-modal(target : node) : <ui,exn> ()
+  dom-attempt{ dom-dialog-show-modal(target) }
+
+pub fun dialog/close(target : node, result : string = "") : <ui,exn> ()
+  dom-attempt{ dom-dialog-close(target,result) }
+
+pub fun dialog/request-close(target : node, result : string = "")
+                        : <ui,exn> ()
+  dom-attempt{ dom-dialog-request-close(target,result) }
+
+pub fun dialog/is-open(target : node) : <ui,exn> bool
+  dom-attempt{ dom-dialog-is-open(target) }
+
+pub fun dialog/is-modal(target : node) : <ui,exn> bool
+  dom-attempt{ dom-dialog-is-modal(target) }
+
+pub fun dialog/return-value(target : node) : <ui,exn> string
+  dom-attempt{ dom-dialog-return-value(target) }
+
+pub fun dialog/event-return-value(value : event) : <ui,exn> string
+  dom-attempt{ dom-dialog-event-return-value(value.original) }
+
+pub fun popover/show(target : node) : <ui,exn> ()
+  dom-attempt{ dom-popover-show(target) }
+
+pub fun popover/hide(target : node) : <ui,exn> ()
+  dom-attempt{ dom-popover-hide(target) }
+
+pub fun popover/toggle(target : node) : <ui,exn> bool
+  dom-attempt{ dom-popover-toggle(target) }
+
+pub fun popover/set-open(target : node, open : bool) : <ui,exn> ()
+  dom-attempt{ dom-popover-set-open(target,open) }
+
+pub fun popover/is-open(target : node) : <ui,exn> bool
+  dom-attempt{ dom-popover-is-open(target) }
+
+pub fun toggle/state(value : event) : <ui,exn> toggle-state
+  val state = dom-attempt{ dom-toggle-state(value.original) }
+  if state == 1
+  then Toggle-open
+  else Toggle-closed
 
 
 // --------------------------------------------------------------------------

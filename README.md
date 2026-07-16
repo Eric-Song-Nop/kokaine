@@ -154,6 +154,17 @@ make serve
 Then open <http://127.0.0.1:4173/examples/counter/>. `make build-counter`
 emits the `jsweb` ES modules into the ignored `dist/` directory.
 
+The smaller native top-layer example is available separately:
+
+```sh
+make serve-top-layer
+```
+
+Open <http://127.0.0.1:4173/examples/top-layer/> to try a modal dialog with a
+native `method="dialog"` form and an auto popover controlled entirely through
+`popovertarget` attributes. The page also shows browser-driven close/toggle
+state being written back through Kokaine event handlers.
+
 The lab is intentionally a multi-file application rather than one oversized
 demo component:
 
@@ -220,6 +231,82 @@ effect targeting its node, while mount and dynamic scopes own DOM ranges.
 For deterministic snapshots or server output, replace the DOM import with
 `kokaine/ssr` and call `render(root,page)`.
 
+## Native dialog and Popover
+
+Kokaine uses the browser's native top layer instead of relocating overlay DOM.
+`dialog` and elements carrying `popover(...)` remain ordinary children of the
+view which created them, so the existing owner, listener, cleanup, and SSR
+rules apply unchanged. The browser supplies modal inertness, focus placement,
+Escape handling, light dismiss, and popover stacking.
+
+The backend-neutral `kokaine/html` vocabulary includes:
+
+- `dialog { ... }` and `dialog("text")` builders;
+- `popover(Popover-auto|Popover-manual|Popover-hint)`;
+- `popover-target(id)` and
+  `popover-target-action(Popover-toggle|Popover-show|Popover-hide)`;
+- `dialog-form-method()`, `autofocus()`, and
+  `dialog-closed-by(Dialog-close-any|Dialog-close-request|Dialog-close-explicit)`.
+
+These helpers serialize as ordinary HTML attributes. In particular, Kokaine
+does not provide a live `open` attribute: a dialog or popover can also close
+because of Escape, light dismiss, form submission, or another popover. Listen
+for native `close`, `cancel`, `beforetoggle`, or `toggle` events and read the
+browser's resulting state instead of treating it as a one-way signal.
+
+The `kokaine/dom` command layer is deliberately thin:
+
+```text
+dialog/show(node)                 popover/show(node)
+dialog/show-modal(node)           popover/hide(node)
+dialog/close(node,result="")      popover/toggle(node) -> bool
+dialog/request-close(node,result="")
+dialog/is-open(node) -> bool      popover/set-open(node,bool)
+dialog/is-modal(node) -> bool     popover/is-open(node) -> bool
+dialog/return-value(node) -> string
+```
+
+Every command and state read above has a `<ui,exn>` effect row.
+`toggle/state(event)` reads `ToggleEvent.newState`, and
+`dialog/event-return-value(event)` reads the closing dialog's `returnValue`.
+Targets and event shapes are validated, and native host failures cross the
+same DOM-exception-to-Koka-`exn` boundary as the rest of the renderer.
+`dialog/request-close` never falls back to `close`, because only the former
+fires the cancelable `cancel` event first.
+
+Browser support follows the platform: core [`<dialog>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/dialog)
+is widely available across browsers since March 2022, the core
+[`popover` attribute](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Global_attributes/popover)
+is Baseline 2024, and
+[`requestClose()`](https://developer.mozilla.org/en-US/docs/Web/API/HTMLDialogElement/requestClose)
+is Baseline 2025. Applications supporting older engines should feature-detect
+newer pieces independently; for example:
+
+```js
+const hasDialog = typeof HTMLDialogElement === "function";
+const hasPopover =
+  typeof HTMLElement === "function" &&
+  "popover" in HTMLElement.prototype &&
+  typeof HTMLElement.prototype.showPopover === "function" &&
+  typeof CSS !== "undefined" &&
+  typeof CSS.supports === "function" &&
+  CSS.supports("selector(:popover-open)");
+const hasRequestClose =
+  hasDialog &&
+  typeof HTMLDialogElement.prototype.requestClose === "function";
+const hasClosedBy = hasDialog && "closedBy" in HTMLDialogElement.prototype;
+let hasHintPopover = false;
+if (hasPopover) {
+  const hintProbe = document.createElement("div");
+  hintProbe.popover = "hint";
+  hasHintPopover = hintProbe.popover === "hint";
+}
+```
+
+Unsupported command methods produce a clear Koka exception. Kokaine does not
+silently install partial polyfills for `requestClose`, `closedby`, or hint
+popover semantics.
+
 ## API shape
 
 - `create-root`, `root.dispose`, `update`, `sample`, and `dispatch` delimit
@@ -251,6 +338,10 @@ For deterministic snapshots or server output, replace the DOM import with
   numeric stale-owner tombstone: remount is rejected without retaining the old
   root or generation portal. `render` safely interprets the same value to a
   string.
+- Native dialog and Popover elements stay in those same ranges even while the
+  browser presents them in the top layer. Branch replacement, unmount, and
+  `root.dispose` remove an open surface and retire its listeners exactly like
+  any other owned DOM node; no portal or ownership exception is involved.
 
 See [the architecture notes](docs/architecture.md) for the scheduler, handler,
 browser re-entry, and WebAssembly design.
@@ -263,6 +354,8 @@ runtime with source-local indexes of actual continuation capabilities.
 
 ```text
 examples/counter.kk                         thin browser entry point
+examples/top-layer.kk                       native dialog and Popover example
+examples/top-layer/                         standalone top-layer page and styles
 examples/report.kk                          self-hosted report entry point
 examples/report/*.kk                        report model and executable islands
 examples/counter/model.kk                   sources and derived state
@@ -305,6 +398,8 @@ test/dom-ownership.kk                      physical same-root ownership fixture
 test/dom-range-safety.kk                   marker and re-entrant cleanup safety
 test/event_effect_boundary.py              closed callback-row compile canary
 test/browser_counter.py                    browser events, churn, rollback, and disposal
+test/dom-top-layer.kk                      dialog/Popover browser command fixture
+test/browser_top_layer.py                  native top-layer behavior and disposal
 support/wasmweb-proof/                     retained-callback Emscripten ABI proof
 ```
 
