@@ -279,6 +279,46 @@ fun test-parallel-error-cancels-queued-result()
   check(load(finalized),
         "parallel finalizes a queued result after sibling failure")
 
+fun test-race-propagates-loser-cleanup-error()
+  val disposed = hidden(False)
+  val failed = error/try(fn()
+    run-async(fn()
+      race(
+        fn() immediate(53),
+        fn() finally(
+          fn() throw("race loser cleanup failure"),
+          fn() never(disposed,"throwing race loser")
+        )
+      )
+    )
+  )
+  match failed
+    Error(problem) ->
+      check(problem.message == "race loser cleanup failure",
+            "race propagates a losing finalizer exception")
+    Ok(_) -> check(False,"race swallowed a losing finalizer exception")
+  check(load(disposed),"race disposes a loser before cleanup throws")
+
+fun test-parallel-prefers-cleanup-error()
+  val disposed = hidden(False)
+  val failed = error/try(fn()
+    run-async(fn()
+      parallel(
+        fn() fail-after-await(),
+        fn() finally(
+          fn() throw("parallel cleanup failure"),
+          fn() never(disposed,"throwing parallel loser")
+        )
+      )
+    )
+  )
+  match failed
+    Error(problem) ->
+      check(problem.message == "parallel cleanup failure",
+            "parallel cleanup exception replaces the triggering failure")
+    Ok(_) -> check(False,"parallel swallowed a cleanup exception")
+  check(load(disposed),"parallel disposes a sibling before cleanup throws")
+
 pub fun main()
   test-parallel()
   test-sequential-awaits-keep-group-scope()
@@ -288,4 +328,6 @@ pub fun main()
   test-timeout-action-wins()
   test-race-drains-after-error()
   test-parallel-error-cancels-queued-result()
+  test-race-propagates-loser-cleanup-error()
+  test-parallel-prefers-cleanup-error()
   println("structured-async: all checks passed")

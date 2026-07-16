@@ -63,16 +63,20 @@ fun group-outcome/add(current : group-outcome<a>, index : int,
                       outcome : strand-outcome<a>, require-all : bool)
                      : group-outcome<a>
   if !require-all then
-    // A race records its first terminal outcome. Later loser cancellation and
-    // finalization are still observed, but cannot replace the winner.
-    match current
-      Group-values(Nil) ->
-        match outcome
-          Strand-value(value) -> Group-values([(index,value)])
-          Strand-exception(error) -> Group-exception(error)
-          Strand-canceled -> Group-canceled
-          Strand-finalized(yield) -> Group-finalized(yield)
-      _ -> current
+    // A value or ordinary cancellation settles a race once. An exception or
+    // final control observed while unwinding a loser is cleanup failure, and
+    // follows Koka's `finally` rule by replacing the earlier body outcome.
+    match outcome
+      Strand-exception(error) -> Group-exception(error)
+      Strand-finalized(yield) -> Group-finalized(yield)
+      Strand-value(value) ->
+        match current
+          Group-values(Nil) -> Group-values([(index,value)])
+          _ -> current
+      Strand-canceled ->
+        match current
+          Group-values(Nil) -> Group-canceled
+          _ -> current
   else
     match outcome
       Strand-value(value) ->
@@ -81,15 +85,9 @@ fun group-outcome/add(current : group-outcome<a>, index : int,
             Group-values(ordered-insert(values,(index,value)))
           _ -> current
       Strand-exception(error) ->
-        match current
-          Group-values(_) -> Group-exception(error)
-          Group-canceled -> Group-exception(error)
-          _ -> current
+        Group-exception(error)
       Strand-finalized(yield) ->
-        match current
-          Group-finalized(_) -> current
-          Group-exception(_) -> current
-          _ -> Group-finalized(yield)
+        Group-finalized(yield)
       Strand-canceled ->
         match current
           Group-values(_) -> Group-canceled

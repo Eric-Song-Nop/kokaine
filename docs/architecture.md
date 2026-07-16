@@ -434,8 +434,10 @@ exception cancels its siblings, but the group continues driving until every
 child has returned or completed cancellation unwinding. `race` records the
 first terminal result, cancels the loser, and likewise drains the loser before
 returning the winner. This makes loser disposers and `finally` clauses part of
-the combinator's completion contract. `timeout-with` and the Web `timeout`
-adapter are ordinary `race` compositions and inherit the same draining rule.
+the combinator's completion contract: an exception or final control raised by
+cleanup replaces the provisional result, matching Koka's ordinary `finally`
+semantics. `timeout-with` and the Web `timeout` adapter are ordinary `race`
+compositions and inherit the same draining rule.
 
 ## Resource source and loader boundary
 
