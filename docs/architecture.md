@@ -599,7 +599,8 @@ async, and Resource checks with `make test-browser`.
   cancellation, and loser finalizer draining without timing dependence.
 - `derive-async-invalid.kk`, `memo-async-invalid.kk`,
   `resource-source-async-invalid.kk`, `run-async-effect-boundary-invalid.kk`,
-  and `async_effect_boundary.py` are
+  `enqueue-microtask-effect-boundary-invalid.kk`, and
+  `async_effect_boundary.py` are
   compile-time canaries for the tracked/untracked async capability boundary.
 - `dom-async-runtime.kk` plus `browser_async.py` check the microtask turn
   boundary, Promise and Fetch adapters, structured combinators, duplicate and

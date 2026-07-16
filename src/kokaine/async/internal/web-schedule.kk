@@ -8,7 +8,7 @@
 --------------------------------------------------------------------------*/
 module kokaine/async/internal/web-schedule
 
-// The callback is latent: enqueueing performs only `ui`; the browser invokes
-// it later with its declared row.
-pub extern enqueue-microtask(action : () -> <ui|e> ()) : ui ()
+// A host callback is invoked without a Koka handler stack. Callers must first
+// delimit or otherwise discharge every non-`ui` effect it could perform.
+pub extern enqueue-microtask(action : () -> ui ()) : ui ()
   js inline "(function(){ var callback=#1; if(typeof queueMicrotask==='function'){ queueMicrotask(callback); } else { Promise.resolve().then(callback); } })()"

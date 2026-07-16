@@ -14,6 +14,7 @@ FIXTURES = (
     "memo-async-invalid.kk",
     "resource-source-async-invalid.kk",
     "run-async-effect-boundary-invalid.kk",
+    "enqueue-microtask-effect-boundary-invalid.kk",
 )
 
 
@@ -48,7 +49,11 @@ def main() -> int:
                 )
             expected_effect = (
                 "audit-effect"
-                if fixture_name == "run-async-effect-boundary-invalid.kk"
+                if fixture_name
+                in {
+                    "run-async-effect-boundary-invalid.kk",
+                    "enqueue-microtask-effect-boundary-invalid.kk",
+                }
                 else "async-await"
             )
             if expected_effect not in diagnostics:
@@ -57,8 +62,8 @@ def main() -> int:
                 )
 
     print(
-        "async-effect-boundary: tracked sources stay sync and run-async "
-        "rejects unsupported lexical effects"
+        "async-effect-boundary: tracked sources stay sync and delayed host "
+        "callbacks reject unsupported lexical effects"
     )
     return 0
 

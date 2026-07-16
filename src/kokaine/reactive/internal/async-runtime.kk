@@ -88,6 +88,15 @@ extern report-async-error(message : string) : ui ()
 fun as-host-action(action : () -> <div,ui> ()) : (() -> ui ())
   fn() pretend-no-div{ action() }
 
+// `run-task-result` inherits the opaque root row in its type even though the
+// public generation entry admits only the closed application row. Keep this
+// erasure private to the runtime-owned trampoline: it catches exceptions,
+// restores the structural portal, and installs the fresh async interpreter
+// before it can invoke the parked suffix.
+extern runtime-host-action(
+  action : () -> <div,ui|e> ()) : (() -> ui ())
+  js inline "#1"
+
 fun resume-generation(root : root<<ui|e>>, family : async-family<e>,
                       action : () -> <async,signal-read,signal-write,pure,ui|e> ())
                      : <signal-read,signal-write,pure,ui|e> ()
@@ -212,7 +221,9 @@ fun accept-task-result(task : generation-task<a,e>, family : async-family<e>,
       Task-pending ->
         store(task.task-result,Just(result))
         store(task.task-state,Task-scheduled)
-        enqueue-microtask(fn() run-task-result(task,family))
+        enqueue-microtask(runtime-host-action(fn()
+          run-task-result(task,family)
+        ))
       _ -> ()
 
 fun retire-task(task : generation-task<a,e>, family : async-family<e>,

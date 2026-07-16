@@ -13,7 +13,6 @@ module kokaine/async/web
 
 import kokaine/async/effects
 pub import kokaine/async/structured
-pub import kokaine/async/internal/web-schedule
 import std/time/duration
 
 
