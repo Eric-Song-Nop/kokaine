@@ -39,6 +39,18 @@ fun require-memo(slot : ref<global,maybe<memo<int>>>) : exn memo<int>
     Nothing -> throw("missing owned memo")
     Just(value) -> value
 
+fun hidden-write(root : root<total>, target : signal<int>, value : int) : exn ()
+  update(root){ target.set(value) }
+
+fun hidden-child(root : root<total>, payload : signal<int>,
+                 runs : ref<global,int>, cleanups : ref<global,int>) : exn ()
+  update(root)
+    val child = create-effect(root,fn() payload.get,fn(_)
+      bump(runs)
+      on-cleanup(root,fn() bump(cleanups))
+    )
+    ()
+
 fun test-deep-wide-diamond()
   val m1-runs = hidden(0)
   val m2-runs = hidden(0)
@@ -335,6 +347,139 @@ fun test-state-entry-targeted-input-coherence()
   run-state-entry-target-order(True)
   run-state-entry-target-order(False)
 
+fun test-pure-phase-guards-every-raw-suffix-and-cross-root()
+  val rejections = hidden(0)
+  val (foreign,foreign-value) : (root<total>,signal<int>) =
+    create-root fn(root) signal(root,0)
+  val (root,(trigger,derived)) : (root<total>,(signal<int>,memo<int>)) =
+    create-root fn(root)
+      val trigger = signal(root,0)
+      val derived = derive(root,0,fn()
+        val current = trigger.get
+        if current <= 0 then () else
+          val attempted : error<()> = mask<exn>{
+            error/try fn() hidden-write(foreign,foreign-value,current)
+          }
+          if attempted.is-error then bump(rejections)
+          else throw("pure suffix mutated a foreign root")
+        current
+      )
+      (trigger,derived)
+
+  update(root){ trigger.set(1) }
+  val first-derived = sample(root){ derived.get }
+  val first-foreign = sample(foreign){ foreign-value.get }
+  if load(rejections) == 1 &&
+     first-derived == 1 && first-foreign == 0
+  then ()
+  else throw("first raw suffix did not reject a foreign-root write")
+
+  // The guard is outside raw continuation capture and is restored after the
+  // turn. An ordinary foreign-root update must therefore remain legal.
+  update(foreign){ foreign-value.set(7) }
+  update(root){ trigger.set(2) }
+  val second-derived = sample(root){ derived.get }
+  val second-foreign = sample(foreign){ foreign-value.get }
+  if load(rejections) == 2 &&
+     second-derived == 2 && second-foreign == 7
+  then ()
+  else throw("raw suffix captured or leaked the pure-plane phase")
+  root.dispose()
+  foreign.dispose()
+
+fun test-pure-phase-rejects-child-registration-atomically()
+  val runs = hidden(0)
+  val cleanups = hidden(0)
+  val allow = hidden(True)
+  val (root,(trigger,payload)) : (root<total>,(signal<int>,signal<int>)) =
+    create-root fn(root)
+      val trigger = signal(root,0)
+      val payload = signal(root,10)
+      val derived = derive(root,0,fn()
+        val current = trigger.get
+        if current > 0 && load(allow)
+        then hidden-child(root,payload,runs,cleanups)
+        else ()
+        current
+      )
+      (trigger,payload)
+
+  val failed : error<()> = mask<exn>{
+    error/try fn() update(root){ trigger.set(1) }
+  }
+  if failed.is-error && load(runs) == 0 && load(cleanups) == 0
+  then ()
+  else throw("pure child registration was not rejected before mutation")
+
+  // The failed K remains retryable; disabling the forbidden branch lets it
+  // settle, and no partially registered child can observe the payload write.
+  store(allow,False)
+  update(root){ payload.set(11) }
+  if load(runs) == 0 && load(cleanups) == 0 then ()
+  else throw("rejected child registration left partial ownership")
+  root.dispose()
+  if load(cleanups) == 0 then ()
+  else throw("rejected child was retained until root disposal")
+
+fun test-pure-phase-rejects-cleanup-registration-atomically()
+  val cleanups = hidden(0)
+  val allow = hidden(True)
+  val (root,trigger) : (root<total>,signal<int>) = create-root fn(root)
+    val trigger = signal(root,0)
+    val derived = derive(root,0,fn()
+      val current = trigger.get
+      if current > 0 && load(allow)
+      then on-cleanup(root,fn() bump(cleanups))
+      else ()
+      current
+    )
+    trigger
+
+  val failed : error<()> = mask<exn>{
+    error/try fn() update(root){ trigger.set(1) }
+  }
+  if failed.is-error && load(cleanups) == 0 then ()
+  else throw("pure cleanup registration was not rejected atomically")
+  store(allow,False)
+  update(root){ trigger.set(2) }
+  root.dispose()
+  if load(cleanups) == 0 then ()
+  else throw("rejected cleanup escaped to root ownership")
+
+fun test-targeted-settle-enters-pure-phase()
+  val allow = hidden(True)
+  val (foreign,foreign-value) : (root<total>,signal<int>) =
+    create-root fn(root) signal(root,0)
+  val (root,(trigger,payload,derived))
+      : (root<total>,(signal<int>,signal<int>,memo<int>)) = create-root fn(root)
+    val trigger = signal(root,0)
+    val payload = signal(root,0)
+    val derived = derive(root,0,fn()
+      val current = trigger.get
+      if current > 0 && load(allow)
+      then hidden-write(foreign,foreign-value,current)
+      else ()
+      current
+    )
+    (trigger,payload,derived)
+
+  val failed : error<()> = mask<exn>{
+    error/try fn()
+      dispatch(root)
+        batch(root)
+          trigger.set(1)
+          val _ = derived.get
+          ()
+  }
+  val foreign-after = sample(foreign){ foreign-value.get }
+  if failed.is-error && foreign-after == 0
+  then ()
+  else throw("targeted producer settlement bypassed the pure phase")
+  store(allow,False)
+  update(root){ payload.set(1) }
+  root.dispose()
+  foreign.dispose()
+
 pub fun main()
   test-deep-wide-diamond()
   test-target-does-not-drain-unrelated-producer()
@@ -342,4 +487,8 @@ pub fun main()
   test-batch-targeted-pull-failure-isolation()
   test-final-control-retires-unpublished-bootstrap()
   test-state-entry-targeted-input-coherence()
+  test-pure-phase-guards-every-raw-suffix-and-cross-root()
+  test-pure-phase-rejects-child-registration-atomically()
+  test-pure-phase-rejects-cleanup-registration-atomically()
+  test-targeted-settle-enters-pure-phase()
   println("execution-planes: all checks passed")

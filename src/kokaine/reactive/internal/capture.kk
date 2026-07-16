@@ -195,4 +195,7 @@ pub fun prepare-trace(root : root<r>, plane : plane<e>,
       _ -> Ok(())
   store(bootstrap-slot,Just(bootstrap-run))
   val bootstrap = Bootstrap-work(current,owner-slot)
-  (current,bootstrap,fn() pretend-no-div{ retire-scope(current) })
+  (current,bootstrap,fn()
+    check-not-pure-plane("reactive scope disposal")
+    pretend-no-div{ retire-scope(current) }
+  )

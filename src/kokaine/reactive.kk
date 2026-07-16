@@ -146,7 +146,7 @@ pub fun on-cleanup(root : root<e>,
 
 // Host callbacks capture the continuation generation which registered them.
 // Work created during re-entry is structurally owned by that generation.
-pub fun capture-reentry(root : root<e>) : reentry<e>
+pub fun capture-reentry(root : root<e>) : exn reentry<e>
   Public-reentry(runtime-capture-reentry(root.unwrap-root))
 
 pub fun reenter(value : reentry<e>,

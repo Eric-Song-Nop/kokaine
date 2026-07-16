@@ -326,19 +326,22 @@ pub fun run-work-raw(plane : plane<e>, current : work<e>) : <div|e> error<()>
 
 pub fun run-derive-work(plane : plane<total>, current : work<total>)
                     : div settle-result
-  val owner = match current
-    Resume-work(capture) ->
-      match capture
-        Trace-end -> Nothing
-        Trace-read(_,slot,_,_,_,_,_,_,_) -> load(slot)
-        Trace-entry(_,slot,_,_,_,_) -> load(slot)
-    Bootstrap-work(_,slot) -> load(slot)
-  match owner
-    Nothing ->
-      match run-work-raw(plane,current)
-        Error(failure) -> Settle-failed(failure)
-        Ok(_) -> Settle-ok
-    Just(producer) -> settle-producer-result(producer)
+  val previous-phase = enter-pure-plane()
+  finally(fn() restore-pure-plane(previous-phase),fn()
+    val owner = match current
+      Resume-work(capture) ->
+        match capture
+          Trace-end -> Nothing
+          Trace-read(_,slot,_,_,_,_,_,_,_) -> load(slot)
+          Trace-entry(_,slot,_,_,_,_) -> load(slot)
+      Bootstrap-work(_,slot) -> load(slot)
+    match owner
+      Nothing ->
+        match run-work-raw(plane,current)
+          Error(failure) -> Settle-failed(failure)
+          Ok(_) -> Settle-ok
+      Just(producer) -> settle-producer-result(producer)
+  )
 
 pub fun restore-deferred(plane : plane<total>, deferred : list<work<total>>) : ()
   store(plane.plane-queue,
@@ -563,13 +566,16 @@ pub fun settle-producer-body(producer : derive-producer) : <div> settle-result
               "derived value belongs to a retired scope")
 
 pub fun settle-producer-result(producer : derive-producer) : <div> settle-result
-  if load(producer.producer-settling)
-  then settle-failure("cyclic derived continuation")
-  else
-    store(producer.producer-settling,True)
-    val result = settle-producer-body(producer)
-    store(producer.producer-settling,False)
-    result
+  val previous-phase = enter-pure-plane()
+  finally(fn() restore-pure-plane(previous-phase),fn()
+    if load(producer.producer-settling)
+    then settle-failure("cyclic derived continuation")
+    else
+      store(producer.producer-settling,True)
+      val result = settle-producer-body(producer)
+      store(producer.producer-settling,False)
+      result
+  )
 
 // Synchronous memo reads can execute this capability without gaining the
 // ambient effect row. It follows only the target scope's actual Trace-read

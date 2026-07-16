@@ -9,6 +9,7 @@ import kokaine/reactive/internal/lifetime
 import kokaine/reactive/internal/scheduler
 import kokaine/reactive/internal/handlers
 import kokaine/reactive/internal/capture
+import kokaine/reactive/internal/resource
 import std/core/undiv
 
 // Public dispatch lives at the composition layer; the handler implementation
@@ -35,17 +36,60 @@ fun fresh-root() : root<e>
     token,owned,cell(0),cell(False),cell(False),cell(False)
   )
 
+// Construction owns the root's outermost batch. If either the constructor or
+// its initial flush exits before the root is returned, cancel that batch without
+// flushing and synchronously retire every registered scope and cleanup.
+fun abort-root-construction(root : root<e>) : <exn|e> ()
+  pretend-no-div{
+    store(root.root-batch-depth,0)
+    store(root.root-disposing,True)
+    store(root.root-token,Scope-dead)
+    finally(
+      fn() {
+        store(root.root-disposed,True)
+        store(root.root-disposing,False)
+        store(root.root-derive-plane.plane-queue,[])
+        store(root.root-effect-plane.plane-queue,[])
+        store(root.root-derive-plane.plane-current,Nothing)
+        store(root.root-effect-plane.plane-current,Nothing)
+        store(root.root-derive-plane.plane-current-entry,Nothing)
+        store(root.root-effect-plane.plane-current-entry,Nothing)
+        store(root.root-derive-plane.plane-draft,Nothing)
+        store(root.root-effect-plane.plane-draft,Nothing)
+        store(root.root-owned,Owned-end)
+      },
+      fn()
+        val values = load(root.root-owned)
+        val finalizers = collect-owned(values)
+        run-finalizers(finalizers)
+    )
+  }
+
 pub fun create-root(action : (root<e>) -> <signal-write,pure|e> a)
                    : <exn|e> (root<e>,a)
+  check-not-pure-plane("reactive root creation")
   val root = fresh-root()
+  val committed = cell(False)
   pretend-no-div{
-    val result = interpret-write(root)
-      enter-batch(root.root-key)
-      finally(fn() leave-batch(root.root-key),fn() action(root))
-    (root,result)
+    finally(
+      fn() lift-div(fn()
+        if load(committed) then () else abort-root-construction(root)
+      ),
+      fn()
+        val result = interpret-write(root)
+          enter-batch(root.root-key)
+          val value = action(root)
+          // Initial bootstrap is part of construction. Commit only after this
+          // flush completes successfully.
+          leave-batch(root.root-key)
+          value
+        store(committed,True)
+        (root,result)
+    )
   }
 
 pub fun root/dispose(root : root<e>) : <exn|e> ()
+  check-not-pure-plane("reactive root disposal")
   if load(root.root-disposed) || load(root.root-disposing) then ()
   elif load(root.root-batch-depth) > 0 ||
        load(root.root-flushing) ||
@@ -94,6 +138,7 @@ pub fun sample(root : root<e>, action : () -> <signal-read,pure|e> a)
 
 pub fun signal-by(root : root<e>, initial : a,
                   equals : (a,a) -> bool) : exn signal<a>
+  check-not-pure-plane("signal creation")
   check-registration(root)
   Signal(new-source(root,initial,equals))
 
@@ -139,6 +184,7 @@ fun create-effect-inner(root : root<e>,
                         track : () -> <signal-read,pure> a,
                         apply : (value : a) -> <signal-write,pure|e> ())
                        : <signal-write,pure> disposer<e>
+  check-not-pure-plane("effect creation")
   val plane = root.root-effect-plane
   val owner-slot = cell(Nothing)
   val owner = load(plane.plane-current-frame)
@@ -165,6 +211,7 @@ fun commit-derived(root : root<e>, source : source<a>, value : a) : exn ()
 fun derive-by-inner(root : root<e>, initial : a,
                     calculate : () -> <signal-read,pure> a,
                     equals : (a,a) -> bool) : <signal-write,pure> memo<a>
+  check-not-pure-plane("derivation creation")
   check-registration(root)
   val source = new-source(root,initial,equals)
   val effect-plane = root.root-effect-plane
@@ -202,6 +249,7 @@ pub fun derive-always(root : root<e>, initial : a,
 fun memo-by-inner(root : root<e>, initial : a,
                   calculate : (previous : a) -> <signal-read,pure> a,
                   equals : (a,a) -> bool) : <signal-write,pure> memo<a>
+  check-not-pure-plane("memo creation")
   check-registration(root)
   val source = new-source(root,initial,equals)
   val effect-plane = root.root-effect-plane
@@ -253,13 +301,14 @@ pub fun create-effect(root : root<e>,
 
 pub fun on-cleanup(root : root<e>,
                    cleanup : () -> <signal-write,pure|e> ()) : exn ()
+  check-not-pure-plane("cleanup registration")
   val plane = root.root-effect-plane
   val current = load(plane.plane-current-frame)
   val checkpoint = load(plane.plane-current)
   check-frame-registration(root,current)
-  val live = cell(True)
-  val action = fn()
+  val resource = capture-resource(fn()
     with-context(plane,checkpoint,current,
       fn() interpret-write(root,cleanup))
+  )
   store(current.frame-owned,
-        Owned-cleanup(live,action,load(current.frame-owned)))
+        Owned-resource(resource,load(current.frame-owned)))
