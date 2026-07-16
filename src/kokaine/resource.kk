@@ -199,23 +199,27 @@ fun apply-input(
       val generation = cell/read(request-generation) + 1
       cell/write(request-generation,generation)
 
-      // A cancel written in the same batch as a source change dominates that
-      // source invalidation. On a later turn the unchanged Cancel command is
-      // merely historical, so a genuinely new source can start normally.
-      if command-changed && !command.is-refresh then
-        settle-active-request(
-          state-source,request-active,latest-success,Request-canceled)
-      elif changed || (command-changed && command.is-refresh) then
-        match snapshot
-          Nothing ->
+      match snapshot
+        Nothing ->
+          // Source absence is terminal even when the same batch also writes
+          // Cancel. No cached value may remain observable without a source.
+          if changed || command-changed then
             cell/write(request-active,False)
             cell/write(latest-success,Nothing)
             state-source.set(Unresolved)
-          Just(value) ->
+          else ()
+        Just(value) ->
+          // For a present source, a new Cancel still dominates a simultaneous
+          // source change. An unchanged Cancel is merely historical, so a
+          // genuinely later source may start normally.
+          if command-changed && !command.is-refresh then
+            settle-active-request(
+              state-source,request-active,latest-success,Request-canceled)
+          elif changed || (command-changed && command.is-refresh) then
             start-request(
               root,state-source,request-generation,request-active,
               latest-success,generation,value,load)
-      else ()
+          else ()
 
 
 // --------------------------------------------------------------------------

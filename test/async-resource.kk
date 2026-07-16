@@ -453,6 +453,55 @@ fun after-self-cancel-recovery(root : root<<ui>>,
   check(generation-async-outstanding() == 0,
     "self-cancel recovery leaves no generation task")
   root.dispose()
+  test-ready-batched-nothing-cancel()
+
+
+// --------------------------------------------------------------------------
+// Ready cancellation precedence
+// --------------------------------------------------------------------------
+
+fun test-ready-batched-nothing-cancel() : <ui,exn> ()
+  val requests-before = request-count()
+  val (root,(source,value))
+      : (root<<ui>>,(signal<maybe<int>>,resource<int,int>)) =
+    create-root fn(root)
+      val source = signal(root,Just(710))
+      val value = resource(root,fn() source.get,fake-load)
+      (source,value)
+
+  val seed = current-request()
+  check(request-count() == requests-before + 1,
+    "Ready Nothing-plus-cancel fixture starts one request")
+  seed.succeed(710)
+  enqueue-microtask(fn() stage(fn()
+    after-ready-batched-nothing-cancel(root,source,value)
+  ))
+
+fun after-ready-batched-nothing-cancel(
+    root : root<<ui>>,
+    source : signal<maybe<int>>,
+    value : resource<int,int>) : <ui,exn> ()
+  expect-ready(root,value,710,
+    "Nothing-plus-cancel fixture first publishes Ready")
+  val requests-before = request-count()
+
+  update(root){
+    batch(root){
+      source.set(Nothing)
+      value.cancel
+    }
+  }
+
+  check(request-count() == requests-before,
+    "Ready source Nothing plus cancel does not start a request")
+  match read-state(root,value)
+    Unresolved -> check(True,
+      "Ready source Nothing plus cancel clears the resource state")
+    _ -> check(False,
+      "Ready source Nothing plus cancel clears the resource state")
+  check(read-latest(root,value) == Nothing,
+    "Ready source Nothing plus cancel clears latest")
+  root.dispose()
   finish()
 
 
