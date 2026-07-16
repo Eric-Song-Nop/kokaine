@@ -317,6 +317,52 @@ with serve_project() as origin:
         assert_ok(fixture.evaluate(f"{controls}.popover.setManual(false)"))
         assert not manual.evaluate("node => node.matches(':popover-open')")
 
+        # togglePopover(true) delegates to the native show algorithm even when
+        # already open. Keep that validation path on legacy implementations
+        # without depending on whether a browser currently rejects re-entry.
+        reentrant_set = fixture.evaluate(
+            f"""() => {{
+                const manual = document.querySelector(
+                    '#fixture-manual-popover'
+                );
+                const auto = document.querySelector('#fixture-auto-popover');
+                const opened = {controls}.popover.setManual(true);
+                const nativeShow = manual.showPopover;
+                let nativeShowCalls = 0;
+                manual.showPopover = function() {{
+                    nativeShowCalls += 1;
+                    return nativeShow.call(this);
+                }};
+                let nested = 'listener-not-called';
+                auto.addEventListener('beforetoggle', event => {{
+                    if (event.newState === 'open') {{
+                        nested = {controls}.popover.setManual(true);
+                    }}
+                }}, {{ once: true }});
+                try {{
+                    const outer = {controls}.popover.showAuto();
+                    return {{
+                        opened,
+                        outer,
+                        nested,
+                        nativeShowCalls,
+                        manualOpen: manual.matches(':popover-open'),
+                        autoOpen: auto.matches(':popover-open')
+                    }};
+                }} finally {{
+                    delete manual.showPopover;
+                    if (manual.matches(':popover-open')) manual.hidePopover();
+                    if (auto.matches(':popover-open')) auto.hidePopover();
+                }}
+            }}"""
+        )
+        assert_ok(reentrant_set["opened"])
+        assert_ok(reentrant_set["outer"])
+        assert reentrant_set["manualOpen"]
+        assert reentrant_set["autoOpen"]
+        assert_ok(reentrant_set["nested"])
+        assert reentrant_set["nativeShowCalls"] == 1
+
         assert_error(
             fixture.evaluate(f"{controls}.popover.wrongTarget()"), "popover"
         )
@@ -330,6 +376,107 @@ with serve_project() as origin:
         assert_error(
             fixture.evaluate(f"{controls}.popover.detachedSetClosed()"),
             "browser dom exception",
+        )
+        # Firefox retains the child Window after an ancestor iframe navigates.
+        # Model that observable topology so Chromium CI also proves that the
+        # adapter walks ancestor container documents before taking its no-op.
+        ancestor_validity = fixture.evaluate(
+            f"""() => {{
+                const target = document.body.appendChild(
+                    document.createElement('div')
+                );
+                target.popover = 'manual';
+                const staleParentDocument = {{
+                    defaultView: {{ document: {{}} }}
+                }};
+                const childDocument = {{}};
+                childDocument.defaultView = {{
+                    document: childDocument,
+                    frameElement: {{
+                        isConnected: true,
+                        ownerDocument: staleParentDocument
+                    }}
+                }};
+                Object.defineProperty(target, 'ownerDocument', {{
+                    configurable: true,
+                    value: childDocument
+                }});
+                let nativeCalls = 0;
+                target.togglePopover = function() {{
+                    nativeCalls += 1;
+                    throw new DOMException(
+                        'document is not fully active',
+                        'InvalidStateError'
+                    );
+                }};
+                try {{
+                    return {{
+                        adapter:
+                            {controls}.popover.setClosedTarget(target),
+                        nativeCalls
+                    }};
+                }} finally {{
+                    delete target.ownerDocument;
+                    delete target.togglePopover;
+                    target.remove();
+                }}
+            }}"""
+        )
+        assert ancestor_validity["nativeCalls"] == 1
+        assert_error(
+            ancestor_validity["adapter"], "browser dom exception"
+        )
+        # isConnected alone does not imply a fully-active document. Navigating
+        # an ancestor iframe leaves the old nested tree connected to its stale
+        # Document, whose browsing context has been discarded.
+        inactive_document = fixture.evaluate(
+            f"""async () => {{
+                const outer = document.body.appendChild(
+                    document.createElement('iframe')
+                );
+                const oldOuterDocument = outer.contentDocument;
+                const inner = oldOuterDocument.body.appendChild(
+                    oldOuterDocument.createElement('iframe')
+                );
+                const target = inner.contentDocument.body.appendChild(
+                    inner.contentDocument.createElement('div')
+                );
+                target.popover = 'manual';
+
+                const loaded = new Promise(resolve => {{
+                    outer.addEventListener('load', resolve, {{ once: true }});
+                }});
+                outer.srcdoc = '<body>replacement</body>';
+                await loaded;
+
+                try {{
+                    const result = {{
+                        connected: target.isConnected,
+                        ownDocumentLostView:
+                            target.ownerDocument.defaultView === null,
+                        ancestorDocumentLostView:
+                            oldOuterDocument.defaultView === null,
+                        adapter:
+                            {controls}.popover.setClosedTarget(target)
+                    }};
+                    try {{
+                        target.togglePopover(false);
+                        result.nativeError = 'none';
+                    }} catch (error) {{
+                        result.nativeError = error.name;
+                    }}
+                    return result;
+                }} finally {{
+                    outer.remove();
+                }}
+            }}"""
+        )
+        assert inactive_document["connected"]
+        assert inactive_document["ownDocumentLostView"]
+        assert inactive_document["ancestorDocumentLostView"]
+        assert inactive_document["nativeError"] == "InvalidStateError"
+        assert_error(
+            inactive_document["adapter"], "browser dom exception"
         )
         assert_error(
             fixture.evaluate(f"{controls}.popover.invalidEvent()"),
