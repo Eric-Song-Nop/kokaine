@@ -48,6 +48,7 @@ fun run-result(mode : completion-mode,
   with handler<async-ioc>
     fun async-ioc(host-action) host-action()
     fun async-schedule-ioc(_scope,host-action) host-action()
+  with handler<async-ownership>
     fun async-own-disposer(_dispose) fn() ()
   with handler<async-cancel>
     val async-scope = root-scope

@@ -26,13 +26,21 @@ type group-outcome<a>
   Group-finalized(yield : yield-info)
 
 type group-state<a>
-  Group-state(active : int, outcome : group-outcome<a>)
+  Group-state(active : int, outcome : group-outcome<a>,
+              owned : list<(int,dispose-fn)>)
 
 // Structured awaits are one-shot. An invocation-local cell can consequently
 // hold the drain ledger without adding a private effect to every user thunk.
 // It is never shared between parallel/race invocations or stored globally.
 abstract value type strand-group<a>
   Strand-group(state : ref<global,group-state<a>>, require-all : bool)
+
+// A nearer structured handler wraps the raw host disposer before the base
+// generation runtime registers it. Releasing the base registration and then
+// claiming this guard implements discard without changing the public
+// `async-own` release protocol.
+abstract value type ownership-guard
+  Ownership-guard(disposer : ref<global,maybe<dispose-fn>>)
 
 fun group-cell(value : a) : ref<global,a>
   unsafe-total { ref(value) }
@@ -43,6 +51,45 @@ fun group-load(value : ref<global,a>) : a
 fun group-store(target : ref<global,a>, value : a) : ()
   unsafe-total { target := value }
 
+fun new-ownership-guard(dispose : dispose-fn) : ownership-guard
+  Ownership-guard(group-cell(Just(dispose)))
+
+fun ownership-guard/retire(guard : ownership-guard) : ui ()
+  match guard
+    Ownership-guard(slot) ->
+      val current = group-load(slot)
+      group-store(slot,Nothing)
+      match current
+        Nothing -> ()
+        Just(dispose) -> dispose()
+
+fun ownership-guard/accept(guard : ownership-guard) : ()
+  match guard
+    Ownership-guard(slot) -> group-store(slot,Nothing)
+
+fun ownership-guard/as-disposer(guard : ownership-guard) : dispose-fn
+  fn() guard.retire
+
+fun release-ownership(release : dispose-fn,
+                      guard : ownership-guard) : ui ()
+  release()
+  guard.accept
+
+fun ownership-release-capability(release : dispose-fn,
+                                 guard : ownership-guard) : dispose-fn
+  fn() release-ownership(release,guard)
+
+fun discard-ownership(release : dispose-fn,
+                      guard : ownership-guard) : ui ()
+  // Unlink the generation registration first. If a retirement snapshot has
+  // already won, its guarded disposer and this path still share one raw slot.
+  release()
+  guard.retire
+
+fun ownership-discard-capability(release : dispose-fn,
+                                 guard : ownership-guard) : dispose-fn
+  fn() discard-ownership(release,guard)
+
 fun group-lift-div(action : () -> e a) : <div|e> a
   mask<div>{ action() }
 
@@ -50,7 +97,8 @@ fun group-lift-exn(action : () -> e a) : <exn|e> a
   mask<exn>{ action() }
 
 fun new-strand-group(require-all : bool) : strand-group<a>
-  Strand-group(group-cell(Group-state(0,Group-values([]))),require-all)
+  Strand-group(
+    group-cell(Group-state(0,Group-values([]),[])),require-all)
 
 tail fun ordered-insert(values : list<(int,a)>, entry : (int,a))
                        : list<(int,a)>
@@ -100,6 +148,13 @@ fun group-outcome/resume(current : group-outcome<a>) : <async,exn> list<a>
     Group-canceled -> discontinue()
     Group-finalized(yield) -> unsafe-reyield(yield)
 
+fun group-outcome/keeps-owned(current : group-outcome<a>, index : int,
+                              require-all : bool) : bool
+  match current
+    Group-values(values) ->
+      require-all || values.any(fn(entry) entry.fst == index)
+    _ -> False
+
 fun strand-group/active(group : strand-group<a>) : bool
   match group
     Strand-group(state,_) -> group-load(state).active > 0
@@ -108,23 +163,42 @@ fun strand-group/start(group : strand-group<a>) : ()
   match group
     Strand-group(state,_) ->
       match group-load(state)
-        Group-state(active,outcome) ->
-          group-store(state,Group-state(active + 1,outcome))
+        Group-state(active,outcome,owned) ->
+          group-store(state,Group-state(active + 1,outcome,owned))
 
 fun strand-group/finish(group : strand-group<a>, index : int,
                         result : strand-outcome<a>) : ()
   match group
     Strand-group(state,require-all) ->
       match group-load(state)
-        Group-state(active,outcome) ->
+        Group-state(active,outcome,owned) ->
           group-store(state,Group-state(
             active - 1,
-            outcome.add(index,result,require-all)
+            outcome.add(index,result,require-all),
+            owned
           ))
+
+fun strand-group/track-owned(group : strand-group<a>, index : int,
+                             discard : dispose-fn) : ()
+  match group
+    Strand-group(state,_) ->
+      match group-load(state)
+        Group-state(active,outcome,owned) ->
+          group-store(state,Group-state(
+            active,outcome,Cons((index,discard),owned)))
 
 fun strand-group/results(group : strand-group<a>) : <async,exn> list<a>
   match group
-    Strand-group(state,_) -> group-load(state).outcome.resume
+    Strand-group(state,require-all) ->
+      match group-load(state)
+        Group-state(active,outcome,owned) ->
+          // Detach the rollback ledger before invoking untrusted host
+          // disposers. Nested/re-entrant cleanup can no longer claim it twice.
+          group-store(state,Group-state(active,outcome,[]))
+          owned.foreach fn(entry)
+            if outcome.keeps-owned(entry.fst,require-all) then ()
+            else async-host(entry.snd)
+          outcome.resume
 
 // Once a race has a winner, or a parallel group has failed/canceled, every
 // later queued ordinary result is a loser. It must take the retained Cancel
@@ -150,6 +224,20 @@ fun in-strand-scope(scope : async-scope, action : () -> <async|e> a)
     fun release-canceled-scope(current) release-canceled-scope(current)
   action()
 
+// Record ownership acquired inside a child dynamic extent. The outer runtime
+// still owns the actual one-shot lease; this nearer handler retains only its
+// discard capability so an unreachable group result can be rolled back.
+fun in-strand-ownership(group : some<a> strand-group<a>, index : int,
+                        action : () -> <async|e> b) : <async|e> b
+  with override
+    fun async-own-disposer(dispose)
+      val guard = new-ownership-guard(dispose)
+      val release = async-own-disposer(guard.as-disposer)
+      group.track-owned(
+        index,ownership-discard-capability(release,guard))
+      ownership-release-capability(release,guard)
+  action()
+
 fun run-strand(
     require-all : bool,
     group : some<a> strand-group<a>,
@@ -160,26 +248,28 @@ fun run-strand(
   group.start
   with route-awaits(queue)
   in-strand-scope(scope,fn()
-    if is-canceled() then
-      group.finish(index,Strand-canceled)
-    else
-      val outcome =
-        with unsafe-try-finalize
-        with unsafe-uncancel
-        error/try(fn() action())
-      match outcome
-        Right(Just(Ok(value))) ->
-          group.finish(index,Strand-value(value))
-          if !require-all then cancel-outstanding()
-        Right(Just(Error(error))) ->
-          group.finish(index,Strand-exception(error))
-          cancel-outstanding()
-        Right(Nothing) ->
-          group.finish(index,Strand-canceled)
-          cancel-outstanding()
-        Left(yield) ->
-          group.finish(index,Strand-finalized(yield))
-          cancel-outstanding()
+    in-strand-ownership(group,index,fn()
+      if is-canceled() then
+        group.finish(index,Strand-canceled)
+      else
+        val outcome =
+          with unsafe-try-finalize
+          with unsafe-uncancel
+          error/try(fn() action())
+        match outcome
+          Right(Just(Ok(value))) ->
+            group.finish(index,Strand-value(value))
+            if !require-all then cancel-outstanding()
+          Right(Just(Error(error))) ->
+            group.finish(index,Strand-exception(error))
+            cancel-outstanding()
+          Right(Nothing) ->
+            group.finish(index,Strand-canceled)
+            cancel-outstanding()
+          Left(yield) ->
+            group.finish(index,Strand-finalized(yield))
+            cancel-outstanding()
+    )
   )
 
 // Every queued item selects between its real completion and a first synthetic

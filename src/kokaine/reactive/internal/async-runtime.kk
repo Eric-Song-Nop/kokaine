@@ -379,7 +379,7 @@ noinline fun release-runtime-scope(runtime : generation-runtime<e>,
 // either transition.
 fun register-owned-disposer(root : root<<ui|e>>, dispose : dispose-fn)
                            : <signal-write,pure,ui|e> dispose-fn
-  val disposer-slot = cell(Just(dispose))
+  val disposer-slot : ref<global,maybe<dispose-fn>> = cell(Just(dispose))
   val committed = cell(False)
   val rollback = fn()
     if load(committed) then () else dispose()
@@ -442,25 +442,28 @@ fun interpret-generation-await(
     family : async-family<e>,
     runtime : generation-runtime<e>,
     action : () -> <async,signal-read,signal-write,pure,ui|e> ())
-    : <async-cancel,async-ioc,discontinue,signal-read,signal-write,pure,ui|e> ()
+    : <async-cancel,async-ioc,async-ownership,discontinue,signal-read,
+       signal-write,pure,ui|e> ()
   with handler<async-await>
     raw ctl do-await(setup,scope,label)
       // Exact rows require the raw clause body to preserve the effects which
       // remain outside this single-effect interpreter.
       mask<async-cancel>{
         mask<async-ioc>{
-          mask<discontinue>{
-            if runtime.is-canceled(scope) then
-              resume-generation(root,family,fn()
-                rcontext.resume-shallow(Cancel)
-              )
-            else
-              // The resumed suffix may sample, but it is always invoked under
-              // captured re-entry. Registration itself performs no read.
-              mask<signal-read>{
-                register-task(root,runtime,scope,label,setup,
-                  fn(result,_) rcontext.resume-shallow(result))
-              }
+          mask<async-ownership>{
+            mask<discontinue>{
+              if runtime.is-canceled(scope) then
+                resume-generation(root,family,fn()
+                  rcontext.resume-shallow(Cancel)
+                )
+              else
+                // The resumed suffix may sample, but it is always invoked under
+                // captured re-entry. Registration itself performs no read.
+                mask<signal-read>{
+                  register-task(root,runtime,scope,label,setup,
+                    fn(result,_) rcontext.resume-shallow(result))
+                }
+            }
           }
         }
       }
@@ -468,12 +471,14 @@ fun interpret-generation-await(
     fun no-await(setup,scope,label,callback)
       mask<async-cancel>{
         mask<async-ioc>{
-          mask<discontinue>{
-            if runtime.is-canceled(scope) then callback(Cancel) else
-              mask<signal-read>{
-                register-task(root,runtime,scope,label,setup,
-                  fn(result,_) callback(result))
-              }
+          mask<async-ownership>{
+            mask<discontinue>{
+              if runtime.is-canceled(scope) then callback(Cancel) else
+                mask<signal-read>{
+                  register-task(root,runtime,scope,label,setup,
+                    fn(result,_) callback(result))
+                }
+            }
           }
         }
       }
@@ -507,8 +512,12 @@ fun run-generation-async-with-family(
         register-scheduled-ioc(root,runtime,scope,host-action)
       }
 
+
+  with handler<async-ownership>
     fun async-own-disposer(dispose)
-      mask<signal-read>{ register-owned-disposer(root,dispose) }
+      mask<async-ioc>{
+        mask<signal-read>{ register-owned-disposer(root,dispose) }
+      }
 
   with handler<async-cancel>
     val async-scope = root-scope
@@ -517,17 +526,21 @@ fun run-generation-async-with-family(
       // Cancellation itself needs the live signal-write evidence below these
       // unused residual handlers. In particular, do not erase that evidence.
       mask<async-ioc>{
-        mask<signal-read>{ cancel-runtime-scope(runtime,scope) }
+        mask<async-ownership>{
+          mask<signal-read>{ cancel-runtime-scope(runtime,scope) }
+        }
       }
 
     fun release-canceled-scope(scope)
       mask<async-ioc>{
-        mask<signal-read>{
-          mask<signal-write>{
-            mask<ui>{
-              lift-exn(fn() lift-div(fn()
-                release-runtime-scope(runtime,scope)
-              ))
+        mask<async-ownership>{
+          mask<signal-read>{
+            mask<signal-write>{
+              mask<ui>{
+                lift-exn(fn() lift-div(fn()
+                  release-runtime-scope(runtime,scope)
+                ))
+              }
             }
           }
         }
@@ -535,10 +548,12 @@ fun run-generation-async-with-family(
 
     fun is-scope-canceled(scope)
       mask<async-ioc>{
-        mask<signal-read>{
-          mask<signal-write>{
-            mask<ui>{
-              lift-exn(fn() lift-div(fn() runtime.is-canceled(scope)))
+        mask<async-ownership>{
+          mask<signal-read>{
+            mask<signal-write>{
+              mask<ui>{
+                lift-exn(fn() lift-div(fn() runtime.is-canceled(scope)))
+              }
             }
           }
         }

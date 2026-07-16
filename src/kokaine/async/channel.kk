@@ -21,6 +21,12 @@ type queue-state<a>
 abstract value type resume-queue<a>
   Resume-queue(state : ref<global,queue-state<a>>)
 
+// A routed completion is only accepted when its queued continuation suffix is
+// selected. Until then the setup disposer must remain available to a sibling
+// failure or parent retirement which synthetically cancels that suffix.
+abstract value type delivery-guard
+  Delivery-guard(disposer : ref<global,maybe<dispose-fn>>)
+
 fun cell(value : a) : ref<global,a>
   unsafe-total { ref(value) }
 
@@ -32,6 +38,32 @@ fun store(target : ref<global,a>, value : a) : ()
 
 pub fun new-resume-queue() : resume-queue<a>
   Resume-queue(cell(Queue-state([],[],[])))
+
+fun new-delivery-guard() : delivery-guard
+  Delivery-guard(cell(Nothing))
+
+fun delivery-guard/install(guard : delivery-guard,
+                           dispose : dispose-fn) : ()
+  match guard
+    Delivery-guard(slot) -> store(slot,Just(dispose))
+
+fun delivery-guard/accept(guard : delivery-guard) : ()
+  match guard
+    Delivery-guard(slot) -> store(slot,Nothing)
+
+fun delivery-guard/abandon(guard : delivery-guard) : ui ()
+  match guard
+    Delivery-guard(slot) ->
+      val current = load(slot)
+      // Revoke before calling an untrusted host disposer. Runtime cancellation
+      // and synthetic cancellation may both reach this one-shot path.
+      store(slot,Nothing)
+      match current
+        Nothing -> ()
+        Just(dispose) -> dispose()
+
+fun delivery-guard/abandon-async(guard : delivery-guard) : async ()
+  async-host(fn() guard.abandon)
 
 pub fun resume-queue/has-value(queue : resume-queue<a>) : bool
   match queue
@@ -100,7 +132,14 @@ pub fun route-awaits(queue,action)
   val cancel-started = cell(False)
   with override
     raw ctl do-await(setup,scope,label)
-      no-await(setup,scope,"structured: " ++ label,fn(result)
+      val delivery = new-delivery-guard()
+      val routed-setup = fn(complete)
+        match setup(complete)
+          Error(problem) -> Error(problem)
+          Ok(dispose) ->
+            delivery.install(dispose)
+            Ok(fn() delivery.abandon)
+      no-await(routed-setup,scope,"structured: " ++ label,fn(result)
         // The selector retains cancellation authority. A parent retirement
         // can therefore discontinue a running strand even after its ordinary
         // result has arrived, without repeatedly canceling cleanup awaits.
@@ -108,12 +147,15 @@ pub fun route-awaits(queue,action)
           match result
             Cancel ->
               store(cancel-started,True)
+              delivery.abandon-async
               rcontext.resume(Cancel)
             _ ->
               if force-cancel && !load(cancel-started) then
                 store(cancel-started,True)
+                delivery.abandon-async
                 rcontext.resume(Cancel)
               else
+                delivery.accept
                 rcontext.resume(result)
         )
       )

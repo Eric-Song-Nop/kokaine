@@ -226,14 +226,46 @@ with serve_project() as origin:
                 globalThis.__kokaineFetchAbortCount = 0;
                 globalThis.__kokaineBodyCancelCount = 0;
                 globalThis.__kokaineHeaderGapBodyStarts = 0;
+                globalThis.__kokaineStructuredFetchAbortCount = 0;
+                globalThis.__kokaineStructuredBodyCancelCount = 0;
                 globalThis.fetch = (input, init = {}) => {
+                    const structuredOwned = String(input).endsWith(
+                        '/async-structured-owned.txt'
+                    );
                     if (String(input).endsWith('/async-reject.txt')) {
                         return Promise.reject(new Error('forced fetch rejection'));
                     }
-                    if (init.signal) {
+                    if (init.signal && !structuredOwned) {
                         init.signal.addEventListener('abort', () => {
                             globalThis.__kokaineFetchAbortCount += 1;
                         }, { once: true });
+                    }
+                    if (structuredOwned) {
+                        if (init.signal) {
+                            init.signal.addEventListener('abort', () => {
+                                globalThis.__kokaineStructuredFetchAbortCount += 1;
+                            }, { once: true });
+                        }
+                        const body = {
+                            locked: false,
+                            cancel() {
+                                globalThis.__kokaineStructuredBodyCancelCount += 1;
+                                this.locked = true;
+                                return Promise.resolve();
+                            }
+                        };
+                        const response = {
+                            status: 200,
+                            ok: true,
+                            url: String(input),
+                            body
+                        };
+                        return {
+                            then(fulfill, _reject) {
+                                fulfill(response);
+                                return this;
+                            }
+                        };
                     }
                     return nativeFetch(input, init).then(response => {
                         if (String(input).endsWith('/async-header-gap.txt')) {
@@ -425,6 +457,40 @@ with serve_project() as origin:
         assert immediate["phase"] == "parallel-before", immediate
         assert immediate["outstanding"] >= 2, immediate
         expect(page.locator("#async-phase")).to_have_text("parallel:left:right")
+        assert page.evaluate("__kokaineAsyncRuntime.outstanding()") == 0
+
+        immediate = dispatch_and_read(page, "#async-parallel-fetch-queued-cancel")
+        assert immediate["phase"] == "parallel-fetch-queued-before", immediate
+        expect(page.locator("#async-phase")).to_have_text(
+            "parallel-fetch-queued-failed:expected setup failure"
+        )
+        assert page.evaluate(
+            "__kokaineAsyncRuntime.log"
+        ).count("parallel-fetch-queued-after") == 0
+        assert page.evaluate("__kokaineStructuredFetchAbortCount") == 1
+        assert page.evaluate("__kokaineStructuredBodyCancelCount") == 0
+        assert page.evaluate("__kokaineAsyncRuntime.outstanding()") == 0
+
+        immediate = dispatch_and_read(page, "#async-parallel-fetch-owned-rollback")
+        assert immediate["phase"] == "parallel-fetch-owned-before", immediate
+        expect(page.locator("#async-phase")).to_have_text(
+            "parallel-fetch-owned-failed:expected setup failure"
+        )
+        assert page.evaluate(
+            "__kokaineAsyncRuntime.log"
+        ).count("parallel-fetch-owned-after") == 1
+        assert page.evaluate("__kokaineStructuredFetchAbortCount") == 2
+        assert page.evaluate("__kokaineStructuredBodyCancelCount") == 1
+        assert page.evaluate("__kokaineAsyncRuntime.outstanding()") == 0
+
+        immediate = dispatch_and_read(page, "#async-parallel-released-ownership")
+        assert immediate["phase"] == "parallel-released-ownership-before", immediate
+        expect(page.locator("#async-phase")).to_have_text(
+            "parallel-released-ownership-failed:expected setup failure"
+        )
+        assert page.evaluate(
+            "__kokaineAsyncRuntime.structuredOwnedDisposeCount"
+        ) == 0
         assert page.evaluate("__kokaineAsyncRuntime.outstanding()") == 0
 
         immediate = dispatch_and_read(page, "#async-race")

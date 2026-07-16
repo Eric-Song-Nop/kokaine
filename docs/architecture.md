@@ -378,10 +378,12 @@ a generation-owned disposer lease. Explicit release and retirement compete on
 the same removable registration: release may consume the disposer only when
 `try-unregister` wins, while a detached retirement snapshot remains responsible
 when it wins first. This keeps disposal and the outstanding-task count exactly
-once even when retirement snapshots the owner ledger concurrently with an
-explicit release. The lease follows the reactive generation rather than a
-structured child scope because a delivered value may escape that child before
-it is consumed.
+once. A structured child installs a nearer ownership handler which wraps the
+raw disposer in another one-shot guard before base registration. Its discard
+capability first releases the base registration and then claims that guard;
+if retirement already won, both paths still converge on the same raw slot. The
+base lease can therefore follow the reactive generation while the group keeps
+enough authority to retire a result which later becomes unreachable.
 
 `Cancel` is distinct from `Exception`. Public await wrappers translate it to
 the final `discontinue` operation, so ordinary `catch` cannot turn cancellation
@@ -446,7 +448,10 @@ one at a time under its active async interpreter, preserving
 browser-observed completion order without letting a host callback execute a
 child suffix. Values are buffered before the driver is woken, so parent
 retirement in the intervening microtask gap can still consume the cancellation
-path and unwind the child.
+path and unwind the child. A delivery guard keeps the setup disposer live until
+the selector accepts the real completion. Synthetic cancellation claims that
+same guard first, so Fetch can still abort after headers arrive but before its
+suffix installs the longer-lived Response lease.
 
 The selector injects at most one synthetic `Cancel` into a losing strand. Once
 that strand is unwinding, an await performed by its cleanup receives its real
@@ -460,8 +465,11 @@ first terminal result, cancels the loser, and likewise drains the loser before
 returning the winner. This makes loser disposers and `finally` clauses part of
 the combinator's completion contract: an exception or final control raised by
 cleanup replaces the provisional result, matching Koka's ordinary `finally`
-semantics. `timeout-with` and the Web `timeout` adapter are ordinary `race`
-compositions and inherit the same draining rule.
+semantics. Ownership acquired inside a child is recorded by strand index. A
+successful `parallel` keeps every lease, a successful `race` keeps only the
+winner's leases, and any final exception or cancellation discards all leases
+in LIFO order before returning. `timeout-with` and the Web `timeout` adapter
+are ordinary `race` compositions and inherit the same draining rule.
 
 ## Resource source and loader boundary
 

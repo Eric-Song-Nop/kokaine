@@ -14,13 +14,16 @@ import std/time/duration
 
 
 extern begin-fixture() : ui ()
-  js inline "(globalThis.__kokaineAsyncRuntime={ log:[], disposerCount:0, disposeRoot:null, outstanding:null })"
+  js inline "(globalThis.__kokaineAsyncRuntime={ log:[], disposerCount:0, structuredOwnedDisposeCount:0, disposeRoot:null, outstanding:null })"
 
 extern append-log(value : string) : ui ()
   js inline "globalThis.__kokaineAsyncRuntime.log.push(#1)"
 
 extern record-disposer() : ui ()
   js inline "(globalThis.__kokaineAsyncRuntime.disposerCount += 1)"
+
+extern record-structured-owned-disposal() : ui ()
+  js inline "(globalThis.__kokaineAsyncRuntime.structuredOwnedDisposeCount += 1)"
 
 extern resolved-promise(value : string) : promise<string>
   js inline "Promise.resolve(#1)"
@@ -233,6 +236,62 @@ pub fun main()
             }
           )
           phase.set("parallel:" ++ left ++ ":" ++ right)
+        )
+      ])
+
+      button("parallel queued Fetch cancellation",attrs=[
+        id("async-parallel-fetch-queued-cancel"),kind("button"),
+        on("click",fn(_)
+          phase.set("parallel-fetch-queued-before")
+          with catch fn(problem)
+            phase.set("parallel-fetch-queued-failed:" ++ show-error(problem))
+          val pair = parallel(
+            fn() setup-failure(),
+            fn() {
+              val result = fetch(get("/async-structured-owned.txt"))
+              append-log("parallel-fetch-queued-after")
+              result
+            }
+          )
+          phase.set("parallel-fetch-queued-unexpected")
+        )
+      ])
+
+      button("parallel owned Fetch rollback",attrs=[
+        id("async-parallel-fetch-owned-rollback"),kind("button"),
+        on("click",fn(_)
+          phase.set("parallel-fetch-owned-before")
+          with catch fn(problem)
+            phase.set("parallel-fetch-owned-failed:" ++ show-error(problem))
+          val pair = parallel(
+            fn() {
+              val result = fetch(get("/async-structured-owned.txt"))
+              append-log("parallel-fetch-owned-after")
+              result
+            },
+            fn() setup-failure()
+          )
+          phase.set("parallel-fetch-owned-unexpected")
+        )
+      ])
+
+      button("parallel released ownership",attrs=[
+        id("async-parallel-released-ownership"),kind("button"),
+        on("click",fn(_)
+          phase.set("parallel-released-ownership-before")
+          with catch fn(problem)
+            phase.set("parallel-released-ownership-failed:" ++
+                      show-error(problem))
+          val pair = parallel(
+            fn() {
+              val release = async-own(
+                fn() record-structured-owned-disposal())
+              async-host(release)
+              "released"
+            },
+            fn() setup-failure()
+          )
+          phase.set("parallel-released-ownership-unexpected")
         )
       ])
 

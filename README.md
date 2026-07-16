@@ -143,8 +143,10 @@ attempts.
   interval aborts the request. Long browser sleeps are split into signed
   32-bit-safe chunks and guarded by a monotonic deadline for each chunk.
 - `parallel`, `race`, and `timeout` are structured: a parent does not return
-  while a canceled child still has an outstanding await or finalizer. Timer,
-  Promise, and Fetch adapters all use the same revocable await protocol.
+  while a canceled child still has an outstanding await or finalizer. A queued
+  completion keeps its host disposer until the child suffix accepts it, and a
+  value made unreachable by a later group failure is discarded immediately.
+  Timer, Promise, and Fetch adapters all use the same revocable await protocol.
 - A Resource tracks only its synchronous source calculation. Its loader
   receives an immutable source snapshot and has no `signal-read` capability;
   equality can therefore preserve an active request, while refresh, source
@@ -277,6 +279,9 @@ Fetch header delivery installs a generation-owned disposer lease;
 `response.text` and `response.json` transfer it only after the body await is
 registered, while `response.discard` releases an unconsumed response explicitly.
 `response.require-ok` uses that discard path before raising its HTTP exception.
+Structured groups retain a second, one-shot discard capability for leases
+acquired inside each child, so a sibling failure cannot strand an unreachable
+Response until generation retirement.
 
 `kokaine/resource` packages the common tracked-source/load/state pattern:
 

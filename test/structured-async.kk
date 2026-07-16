@@ -87,6 +87,7 @@ fun run-async(action : () -> <async,exn> a) : <ui,exn> maybe<a>
   with handler<async-ioc>
     fun async-ioc(host-action) host-action()
     fun async-schedule-ioc(_scope,host-action) host-action()
+  with handler<async-ownership>
     fun async-own-disposer(_dispose) fn() ()
   with handler<async-cancel>
     val async-scope = root-scope
@@ -113,6 +114,15 @@ fun fail-after-await() : <async,exn> int
   await1("failed",fn(_complete)
     Error(Exception("expected strand failure",ExnError))
   )
+
+fun immediate-with-disposer(value : a, disposals : ref<global,int>)
+                          : <async,exn> a
+  mask<exn>{
+    setup/await-noexn("immediate with disposer",fn(complete)
+      complete(value)
+      fn() store(disposals,load(disposals) + 1)
+    )
+  }
 
 fun test-parallel()
   val result = run-async(fn()
@@ -280,6 +290,30 @@ fun test-parallel-error-cancels-queued-result()
   check(load(finalized),
         "parallel finalizes a queued result after sibling failure")
 
+fun test-parallel-disposes-synchronously-completed-loser()
+  val disposals = hidden(0)
+  val continued = hidden(False)
+  val failed = error/try(fn()
+    run-async(fn()
+      parallel(
+        fn() fail-after-await(),
+        fn()
+          val value = immediate-with-disposer(43,disposals)
+          store(continued,True)
+          value
+      )
+    )
+  )
+  match failed
+    Error(problem) ->
+      check(problem.message == "expected strand failure",
+            "parallel propagates failure before synchronous sibling suffix")
+    Ok(_) -> check(False,"parallel must propagate the earlier sibling failure")
+  check(!load(continued),
+        "parallel does not run a synchronously completed losing suffix")
+  check(load(disposals) == 1,
+        "synthetic cancellation disposes synchronous setup exactly once")
+
 fun test-race-propagates-loser-cleanup-error()
   val disposed = hidden(False)
   val failed = error/try(fn()
@@ -361,6 +395,7 @@ pub fun main()
   test-timeout-action-wins()
   test-race-drains-after-error()
   test-parallel-error-cancels-queued-result()
+  test-parallel-disposes-synchronously-completed-loser()
   test-race-propagates-loser-cleanup-error()
   test-parallel-prefers-cleanup-error()
   test-race-resumes-awaits-in-loser-cleanup()

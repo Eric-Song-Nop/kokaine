@@ -64,6 +64,11 @@ pub effect async-cancel
 pub effect async-ioc
   fun async-ioc(action : () -> ui a) : a
   fun async-schedule-ioc(scope : async-scope, action : () -> ui ()) : ()
+
+// Ownership is separate from host I/O so structured combinators and Resource
+// loaders can install a nearer lease ledger without proxying polymorphic host
+// operations through a retained continuation.
+pub effect async-ownership
   // Keep a host disposer owned by the current reactive generation after an
   // await has completed. The returned release action transfers ownership
   // without running the disposer; generation retirement runs it exactly once.
@@ -134,7 +139,8 @@ pub effect discontinue
   // operation still unwinds Koka `finally` clauses in the canceled strand.
   final ctl discontinue() : a
 
-pub alias async = <async-await,async-cancel,async-ioc,discontinue>
+pub alias async = <async-await,async-cancel,async-ioc,async-ownership,
+                   discontinue>
 
 // Perform browser-host work through the active generation interpreter.
 pub fun async-host(action : () -> ui a) : async a
