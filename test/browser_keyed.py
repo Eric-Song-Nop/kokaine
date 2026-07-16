@@ -322,6 +322,8 @@ with serve_project() as origin:
             "error": None,
         }, f"structural ledger compaction was not stack-safe: {compaction!r}"
 
+        assert invoke(page, "bulkRetirement") is True
+
         invoke(page, "dispose")
         for selector in (
             "#keyed-main-root",

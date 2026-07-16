@@ -105,18 +105,38 @@ pub fun widen-pure-retirement(current : retirement<total>) : retirement<e>
 // Structural children are completely marked dead before resource continuations
 // are finalized. This is what makes self-disposal and cleanup-triggered writes
 // unable to re-enter a half-retired subtree.
+fun prepend-retirements-reversed(values : list<retirement<e>>,
+                                 collected : list<retirement<e>>)
+                                : list<retirement<e>>
+  match values
+    Nil -> collected
+    Cons(current,rest) ->
+      prepend-retirements-reversed(rest,Cons(current,collected))
+
+fun collect-owned-forks-reversed(values : owned<e>,
+                                  collected : list<retirement<e>>)
+                                 : <div> list<retirement<e>>
+  match values
+    Owned-end -> collected
+    Owned-fork(current,next) ->
+      collect-owned-forks-reversed(
+        next,prepend-retirements-reversed(collect-scope(current),collected))
+    Owned-derive-fork(current,next) ->
+      collect-owned-forks-reversed(
+        next,
+        prepend-retirements-reversed(
+          collect-scope(current).map(widen-pure-retirement),collected))
+    Owned-resource(_,next) ->
+      collect-owned-forks-reversed(next,collected)
+    Owned-structural(current,next) ->
+      collect-owned-forks-reversed(
+        next,
+        prepend-retirements-reversed(
+          collect-structural-owner(current),collected))
+
 pub fun collect-owned-forks(values : owned<e>)
                        : <div> list<retirement<e>>
-  match values
-    Owned-end -> []
-    Owned-fork(current,next) ->
-      collect-scope(current) ++ collect-owned-forks(next)
-    Owned-derive-fork(current,next) ->
-      collect-scope(current).map(widen-pure-retirement) ++
-      collect-owned-forks(next)
-    Owned-resource(_,next) -> collect-owned-forks(next)
-    Owned-structural(current,next) ->
-      collect-structural-owner(current) ++ collect-owned-forks(next)
+  collect-owned-forks-reversed(values,[]).reverse
 
 // Keep capability capture outside the tail-recursive list builder. In
 // particular, jsweb must not close over the builder's mutable loop cursor.
@@ -145,7 +165,19 @@ pub fun run-finalizers(finalizers : list<retirement<e>>)
     Cons(current,rest) ->
       match current
         Retirement(finalize) ->
-          finally(fn() run-finalizers(rest),finalize)
+          // Successful finalizers advance through the tail-recursive loop.
+          // Only an abortive effect needs the dynamic fallback, which preserves
+          // exhaustive retirement without growing one JavaScript frame per row.
+          val completed = cell(False)
+          finally(
+            fn() {
+              if load(completed) then () else run-finalizers(rest)
+            },
+            fn()
+              finalize()
+              store(completed,True)
+          )
+          run-finalizers(rest)
 
 pub fun retire-trace(current : trace<e>) : <div,exn|e> ()
   val finalizers = pretend-no-div{ collect-retirement(current) }

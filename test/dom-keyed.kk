@@ -5,6 +5,7 @@ import kokaine/html
 import kokaine/control
 import kokaine/dom
 import std/core/undiv
+import std/core/unsafe
 
 
 value struct tag-data(tag-id : int, tag-label : string)
@@ -22,6 +23,15 @@ value struct keyed-model(
   mode-source : signal<bool>,
   visible : memo<bool>,
   compact : memo<bool>)
+
+fun probe-cell(value : a) : ref<global,a>
+  unsafe-total { ref(value) }
+
+fun probe-load(value : ref<global,a>) : a
+  unsafe-total { !value }
+
+fun probe-store(target : ref<global,a>, value : a)
+  unsafe-total { target := value }
 
 fun tag-data/(==)(left : tag-data, right : tag-data) : bool
   left.tag-id == right.tag-id && left.tag-label == right.tag-label
@@ -114,8 +124,9 @@ extern publish-faults(
   move-reset : () -> ui bool,
   bootstrap : () -> ui bool,
   bootstrap-reset : () -> ui bool,
-  compact-ledger : () -> ui bool) : ui ()
-  js inline "Object.assign(globalThis.__kokaineKeyed, { duplicate:#1, duplicateReset:#2, move:#3, moveReset:#4, bootstrap:#5, bootstrapReset:#6, compactLedger:#7 })"
+  compact-ledger : () -> ui bool,
+  bulk-retirement : () -> ui bool) : ui ()
+  js inline "Object.assign(globalThis.__kokaineKeyed, { duplicate:#1, duplicateReset:#2, move:#3, moveReset:#4, bootstrap:#5, bootstrapReset:#6, compactLedger:#7, bulkRetirement:#8 })"
 
 fun safe-set(root : root<<ui>>, source : signal<list<item-data>>,
              next : list<item-data>) : ui bool
@@ -167,6 +178,31 @@ fun compact-ledger-stress(root : root<<ui>>,
     internal/dispose-structural-owner(child)
   internal/compact-structural-owner(owner)
   True
+
+fun bulk-retirement-stress(root : root<<ui>>,
+                           owner : structural-owner<<ui>>) : ui bool
+  with catch fn(_)
+    False
+  val finalized = probe-cell(0)
+  val parent = pretend-no-div{
+    internal/with-structural-owner(root,owner,fn()
+      internal/open-structural-owner(root)
+    )
+  }
+  pretend-no-div{
+    internal/with-structural-owner(root,parent,fn()
+      for(4000) fn(_)
+        val child = internal/open-structural-owner(root)
+        internal/with-structural-owner(root,child,fn()
+          on-cleanup(root,fn()
+            probe-store(finalized,probe-load(finalized) + 1)
+          )
+        )
+    )
+  }
+  internal/dispose-structural-owner(parent)
+  internal/compact-structural-owner(owner)
+  probe-load(finalized) == 4000
 
 fun main-row(root : root<<ui>>, pulse : signal<int>, clicks : signal<int>,
              runs : signal<int>, cleanups : signal<int>, compact : memo<bool>,
@@ -335,5 +371,6 @@ pub fun main()
       [item(1,"one"),item(2,"two"),item(3,"three")]),
     fn() safe-set(bootstrap-root,bootstrap-source,[item(7,"seven")]),
     fn() safe-set(bootstrap-root,bootstrap-source,[]),
-    fn() compact-ledger-stress(compact-root,compact-owner)
+    fn() compact-ledger-stress(compact-root,compact-owner),
+    fn() bulk-retirement-stress(compact-root,compact-owner)
   )
