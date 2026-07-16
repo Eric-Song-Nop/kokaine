@@ -134,9 +134,10 @@ attempts.
 
 ## Quick start
 
-Prerequisites are Koka 3.2.3 and `make`. The browser checks additionally use
-[`uv`](https://docs.astral.sh/uv/) to run Playwright without adding project
-dependencies.
+Prerequisites are Koka 3.2.3, Python 3, and `make`. Set `PYTHON=/path/to/python`
+when the Python 3 executable is not named `python3`. The browser checks
+additionally use [`uv`](https://docs.astral.sh/uv/) to run Playwright without
+adding project dependencies.
 
 ```sh
 make test
