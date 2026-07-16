@@ -42,7 +42,7 @@ build-counter:
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
 		--buildname=counter examples/counter.kk
 
-build-top-layer:
+build-top-layer: build-counter
 	mkdir -p dist
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
 		--buildname=top-layer examples/top-layer.kk
@@ -52,9 +52,7 @@ build-report:
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
 		--buildname=report examples/report.kk
 
-build-browser-fixtures: build-counter
-	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
-		--buildname=top-layer examples/top-layer.kk
+build-browser-fixtures: build-top-layer
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
 		--buildname=dom-errors test/dom-errors.kk
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \

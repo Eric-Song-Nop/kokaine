@@ -56,6 +56,9 @@ def check_parallel_build() -> None:
                 "-j2",
                 f"KOKA={fake_command}",
                 "build-browser-fixtures",
+                # The standalone goal must share the fixture build's node in
+                # the Make DAG instead of launching a duplicate compilation.
+                "build-top-layer",
             ],
             cwd=temporary,
             env=environment,
