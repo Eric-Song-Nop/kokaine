@@ -372,6 +372,16 @@ which takes it first discards the parked cleanup without executing it. The
 owner ledger is therefore bounded by live work instead of completed-task
 history, while neither path can finalize the registration twice.
 
+Host values which may outlive the await that produced them use `async-own` for
+a generation-owned disposer lease. Explicit release and retirement compete on
+the same removable registration: release may consume the disposer only when
+`try-unregister` wins, while a detached retirement snapshot remains responsible
+when it wins first. This keeps disposal and the outstanding-task count exactly
+once even when retirement snapshots the owner ledger concurrently with an
+explicit release. The lease follows the reactive generation rather than a
+structured child scope because a delivered value may escape that child before
+it is consumed.
+
 `Cancel` is distinct from `Exception`. Public await wrappers translate it to
 the final `discontinue` operation, so ordinary `catch` cannot turn cancellation
 into a value. Final control still unwinds Koka `finally` clauses. During owner
@@ -399,20 +409,26 @@ callback without a Koka handler.
 `kokaine/async/web` exposes direct-style operations over the primitive await
 protocol:
 
-- `sleep` and `yield` use a revocable timer subscription;
+- `sleep` and `yield` use a revocable timer subscription. Delays larger than
+  `2147483647` milliseconds are scheduled in bounded chunks, with a monotonic
+  deadline for each chunk so early callbacks re-arm instead of completing the
+  sleep prematurely;
 - `promise.await` wraps fulfillment and rejection in a callback cell which can
   be cleared even though settlement itself cannot be stopped;
-- `fetch` owns an `AbortController`; `response.text` and `response.json`
-  transfer that controller into the body await so retirement after headers
-  still aborts a streaming body, while `response.require-ok` aborts and cancels
-  an unconsumed non-OK body before raising the HTTP exception; and
+- `fetch` owns an `AbortController` through a generation disposer lease after
+  headers arrive; `response.text` and `response.json` transfer that lease into
+  the body await only after its structural registration is durable,
+  `response.discard` releases an unconsumed response, and
+  `response.require-ok` uses the same path before raising its HTTP exception;
+  and
 - `timeout` composes a timer and action through structured `race`.
 
 All setup boundaries catch browser setup failures and turn them into Koka
-exceptions. One-shot task state also rejects duplicate completion from a
-misbehaving source. `unsafe-promise` is intentionally named: the adapter cannot
-prove that a JavaScript value matches its asserted Koka type. JSON likewise
-remains `any` until a domain boundary validates it.
+exceptions. Long-timer re-scheduling and monotonic-clock failures are reported
+through that same async result path. One-shot task state also rejects duplicate
+completion from a misbehaving source. `unsafe-promise` is intentionally named:
+the adapter cannot prove that a JavaScript value matches its asserted Koka
+type. JSON likewise remains `any` until a domain boundary validates it.
 
 Adapter authors use `setup/await` when setup can fail and returns a disposer,
 or the smaller `await0`/`await1` variants. The completion callback carries an

@@ -137,9 +137,11 @@ attempts.
   Completion and retirement first revoke the retained continuation and host
   callbacks. Cancellation is final control rather than an ordinary exception,
   so it cannot be caught as a failure and still unwinds the strand's `finally`
-  clauses after the host disposer has been attempted. Fetch body reads retain
-  the request's controller, so retirement after headers also aborts a streaming
-  body.
+  clauses after the host disposer has been attempted. A Fetch response retains
+  the request's controller from header delivery until it is explicitly
+  discarded or body consumption takes ownership, so retirement during either
+  interval aborts the request. Long browser sleeps are split into signed
+  32-bit-safe chunks and guarded by a monotonic deadline for each chunk.
 - `parallel`, `race`, and `timeout` are structured: a parent does not return
   while a canceled child still has an outstanding await or finalizer. Timer,
   Promise, and Fetch adapters all use the same revocable await protocol.
@@ -271,8 +273,10 @@ delimiter when starting the same kind of task from another live reactive turn.
 Every resumed suffix uses a fresh base async interpreter; structured siblings
 share only their active cancellation family, and terminal operations detach
 from that family and physically unlink their structural cleanup registration.
-`response.require-ok` aborts and
-cancels an unconsumed error body before raising its HTTP exception.
+Fetch header delivery installs a generation-owned disposer lease;
+`response.text` and `response.json` transfer it only after the body await is
+registered, while `response.discard` releases an unconsumed response explicitly.
+`response.require-ok` uses that discard path before raising its HTTP exception.
 
 `kokaine/resource` packages the common tracked-source/load/state pattern:
 
