@@ -4,6 +4,7 @@
 module kokaine/reactive/internal/lifetime
 
 import kokaine/reactive/internal/model
+import kokaine/reactive/internal/resource
 import std/core/undiv
 
 // --------------------------------------------------------------------------
@@ -87,8 +88,8 @@ pub fun widen-pure-retirement(current : retirement<total>) : retirement<e>
   match current
     Retirement(action) -> Retirement(fn() action())
 
-// Structural children are completely marked dead before cleanup actions are
-// allowed to run. This is what makes self-disposal and cleanup-triggered writes
+// Structural children are completely marked dead before resource continuations
+// are finalized. This is what makes self-disposal and cleanup-triggered writes
 // unable to re-enter a half-retired subtree.
 pub fun collect-owned-forks(values : owned<e>)
                        : <div> list<retirement<e>>
@@ -99,22 +100,26 @@ pub fun collect-owned-forks(values : owned<e>)
     Owned-derive-fork(current,next) ->
       collect-scope(current).map(widen-pure-retirement) ++
       collect-owned-forks(next)
-    Owned-cleanup(_,_,next) -> collect-owned-forks(next)
+    Owned-resource(_,next) -> collect-owned-forks(next)
 
-pub fun collect-owned-cleanups(values : owned<e>)
-                          : <div> list<retirement<e>>
+// Keep capability capture outside the tail-recursive list builder. In
+// particular, jsweb must not close over the builder's mutable loop cursor.
+noinline fun resource-retirement(resource : resource-k<e>) : retirement<e>
+  Retirement(fn() finalize-resource(resource))
+
+pub fun collect-owned-resources(values : owned<e>)
+                           : <div> list<retirement<e>>
   match values
     Owned-end -> []
-    Owned-fork(_,next) -> collect-owned-cleanups(next)
-    Owned-derive-fork(_,next) -> collect-owned-cleanups(next)
-    Owned-cleanup(live,action,next) ->
-      if !load(live) then collect-owned-cleanups(next) else
-        store(live,False)
-        Cons(Retirement(action),collect-owned-cleanups(next))
+    Owned-fork(_,next) -> collect-owned-resources(next)
+    Owned-derive-fork(_,next) -> collect-owned-resources(next)
+    Owned-resource(resource,next) ->
+      Cons(resource-retirement(resource),
+           collect-owned-resources(next))
 
 pub fun collect-owned(values : owned<e>)
                  : <div> list<retirement<e>>
-  collect-owned-forks(values) ++ collect-owned-cleanups(values)
+  collect-owned-forks(values) ++ collect-owned-resources(values)
 
 pub fun run-finalizers(finalizers : list<retirement<e>>)
                   : <div,exn|e> ()

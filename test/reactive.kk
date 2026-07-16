@@ -603,28 +603,28 @@ fun mutate-total(root : root<total>, source : signal<int>, value : int)
 fun read-total(root : root<total>, source : signal<int>) : exn int
   sample(root){ source.get }
 
-fun test-nested-handler-coherence()
+fun test-nested-handler-rejection()
   val built : (root<total>,signal<int>) = create-root fn(root)
     signal(root,0)
   val (root,source) = built
-  val derived = update(root)
-    derive(root,0,fn()
-      // This handled write is part of the one-shot prefix. The tracked read
-      // below captures only its suffix, so later invalidation cannot replay it.
-      mutate-total(root,source,7)
-      source.get
-    )
-  val initial-source = sample(root){ source.get }
-  if initial-source == 7 then ()
-  else throw("nested write did not commit before the first capture")
-  val initial-derived = sample(root){ derived.get }
-  if initial-derived == 7 then ()
-  else throw("nested handler bootstrap published an incoherent value")
+  val failed : error<memo<int>> = mask<exn>{
+    error/try fn()
+      update(root)
+        derive(root,0,fn()
+          mutate-total(root,source,7)
+          source.get
+        )
+  }
+  val after-rejection = sample(root){ source.get }
   update(root){ source.set(8) }
-  val next-derived = sample(root){ derived.get }
-  if next-derived == 8 then ()
-  else throw("resuming the suffix replayed its handled-write prefix")
+  val after-update = sample(root){ source.get }
   root.dispose()
+  if failed.is-error then ()
+  else throw("a locally handled write was accepted in a pure calculator")
+  if after-rejection == 0 then ()
+  else throw("rejected calculator write partially committed its source")
+  if after-update == 8 then ()
+  else throw("pure-plane rejection leaked into an ordinary update")
 
 fun test-apply-is-untracked()
   val built : (root<total>,(signal<int>,signal<int>,signal<int>)) =
@@ -748,7 +748,7 @@ pub fun main()
   test-generation-checkpoint-equality()
   test-clean-read-failure-isolation()
   test-late-registration()
-  test-nested-handler-coherence()
+  test-nested-handler-rejection()
   test-apply-is-untracked()
   test-cleanup-failure-recovery()
   test-memo-error-state()

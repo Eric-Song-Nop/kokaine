@@ -81,7 +81,7 @@ pub fun runtime-on-cleanup(root : root<e>,
                            cleanup : () -> <signal-write,pure|e> ()) : exn ()
   kokaine/reactive/internal/runtime/on-cleanup(root,cleanup)
 
-pub fun runtime-capture-reentry(root : root<e>) : reentry<e>
+pub fun runtime-capture-reentry(root : root<e>) : exn reentry<e>
   kokaine/reactive/internal/reentry/capture-reentry(root)
 
 pub fun runtime-run-reentry(value : reentry<e>,
