@@ -391,6 +391,68 @@ with serve_project() as origin:
             fixture.evaluate(f"{controls}.popover.detachedSetClosed()"),
             "browser dom exception",
         )
+        # The reflected platform state must not be confused with an own
+        # `popover` field on a custom element. Class fields use own properties
+        # and can legitimately collide with this newer platform API.
+        shadowed_popover_property = fixture.evaluate(
+            f"""() => {{
+                const target = document.body.appendChild(
+                    document.createElement('x-popover-probe')
+                );
+                target.setAttribute('popover', 'manual');
+                Object.defineProperty(target, 'popover', {{
+                    configurable: true,
+                    value: 'component-state'
+                }});
+                try {{
+                    return {{
+                        adapter:
+                            {controls}.popover.setClosedTarget(target),
+                        nativeResult:
+                            HTMLElement.prototype.togglePopover.call(
+                                target, false
+                            )
+                    }};
+                }} finally {{
+                    target.remove();
+                }}
+            }}"""
+        )
+        assert shadowed_popover_property["nativeResult"] is False
+        assert_ok(shadowed_popover_property["adapter"])
+
+        # Conversely, an own field cannot manufacture native popover state.
+        # The platform rejects a hidden element with no popover attribute even
+        # when the requested state is already closed.
+        forged_popover_property = fixture.evaluate(
+            f"""() => {{
+                const target = document.body.appendChild(
+                    document.createElement('x-popover-probe')
+                );
+                Object.defineProperty(target, 'popover', {{
+                    configurable: true,
+                    value: 'manual'
+                }});
+                let nativeError = 'none';
+                try {{
+                    HTMLElement.prototype.togglePopover.call(target, false);
+                }} catch (error) {{
+                    nativeError = error.name;
+                }}
+                try {{
+                    return {{
+                        adapter:
+                            {controls}.popover.setClosedTarget(target),
+                        nativeError
+                    }};
+                }} finally {{
+                    target.remove();
+                }}
+            }}"""
+        )
+        assert forged_popover_property["nativeError"] == "NotSupportedError"
+        assert_error(forged_popover_property["adapter"], "popover")
+
         # WebKit retargets :fullscreen across a shadow boundary, so a host can
         # match even though only its shadow descendant has the fullscreen flag.
         # Popover validity checks must use the target's own modal state.
@@ -596,7 +658,11 @@ with serve_project() as origin:
                 const popover = foreignDocument.createElement('div');
                 dialog.id = 'fixture-dialog';
                 popover.id = 'fixture-manual-popover';
-                popover.popover = 'manual';
+                popover.setAttribute('popover', 'manual');
+                Object.defineProperty(popover, 'popover', {{
+                    configurable: true,
+                    value: 'component-state'
+                }});
                 originalDialog.id = 'fixture-dialog-main-realm';
                 originalPopover.id = 'fixture-popover-main-realm';
                 document.body.append(dialog, popover);
@@ -605,7 +671,12 @@ with serve_project() as origin:
                     const result = {{
                         dialogMainInstance:
                             dialog instanceof HTMLDialogElement,
-                        popoverMainInstance: popover instanceof Element
+                        popoverMainInstance: popover instanceof Element,
+                        popoverHasOwnState:
+                            Object.hasOwn(popover, 'popover'),
+                        popoverOwnState: popover.popover,
+                        popoverAttribute:
+                            popover.getAttribute('popover')
                     }};
 
                     result.dialogShow = {controls}.dialog.show();
@@ -679,6 +750,9 @@ with serve_project() as origin:
         )
         assert not foreign_realm["dialogMainInstance"]
         assert not foreign_realm["popoverMainInstance"]
+        assert foreign_realm["popoverHasOwnState"]
+        assert foreign_realm["popoverOwnState"] == "component-state"
+        assert foreign_realm["popoverAttribute"] == "manual"
         assert not foreign_realm["toggleEventMainInstance"]
         assert not foreign_realm["closeEventMainInstance"]
         assert_ok(foreign_realm["dialogShow"])

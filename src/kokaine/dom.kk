@@ -213,6 +213,12 @@ extern dom-require-dialog-target(target : node, message : string) : ui ()
 extern dom-require-element-target(target : node, message : string) : ui ()
   js inline "(function(target,message){ if(typeof Element !== 'function') throw new Error('Element is not supported by this browser'); var descriptor=Object.getOwnPropertyDescriptor(Element.prototype,'localName'); if(!descriptor || typeof descriptor.get!=='function') throw new Error('Element.localName is not supported by this browser'); try { Reflect.apply(descriptor.get,target,[]); } catch(_) { throw new TypeError(message); } })(#1,#2)"
 
+// Read the platform reflection getter directly. An own `popover` class field on
+// a custom element must neither hide a real content attribute nor manufacture
+// popover state where the browser has none.
+extern dom-require-popover-target(target : node, message : string) : ui ()
+  js inline "(function(target,message){ if(typeof HTMLElement !== 'function') throw new Error('HTMLElement is not supported by this browser'); var descriptor=Object.getOwnPropertyDescriptor(HTMLElement.prototype,'popover'); if(!descriptor || typeof descriptor.get!=='function') throw new Error('HTMLElement.popover is not supported by this browser'); var mode; try { mode=Reflect.apply(descriptor.get,target,[]); } catch(_) { throw new TypeError(message); } if(mode!=='auto' && mode!=='manual' && mode!=='hint') throw new TypeError(message); })(#1,#2)"
+
 extern dom-dialog-show(target : node) : ui ()
   js inline "(function(target){ if(typeof target.show !== 'function') throw new Error('HTMLDialogElement.show() is not supported by this browser'); target.show(); })(#1)"
 
@@ -238,15 +244,15 @@ extern dom-dialog-return-value(target : node) : ui string
 // A recognized reflected `popover` value distinguishes enabled elements from
 // arbitrary nodes. Do not infer state or simulate unsupported native methods.
 extern dom-popover-show(target : node) : ui ()
-  js inline "(function(target){ if(typeof target.showPopover !== 'function' || !('popover' in target)) throw new Error('Element.showPopover() is not supported by this browser'); var mode=target.popover; if(mode!=='auto' && mode!=='manual' && mode!=='hint') throw new TypeError('popover/show target must have a valid popover attribute'); target.showPopover(); })(#1)"
+  js inline "(function(target){ if(typeof target.showPopover !== 'function') throw new Error('Element.showPopover() is not supported by this browser'); target.showPopover(); })(#1)"
 
 extern dom-popover-hide(target : node) : ui ()
-  js inline "(function(target){ if(typeof target.hidePopover !== 'function' || !('popover' in target)) throw new Error('Element.hidePopover() is not supported by this browser'); var mode=target.popover; if(mode!=='auto' && mode!=='manual' && mode!=='hint') throw new TypeError('popover/hide target must have a valid popover attribute'); target.hidePopover(); })(#1)"
+  js inline "(function(target){ if(typeof target.hidePopover !== 'function') throw new Error('Element.hidePopover() is not supported by this browser'); target.hidePopover(); })(#1)"
 
 // Some older implementations return `undefined`; querying the selector after
 // the call gives Koka the authoritative post-toggle state in every case.
 extern dom-popover-toggle(target : node) : ui bool
-  js inline "(function(target){ if(typeof target.togglePopover !== 'function' || !('popover' in target)) throw new Error('Element.togglePopover() is not supported by this browser'); var mode=target.popover; if(mode!=='auto' && mode!=='manual' && mode!=='hint') throw new TypeError('popover/toggle target must have a valid popover attribute'); target.togglePopover(); if(typeof target.matches !== 'function') throw new Error('Element.matches() is not supported by this browser'); return target.matches(':popover-open'); })(#1)"
+  js inline "(function(target){ if(typeof target.togglePopover !== 'function') throw new Error('Element.togglePopover() is not supported by this browser'); target.togglePopover(); if(typeof target.matches !== 'function') throw new Error('Element.matches() is not supported by this browser'); return target.matches(':popover-open'); })(#1)"
 
 // The force overload arrived after the core Popover API. Compare state first so
 // older implementations which ignore that argument still provide a true setter.
@@ -255,10 +261,10 @@ extern dom-popover-toggle(target : node) : ui bool
 // `:modal` covers modal dialogs and the target's own fullscreen flag. Unlike
 // `:fullscreen`, it does not match a retargeted shadow host.
 extern dom-popover-set-open(target : node, open : bool) : ui ()
-  js inline "(function(target,open){ if(typeof target.togglePopover !== 'function' || !('popover' in target)) throw new Error('Element.togglePopover() is not supported by this browser'); var mode=target.popover; if(mode!=='auto' && mode!=='manual' && mode!=='hint') throw new TypeError('popover/set-open target must have a valid popover attribute'); if(typeof target.matches !== 'function') throw new Error('Element.matches() is not supported by this browser'); var current=target.matches(':popover-open'); var desired=!!open; if(current!==desired){ target.togglePopover(); return; } if(desired){ if(typeof target.showPopover !== 'function') throw new Error('Element.showPopover() is not supported by this browser'); target.showPopover(); return; } var doc=target.ownerDocument; var view=doc && doc.defaultView; var inactive=!target.isConnected || !view; if(!inactive){ try { if(view.document!==doc) inactive=true; while(!inactive && view.parent!==view){ var parent=view.parent; var listed=false; for(var i=0;i<parent.length;i++){ if(parent[i]===view){ listed=true; break; } } if(!listed){ inactive=true; break; } view=parent; } } catch(_) { inactive=true; } } if(inactive || target.matches(':modal')) target.togglePopover(); })(#1,#2)"
+  js inline "(function(target,open){ if(typeof target.togglePopover !== 'function') throw new Error('Element.togglePopover() is not supported by this browser'); if(typeof target.matches !== 'function') throw new Error('Element.matches() is not supported by this browser'); var current=target.matches(':popover-open'); var desired=!!open; if(current!==desired){ target.togglePopover(); return; } if(desired){ if(typeof target.showPopover !== 'function') throw new Error('Element.showPopover() is not supported by this browser'); target.showPopover(); return; } var doc=target.ownerDocument; var view=doc && doc.defaultView; var inactive=!target.isConnected || !view; if(!inactive){ try { if(view.document!==doc) inactive=true; while(!inactive && view.parent!==view){ var parent=view.parent; var listed=false; for(var i=0;i<parent.length;i++){ if(parent[i]===view){ listed=true; break; } } if(!listed){ inactive=true; break; } view=parent; } } catch(_) { inactive=true; } } if(inactive || target.matches(':modal')) target.togglePopover(); })(#1,#2)"
 
 extern dom-popover-is-open(target : node) : ui bool
-  js inline "(function(target){ if(!('popover' in target)) throw new Error('Popover API is not supported by this browser'); var mode=target.popover; if(mode!=='auto' && mode!=='manual' && mode!=='hint') throw new TypeError('popover/is-open target must have a valid popover attribute'); if(typeof target.matches !== 'function') throw new Error('Element.matches() is not supported by this browser'); return target.matches(':popover-open'); })(#1)"
+  js inline "(function(target){ if(typeof target.matches !== 'function') throw new Error('Element.matches() is not supported by this browser'); return target.matches(':popover-open'); })(#1)"
 
 extern dom-toggle-state(value : any) : ui int
   js inline "(function(event){ if(!event || typeof event!=='object') throw new TypeError('toggle/state requires a DOM event'); if(event.type!=='toggle' && event.type!=='beforetoggle') throw new TypeError('toggle/state requires a toggle or beforetoggle event'); var target=event.currentTarget; if(typeof Element !== 'function') throw new Error('Element is not supported by this browser'); var descriptor=Object.getOwnPropertyDescriptor(Element.prototype,'localName'); if(!descriptor || typeof descriptor.get!=='function') throw new Error('Element.localName is not supported by this browser'); try { Reflect.apply(descriptor.get,target,[]); } catch(_) { throw new TypeError('toggle/state event must have an Element currentTarget'); } if(event.newState==='open') return 1; if(event.newState==='closed') return 0; throw new TypeError('toggle/state event must have an open or closed newState'); })(#1)"
@@ -346,6 +352,8 @@ pub fun popover/show(target : node) : <ui,exn> ()
   dom-attempt{
     dom-require-element-target(target,
       "popover/show target must be an Element")
+    dom-require-popover-target(target,
+      "popover/show target must have a valid popover attribute")
     dom-popover-show(target)
   }
 
@@ -353,6 +361,8 @@ pub fun popover/hide(target : node) : <ui,exn> ()
   dom-attempt{
     dom-require-element-target(target,
       "popover/hide target must be an Element")
+    dom-require-popover-target(target,
+      "popover/hide target must have a valid popover attribute")
     dom-popover-hide(target)
   }
 
@@ -360,6 +370,8 @@ pub fun popover/toggle(target : node) : <ui,exn> bool
   dom-attempt{
     dom-require-element-target(target,
       "popover/toggle target must be an Element")
+    dom-require-popover-target(target,
+      "popover/toggle target must have a valid popover attribute")
     dom-popover-toggle(target)
   }
 
@@ -367,6 +379,8 @@ pub fun popover/set-open(target : node, open : bool) : <ui,exn> ()
   dom-attempt{
     dom-require-element-target(target,
       "popover/set-open target must be an Element")
+    dom-require-popover-target(target,
+      "popover/set-open target must have a valid popover attribute")
     dom-popover-set-open(target,open)
   }
 
@@ -374,6 +388,8 @@ pub fun popover/is-open(target : node) : <ui,exn> bool
   dom-attempt{
     dom-require-element-target(target,
       "popover/is-open target must be an Element")
+    dom-require-popover-target(target,
+      "popover/is-open target must have a valid popover attribute")
     dom-popover-is-open(target)
   }
 
