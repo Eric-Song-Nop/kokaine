@@ -44,11 +44,14 @@ writes settle, and nested HTML handlers collect only their own emitted children.
 
 An effect row reports operations that escape a function after local handling.
 It does not attest that an operation was never performed inside the function,
-and it does not say how reactivity propagates. In particular, Kokaine does not
-claim a runtime prohibition on locally handled "write-handler smuggling."
-Continuation-native propagation is instead guaranteed structurally: sources
-store captured read resumptions, queues store `Resume-work(trace)`, and no
-producer retains a full calculation action after bootstrap.
+and it does not say how reactivity propagates. Kokaine adds the missing runtime
+boundary explicitly: every pure derivation bootstrap, resumption, and targeted
+settlement enters a nested pure phase. Reactive writes, structural registration,
+disposal, and re-entry fail before mutation in that phase, even when a local
+wrapper handled their public effect row or targets another root. Separately,
+continuation-native propagation is guaranteed structurally: sources store
+captured read resumptions, queues store `Resume-work(trace)`, and no producer
+retains a full calculation action after bootstrap.
 
 The continuation capabilities are also not affine. A live read trace may be
 invalidated and resumed on many turns; after failure, the same capability
@@ -242,9 +245,10 @@ rollback path even though it does not return an `Error` value.
 ## Structural lifetime
 
 Every resumed suffix runs in a fresh draft frame. Work created during that
-dynamic extent—child effect scopes, pure derivation scopes, and cleanup actions
-that retire DOM listeners or region contents—is recorded in the frame's
-ownership ledger.
+dynamic extent—child effect scopes, pure derivation scopes, and opaque resource
+continuations for DOM listeners or region contents—is recorded in the frame's
+ownership ledger. A resource's cleanup action is inside the parked K's
+`finally`; the ledger stores only its abstract one-shot finalization capability.
 On successful publication the draft frame becomes the live structural extent
 of that trace node.
 
@@ -254,8 +258,10 @@ work to a half-retired branch. A stale frame rejects registration, and root
 disposal applies the same retirement transitively and idempotently.
 
 This ownership ledger is explicit, but it is not part of dependency
-propagation. Its purpose is to finalize raw continuations, remove DOM listeners
-and ranges, and retire callback-created work exactly once.
+propagation. Retirement first detaches the capability from its owner and then
+calls `rcontext.finalize`, which enters the parked resource K's `finally` to
+remove DOM listeners and ranges exactly once. No `Owned-cleanup` action closure
+is retained as an alternate destruction path.
 
 ## Batching
 
@@ -304,13 +310,15 @@ Managed element and trusted-HTML roots carry an internal same-root re-entry
 capability in a `WeakMap`. A later `mount` into such a node restores that exact
 generation before registering its own scope, so physical nesting under a
 dynamic region also becomes structural ownership. `mount-independent` opts out
-when an independently disposed nested root is intentional. Marker pairs are
-installed together, and range cleanup validates common parentage and endpoint
-reachability before removing any node; a damaged range therefore fails closed
-instead of scanning into foreign siblings. Cleanup snapshots the validated nodes
-and then detaches each from its current parent, so a custom element's synchronous
-`disconnectedCallback` cannot create a half-removed range merely by moving a
-later node elsewhere.
+when an independently disposed nested root is intentional. Retirement clears
+the live portal and leaves only a numeric same-root tombstone, so an externally
+retained stale node is rejected without retaining its root or generation frame.
+Marker pairs are installed together, and range cleanup validates common
+parentage and endpoint reachability before removing any node; a damaged range
+therefore fails closed instead of scanning into foreign siblings. Cleanup
+snapshots the validated nodes and then detaches each from its current parent, so
+a custom element's synchronous `disconnectedCallback` cannot create a
+half-removed range merely by moving a later node elsewhere.
 
 ## Host callbacks, event continuations, and re-entry
 

@@ -11,8 +11,12 @@ extern report-error(message : string) : ui ()
 extern publish-controls(toggle : () -> ui (),
                         dispose-outer : () -> ui (),
                         dispose-children : () -> ui (),
-                        read : () -> ui int) : ui ()
-  js inline "(globalThis.__kokaineOwnership = { toggle:#1, disposeOuter:#2, disposeChildren:#3, read:#4 })"
+                        read : () -> ui int,
+                        mount-stale : () -> ui string,
+                        mount-raw-failure : () -> ui string,
+                        mount-raw-stale : () -> ui string,
+                        mount-cross-root : () -> ui string) : ui ()
+  js inline "(globalThis.__kokaineOwnership = { toggle:#1, disposeOuter:#2, disposeChildren:#3, read:#4, mountStale:#5, mountRawFailure:#6, mountRawStale:#7, mountCrossRoot:#8 })"
 
 fun safe-update(root : root<<ui>>, action : () -> signal-write ()) : ui ()
   with catch fn(problem)
@@ -33,6 +37,37 @@ fun safe-unmount(dispose : disposer<<ui>>) : ui ()
     report-error("ownership unmount failed: " ++ problem.show)
   unmount(dispose)
 
+fun mount-stale-result(root : root<<ui>>, selector : string) : ui string
+  val attempt = error/try fn()
+    val dispose = mount(root,query(selector),view
+      span("unexpected",attrs=[id("stale-owner-mounted")])
+    )
+    ()
+  match attempt
+    Ok(_) -> "mounted"
+    Error(problem) -> problem.show
+
+fun mount-raw-failure-result(root : root<<ui>>) : ui string
+  val attempt = error/try fn()
+    val dispose = mount(root,query("#owner-raw-rollback-root"),view
+      trusted(unsafe-trusted-html(
+        "<div id=\"owner-raw-rollback-node\"></div>"))
+    )
+    ()
+  match attempt
+    Ok(_) -> "mounted"
+    Error(problem) -> problem.show
+
+fun mount-cross-root-result(root : root<<ui>>) : ui string
+  val attempt = error/try fn()
+    val dispose = mount(root,query("#owned-region-host"),view
+      span("cross",attrs=[id("cross-root-mounted")])
+    )
+    unmount(dispose)
+  match attempt
+    Ok(_) -> "mounted"
+    Error(problem) -> problem.show
+
 pub fun main()
   val (root,(first-branch,count)) = create-root fn(root)
     (signal(root,True),signal(root,0))
@@ -45,6 +80,8 @@ pub fun main()
         else
           p("replacement",attrs=[id("owned-region-replacement")])
       div("",attrs=[id("owned-top-host")])
+      div("",attrs=[id("owned-overwrite-host")])
+      trusted(unsafe-trusted-html("<div id=\"owned-raw-host\"></div>"))
 
   val outer-stop = mount(root,query("#ownership-root"),outer-view)
 
@@ -71,6 +108,8 @@ pub fun main()
       text { count.get.show }
   )
 
+  val (cross-root,_) = create-root fn(_) ()
+
   publish-controls(
     fn() safe-toggle(root,first-branch),
     fn() safe-unmount(outer-stop),
@@ -78,5 +117,9 @@ pub fun main()
       safe-unmount(region-stop)
       safe-unmount(top-stop)
     },
-    fn() safe-read(root,count)
+    fn() safe-read(root,count),
+    fn() mount-stale-result(root,"#owned-region-host"),
+    fn() mount-raw-failure-result(root),
+    fn() mount-stale-result(root,"#owner-raw-rollback-node"),
+    fn() mount-cross-root-result(cross-root)
   )

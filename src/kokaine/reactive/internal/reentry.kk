@@ -13,7 +13,8 @@ import std/core/undiv
 // Capture is non-resumptive: it records the structural capability already
 // established by the current exact-read continuation. The host callback may
 // be invoked repeatedly while that generation remains live.
-pub fun capture-reentry(root : root<e>) : reentry<e>
+pub fun capture-reentry(root : root<e>) : exn reentry<e>
+  check-not-pure-plane("reactive re-entry capture")
   val plane = root.root-effect-plane
   val current = load(plane.plane-current-frame)
   Reentry(root,load(plane.plane-current),current)
@@ -32,6 +33,7 @@ fun reentry-turn(root : root<e>,
 pub fun run-reentry(value : reentry<e>,
                     action : () -> <signal-read,signal-write,pure|e> a)
                    : <exn|e> a
+  check-not-pure-plane("reactive re-entry")
   match value
     Reentry(root,checkpoint,current) ->
       check-frame-registration(root,current)

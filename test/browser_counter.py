@@ -283,6 +283,36 @@ with serve_project() as origin:
                 const host = document.createElement('div');
                 host.id = 'ownership-root';
                 document.body.append(host);
+
+                const rollbackHost = document.createElement('div');
+                rollbackHost.id = 'owner-raw-rollback-root';
+                document.body.append(rollbackHost);
+                const nativeAppend = rollbackHost.appendChild;
+                const nativeInsert = rollbackHost.insertBefore;
+                rollbackHost.appendChild = function appendRawThenThrow(child) {
+                    const target = child.nodeType === Node.DOCUMENT_FRAGMENT_NODE
+                        ? child.querySelector('#owner-raw-rollback-node')
+                        : null;
+                    const result = nativeAppend.call(this, child);
+                    if (target) {
+                        globalThis.__kokaineOwnerRawRollbackNode = target;
+                        throw new Error('forced raw HTML append failure');
+                    }
+                    return result;
+                };
+                rollbackHost.insertBefore = function insertRawThenThrow(
+                    child, before
+                ) {
+                    const target = child.nodeType === Node.DOCUMENT_FRAGMENT_NODE
+                        ? child.querySelector('#owner-raw-rollback-node')
+                        : null;
+                    const result = nativeInsert.call(this, child, before);
+                    if (target) {
+                        globalThis.__kokaineOwnerRawRollbackNode = target;
+                        throw new Error('forced raw HTML append failure');
+                    }
+                    return result;
+                };
             }"""
         )
         desktop.evaluate(
@@ -290,14 +320,47 @@ with serve_project() as origin:
                 await import('/dist/test_dom_dash_ownership__main.mjs');
             }"""
         )
+        region_host = desktop.locator("#owned-region-host").element_handle()
         region_button = desktop.locator("#owned-region-button").element_handle()
         region_count = desktop.locator("#owned-region-count").element_handle()
         top_button = desktop.locator("#owned-top-button").element_handle()
         top_count = desktop.locator("#owned-top-count").element_handle()
+        raw_host = desktop.locator("#owned-raw-host").element_handle()
+        overwrite_host = desktop.locator("#owned-overwrite-host").element_handle()
         assert desktop.evaluate("__kokaineOwnership.read()") == 0
 
         desktop.evaluate("__kokaineOwnership.toggle()")
         expect(desktop.locator("#owned-region-replacement")).to_be_visible()
+        owner_tombstone = region_host.evaluate(
+            """node => {
+                const registry = globalThis[
+                    Symbol.for('kokaine.dom.owners')
+                ];
+                const entry = registry && registry.owners.get(node);
+                return {
+                    retired: !!(entry && entry.retired),
+                    portalCleared: !!entry && entry.portal === null,
+                    rootReleased: !!entry && !Object.hasOwn(entry, 'root'),
+                    ownerId: entry && typeof entry.ownerId
+                };
+            }"""
+        )
+        assert owner_tombstone == {
+            "retired": True,
+            "portalCleared": True,
+            "rootReleased": True,
+            "ownerId": "number",
+        }, f"retired DOM owner kept its root/portal: {owner_tombstone!r}"
+        region_host.evaluate("node => document.body.append(node)")
+        stale_mount = desktop.evaluate("__kokaineOwnership.mountStale()")
+        assert "retired Kokaine DOM generation" in stale_mount, (
+            "a retained stale host was adopted as an unmanaged mount: "
+            + stale_mount
+        )
+        assert desktop.evaluate("__kokaineOwnership.mountCrossRoot()") == "mounted", (
+            "a retired owner tombstone incorrectly blocked cross-root adoption"
+        )
+        region_host.evaluate("node => node.remove()")
         assert not region_button.evaluate("node => node.isConnected")
         region_button.evaluate(
             "node => node.dispatchEvent(new MouseEvent('click', {bubbles: true}))"
@@ -313,8 +376,102 @@ with serve_project() as origin:
             "a retired nested live binding reacted to a later source write"
         )
 
+        raw_failure = desktop.evaluate("__kokaineOwnership.mountRawFailure()")
+        assert "forced raw HTML append failure" in raw_failure, (
+            "the injected commit-then-throw raw append did not fail: "
+            + raw_failure
+        )
+        raw_rollback_state = desktop.evaluate(
+            """() => {
+                const node = __kokaineOwnerRawRollbackNode;
+                const registry = globalThis[
+                    Symbol.for('kokaine.dom.owners')
+                ];
+                const entry = registry && registry.owners.get(node);
+                return {
+                    connected: node.isConnected,
+                    retired: !!(entry && entry.retired),
+                    portalCleared: !!entry && entry.portal === null,
+                    rootReleased: !!entry && !Object.hasOwn(entry, 'root')
+                };
+            }"""
+        )
+        assert raw_rollback_state == {
+            "connected": False,
+            "retired": True,
+            "portalCleared": True,
+            "rootReleased": True,
+        }, f"raw append rollback lost its safe tombstone: {raw_rollback_state!r}"
+        desktop.evaluate(
+            "document.body.append(__kokaineOwnerRawRollbackNode)"
+        )
+        raw_stale_mount = desktop.evaluate("__kokaineOwnership.mountRawStale()")
+        assert "retired Kokaine DOM generation" in raw_stale_mount, (
+            "a commit-then-throw raw node was adopted after rollback: "
+            + raw_stale_mount
+        )
+        desktop.evaluate("__kokaineOwnerRawRollbackNode.remove()")
+
+        overwrite_snapshot = overwrite_host.evaluate(
+            """node => {
+                const registry = globalThis[
+                    Symbol.for('kokaine.dom.owners')
+                ];
+                const oldEntry = registry.owners.get(node);
+                const replacement = {
+                    ownerId: oldEntry.ownerId + 1000000,
+                    portal: { sentinel: true },
+                    retired: false
+                };
+                registry.owners.set(node, replacement);
+                globalThis.__kokaineOldOwnerEntry = oldEntry;
+                globalThis.__kokaineReplacementOwnerEntry = replacement;
+                return !!oldEntry.portal;
+            }"""
+        )
+        assert overwrite_snapshot, "owner overwrite fixture had no live portal"
+
         desktop.evaluate("__kokaineOwnership.disposeOuter()")
         expect(desktop.locator("#ownership-root")).to_be_empty()
+        raw_owner_state = raw_host.evaluate(
+            """node => {
+                const registry = globalThis[
+                    Symbol.for('kokaine.dom.owners')
+                ];
+                const entry = registry && registry.owners.get(node);
+                return {
+                    retired: !!(entry && entry.retired),
+                    portalCleared: !!entry && entry.portal === null,
+                    rootReleased: !!entry && !Object.hasOwn(entry, 'root')
+                };
+            }"""
+        )
+        assert raw_owner_state == {
+            "retired": True,
+            "portalCleared": True,
+            "rootReleased": True,
+        }, f"retired trusted HTML kept its root/portal: {raw_owner_state!r}"
+        overwritten_owner_state = overwrite_host.evaluate(
+            """node => {
+                const registry = globalThis[
+                    Symbol.for('kokaine.dom.owners')
+                ];
+                return {
+                    oldRetired: __kokaineOldOwnerEntry.retired,
+                    oldPortalCleared: __kokaineOldOwnerEntry.portal === null,
+                    replacementUnchanged:
+                        registry.owners.get(node) ===
+                        __kokaineReplacementOwnerEntry &&
+                        __kokaineReplacementOwnerEntry.portal.sentinel === true &&
+                        __kokaineReplacementOwnerEntry.retired === false
+                };
+            }"""
+        )
+        assert overwritten_owner_state == {
+            "oldRetired": True,
+            "oldPortalCleared": True,
+            "replacementUnchanged": True,
+        }, f"old owner cleanup corrupted an overwrite: {overwritten_owner_state!r}"
         assert not top_button.evaluate("node => node.isConnected")
         top_button.evaluate(
             "node => node.dispatchEvent(new MouseEvent('click', {bubbles: true}))"

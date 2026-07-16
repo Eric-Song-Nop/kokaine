@@ -9,6 +9,8 @@ KOKA_FLAGS := -j1 -i./src
 test: test-native
 
 test-native:
+	$(KOKA) $(KOKA_FLAGS) -e test/root-construction.kk
+	$(KOKA) $(KOKA_FLAGS) -e test/resource-finalization.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/trace-semantics.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/structural-scopes.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/targeted-settle.kk
@@ -20,7 +22,6 @@ test-native:
 	$(KOKA) $(KOKA_FLAGS) -e test/smoke.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/continuation.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/final-control-rollback.kk
-	$(KOKA) $(KOKA_FLAGS) -e test/root-construction.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/continuation-reentry.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/reactive.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/reactive-advanced.kk

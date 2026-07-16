@@ -56,10 +56,12 @@ from its untracked apply function; `untrack` is a nested override handler; and
 An effect row describes operations that remain unhandled at a function
 boundary. It does not prove that no operation was performed and handled inside
 that function. Consequently, an effect-typed API is valuable capability
-documentation and composition, but it is not by itself evidence of a
-continuation-native reactive runtime. Kokaine relies on runtime invariants and
-mutation tests for that stronger claim; it makes no separate "write-handler
-smuggling" guarantee.
+documentation and composition, but it is not by itself a sufficient purity
+boundary. Kokaine therefore enters a runtime-wide pure phase around derivation
+bootstrap, resumption, and targeted settlement. Framework writes, ownership
+registration, disposal, and re-entry are rejected in that phase even when a
+local public wrapper handled their outward effect row, including cross-root
+attempts.
 
 ## Current guarantees
 
@@ -96,6 +98,9 @@ smuggling" guarantee.
 - Pure derivations run on `plane<total>`; user effects run on `plane<e>`. A
   synchronous memo read can therefore settle only the required producer chain
   without erasing an ambient user effect row or draining unrelated work.
+- The pure plane is dynamically read-only. Hidden signal writes and structural
+  registration are rejected before mutating a source, queue, or owner ledger;
+  the phase is restored across exceptions and abortive final control.
 - `derive` is stateless: its captured read suffix calculates from current
   inputs. `memo(previous)` adds a separate state-entry continuation that
   injects the latest successfully committed output without subscribing to its
@@ -106,9 +111,11 @@ smuggling" guarantee.
 - Replacement generations are built as drafts. Failure or abortive final
   control retires unpublished continuations and structural children while the
   committed source value and pending retry K remain explicit.
-- Continuation frames own nested effects, derivations, and cleanup registrations
-  for DOM listeners and regions. Replacing a generation retires that complete
-  extent; root disposal is exhaustive and idempotent.
+- Continuation frames own nested effects, derivations, and opaque parked
+  resource continuations for DOM listeners and regions. Cleanup code lives in
+  each resource K's `finally`; generation retirement invokes
+  `rcontext.finalize` rather than calling an action closure stored in the owner
+  ledger. Root disposal follows the same exhaustive, idempotent path.
 - Nested batches delay settling while making newly committed source values
   immediately readable. Host re-entry is also one atomic batched turn.
 - Browser listeners capture a typed `reentry<e>` containing their registering
@@ -220,8 +227,8 @@ For deterministic snapshots or server output, replace the DOM import with
   previous successfully committed value.
 - `create-effect(root, track, apply)` tracks only `track`; reads performed by
   `apply` do not silently become dependencies.
-- `on-cleanup` attaches work to the current owner. Disposers returned by
-  `create-effect` remove the complete owned subtree.
+- `on-cleanup` parks a one-shot resource continuation under the current owner.
+  Disposers returned by `create-effect` finalize the complete owned subtree.
 - `capture-reentry` and `reenter` let a host callback re-enter the exact
   continuation generation that registered it. They restore Kokaine's reactive
   structure, not arbitrary lexical effect handlers. DOM listeners additionally
@@ -235,8 +242,10 @@ For deterministic snapshots or server output, replace the DOM import with
   managed element inherits the exact same-root DOM generation which created
   that element, while `mount-independent` is the explicit opt-out. Mount
   construction is transactional, so a descendant bootstrap failure cannot
-  leave caller-inaccessible DOM or listeners. `render` safely interprets the
-  same value to a string.
+  leave caller-inaccessible DOM or listeners. Retired managed nodes keep only a
+  numeric stale-owner tombstone: remount is rejected without retaining the old
+  root or generation portal. `render` safely interprets the same value to a
+  string.
 
 See [the architecture notes](docs/architecture.md) for the scheduler, handler,
 browser re-entry, and WebAssembly design.
@@ -260,6 +269,7 @@ src/kokaine/reactive/effects.kk            signal read/write effect operations
 src/kokaine/reactive/internal/model.kk     traces, planes, scopes, and capabilities
 src/kokaine/reactive/internal/capture.kk   exact read-suffix reification
 src/kokaine/reactive/internal/lifetime.kk  draft transactions and finalization
+src/kokaine/reactive/internal/resource.kk  opaque parked resource continuations
 src/kokaine/reactive/internal/scheduler.kk invalidation, queues, targeted settle
 src/kokaine/reactive/internal/handlers.kk  signal interpreters and dispatch
 src/kokaine/reactive/internal/reentry.kk   batched structural host re-entry
@@ -270,6 +280,7 @@ src/kokaine/html.kk                        handled backend-neutral view DSL
 src/kokaine/dom.kk                         jsweb renderer and event boundary
 src/kokaine/ssr.kk                         escaped deterministic string renderer
 test/trace-semantics.kk                    exact suffix and branching semantics
+test/resource-finalization.kk              resource-K parking and finalization
 test/structural-scopes.kk                  ownership and cleanup generations
 test/targeted-settle*.kk                   isolated and transitive memo settling
 test/execution-planes.kk                   pure/effect plane behavior

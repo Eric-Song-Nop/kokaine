@@ -23,8 +23,10 @@ decision therefore has two independent parts:
 An effect row records operations left unhandled by a function. A local handler
 can discharge an operation before it reaches that boundary, so the design does
 not claim that types alone detect a hidden or "smuggled" write handler. The
-continuation-native claim rests on stored runtime capabilities and behavioral
-mutation canaries, not merely on API effect rows.
+runtime closes that gap with a nested, runtime-wide pure phase around all
+derivation execution and targeted settlement. Framework mutation, ownership
+registration, disposal, and re-entry check that phase before changing state;
+behavioral canaries cover same-root and cross-root attempts.
 
 ## Why this decision was necessary
 
@@ -203,10 +205,12 @@ branch failures and deferrals.
 
 A trace is both an execution boundary and the parent of a structural
 generation. Each replacement resume runs in a draft frame that records child
-effects, derived scopes, and cleanup actions for listeners and region contents
-created by that suffix. Only a successful publication activates the draft.
-Replacement marks the previous frame subtree dead before running its
-finalizers, so cleanup cannot register new work into a half-retired generation.
+effects, derived scopes, and opaque parked resource continuations for listeners
+and region contents created by that suffix. The cleanup action lives in the
+resource K's `finally`; the owner ledger retains only its one-shot finalize
+capability. Only a successful publication activates the draft. Replacement
+marks the previous frame subtree dead before finalizing its resources, so
+cleanup cannot register new work into a half-retired generation.
 
 This explicit owner ledger is necessary even though the Observer graph was
 removed. It answers "what must be finalized with this continuation generation,"
@@ -289,7 +293,9 @@ remains closed.
 - Source invalidation is local, but source capture compaction and deep retirement
   still have costs that should be measured under large traces.
 - The structural ownership ledger remains explicit because raw continuations,
-  cleanup actions, DOM ranges, and listeners require deterministic retirement.
+  parked resource Ks, DOM ranges, and listeners require deterministic
+  retirement. Resource cleanup is entered by `rcontext.finalize`, not by an
+  owner-stored action closure.
 - JavaScript remains the event transport ABI, while the user action is entered
   only by resuming the guarded event continuation under structural re-entry.
 - The public callback row is closed over the capabilities reinstalled by this
@@ -317,6 +323,8 @@ The important tests are behavioral rather than source-string checks:
 - `entry-targeted-settle.kk` fails if state-entry routing is bypassed.
 - `final-control-rollback.kk` proves abandoned drafts retry through the exact K.
 - `continuation-reentry.kk` fails if re-entry is changed to plain root dispatch.
+- `resource-finalization.kk` proves resource capture is parked, one-shot, LIFO,
+  and cannot skip sibling finalizers after a failure.
 - `dom-lifecycle.kk` and `browser_counter.py` prove event-created work retires
   with the DOM generation that registered its listener.
 - `dom-event-continuation.kk` proves repeated and nested browser dispatches

@@ -29,6 +29,14 @@ abstract type raw-event
 abstract type dom-listener
   Dom-listener(value : any)
 
+abstract type dom-owner-registration
+  Dom-owner-registration(value : any)
+
+type owner-match<e::E>
+  Owner-none
+  Owner-live(owner-portal : reentry<e>)
+  Owner-retired
+
 // Transaction state must survive abortive control while mount bootstraps are
 // flushing. Keep this adapter-local and inaccessible to user code.
 fun transaction-cell(value : a) : ref<global,a>
@@ -85,15 +93,24 @@ extern element-node(value : element) : node
   js inline "#1"
 
 // Nodes created by a managed generation remember its structural re-entry
-// capability. A later mount into such a node can then become a child of the
-// exact region/mount generation even though the original `mount` call has
-// already returned. The root identity check prevents cross-root adoption.
+// capability. The registry gives each live root a weakly keyed numeric ID:
+// retired node tombstones can therefore reject stale same-root adoption without
+// retaining the root or its generation portal.
 extern dom-record-owner(value : node, root : root<e>, portal : reentry<e>)
-                       : ui ()
-  js inline "(function(){ var key=Symbol.for('kokaine.dom.owners'); var owners=globalThis[key]; if(!owners){ owners=new WeakMap(); globalThis[key]=owners; } owners.set(#1,{ root:#2, portal:#3 }); })()"
+                       : ui dom-owner-registration
+  js inline "(function(){ var key=Symbol.for('kokaine.dom.owners'); var registry=globalThis[key]; if(!registry || !registry.owners || !registry.roots){ registry={ owners:new WeakMap(), roots:new WeakMap(), nextId:1 }; globalThis[key]=registry; } var ownerId=registry.roots.get(#2); if(ownerId==null){ ownerId=registry.nextId++; registry.roots.set(#2,ownerId); } var entry={ ownerId:ownerId, portal:#3, retired:false }; registry.owners.set(#1,entry); return [{ node:#1, ownerId:ownerId, entry:entry }]; })()"
+
+extern dom-retire-owners(value : dom-owner-registration) : ui ()
+  js inline "(function(){ var registry=globalThis[Symbol.for('kokaine.dom.owners')]; var handles=#1 || []; for(var i=0;i<handles.length;i++){ var handle=handles[i]; var entry=handle.entry; if(entry){ entry.portal=null; entry.retired=true; } if(registry && registry.owners && handle.node){ var current=registry.owners.get(handle.node); if(current===entry && current.ownerId===handle.ownerId){ registry.owners.set(handle.node,entry); } } handle.node=null; handle.entry=null; } })()"
 
 extern dom-find-owner(value : node, root : root<e>) : ui any
-  js inline "(function(){ var owners=globalThis[Symbol.for('kokaine.dom.owners')]; if(!owners) return null; var current=#1; while(current){ var entry=owners.get(current); if(entry && entry.root===#2) return entry.portal; current=current.parentNode || current.host || null; } return null; })()"
+  js inline "(function(){ var registry=globalThis[Symbol.for('kokaine.dom.owners')]; if(!registry || !registry.owners || !registry.roots) return { state:0 }; var ownerId=registry.roots.get(#2); if(ownerId==null) return { state:0 }; var current=#1; while(current){ var entry=registry.owners.get(current); if(entry && entry.ownerId===ownerId){ if(entry.retired || !entry.portal) return { state:2 }; return { state:1, portal:entry.portal }; } current=current.parentNode || current.host || null; } return { state:0 }; })()"
+
+extern dom-owner-state(value : any) : int
+  js inline "Number((#1).state)"
+
+extern dom-owner-portal(value : any) : any
+  js inline "(#1).portal"
 
 extern dom-append(parent : node, child : node) : ui ()
   js inline "(#1).appendChild(#2)"
@@ -140,13 +157,15 @@ extern dom-remove-range(first : node, last : node) : ui ()
   js inline "(function(){ var rangeFirst=#1; var rangeLast=#2; var firstParent=rangeFirst && rangeFirst.parentNode; var lastParent=rangeLast && rangeLast.parentNode; if(!firstParent && !lastParent) return; if(!firstParent || firstParent!==lastParent || rangeFirst===rangeLast){ throw new Error('invalid Kokaine DOM range: endpoints do not share a parent'); } var nodes=[]; var n=rangeFirst; while(n && n!==rangeLast){ nodes.push(n); n=n.nextSibling; } if(n!==rangeLast){ throw new Error('invalid Kokaine DOM range: closing marker is not reachable after opening marker'); } nodes.push(rangeLast); var passes=Math.max(2,nodes.length+2); while(passes-- > 0){ var attached=false; for(var i=0;i<nodes.length;i++){ var parent=nodes[i].parentNode; if(parent){ attached=true; Node.prototype.removeChild.call(parent,nodes[i]); } } if(!attached) return; } for(var j=0;j<nodes.length;j++){ if(nodes[j].parentNode){ throw new Error('invalid Kokaine DOM cleanup: a removed node was synchronously reinserted'); } } })()"
 
 extern dom-append-html(parent : node, content : string,
-                       root : root<e>, portal : reentry<e>) : ui ()
-  js inline "(function(){ var template=document.createElement('template'); template.innerHTML=#2; var owners=globalThis[Symbol.for('kokaine.dom.owners')]; if(!owners){ owners=new WeakMap(); globalThis[Symbol.for('kokaine.dom.owners')]=owners; } Array.from(template.content.childNodes).forEach(function(child){ owners.set(child,{ root:#3, portal:#4 }); }); (#1).appendChild(template.content); })()"
+                       root : root<e>, portal : reentry<e>)
+                      : ui dom-owner-registration
+  js inline "(function(){ var template=document.createElement('template'); template.innerHTML=#2; var key=Symbol.for('kokaine.dom.owners'); var registry=globalThis[key]; if(!registry || !registry.owners || !registry.roots){ registry={ owners:new WeakMap(), roots:new WeakMap(), nextId:1 }; globalThis[key]=registry; } var ownerId=registry.roots.get(#3); if(ownerId==null){ ownerId=registry.nextId++; registry.roots.set(#3,ownerId); } var handles=[]; Array.from(template.content.childNodes).forEach(function(child){ var entry={ ownerId:ownerId, portal:#4, retired:false }; registry.owners.set(child,entry); handles.push({ node:child, ownerId:ownerId, entry:entry }); }); try { (#1).appendChild(template.content); return handles; } catch(error) { handles.forEach(function(handle){ var entry=handle.entry; if(entry){ entry.portal=null; entry.retired=true; } if(registry.owners.get(handle.node)===entry) registry.owners.set(handle.node,entry); handle.node=null; handle.entry=null; }); throw error; } })()"
 
 extern dom-insert-html-before(parent : node, before : node,
                               content : string, root : root<e>,
-                              portal : reentry<e>) : ui ()
-  js inline "(function(){ var template=document.createElement('template'); template.innerHTML=#3; var owners=globalThis[Symbol.for('kokaine.dom.owners')]; if(!owners){ owners=new WeakMap(); globalThis[Symbol.for('kokaine.dom.owners')]=owners; } Array.from(template.content.childNodes).forEach(function(child){ owners.set(child,{ root:#4, portal:#5 }); }); (#1).insertBefore(template.content,#2); })()"
+                              portal : reentry<e>)
+                             : ui dom-owner-registration
+  js inline "(function(){ var template=document.createElement('template'); template.innerHTML=#3; var key=Symbol.for('kokaine.dom.owners'); var registry=globalThis[key]; if(!registry || !registry.owners || !registry.roots){ registry={ owners:new WeakMap(), roots:new WeakMap(), nextId:1 }; globalThis[key]=registry; } var ownerId=registry.roots.get(#4); if(ownerId==null){ ownerId=registry.nextId++; registry.roots.set(#4,ownerId); } var handles=[]; Array.from(template.content.childNodes).forEach(function(child){ var entry={ ownerId:ownerId, portal:#5, retired:false }; registry.owners.set(child,entry); handles.push({ node:child, ownerId:ownerId, entry:entry }); }); try { (#1).insertBefore(template.content,#2); return handles; } catch(error) { handles.forEach(function(handle){ var entry=handle.entry; if(entry){ entry.portal=null; entry.retired=true; } if(registry.owners.get(handle.node)===entry) registry.owners.set(handle.node,entry); handle.node=null; handle.entry=null; }); throw error; } })()"
 
 extern dom-listen(value : element, name : string,
                   action : raw-event -> <ui|e> ()) : ui dom-listener
@@ -240,24 +259,49 @@ fun insert-marker-pair(parent : node, before : maybe<node>,
     Just(anchor) ->
       dom-attempt{ dom-insert-marker-pair-before(parent,first,last,anchor) }
 
-fun record-owner(root : root<e>, value : node) : <ui,exn> ()
-  val portal = capture-reentry(root)
-  dom-attempt{ dom-record-owner(value,root,portal) }
+fun retire-owner-registration(value : dom-owner-registration) : <ui,exn> ()
+  dom-attempt{ dom-retire-owners(value) }
 
-fun find-owner(root : root<e>, value : node) : <ui,exn> maybe<reentry<e>>
+fun register-owner-cleanup(root : root<<ui|e>>,
+                           value : dom-owner-registration)
+                          : <signal-write,pure,ui|e> ()
+  val committed = transaction-cell(False)
+  finally(
+    fn() {
+      if transaction-load(committed) then ()
+      else retire-owner-registration(value)
+    },
+    fn()
+      on-cleanup(root,fn()
+        reactive-ui-exn{ retire-owner-registration(value) }
+      )
+      transaction-store(committed,True)
+  )
+
+fun record-owner(root : root<<ui|e>>, value : node)
+                : <signal-write,pure,ui|e> ()
+  val portal = capture-reentry(root)
+  val registered = dom-attempt{ dom-record-owner(value,root,portal) }
+  register-owner-cleanup(root,registered)
+
+fun find-owner(root : root<e>, value : node) : <ui,exn> owner-match<e>
   val found = dom-attempt{ dom-find-owner(value,root) }
-  if found.any-is-null then Nothing else Just(any-reentry(found))
+  match dom-owner-state(found)
+    0 -> Owner-none
+    1 -> Owner-live(any-reentry(dom-owner-portal(found)))
+    _ -> Owner-retired
 
-fun insert-html(root : root<e>, parent : node, before : maybe<node>,
+fun insert-html(root : root<<ui|e>>, parent : node, before : maybe<node>,
                 content : string)
-                : <ui,exn> ()
+                : <signal-write,pure,ui|e> ()
   val portal = capture-reentry(root)
-  match before
+  val registered = match before
     Nothing -> dom-attempt{ dom-append-html(parent,content,root,portal) }
     Just(anchor) ->
       dom-attempt{
         dom-insert-html-before(parent,anchor,content,root,portal)
       }
+  register-owner-cleanup(root,registered)
 
 fun set-attribute(value : element, name : string,
                   content : maybe<string>) : <ui,exn> ()
@@ -474,8 +518,10 @@ fun mount-transaction(root : root<<ui|e>>, parent : node, tree : view<e>,
         if !inherit-owner then
           update(root){ batch(root,register) }
         else match find-owner(root,parent)
-          Nothing -> update(root){ batch(root,register) }
-          Just(portal) -> reenter(portal,fn()
+          Owner-none -> update(root){ batch(root,register) }
+          Owner-retired ->
+            throw("cannot mount into a retired Kokaine DOM generation")
+          Owner-live(portal) -> reenter(portal,fn()
             // Re-entry exposes the full reactive turn row even though mount
             // registration itself performs no reads.
             mask<signal-read>{ register() }

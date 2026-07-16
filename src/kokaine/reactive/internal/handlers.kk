@@ -17,6 +17,7 @@ pub fun interpret-write(root : root<e>,
                    : <div,exn|e> a
   with handler
     fun write-source(source,value)
+      check-not-pure-plane("signal write")
       check-root(root,source.source-root)
       val previous = load(source.source-cell)
       val equal = source.source-equals
@@ -27,6 +28,7 @@ pub fun interpret-write(root : root<e>,
         flush(root)
 
     fun modify-source(source,update)
+      check-not-pure-plane("signal modify")
       check-root(root,source.source-root)
       val previous = load(source.source-cell)
       val value = update(previous)
@@ -39,10 +41,12 @@ pub fun interpret-write(root : root<e>,
 
     fun enter-batch(key)
       mask<div>
+        check-not-pure-plane("reactive batch")
         check-root(root,key)
         store(root.root-batch-depth,load(root.root-batch-depth) + 1)
 
     fun leave-batch(key)
+      check-not-pure-plane("reactive batch")
       check-root(root,key)
       val depth = load(root.root-batch-depth)
       if depth <= 0 then mask<div>{ throw("unbalanced reactive batch") } else
@@ -50,6 +54,7 @@ pub fun interpret-write(root : root<e>,
         flush(root)
 
     fun request-flush(key)
+      check-not-pure-plane("reactive flush")
       check-root(root,key)
       flush(root)
 
