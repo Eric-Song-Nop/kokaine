@@ -149,6 +149,18 @@ pub type scope-state
   Scope-branch-dead
   Scope-dead
 
+// A structural owner is a stable registration frame deliberately separated
+// from effect generations.  Keyed DOM rows use it to retain their reactive
+// subtree while the collection observer's own continuation generation is
+// replaced.  The checkpoint is reinstated together with the frame so children
+// never inherit a transient reconciliation gate.
+pub type structural-owner<e::E>
+  Structural-owner(
+    structural-root       : root-key,
+    structural-checkpoint : maybe<continuation-gate>,
+    structural-frame      : frame<e>
+  )
+
 pub type owned<e::E>
   Owned-end
   Owned-fork(owned-scope : continuation-scope<e>, owned-next : owned<e>)
@@ -159,6 +171,10 @@ pub type owned<e::E>
   Owned-resource(
     owned-resource : resource-k<e>,
     resource-next  : owned<e>
+  )
+  Owned-structural(
+    owned-structural : structural-owner<e>,
+    owned-next       : owned<e>
   )
 
 pub type continuation-scope<e::E>

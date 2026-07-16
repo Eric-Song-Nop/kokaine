@@ -24,10 +24,13 @@ memos, and re-entry capabilities. Its implementation is split by responsibility:
 | `internal/model.kk` | sources, traces, planes, scopes, frames, and work tickets |
 | `internal/capture.kk` | raw-handler reification of synchronous read suffixes |
 | `internal/lifetime.kk` | draft transactions, ownership, and finalization |
+| `internal/structural.kk` | persistent owners for retained keyed rows |
 | `internal/scheduler.kk` | invalidation, queueing, resumption, and targeted settle |
 | `internal/handlers.kk` | write interpretation, sampled reads, and dispatch |
 | `internal/reentry.kk` | continuation-derived host re-entry |
 | `kokaine/internal/event-runtime.kk` | guarded multi-shot browser-event continuation |
+| `kokaine/internal/key-index.kk` | persistent balanced key lookup shared by renderers |
+| `kokaine/control.kk` | memo branches and list/vector keyed control flow |
 | `internal/runtime.kk` | roots and high-level signal, memo, and effect operations |
 | `internal/bridge.kk` | unambiguous calls from the opaque facade |
 
@@ -263,6 +266,15 @@ calls `rcontext.finalize`, which enters the parked resource K's `finally` to
 remove DOM listeners and ranges exactly once. No `Owned-cleanup` action closure
 is retained as an alternate destruction path.
 
+Keyed rows require a lifetime that outlasts any one collection-trace
+generation. An explicit structural owner captures a root, continuation gate,
+and frame, links that frame to the current structural parent, and can later
+restore the captured frame around row construction or host re-entry. Each
+keyed region owns one persistent reconciliation owner; every business key owns
+a child row owner. Reordering retains that child owner, deletion retires it
+exactly once, and retiring the enclosing conditional region or root reaches the
+same row subtree transitively.
+
 ## Batching
 
 A batch delays settling while writes still update source cells immediately.
@@ -296,8 +308,8 @@ Consequently, updates resume the precise continuation of an affected live
 binding, not a retained component-render closure and not the earlier HTML
 builder. Replacing a region retires its old generation and owned reactive
 children, clears the contents between its persistent marker pair, and then
-mounts the new view. It is whole-range replacement, not keyed or virtual-DOM
-reconciliation.
+mounts the new view. An ordinary `Region` is whole-range replacement; keyed
+reconciliation is represented separately by `Keyed-region`.
 
 Mount construction is a commit boundary. The outer mount disposer is retained
 before its bootstrap batch may flush; if any descendant bootstrap fails or
@@ -319,6 +331,46 @@ therefore fails closed instead of scanning into foreign siblings. Cleanup
 snapshots the validated nodes and then detaches each from its current parent, so
 a custom element's synchronous `disconnectedCallback` cannot create a
 half-removed range merely by moving a later node elsewhere.
+
+## Native control flow and keyed reconciliation
+
+`kokaine/control` builds two kinds of backend-neutral structure. `branch`
+accepts a memo and emits an ordinary dynamic region; `when` is its boolean
+specialization with an optional empty fallback. `for` has list and vector
+overloads. Each packages a tracked collection reader, native sequential walker,
+business-key function, comparator, item equality, and row builder into an
+existential `keyed-plan`. The plan deliberately exposes no indexing operation,
+so the list path never detours through a vector.
+
+The row builder receives read-only item and index accessors. DOM interpretation
+backs those accessors with row-owned sources. A retained key therefore keeps
+its marker range, actual DOM objects, listeners, continuation frame, local form
+state, and nested reactive/resource ownership; only unequal item values and
+changed indexes publish. A deleted key retires the row owner after a successful
+commit.
+
+Reconciliation uses a persistent AVL key index. One sequential source walk
+constructs the desired table and update list with `O(log n)` lookup/insertion,
+for `O(n log n)` reconciliation plus DOM moves. Inserting a duplicate key fails
+the draft. DOM ordering is then a three-part transaction:
+
+1. build draft rows and validate keys/equality without publishing the new table
+   or any retained-row source updates;
+2. move complete validated marker ranges into desired order; and
+3. publish changed item/index sources and the new table, then retire stale rows.
+
+On a move failure, reconciliation restores the previous row order and disposes
+draft owners before rethrowing. The range primitive validates common parentage,
+endpoint reachability, and an out-of-range insertion target before extraction;
+it moves existing nodes rather than cloning them and restores focus/selection
+when the host move disturbs it. If host interference makes restoration itself
+impossible, the adapter raises a combined rollback error instead of publishing
+the new table or retained-row sources.
+
+SSR eliminates the same keyed plan as one snapshot. It performs the native
+sequential walk, checks keys through the balanced index, constructs constant
+item/index accessors for each row, and renders in source order. It does not
+retain row state, but it applies the same duplicate-key rule as the browser.
 
 ## Host callbacks, event continuations, and re-entry
 
@@ -376,10 +428,16 @@ innermost boundary and translate them to Koka `exn`, as the DOM adapter does.
 - `stateful-entry-gates.kk`, `entry-targeted-settle.kk`, and
   `entry-structural.kk` check state-entry routing and ownership.
 - `structural-scopes.kk` checks replacement cleanup and stale-frame rejection.
+- `structural-owners.kk` checks persistent row ownership, parent/root retirement,
+  and stale-owner rejection.
+- `control-flow.kk` checks conditional/list/vector snapshots and duplicate-key
+  parity; `key-index.kk` checks balanced lookup under adversarial insertion.
 - `final-control-rollback.kk` checks abandoned drafts and exact-K retry.
 - `continuation-reentry.kk` checks callback-created ownership and stale re-entry.
 - `dom-lifecycle.kk` plus `browser_counter.py` check listener, region, and mount
   retirement in a real browser.
+- `dom-keyed.kk` exercises retained node identity, item/index publication,
+  reorder/insert/delete, focus, event re-entry, cleanup, and rollback.
 - `dom-event-continuation.kk` checks repeated multi-shot delivery, synchronous
   nested dispatch and `preventDefault`, plus rejection after retirement.
 - `root-construction.kk`, `dom-mount-rollback.kk`, `dom-ownership.kk`, and
@@ -388,6 +446,7 @@ innermost boundary and translate them to Koka `exn`, as the DOM adapter does.
 - `event_effect_boundary.py` checks that a lexical-only application effect
   cannot enter a retained callback.
 
-The browser renderer currently replaces all content between a region's
-persistent markers and does not provide keyed reconciliation, hydration,
-suspense, or preservation of arbitrary outer handler stacks.
+The browser renderer still replaces all content between an ordinary region's
+persistent markers. `Keyed-region` adds explicit business-key reconciliation;
+hydration, suspense, and preservation of arbitrary outer handler stacks remain
+outside the current scope.

@@ -23,6 +23,13 @@ abstract value type memo<a>
 abstract value type reentry<e::E>
   Public-reentry(internal-reentry : kokaine/reactive/internal/model/reentry<e>)
 
+// Reserved for framework backends.  Application code receives only row
+// accessors; it cannot construct or inspect this structural capability.
+abstract value type structural-owner<e::E>
+  Public-structural-owner(
+    internal-structural-owner : kokaine/reactive/internal/model/structural-owner<e>
+  )
+
 pub alias disposer<e> = kokaine/reactive/internal/model/disposer<e>
 
 fun unwrap-root(value : root<e>) : kokaine/reactive/internal/model/root<e>
@@ -43,6 +50,11 @@ fun unwrap-reentry(value : reentry<e>)
   match value
     Public-reentry(inner) -> inner
 
+fun unwrap-structural-owner(value : structural-owner<e>)
+                         : kokaine/reactive/internal/model/structural-owner<e>
+  match value
+    Public-structural-owner(inner) -> inner
+
 pub fun dispatch(root : root<e>,
                  action : () -> <signal-read,signal-write,pure|e> a)
                 : <exn|e> a
@@ -57,7 +69,7 @@ pub fun create-root(action : (root<e>) -> <signal-write,pure|e> a)
 pub fun root/dispose(root : root<e>) : <exn|e> ()
   runtime-dispose-root(root.unwrap-root)
 
-pub fun root/is-disposed(root : root<e>) : bool
+pub noinline fun root/is-disposed(root : root<e>) : bool
   runtime-root-is-disposed(root.unwrap-root)
 
 pub fun update(root : root<e>, action : () -> <signal-write,pure|e> a)
@@ -153,3 +165,29 @@ pub fun reenter(value : reentry<e>,
                 action : () -> <signal-read,signal-write,pure|e> a)
                : <exn|e> a
   runtime-run-reentry(value.unwrap-reentry,action)
+
+// Koka has no package-private exports.  These qualified names are the narrow
+// backend bridge used by `kokaine/dom`; they are intentionally absent from the
+// documented application API.
+pub fun internal/open-structural-owner(root : root<e>)
+                                      : exn structural-owner<e>
+  Public-structural-owner(
+    runtime-open-structural-owner(root.unwrap-root))
+
+pub fun internal/with-structural-owner(
+          root : root<r>, owner : structural-owner<r>,
+          action : () -> <div,exn|e> a)
+         : <div,exn|e> a
+  runtime-with-structural-owner(
+    root.unwrap-root,owner.unwrap-structural-owner,action)
+
+pub fun internal/dispose-structural-owner(owner : structural-owner<e>)
+                                         : <exn|e> ()
+  runtime-dispose-structural-owner(owner.unwrap-structural-owner)
+
+pub fun internal/compact-structural-owner(owner : structural-owner<e>) : ()
+  runtime-compact-structural-owner(owner.unwrap-structural-owner)
+
+pub fun internal/bootstrap-structural-owner(owner : structural-owner<e>)
+                                           : <div,exn|e> ()
+  runtime-bootstrap-structural-owner(owner.unwrap-structural-owner)

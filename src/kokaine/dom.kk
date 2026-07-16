@@ -10,6 +10,7 @@ module kokaine/dom
 import kokaine/reactive
 import kokaine/html
 import kokaine/internal/event-runtime
+import kokaine/internal/key-index
 import std/core/unsafe
 
 
@@ -36,6 +37,38 @@ type owner-match<e::E>
   Owner-none
   Owner-live(owner-portal : reentry<e>)
   Owner-retired
+
+// A keyed row has a lifetime which is deliberately independent from the
+// collection observer generation.  `current-item` and `current-index` are the
+// last committed values; their always-publishing sources are written only
+// after the reconciler has already performed every fallible comparison and DOM
+// move in the draft transaction.
+type keyed-row<e::E,a,k>
+  Keyed-row(
+    row-key           : k,
+    row-current-item  : ref<global,a>,
+    row-current-index : ref<global,int>,
+    row-item-source   : signal<a>,
+    row-index-source  : signal<int>,
+    row-owner         : structural-owner<<ui|e>>,
+    row-first         : node,
+    row-last          : node
+  )
+
+type keyed-update<e::E,a,k>
+  Keyed-update(
+    update-row           : keyed-row<e,a,k>,
+    update-item          : a,
+    update-index         : int,
+    update-item-changed  : bool,
+    update-index-changed : bool
+  )
+
+type keyed-table<e::E,a,k>
+  Keyed-table(
+    table-index : key-index<k,keyed-row<e,a,k>>,
+    table-order : list<keyed-row<e,a,k>>
+  )
 
 // Transaction state must survive abortive control while mount bootstraps are
 // flushing. Keep this adapter-local and inaccessible to user code.
@@ -127,6 +160,29 @@ extern dom-append-marker-pair(parent : node, first : node, last : node) : ui ()
 extern dom-insert-marker-pair-before(parent : node, first : node, last : node,
                                      before : node) : ui ()
   js inline "(function(){ var rangeFirst=#2; var rangeLast=#3; var fragment=document.createDocumentFragment(); fragment.appendChild(rangeFirst); fragment.appendChild(rangeLast); try { (#1).insertBefore(fragment,#4); } catch(error) { try { if(rangeFirst.parentNode) Node.prototype.removeChild.call(rangeFirst.parentNode,rangeFirst); } catch(_) {} try { if(rangeLast.parentNode) Node.prototype.removeChild.call(rangeLast.parentNode,rangeLast); } catch(_) {} throw error; } })()"
+
+extern dom-same-node(left : node, right : node) : bool
+  js inline "(#1 === #2)"
+
+// Validate a complete managed range before exposing either cursor.  The DOM
+// can be mutated by application JavaScript, custom-element callbacks, or test
+// fault injection, so reconciliation never trusts retained marker handles.
+extern dom-range-first(parent : node, first : node, last : node) : ui node
+  js inline "(function(rangeParent,rangeFirst,rangeLast){ if(!rangeParent || !rangeFirst || !rangeLast || rangeFirst===rangeLast || rangeFirst.parentNode!==rangeParent || rangeLast.parentNode!==rangeParent){ throw new Error('invalid Kokaine DOM range: endpoints do not share the expected parent'); } var n=rangeFirst; while(n && n!==rangeLast) n=n.nextSibling; if(n!==rangeLast){ throw new Error('invalid Kokaine DOM range: closing marker is not reachable after opening marker'); } return rangeFirst.nextSibling; })(#1,#2,#3)"
+
+extern dom-range-next(parent : node, first : node, last : node) : ui node
+  js inline "(function(rangeParent,rangeFirst,rangeLast){ if(!rangeParent || !rangeFirst || !rangeLast || rangeFirst===rangeLast || rangeFirst.parentNode!==rangeParent || rangeLast.parentNode!==rangeParent){ throw new Error('invalid Kokaine DOM range: endpoints do not share the expected parent'); } var n=rangeFirst; while(n && n!==rangeLast) n=n.nextSibling; if(n!==rangeLast){ throw new Error('invalid Kokaine DOM range: closing marker is not reachable after opening marker'); } var next=rangeLast.nextSibling; if(!next){ throw new Error('invalid Kokaine keyed DOM range: row has no following boundary'); } return next; })(#1,#2,#3)"
+
+// Move one inclusive row range as a single host insertion.  Validation is
+// deliberately complete before extraction.  If extraction, insertion, focus
+// restoration, or a commit-then-throw host shim fails, every snapshotted node
+// is pulled back before the original successor with native prototype methods.
+// A focused descendant is restored together with its text selection; ordinary
+// DOM object identity, listeners, form values, and owner registrations are
+// retained because no node is cloned.
+extern dom-move-range-before(parent : node, first : node, last : node,
+                             before : node) : ui ()
+  js inline "(function(rangeParent,rangeFirst,rangeLast,target){ if(!rangeParent || !rangeFirst || !rangeLast || !target || rangeFirst===rangeLast || rangeFirst.parentNode!==rangeParent || rangeLast.parentNode!==rangeParent || target.parentNode!==rangeParent){ throw new Error('invalid Kokaine DOM move: range and target must share the expected parent'); } var nodes=[]; var n=rangeFirst; while(n){ nodes.push(n); if(n===rangeLast) break; n=n.nextSibling; } if(n!==rangeLast){ throw new Error('invalid Kokaine DOM move: closing marker is not reachable after opening marker'); } if(nodes.indexOf(target)>=0){ throw new Error('invalid Kokaine DOM move: target lies inside the moved range'); } if(rangeLast.nextSibling===target) return; var originalNext=rangeLast.nextSibling; var active=document.activeElement; var ownsFocus=!!active && nodes.some(function(node){ return node===active || (node.nodeType===1 && node.contains(active)); }); var selection=null; if(ownsFocus && typeof active.selectionStart==='number' && typeof active.selectionEnd==='number'){ selection=[active.selectionStart,active.selectionEnd,active.selectionDirection]; } function restoreFocus(){ if(!ownsFocus || document.activeElement===active || !active.isConnected) return; active.focus({ preventScroll:true }); if(selection && typeof active.setSelectionRange==='function') active.setSelectionRange(selection[0],selection[1],selection[2]); } function gather(values){ var fragment=document.createDocumentFragment(); for(var i=0;i<values.length;i++) Node.prototype.appendChild.call(fragment,values[i]); return fragment; } function verify(anchor){ for(var i=0;i<nodes.length;i++){ if(nodes[i].parentNode!==rangeParent) throw new Error('a moved node escaped its keyed range'); if(i>0 && nodes[i-1].nextSibling!==nodes[i]) throw new Error('the keyed range became non-contiguous'); } if(nodes[nodes.length-1].nextSibling!==anchor) throw new Error('the keyed range was not placed at its requested boundary'); } function rollback(){ var anchor=originalNext && originalNext.parentNode===rangeParent ? originalNext : null; Node.prototype.insertBefore.call(rangeParent,gather(nodes),anchor); restoreFocus(); verify(anchor); if(originalNext && anchor!==originalNext) throw new Error('the original keyed range successor was detached'); } try { rangeParent.insertBefore(gather(nodes),target); restoreFocus(); verify(target); } catch(error) { try { rollback(); } catch(rollbackError) { throw new Error(String(error && error.message != null ? error.message : error) + '; keyed DOM move rollback failed: ' + String(rollbackError && rollbackError.message != null ? rollbackError.message : rollbackError)); } throw error; } })(#1,#2,#3,#4)"
 
 extern dom-set-text(value : node, content : string) : ui ()
   js inline "((#1).data = #2)"
@@ -247,6 +303,22 @@ fun reactive-ui-exn-open(action : () -> <ui,exn|e> a)
                          : <signal-write,pure,ui|e> a
   mask<signal-write>{ mask<div>{ action() } }
 
+// Row renderers are sampled once while their live closures retain the item and
+// index accessors.  Widen the handled sample back to the DOM apply row so Koka
+// does not prematurely close a surrounding structural-owner action at `<ui>`.
+fun reactive-sample(root : root<<ui|e>>,
+                    action : () -> <signal-read,pure> a)
+                   : <signal-write,pure,ui|e> a
+  mask<signal-write>{ mask<div>{ sample(root,action) } }
+
+fun reactive-write-ui(action : () -> signal-write a)
+                     : <signal-write,pure,ui|e> a
+  mask<ui>{ mask<exn>{ mask<div>{ action() } } }
+
+fun reactive-structural(action : () -> <div,exn,ui|e> a)
+                       : <signal-write,pure,ui|e> a
+  mask<signal-write>{ action() }
+
 fun insert(parent : node, before : maybe<node>, child : node) : <ui,exn> ()
   match before
     Nothing -> dom-attempt{ dom-append(parent,child) }
@@ -258,6 +330,16 @@ fun insert-marker-pair(parent : node, before : maybe<node>,
     Nothing -> dom-attempt{ dom-append-marker-pair(parent,first,last) }
     Just(anchor) ->
       dom-attempt{ dom-insert-marker-pair-before(parent,first,last,anchor) }
+
+fun range-first(parent : node, first : node, last : node) : <ui,exn> node
+  dom-attempt{ dom-range-first(parent,first,last) }
+
+fun range-next(parent : node, first : node, last : node) : <ui,exn> node
+  dom-attempt{ dom-range-next(parent,first,last) }
+
+fun move-range-before(parent : node, first : node, last : node,
+                      before : node) : <ui,exn> ()
+  dom-attempt{ dom-move-range-before(parent,first,last,before) }
 
 fun retire-owner-registration(value : dom-owner-registration) : <ui,exn> ()
   dom-attempt{ dom-retire-owners(value) }
@@ -437,6 +519,340 @@ fun mount-attribute(root : root<<ui|e>>, target : element,
         install-event-listener(root,target,name,action)
       }
 
+// --------------------------------------------------------------------------
+// Incremental keyed regions
+// --------------------------------------------------------------------------
+
+fun dispose-keyed-rows<a,k,e::E>(rows : list<keyed-row<e,a,k>>)
+                                  : <ui,exn|e> ()
+  match rows
+    Nil -> ()
+    Cons(row,rest) ->
+      // A throwing cleanup cannot prevent later draft/stale rows from retiring.
+      finally(
+        fn() dispose-keyed-rows(rest),
+        fn() internal/dispose-structural-owner(row.row-owner)
+      )
+
+fun rollback-keyed-order<a,k,e::E>(parent : node, last : node,
+                         rows : list<keyed-row<e,a,k>>) : <ui,exn> ()
+  match rows
+    Nil -> ()
+    Cons(row,rest) ->
+      // Moving each prior row to the closing boundary in its former order
+      // reconstructs that complete order regardless of the partial draft order.
+      finally(
+        fn() rollback-keyed-order(parent,last,rest),
+        fn() move-range-before(parent,row.row-first,row.row-last,last)
+      )
+
+fun validate-keyed-order<a,k,e::E>(parent : node, last : node, cursor : node,
+                         rows : list<keyed-row<e,a,k>>) : <ui,exn> ()
+  match rows
+    Nil ->
+      if dom-same-node(cursor,last) then ()
+      else throw("invalid Kokaine keyed DOM: unmanaged nodes remain in the region")
+    Cons(row,rest) ->
+      if !dom-same-node(cursor,row.row-first)
+      then throw("invalid Kokaine keyed DOM: retained row ranges are out of order")
+      else
+        val next = range-next(parent,row.row-first,row.row-last)
+        validate-keyed-order(parent,last,next,rest)
+
+fun place-keyed-updates<a,k,e::E>(parent : node, cursor : node,
+                        updates : list<keyed-update<e,a,k>>)
+                       : <ui,exn> node
+  match updates
+    Nil -> cursor
+    Cons(update,rest) ->
+      val row = update.update-row
+      val next = range-next(parent,row.row-first,row.row-last)
+      if dom-same-node(cursor,row.row-first)
+      then place-keyed-updates(parent,next,rest)
+      else
+        move-range-before(parent,row.row-first,row.row-last,cursor)
+        place-keyed-updates(parent,cursor,rest)
+
+fun collect-stale-rows<a,k,e::E>(rows : list<keyed-row<e,a,k>>,
+                       next : key-index<k,keyed-row<e,a,k>>,
+                       compare : (k,k) -> order)
+                      : list<keyed-row<e,a,k>>
+  match rows
+    Nil -> []
+    Cons(row,rest) ->
+      match next.find(row.row-key,compare)
+        Just(_) -> collect-stale-rows(rest,next,compare)
+        Nothing -> Cons(row,collect-stale-rows(rest,next,compare))
+
+fun commit-keyed-update<a,k,e::E>(update : keyed-update<e,a,k>)
+                                  : signal-write ()
+  val row = update.update-row
+  if update.update-item-changed then
+    row.row-item-source.set(update.update-item)
+    transaction-store(row.row-current-item,update.update-item)
+  else ()
+  if update.update-index-changed then
+    row.row-index-source.set(update.update-index)
+    transaction-store(row.row-current-index,update.update-index)
+  else ()
+
+fun create-keyed-row<a,k,e::E>(
+      root : root<<ui|e>>, parent : node, last : node,
+      identity : k, item : a, index : int,
+      children : (item : accessor<a>, index : accessor<int>)
+                 -> <html<e>,signal-read> ())
+    : <signal-write,ui,pure|e> keyed-row<e,a,k>
+  val owner = internal/open-structural-owner(root)
+  val committed = transaction-cell(False)
+  val installed = transaction-cell(False)
+  val range-owned = transaction-cell(False)
+  finally(
+    fn() {
+      if transaction-load(committed) then ()
+      else reactive-ui-exn-open{
+        internal/dispose-structural-owner(owner)
+      }
+    },
+    fn()
+      internal/with-structural-owner(root,owner,fn()
+        val first = dom-attempt{ dom-create-comment("kokaine:for-row") }
+        val row-last = dom-attempt{ dom-create-comment("/kokaine:for-row") }
+        finally(
+          fn() {
+            // Cover the tiny interval between publishing the pair and parking
+            // its owner cleanup.  The pair insertion primitive compensates a
+            // commit-then-throw before `installed` can become true.
+            if transaction-load(installed) &&
+               !transaction-load(range-owned)
+            then reactive-ui-exn{
+              dom-attempt{ dom-remove-range(first,row-last) }
+            }
+            else ()
+          },
+          fn()
+            insert-marker-pair(parent,Just(last),first,row-last)
+            transaction-store(installed,True)
+            on-cleanup(root,fn()
+              reactive-ui-exn{
+                dom-attempt{ dom-remove-range(first,row-last) }
+              }
+            )
+            transaction-store(range-owned,True)
+
+            // The reconciler performs item equality before committing.  These
+            // sources therefore use a total always-publish equality and are
+            // written only for values already known to have changed.
+            val item-source = signal-always(root,item)
+            val index-source = signal-always(root,index)
+            val tree = reactive-sample(root,fn()
+              view fn()
+                children(fn() item-source.get,fn() index-source.get)
+            )
+            mount-view(root,parent,Just(row-last),tree)
+            // Live descendants created during an already-running collection
+            // turn would otherwise wait for a later scheduler pass.  Bootstrap
+            // them inside the draft so a failing initial property/listener
+            // installation aborts the entire row transaction.
+            reactive-structural{
+              internal/bootstrap-structural-owner(owner)
+            }
+            val row = Keyed-row(
+              identity,transaction-cell(item),transaction-cell(index),
+              item-source,index-source,owner,first,row-last)
+            transaction-store(committed,True)
+            row
+        )
+      )
+  )
+
+fun reconcile-keyed<a,k,e::E>(
+      root : root<<ui|e>>, parent : node, first : node, last : node,
+      owner : structural-owner<<ui|e>>,
+      table : ref<global,keyed-table<e,a,k>>, items : list<a>,
+      key : (a) -> k,
+      compare : (k,k) -> order, item-equals : (a,a) -> bool,
+      children : (item : accessor<a>, index : accessor<int>)
+                 -> <html<e>,signal-read> ())
+    : <signal-write,ui,pure|e> ()
+  match transaction-load(table)
+    Keyed-table(old-index,old-order) ->
+      val next-index = transaction-cell(
+        kokaine/internal/key-index/empty())
+      val updates = transaction-cell([])
+      val drafts = transaction-cell([])
+      val position = transaction-cell(0)
+      val move-phase = transaction-cell(False)
+      val committed = transaction-cell(False)
+      finally(
+        // Row disposal leaves inert structural registrations in this owner's
+        // ledger.  Compact once after either stale retirement or draft
+        // rollback so retained memory remains proportional to live rows.
+        fn() internal/compact-structural-owner(owner),
+        fn()
+        finally(
+          fn() {
+            if transaction-load(committed) then () else
+              // Draft owner cleanup and order restoration are both exhaustive.
+              // `finally` makes a failure in either path unable to skip the other.
+              reactive-ui-exn-open{
+                finally(
+                  fn() {
+                    if transaction-load(move-phase)
+                    then rollback-keyed-order(parent,last,old-order)
+                    else ()
+                  },
+                  fn() dispose-keyed-rows(transaction-load(drafts))
+                )
+              }
+          },
+          fn()
+          val old-cursor = range-first(parent,first,last)
+          validate-keyed-order(parent,last,old-cursor,old-order)
+
+          items.foreach fn(item)
+            val identity = key(item)
+            match transaction-load(next-index).find(identity,compare)
+              Just(_) -> throw("duplicate key in keyed For")
+              Nothing -> ()
+
+            val current-index = transaction-load(position)
+            val (row,item-changed) =
+              match old-index.find(identity,compare)
+                Just(existing) ->
+                  (existing,
+                   !item-equals(transaction-load(existing.row-current-item),
+                                item))
+                Nothing ->
+                  val draft = create-keyed-row(
+                    root,parent,last,identity,item,current-index,children)
+                  // Publish the draft handle before another fallible comparison
+                  // so final-control and comparator failure can always reach it.
+                  transaction-store(drafts,
+                    Cons(draft,transaction-load(drafts)))
+                  (draft,False)
+
+            match transaction-load(next-index).insert(
+                    identity,row,compare)
+              Duplicate(_) -> throw("duplicate key in keyed For")
+              Inserted(next) -> transaction-store(next-index,next)
+
+            val update = Keyed-update(
+              row,item,current-index,item-changed,
+              transaction-load(row.row-current-index) != current-index)
+            transaction-store(updates,
+              Cons(update,transaction-load(updates)))
+            transaction-store(position,current-index + 1)
+
+          val final-updates = transaction-load(updates).reverse
+          val final-index = transaction-load(next-index)
+          // Comparator failures while finding stale rows still happen before
+          // the first move, so the old DOM and sources remain untouched.
+          val stale = collect-stale-rows(old-order,final-index,compare)
+          transaction-store(move-phase,True)
+          val cursor = range-first(parent,first,last)
+          val _ = place-keyed-updates(parent,cursor,final-updates)
+
+          // A synchronous host callback can retire the parent while a fallback
+          // fragment move is in progress.  Re-entering validates the persistent
+          // frame once more before any source/table publication.
+          reactive-structural{
+            internal/with-structural-owner(root,owner,fn() ())
+          }
+
+          // Reconciliation is itself an effect publication inside the active
+          // scheduler flush, so source notifications queue work but cannot
+          // settle between these writes.  No nested public batch is necessary.
+          reactive-write-ui{
+            final-updates.foreach(fn(update) commit-keyed-update(update))
+          }
+          val final-order = final-updates.map(fn(update) update.update-row)
+          transaction-store(table,Keyed-table(final-index,final-order))
+          transaction-store(committed,True)
+
+          // Removed rows retire only after the new table and all row sources are
+          // coherent.  Cleanup writes merely queue a later collection turn.
+          reactive-ui-exn-open{
+            dispose-keyed-rows(stale)
+          }
+        )
+      )
+
+fun mount-keyed-fields<s,a,k,e::E>(
+      root : root<<ui|e>>, parent : node, before : maybe<node>,
+      read : () -> signal-read s,
+      walk : forall<p::E> (s,(a) -> p ()) -> p (), key : (a) -> k,
+      compare : (k,k) -> order, item-equals : (a,a) -> bool,
+      children : (item : accessor<a>, index : accessor<int>)
+                 -> <html<e>,signal-read> ())
+    : <signal-write,ui,pure|e> ()
+  val owner = internal/open-structural-owner(root)
+  val committed = transaction-cell(False)
+  val installed = transaction-cell(False)
+  val range-owned = transaction-cell(False)
+  finally(
+    fn() {
+      if transaction-load(committed) then ()
+      else reactive-ui-exn-open{
+        internal/dispose-structural-owner(owner)
+      }
+    },
+    fn()
+      internal/with-structural-owner(root,owner,fn()
+        val first = dom-attempt{ dom-create-comment("kokaine:for") }
+        val last = dom-attempt{ dom-create-comment("/kokaine:for") }
+        finally(
+          fn() {
+            if transaction-load(installed) &&
+               !transaction-load(range-owned)
+            then reactive-ui-exn{
+              dom-attempt{ dom-remove-range(first,last) }
+            }
+            else ()
+          },
+          fn()
+            insert-marker-pair(parent,before,first,last)
+            transaction-store(installed,True)
+            on-cleanup(root,fn()
+              reactive-ui-exn{
+                dom-attempt{ dom-remove-range(first,last) }
+              }
+            )
+            transaction-store(range-owned,True)
+            val table = transaction-cell(Keyed-table(
+              kokaine/internal/key-index/empty(),[]))
+            val dispose = create-effect(
+              root,fn() tracked(read),fn(snapshot)
+                internal/with-structural-owner(root,owner,fn()
+                  // Keep the higher-ranked source walker local to the packed
+                  // collection closure.  Koka 3.2.3 mis-specializes it if it
+                  // crosses another generic function boundary.  This still
+                  // walks the tracked snapshot exactly once.
+                  val items = transaction-cell([])
+                  walk(snapshot) fn(item)
+                    transaction-store(items,
+                      Cons(item,transaction-load(items)))
+                  reconcile-keyed(
+                    root,parent,first,last,owner,table,
+                    transaction-load(items).reverse,
+                    key,compare,item-equals,children)
+                )
+            )
+            transaction-store(committed,True)
+            ()
+        )
+      )
+  )
+
+fun mount-keyed-plan<e::E>(root : root<<ui|e>>, parent : node,
+                     before : maybe<node>, plan : keyed-plan<e>)
+                    : <signal-write,ui,pure|e> ()
+  match plan
+    Keyed-plan(spec) ->
+      match spec
+        Keyed-spec(read,walk,key,compare,item-equals,children) ->
+          mount-keyed-fields(
+            root,parent,before,read,walk,key,compare,item-equals,children)
+
 fun mount-view(root : root<<ui|e>>, parent : node,
                before : maybe<node>, tree : view<e>)
               : <signal-write,ui,pure|e> ()
@@ -478,6 +894,7 @@ fun mount-view(root : root<<ui|e>>, parent : node,
         mount-view(root,parent,Just(last),next)
       )
       ()
+    Keyed-region(plan) -> mount-keyed-plan(root,parent,before,plan)
     Raw-html(content) ->
       insert-html(root,parent,before,trusted-content(content))
 

@@ -131,6 +131,11 @@ attempts.
 - Text and attributes are escaped in SSR. Inline `on*`, `srcdoc`, and
   markup-writing DOM properties are rejected; raw markup requires the explicit
   `unsafe-trusted-html` boundary. Native DOM exceptions become Koka `exn`.
+- `kokaine/control` provides memo-driven `branch`/`when` and keyed `for`
+  overloads for lists and vectors. Browser reconciliation retains row DOM,
+  listeners, local state, and row-owned reactive work by business key; SSR
+  walks the same backend-neutral plan as one deterministic snapshot. Duplicate
+  keys fail before publication in both backends.
 
 ## Quick start
 
@@ -153,6 +158,17 @@ make serve
 
 Then open <http://127.0.0.1:4173/examples/counter/>. `make build-counter`
 emits the `jsweb` ES modules into the ignored `dist/` directory.
+
+The keyed reconciliation bench makes DOM identity directly observable:
+
+```sh
+make serve-keyed
+```
+
+Open <http://127.0.0.1:4173/examples/keyed/>, type into a row's uncontrolled
+note field, then reverse, prepend, revise, or delete rows. The changing index
+readout follows position while the input value and focus stay with the stable
+business key.
 
 The lab is intentionally a multi-file application rather than one oversized
 demo component:
@@ -220,6 +236,46 @@ effect targeting its node, while mount and dynamic scopes own DOM ranges.
 For deterministic snapshots or server output, replace the DOM import with
 `kokaine/ssr` and call `render(root,page)`.
 
+## Responsive control flow
+
+`kokaine/control` adds conditional and keyed structure without making the HTML
+builder or either renderer collection-specific:
+
+```koka
+import kokaine/control
+
+val ready = derive(root,False,fn() todos.get.length > 0)
+
+when(ready,
+  fn()
+    ul
+      for(fn() todos.get,fn(todo) todo/id(todo)) fn(item,index)
+        li
+          text { (index() + 1).show ++ ". " ++ todo/title(item()) }
+  ,fallback=fn() p("Nothing to do."))
+```
+
+`branch(value, children)` rebuilds its conditional region when the supplied
+memo publishes. `when(condition, children, fallback)` is its boolean form; the
+fallback defaults to an empty view. Both accept tracked reads inside the child
+builder and use ordinary dynamic-region lifetime.
+
+The list and vector `for` overloads accept a tracked collection reader, a
+business-key function, and a row builder. They walk their native collection in
+sequence—the list overload is never converted to a vector. The row builder
+receives read-only `item()` and `index()` accessors. When a retained key receives
+a changed item or moves, those accessors publish the new value while the row's
+DOM nodes, listener continuations, owned derivations/effects/resources, and
+uncontrolled form state remain intact. Custom key comparison and item equality
+functions are optional; equality suppresses needless item publications.
+
+Keys must be unique within a snapshot. A duplicate throws and leaves the last
+committed browser order and row sources unchanged; SSR rejects the same input.
+The shared persistent balanced-tree index makes lookup and insertion
+`O(log n)`, so a complete reconciliation is `O(n log n)` plus the required DOM
+range moves. DOM interpretation is incremental and transactional; SSR renders
+the current sequence once in source order.
+
 ## API shape
 
 - `create-root`, `root.dispose`, `update`, `sample`, and `dispatch` delimit
@@ -243,6 +299,9 @@ For deterministic snapshots or server output, replace the DOM import with
   typed listeners form the HTML DSL. A listener callback has the closed
   `<signal-read,signal-write,ui,pure>` capability row; unsupported application
   effects are rejected instead of escaping into a later host turn.
+- `branch` and `when` consume memos and delimit conditional regions. List and
+  vector `for` consume a sequential collection reader plus stable-key function;
+  row item/index accessors are reactive but read-only.
 - `mount`/`unmount` interpret a view into validated DOM ranges. A mount into a
   managed element inherits the exact same-root DOM generation which created
   that element, while `mount-independent` is the explicit opt-out. Mount
@@ -263,6 +322,8 @@ runtime with source-local indexes of actual continuation capabilities.
 
 ```text
 examples/counter.kk                         thin browser entry point
+examples/keyed.kk                           keyed control-flow specimen bench
+examples/keyed/                             interactive keyed example shell and styles
 examples/report.kk                          self-hosted report entry point
 examples/report/*.kk                        report model and executable islands
 examples/counter/model.kk                   sources and derived state
@@ -283,6 +344,8 @@ src/kokaine/reactive/internal/reentry.kk   batched structural host re-entry
 src/kokaine/reactive/internal/runtime.kk   roots and high-level reactive values
 src/kokaine/reactive/internal/bridge.kk    names used by the public facade
 src/kokaine/internal/event-runtime.kk      guarded multi-shot browser event K
+src/kokaine/internal/key-index.kk          persistent balanced keyed-row index
+src/kokaine/control.kk                     branch, when, and list/vector keyed For
 src/kokaine/html.kk                        handled backend-neutral view DSL
 src/kokaine/dom.kk                         jsweb renderer and event boundary
 src/kokaine/ssr.kk                         escaped deterministic string renderer
@@ -296,6 +359,9 @@ test/entry-targeted-settle.kk              entry routing and recovery canaries
 test/final-control-rollback.kk              abandoned generation rollback
 test/continuation-reentry.kk               callback-created ownership and staleness
 test/reactive*.kk                          compatibility, advanced, and stress suites
+test/control-flow.kk                       branch/when/For snapshots and duplicate keys
+test/key-index.kk                          balanced-index correctness and growth bound
+test/structural-owners.kk                  persistent keyed-row ownership lifetime
 test/html.kk                               builder, escaping, and validation checks
 test/dom-lifecycle.kk                      listener, region, and re-entry fixture
 test/dom-event-continuation.kk              nested synchronous event-K fixture
@@ -310,10 +376,11 @@ support/wasmweb-proof/                     retained-callback Emscripten ABI proo
 
 ## Scope
 
-Kokaine does not yet provide hydration, keyed list reconciliation, suspense,
-or a complete WASM DOM renderer. The current `region` primitive intentionally
-replaces the contents between persistent marker nodes; it is the correct
-building block for conditional structure, not an optimized list diff.
+Kokaine does not yet provide hydration, suspense, or a complete WASM DOM
+renderer. Ordinary `region` remains a whole-range replacement primitive for
+general conditional structure. Keyed list/vector reconciliation is available
+only through `for` from `kokaine/control`, where an explicit business key makes
+row identity and lifetime unambiguous.
 
 Browser delivery still begins at an ordinary host ABI callback, but that
 callback no longer calls the user action directly. Listener installation parks

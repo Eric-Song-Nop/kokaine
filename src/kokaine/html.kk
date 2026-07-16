@@ -65,6 +65,7 @@ pub type view<e::E>
           children : list<view<e>>)
   Fragment(children : list<view<e>>)
   Region(read : () -> signal-read view<e>)
+  Keyed-region(plan : keyed-plan<e>)
   Raw-html(content : trusted-html)
 
 // The name makes the trust boundary visible at every call site. Browser and
@@ -119,6 +120,40 @@ pub fun is-valid-event-name(value : string) : bool
 pub effect html<e::E>
   fun emit(node : view<e>) : ()
 
+// A For plan existentially packages both the source collection type and the
+// application item/key types.  Backends receive only a sequential walker; the
+// DOM reconciler therefore cannot accidentally depend on random access and the
+// list entry point never detours through a vector.
+pub alias accessor<a> = () -> signal-read a
+
+pub div type keyed-spec<e::E,s,a,k>
+  Keyed-spec(
+    keyed-read        : () -> signal-read s,
+    keyed-walk        : forall<p::E> (s,(a) -> p ()) -> p (),
+    keyed-key         : (a) -> k,
+    keyed-compare     : (k,k) -> order,
+    keyed-item-equals : (a,a) -> bool,
+    keyed-children    : (item : accessor<a>, index : accessor<int>)
+                        -> <html<e>,signal-read> ()
+  )
+
+// Koka constructor quantifiers give this plan a direct existential package.
+// Keeping the source/item/key types behind the constructor avoids exposing a
+// random-access assumption to renderers and also avoids retaining a rank-2
+// consumer closure in long-lived reactive work.
+pub div type keyed-plan<e::E>
+  Keyed-plan<s,a,k>(plan-spec : keyed-spec<e,s,a,k>)
+
+pub fun internal/pack-keyed-plan(
+          read : () -> signal-read s,
+          walk : forall<p::E> (s,(a) -> p ()) -> p (),
+          key : (a) -> k,
+          cmp : (k,k) -> order,
+          item-equals : (a,a) -> bool,
+          children : (item : accessor<a>, index : accessor<int>)
+                     -> <html<e>,signal-read> ()) : keyed-plan<e>
+  Keyed-plan(Keyed-spec(read,walk,key,cmp,item-equals,children))
+
 fun collect(action : () -> <html<e>|p> ()) : p list<view<e>>
   var nodes := []
   with handler
@@ -171,6 +206,11 @@ fun emit-region(read : () -> signal-read view<e>) : html<e> ()
 // Dynamic structure reads signals and rebuilds just this region.
 pub fun dynamic(children : () -> <html<e>,signal-read> ()) : html<e> ()
   emit-region(fn() view(children))
+
+// Constructor bridge used by `kokaine/control`; the packed plan keeps browser
+// values out of the backend-neutral HTML layer.
+pub fun keyed(plan : keyed-plan<e>) : html<e> ()
+  emit(Keyed-region(plan))
 
 pub fun trusted(content : trusted-html) : html<e> ()
   emit(Raw-html(content))

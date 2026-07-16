@@ -84,6 +84,20 @@ pub fun collect-scope(current : continuation-scope<e>)
       store(current.scope-prefix,Owned-end)
       collect-retirement(body) ++ collect-owned(structural-prefix)
 
+pub fun collect-structural-owner(current : structural-owner<e>)
+                            : <div> list<retirement<e>>
+  val frame = current.structural-frame
+  match load(frame.frame-token)
+    Scope-dead -> []
+    _ ->
+      // Sever and mark the complete structural capability before any parked
+      // resource continuation is finalized.  An explicit second dispose, or
+      // later retirement through the parent ledger, is therefore a no-op.
+      store(frame.frame-token,Scope-dead)
+      val nested = load(frame.frame-owned)
+      store(frame.frame-owned,Owned-end)
+      collect-owned(nested)
+
 pub fun widen-pure-retirement(current : retirement<total>) : retirement<e>
   match current
     Retirement(action) -> Retirement(fn() action())
@@ -101,6 +115,8 @@ pub fun collect-owned-forks(values : owned<e>)
       collect-scope(current).map(widen-pure-retirement) ++
       collect-owned-forks(next)
     Owned-resource(_,next) -> collect-owned-forks(next)
+    Owned-structural(current,next) ->
+      collect-structural-owner(current) ++ collect-owned-forks(next)
 
 // Keep capability capture outside the tail-recursive list builder. In
 // particular, jsweb must not close over the builder's mutable loop cursor.
@@ -113,6 +129,7 @@ pub fun collect-owned-resources(values : owned<e>)
     Owned-end -> []
     Owned-fork(_,next) -> collect-owned-resources(next)
     Owned-derive-fork(_,next) -> collect-owned-resources(next)
+    Owned-structural(_,next) -> collect-owned-resources(next)
     Owned-resource(resource,next) ->
       Cons(resource-retirement(resource),
            collect-owned-resources(next))
@@ -140,6 +157,11 @@ pub fun retire-owned(values : owned<e>) : <div,exn|e> ()
 
 pub fun retire-scope(current : continuation-scope<e>) : <div,exn|e> ()
   val finalizers = pretend-no-div{ collect-scope(current) }
+  run-finalizers(finalizers)
+
+pub fun retire-structural-owner(current : structural-owner<e>)
+                           : <div,exn|e> ()
+  val finalizers = pretend-no-div{ collect-structural-owner(current) }
   run-finalizers(finalizers)
 
 pub fun retire-drafts(values : list<trace<e>>) : <div,exn|e> ()

@@ -4,7 +4,7 @@ UV ?= uv
 
 KOKA_FLAGS := -j1 -i./src
 
-.PHONY: test test-native test-all test-wasm test-report build-counter build-report build-browser-fixtures browser-install test-browser serve serve-report
+.PHONY: test test-native test-all test-wasm test-report build-counter build-keyed build-report build-browser-fixtures browser-install test-browser serve serve-keyed serve-report
 
 test: test-native
 
@@ -13,6 +13,8 @@ test-native:
 	$(KOKA) $(KOKA_FLAGS) -e test/resource-finalization.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/trace-semantics.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/structural-scopes.kk
+	$(KOKA) $(KOKA_FLAGS) -e test/structural-owners.kk
+	$(KOKA) $(KOKA_FLAGS) -e test/key-index.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/targeted-settle.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/targeted-settle-canary.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/execution-planes.kk
@@ -27,12 +29,18 @@ test-native:
 	$(KOKA) $(KOKA_FLAGS) -e test/reactive-advanced.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/reactive-stress.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/html.kk
+	$(KOKA) $(KOKA_FLAGS) -e test/control-flow.kk
 	python3 test/event_effect_boundary.py $(KOKA)
 
 build-counter:
 	mkdir -p dist
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
 		--buildname=counter examples/counter.kk
+
+build-keyed:
+	mkdir -p dist
+	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
+		--buildname=keyed examples/keyed.kk
 
 build-report:
 	mkdir -p dist
@@ -52,12 +60,15 @@ build-browser-fixtures: build-counter
 		--buildname=dom-ownership test/dom-ownership.kk
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
 		--buildname=dom-event-continuation test/dom-event-continuation.kk
+	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
+		--buildname=dom-keyed test/dom-keyed.kk
 
 browser-install:
 	$(UV) run --with playwright python -m playwright install chromium
 
 test-browser: build-browser-fixtures
 	$(UV) run --with playwright python test/browser_counter.py
+	$(UV) run --with playwright python test/browser_keyed.py
 
 test-wasm:
 	./support/wasmweb-proof/run.sh test
@@ -69,6 +80,10 @@ test-report: build-report
 test-all: test-native test-browser test-wasm test-report
 
 serve: build-counter
+	python3 -m http.server 4173 --bind 127.0.0.1
+
+serve-keyed: build-keyed
+	@echo "Kokaine keyed example: http://127.0.0.1:4173/examples/keyed/"
 	python3 -m http.server 4173 --bind 127.0.0.1
 
 serve-report: build-report build-counter
