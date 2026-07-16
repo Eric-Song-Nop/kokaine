@@ -96,7 +96,7 @@ fun as-host-action(action : () -> <div,ui> ()) : (() -> ui ())
 // before it can invoke the parked suffix.
 extern runtime-host-action(
   action : () -> <div,ui|e> ()) : (() -> ui ())
-  js inline "#1"
+  inline "#1"
 
 fun resume-generation(root : root<<ui|e>>, family : async-family<e>,
                       action : () -> <async,signal-read,signal-write,pure,ui|e> ())
