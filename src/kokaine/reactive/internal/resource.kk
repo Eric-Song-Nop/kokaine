@@ -61,3 +61,14 @@ pub fun finalize-resource(resource : resource-k<e>) : <div,exn|e> ()
         // therefore cannot finalize this one-shot continuation twice.
         store(live,False)
         finalize()
+
+// Explicit unregistration consumes the capability without entering its
+// parked finalizer. This is intentionally distinct from retirement: callers
+// can prove that a detached cleanup can never be observed again.
+pub fun discard-resource(resource : resource-k<e>) : bool
+  match resource
+    Resource-done -> False
+    Resource-parked(live,_) ->
+      if !load(live) then False else
+        store(live,False)
+        True

@@ -102,7 +102,7 @@ pub fun activate-trace-loop(plane : plane<e>, current : trace<e>) : <div> ()
         Capture-draft ->
           val current-frame = load(current-frame-slot)
           store(state,Capture-live)
-          store(current-frame.frame-token,Scope-live)
+          store(current-frame.frame-lifetime.lifetime-token,Scope-live)
           activate-trace-loop(plane,load(child))
           if stale() then
             match entry
@@ -116,7 +116,7 @@ pub fun activate-trace-loop(plane : plane<e>, current : trace<e>) : <div> ()
         Capture-draft ->
           val current-frame = load(current-frame-slot)
           store(state,Capture-live)
-          store(current-frame.frame-token,Scope-live)
+          store(current-frame.frame-lifetime.lifetime-token,Scope-live)
           activate-trace-loop(plane,load(child))
         _ -> ()
 
@@ -130,7 +130,7 @@ pub fun activate-trace(plane : plane<e>, current : trace<e>) : ()
 pub fun work-runnable(current : work<e>) : bool
   match current
     Bootstrap-work(scope,_) ->
-      match load(scope.scope-state)
+      match load(scope.scope-lifetime.lifetime-token)
         Scope-starting ->
           load(scope.scope-bootstrap-slot).is-just &&
           !pending-ancestor(scope.scope-parent)
@@ -143,7 +143,7 @@ pub fun work-runnable(current : work<e>) : bool
 pub fun work-stale(current : work<e>) : bool
   match current
     Bootstrap-work(scope,_) ->
-      match load(scope.scope-state)
+      match load(scope.scope-lifetime.lifetime-token)
         Scope-starting -> load(scope.scope-bootstrap-slot).is-nothing
         _ -> True
     Resume-work(capture) ->
@@ -176,11 +176,9 @@ pub fun queue-work(plane : plane<e>, current : work<e>) : ()
   store(plane.plane-queue,queued)
 
 pub fun abandon-draft-frame(current : frame<e>, drafts : list<trace<e>>) : e ()
-  store(current.frame-token,Scope-branch-dead)
-  val structural = load(current.frame-owned)
-  store(current.frame-owned,Owned-end)
+  store(current.frame-lifetime.lifetime-token,Scope-branch-dead)
   val _ = try-retire-drafts(drafts)
-  val _ = try-retire-owned(structural)
+  val _ = try-retire-lifetime(current.frame-lifetime)
   ()
 
 pub fun resume-node(plane : plane<e>, current : trace<e>,
@@ -194,8 +192,7 @@ pub fun resume-node(plane : plane<e>, current : trace<e>,
     Capture-pending ->
       store(state,Capture-running)
       val old-frame = load(current-frame-slot)
-      val draft-owned = cell(Owned-end)
-      val draft-frame = Frame(cell(Scope-starting),draft-owned)
+      val draft-frame = Frame(new-lifetime-owner(Scope-starting))
       val drafts = cell([])
       val completed = cell(False)
       val resume-draft = fn() resume(draft-frame)
@@ -227,12 +224,13 @@ pub fun resume-node(plane : plane<e>, current : trace<e>,
               val publish = built.built-publish
               val old = load(child)
               store(child,Trace-end)
-              store(old-frame.frame-token,Scope-branch-dead)
+              store(old-frame.frame-lifetime.lifetime-token,Scope-branch-dead)
               store(current-frame-slot,draft-frame)
-              val old-owned = load(old-frame.frame-owned)
-              store(old-frame.frame-owned,Owned-end)
               val retirement = pretend-no-div{
-                collect-retirement(old) ++ collect-owned(old-owned)
+                collect-retirement-work([
+                  trace-retirement-work(old),
+                  lifetime-retirement-work(old-frame.frame-lifetime)
+                ])
               }
               val retired = pretend-no-div{
                 error/try(fn() run-finalizers(retirement))
@@ -266,7 +264,7 @@ pub fun resume-node(plane : plane<e>, current : trace<e>,
                             _ ->
                               store(child,built.built-root)
                               activate-trace(plane,built.built-root)
-                              store(draft-frame.frame-token,Scope-live)
+                              store(draft-frame.frame-lifetime.lifetime-token,Scope-live)
                               match load(state)
                                 Capture-running -> store(state,Capture-live)
                                 _ -> ()
@@ -286,7 +284,7 @@ pub fun resume-capture(plane : plane<e>, current : trace<e>)
     Trace-entry(gate,_,child,current-frame-slot,resume,_) ->
       resume-node(plane,current,gate,child,current-frame-slot,resume)
 pub fun run-bootstrap(scope : continuation-scope<e>) : <div|e> error<()>
-  match load(scope.scope-state)
+  match load(scope.scope-lifetime.lifetime-token)
     Scope-starting ->
       val run-slot = scope.scope-bootstrap-slot
       val pending = load(run-slot)
@@ -300,7 +298,7 @@ pub fun run-bootstrap(scope : continuation-scope<e>) : <div|e> error<()>
         Just(run) ->
           finally(
             fn() lift-div(fn(){
-              match load(scope.scope-state)
+              match load(scope.scope-lifetime.lifetime-token)
                 Scope-starting ->
                   // An ambient final control effect may abandon `run`
                   // without producing Error. Its dynamic finalizer still
@@ -538,7 +536,7 @@ pub fun settle-trace-result(plane : plane<total>, current : trace<total>)
       settle-entry-node(plane,current,gate,child)
 
 pub fun settle-producer-body(producer : derive-producer) : <div> settle-result
-  match load(producer.producer-scope.scope-state)
+  match load(producer.producer-scope.scope-lifetime.lifetime-token)
     Scope-branch-dead -> settle-failure(
       "derived value belongs to a retired branch")
     Scope-dead -> settle-failure("derived value belongs to a retired scope")
@@ -549,7 +547,7 @@ pub fun settle-producer-body(producer : derive-producer) : <div> settle-result
         Settle-ok ->
           // Validation can retire the structural owner, so recheck before
           // starting or walking the producer.
-          match load(producer.producer-scope.scope-state)
+          match load(producer.producer-scope.scope-lifetime.lifetime-token)
             Scope-starting ->
               match run-bootstrap(producer.producer-scope)
                 Error(failure) -> Settle-failed(failure)
@@ -626,7 +624,7 @@ pub fun check-registration(root : root<e>) : exn ()
 
 pub fun check-frame-registration(root : root<e>, current : frame<e>) : exn ()
   check-registration(root)
-  match load(current.frame-token)
+  match load(current.frame-lifetime.lifetime-token)
     Scope-starting -> ()
     Scope-live -> ()
     _ -> throw("reactive value created under a retired continuation branch")

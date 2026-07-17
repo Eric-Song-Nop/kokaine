@@ -10,6 +10,7 @@ import kokaine/reactive/internal/scheduler
 import kokaine/reactive/internal/handlers
 import kokaine/reactive/internal/capture
 import kokaine/reactive/internal/resource
+import kokaine/reactive/internal/registry
 import std/core/undiv
 
 // Public dispatch lives at the composition layer; the handler implementation
@@ -27,13 +28,12 @@ fun fresh-plane(current-frame : frame<e>) : plane<e>
   Plane(cell([]),cell(Nothing),cell(Nothing),cell(current-frame),cell(Nothing))
 
 fun fresh-root() : root<e>
-  val token = cell(Scope-live)
-  val owned = cell(Owned-end)
-  val effect-frame = Frame(token,owned)
-  val derive-frame = Frame(cell(Scope-live),cell(Owned-end))
+  val lifetime = new-lifetime-owner(Scope-live)
+  val effect-frame = Frame(lifetime)
+  val derive-frame = Frame(new-lifetime-owner(Scope-live))
   Root(
     Root-key(cell(True)),fresh-plane(derive-frame),fresh-plane(effect-frame),
-    token,owned,cell(0),cell(False),cell(False),cell(False)
+    lifetime,cell(0),cell(False),cell(False),cell(False)
   )
 
 // This is the non-validating half of root disposal. Besides ordinary public
@@ -42,7 +42,7 @@ fun fresh-root() : root<e>
 // may have failed after publishing only a prefix of the queued scopes.
 fun retire-root-now(root : root<e>) : <div,exn|e> ()
   store(root.root-disposing,True)
-  store(root.root-token,Scope-dead)
+  store(root.root-lifetime.lifetime-token,Scope-dead)
   finally(
     fn() {
       store(root.root-batch-depth,0)
@@ -57,11 +57,9 @@ fun retire-root-now(root : root<e>) : <div,exn|e> ()
       store(root.root-effect-plane.plane-current-entry,Nothing)
       store(root.root-derive-plane.plane-draft,Nothing)
       store(root.root-effect-plane.plane-draft,Nothing)
-      store(root.root-owned,Owned-end)
     },
     fn()
-      val values = load(root.root-owned)
-      val finalizers = collect-owned(values)
+      val finalizers = collect-lifetime(root.root-lifetime)
       run-finalizers(finalizers)
   )
 
@@ -172,8 +170,9 @@ fun create-effect-inner(root : root<e>,
     root,plane,owner-slot,load(plane.plane-current),track,
     fn(value) interpret-write(root,fn() apply(value))
   )
-  store(owner.frame-owned,
-        Owned-fork(current,load(owner.frame-owned)))
+  val registration = owner.frame-lifetime.register-child(
+    scope-retirement-work(current))
+  store(current.scope-unlink,Just(fn() registration.take.is-just))
   queue-work(plane,bootstrap)
   request-flush(root.root-key)
   dispose
@@ -204,8 +203,11 @@ fun derive-by-inner(root : root<e>, initial : a,
   )
   val producer = Derive-producer(derive-plane,current,cell(False))
   store(owner-slot,Just(producer))
-  store(owner.frame-owned,
-        Owned-derive-fork(current,load(owner.frame-owned)))
+  val structural = pretend-no-div{
+    widen-pure-retirement(scope-retirement-work(current))
+  }
+  val registration = owner.frame-lifetime.register-child(structural)
+  store(current.scope-unlink,Just(fn() registration.take.is-just))
   queue-work(derive-plane,bootstrap)
   request-flush(root.root-key)
   Memo(source,producer)
@@ -247,8 +249,11 @@ fun memo-by-inner(root : root<e>, initial : a,
   )
   val producer = Derive-producer(derive-plane,current,cell(False))
   store(owner-slot,Just(producer))
-  store(owner.frame-owned,
-        Owned-derive-fork(current,load(owner.frame-owned)))
+  val structural = pretend-no-div{
+    widen-pure-retirement(scope-retirement-work(current))
+  }
+  val registration = owner.frame-lifetime.register-child(structural)
+  store(current.scope-unlink,Just(fn() registration.take.is-just))
   queue-work(derive-plane,bootstrap)
   request-flush(root.root-key)
   Memo(source,producer)
@@ -280,6 +285,12 @@ pub fun create-effect(root : root<e>,
 
 pub fun on-cleanup(root : root<e>,
                    cleanup : () -> <signal-write,pure|e> ()) : exn ()
+  val _ = register-cleanup(root,cleanup)
+  ()
+
+pub fun register-cleanup(root : root<e>,
+                         cleanup : () -> <signal-write,pure|e> ())
+                        : exn cleanup-registration<e>
   check-not-pure-plane("cleanup registration")
   val plane = root.root-effect-plane
   val current = load(plane.plane-current-frame)
@@ -289,5 +300,12 @@ pub fun on-cleanup(root : root<e>,
     with-context(plane,checkpoint,current,
       fn() interpret-write(root,cleanup))
   )
-  store(current.frame-owned,
-        Owned-resource(resource,load(current.frame-owned)))
+  val node = current.frame-lifetime.register-finalizer(
+    Retirement-finalizer(fn() finalize-resource(resource)))
+  Cleanup-registration(node,resource)
+
+pub fun cleanup-registration/unregister(
+    registration : cleanup-registration<e>) : bool
+  match registration.cleanup-node.take
+    Nothing -> False
+    Just(_) -> discard-resource(registration.cleanup-resource)

@@ -5,6 +5,7 @@ module kokaine/reactive/internal/lifetime
 
 import kokaine/reactive/internal/model
 import kokaine/reactive/internal/resource
+import kokaine/reactive/internal/registry
 import std/core/undiv
 
 // --------------------------------------------------------------------------
@@ -29,14 +30,79 @@ pub fun trace-parent-of(current : trace<e>) : maybe<continuation-gate>
     Just(gate) -> gate.gate-parent
 
 // --------------------------------------------------------------------------
-// Structured trace retirement
+// Generic lifetime owners and iterative two-phase retirement
 // --------------------------------------------------------------------------
 
-pub type retirement<e::E>
-  Retirement(retirement-finalizer : () -> <div,exn|e> ())
+pub alias retirement<e> = retirement-work<e>
 
-pub fun collect-retirement(current : trace<e>)
-                      : <div> list<retirement<e>>
+pub fun new-lifetime-owner(state : scope-state) : lifetime-owner<e>
+  Lifetime-owner(cell(state),new-registry(),new-registry())
+
+pub fun lifetime-owner/register-child(owner : lifetime-owner<e>,
+                                      work : retirement-work<e>)
+                                     : exn registry-registration<retirement-work<e>>
+  owner.lifetime-children.insert(work)
+
+pub fun lifetime-owner/register-finalizer(owner : lifetime-owner<e>,
+                                          work : retirement-work<e>)
+                                         : exn registry-registration<retirement-work<e>>
+  owner.lifetime-finalizers.insert(work)
+
+fun unlink-scope-owner(current : continuation-scope<e>) : ()
+  val unlink = load(current.scope-unlink)
+  store(current.scope-unlink,Nothing)
+  match unlink
+    Nothing -> ()
+    Just(remove) ->
+      val _ = remove()
+      ()
+
+tail fun reverse-onto(values : list<a>, target : list<a>) : <div> list<a>
+  match values
+    Nil -> target
+    Cons(current,rest) -> reverse-onto(rest,Cons(current,target))
+
+fun prepend-in-order(values : list<a>, target : list<a>) : <div> list<a>
+  reverse-onto(values.reverse,target)
+
+fun append-in-order(left : list<a>, right : list<a>) : <div> list<a>
+  prepend-in-order(left,right)
+
+fun widen-work-list(values : list<retirement-work<total>>,
+                    collected : list<retirement-work<e>>)
+                   : <div> list<retirement-work<e>>
+  match values
+    Nil -> collected.reverse
+    Cons(current,rest) ->
+      widen-work-list(rest,Cons(widen-pure-retirement(current),collected))
+
+pub fun widen-pure-retirement(current : retirement-work<total>)
+                         : <div> retirement-work<e>
+  lift-div(fn()
+    match current
+      Retirement-step(expand) -> Retirement-step(fn()
+        widen-work-list(expand(),[])
+      )
+      Retirement-finalizer(action) -> Retirement-finalizer(fn() action())
+  )
+
+fun lifetime-retirement-expand(owner : lifetime-owner<e>)
+                          : <div> list<retirement-work<e>>
+  store(owner.lifetime-token,Scope-dead)
+  val children = match owner.lifetime-children.seal-detach
+    Nothing -> []
+    Just(values) -> values
+  val finalizers = match owner.lifetime-finalizers.seal-detach
+    Nothing -> []
+    Just(values) -> values
+  append-in-order(children,finalizers)
+
+pub fun lifetime-retirement-work(owner : lifetime-owner<e>)
+                            : retirement-work<e>
+  Retirement-step(fn() lifetime-retirement-expand(owner))
+
+fun trace-retirement-expand(current : trace<e>)
+                       : <div> list<retirement-work<e>>
   match current
     Trace-end -> []
     Trace-read(gate,_,_,child,current-frame-slot,_,finalize,unlink,_) ->
@@ -45,114 +111,144 @@ pub fun collect-retirement(current : trace<e>)
         Capture-dead -> []
         _ ->
           val current-frame = load(current-frame-slot)
+          val lifetime = current-frame.frame-lifetime
           store(state,Capture-dead)
-          store(current-frame.frame-token,Scope-branch-dead)
+          store(lifetime.lifetime-token,Scope-branch-dead)
           unlink()
           val nested = load(child)
           store(child,Trace-end)
-          val structural = load(current-frame.frame-owned)
-          store(current-frame.frame-owned,Owned-end)
-          collect-retirement(nested) ++
-          collect-owned(structural) ++ [Retirement(finalize)]
+          [trace-retirement-work(nested),
+           lifetime-retirement-work(lifetime),
+           Retirement-finalizer(finalize)]
     Trace-entry(gate,_,child,current-frame-slot,_,finalize) ->
       val state = gate.gate-state
       match load(state)
         Capture-dead -> []
         _ ->
           val current-frame = load(current-frame-slot)
+          val lifetime = current-frame.frame-lifetime
           store(state,Capture-dead)
-          store(current-frame.frame-token,Scope-branch-dead)
+          store(lifetime.lifetime-token,Scope-branch-dead)
           val nested = load(child)
           store(child,Trace-end)
-          val structural = load(current-frame.frame-owned)
-          store(current-frame.frame-owned,Owned-end)
-          collect-retirement(nested) ++
-          collect-owned(structural) ++ [Retirement(finalize)]
+          [trace-retirement-work(nested),
+           lifetime-retirement-work(lifetime),
+           Retirement-finalizer(finalize)]
+
+pub fun trace-retirement-work(current : trace<e>)
+                         : <div> retirement-work<e>
+  lift-div(fn() Retirement-step(fn() trace-retirement-expand(current)))
+
+fun scope-retirement-expand(current : continuation-scope<e>)
+                       : <div> list<retirement-work<e>>
+  val lifetime = current.scope-lifetime
+  store(current.scope-bootstrap-slot,Nothing)
+  unlink-scope-owner(current)
+  match load(lifetime.lifetime-token)
+    Scope-dead -> []
+    _ ->
+      store(lifetime.lifetime-token,Scope-dead)
+      val body = load(current.scope-body)
+      store(current.scope-body,Trace-end)
+      [trace-retirement-work(body),lifetime-retirement-work(lifetime)]
+
+pub fun scope-retirement-work(current : continuation-scope<e>)
+                         : retirement-work<e>
+  Retirement-step(fn() scope-retirement-expand(current))
+
+tail fun collect-retirement-loop(pending : list<retirement-work<e>>,
+                                 collected : list<retirement-work<e>>)
+                                : <div> list<retirement-work<e>>
+  match pending
+    Nil -> collected.reverse
+    Cons(current,rest) ->
+      match current
+        Retirement-finalizer(_) ->
+          collect-retirement-loop(rest,Cons(current,collected))
+        Retirement-step(expand) ->
+          collect-retirement-loop(
+            prepend-in-order(expand(),rest),collected)
+
+pub fun collect-retirement-work(values : list<retirement-work<e>>)
+                           : <div> list<retirement-work<e>>
+  collect-retirement-loop(values,[])
+
+pub fun collect-retirement(current : trace<e>)
+                      : <div> list<retirement<e>>
+  collect-retirement-work([trace-retirement-work(current)])
 
 pub fun collect-scope(current : continuation-scope<e>)
                  : <div> list<retirement<e>>
-  // Cancellation before bootstrap is still one-shot: retirement severs the
-  // only retained path to the initial calculate closure.
-  store(current.scope-bootstrap-slot,Nothing)
-  match load(current.scope-state)
-    Scope-dead -> []
-    _ ->
-      store(current.scope-state,Scope-dead)
-      val body = load(current.scope-body)
-      val structural-prefix = load(current.scope-prefix)
-      store(current.scope-body,Trace-end)
-      store(current.scope-prefix,Owned-end)
-      collect-retirement(body) ++ collect-owned(structural-prefix)
+  collect-retirement-work([scope-retirement-work(current)])
 
-pub fun widen-pure-retirement(current : retirement<total>) : retirement<e>
-  match current
-    Retirement(action) -> Retirement(fn() action())
+pub fun collect-lifetime(owner : lifetime-owner<e>)
+                    : <div> list<retirement<e>>
+  collect-retirement-work([lifetime-retirement-work(owner)])
 
-// Structural children are completely marked dead before resource continuations
-// are finalized. This is what makes self-disposal and cleanup-triggered writes
-// unable to re-enter a half-retired subtree.
-pub fun collect-owned-forks(values : owned<e>)
-                       : <div> list<retirement<e>>
-  match values
-    Owned-end -> []
-    Owned-fork(current,next) ->
-      collect-scope(current) ++ collect-owned-forks(next)
-    Owned-derive-fork(current,next) ->
-      collect-scope(current).map(widen-pure-retirement) ++
-      collect-owned-forks(next)
-    Owned-resource(_,next) -> collect-owned-forks(next)
-
-// Keep capability capture outside the tail-recursive list builder. In
-// particular, jsweb must not close over the builder's mutable loop cursor.
-noinline fun resource-retirement(resource : resource-k<e>) : retirement<e>
-  Retirement(fn() finalize-resource(resource))
-
-pub fun collect-owned-resources(values : owned<e>)
-                           : <div> list<retirement<e>>
-  match values
-    Owned-end -> []
-    Owned-fork(_,next) -> collect-owned-resources(next)
-    Owned-derive-fork(_,next) -> collect-owned-resources(next)
-    Owned-resource(resource,next) ->
-      Cons(resource-retirement(resource),
-           collect-owned-resources(next))
-
-pub fun collect-owned(values : owned<e>)
-                 : <div> list<retirement<e>>
-  collect-owned-forks(values) ++ collect-owned-resources(values)
+fun run-finalizers-loop(finalizers : list<retirement<e>>,
+                        latest : maybe<exception>)
+                       : <div,exn|e> ()
+  match finalizers
+    Nil ->
+      match latest
+        Nothing -> ()
+        Just(problem) -> throw-exn(problem)
+    Cons(current,rest) ->
+      match current
+        Retirement-step(_) ->
+          run-finalizers-loop(
+            pretend-no-div{ collect-retirement-work(Cons(current,rest)) },
+            latest)
+        Retirement-finalizer(finalize) ->
+          val completed = cell(False)
+          val attempted = finally(
+            fn() {
+              if load(completed) then () else run-finalizers(rest)
+            },
+            fn() lift-exn(fn()
+              val result = error/try(finalize)
+              store(completed,True)
+              result
+            )
+          )
+          match attempted
+            Ok(_) -> run-finalizers-loop(rest,latest)
+            Error(problem) -> run-finalizers-loop(rest,Just(problem))
 
 pub fun run-finalizers(finalizers : list<retirement<e>>)
                   : <div,exn|e> ()
-  match finalizers
-    Nil -> ()
-    Cons(current,rest) ->
-      match current
-        Retirement(finalize) ->
-          finally(fn() run-finalizers(rest),finalize)
+  run-finalizers-loop(finalizers,Nothing)
 
 pub fun retire-trace(current : trace<e>) : <div,exn|e> ()
   val finalizers = pretend-no-div{ collect-retirement(current) }
   run-finalizers(finalizers)
 
-pub fun retire-owned(values : owned<e>) : <div,exn|e> ()
-  val finalizers = pretend-no-div{ collect-owned(values) }
+pub fun retire-lifetime(owner : lifetime-owner<e>) : <div,exn|e> ()
+  val finalizers = pretend-no-div{ collect-lifetime(owner) }
   run-finalizers(finalizers)
 
 pub fun retire-scope(current : continuation-scope<e>) : <div,exn|e> ()
   val finalizers = pretend-no-div{ collect-scope(current) }
   run-finalizers(finalizers)
 
-pub fun retire-drafts(values : list<trace<e>>) : <div,exn|e> ()
+tail fun draft-work-list(values : list<trace<e>>,
+                         collected : list<retirement-work<e>>)
+                        : <div> list<retirement-work<e>>
   match values
-    Nil -> ()
+    Nil -> collected.reverse
     Cons(current,rest) ->
-      finally(fn() retire-drafts(rest),fn() retire-trace(current))
+      draft-work-list(rest,Cons(trace-retirement-work(current),collected))
+
+pub fun retire-drafts(values : list<trace<e>>) : <div,exn|e> ()
+  val work = draft-work-list(values,[])
+  val finalizers = pretend-no-div{ collect-retirement-work(work) }
+  run-finalizers(finalizers)
 
 pub fun retire-drafts-now(values : list<trace<e>>) : <exn|e> ()
   pretend-no-div{ retire-drafts(values) }
 
-pub fun try-retire-owned(values : owned<e>) : e error<()>
-  error/try(fn() pretend-no-div{ retire-owned(values) })
+pub fun try-retire-lifetime(owner : lifetime-owner<e>) : e error<()>
+  error/try(fn() pretend-no-div{ retire-lifetime(owner) })
 
 pub fun try-retire-drafts(values : list<trace<e>>) : e error<()>
   error/try(fn() retire-drafts-now(values))

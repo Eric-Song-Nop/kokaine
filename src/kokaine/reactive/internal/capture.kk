@@ -50,9 +50,7 @@ pub fun reify-trace(root : root<r>, plane : plane<e>,
               val gate = Continuation-gate(
                 state,load(plane.plane-current),Nothing)
               val child = cell(Trace-end)
-              val token = cell(Scope-starting)
-              val owned = cell(Owned-end)
-              val current-frame = Frame(token,owned)
+              val current-frame = Frame(new-lifetime-owner(Scope-starting))
               val current-frame-slot = cell(current-frame)
               val self = cell(Trace-end)
               val current = Trace-entry(
@@ -85,9 +83,7 @@ pub fun reify-trace(root : root<r>, plane : plane<e>,
               val gate = Continuation-gate(
                 state,load(plane.plane-current),producer)
               val child = cell(Trace-end)
-              val token = cell(Scope-starting)
-              val owned = cell(Owned-end)
-              val current-frame = Frame(token,owned)
+              val current-frame = Frame(new-lifetime-owner(Scope-starting))
               val current-frame-slot = cell(current-frame)
               val registration : ref<global,maybe<registry-registration<packed-capture>>> = cell(Nothing)
               val unlink = fn()
@@ -142,15 +138,15 @@ pub fun prepare-trace(root : root<r>, plane : plane<e>,
                   track : () -> <signal-read,pure> a,
                   publish : (value : a) -> <div,exn|e> ())
                  : (continuation-scope<e>,work<e>,disposer<e>)
-  val state = cell(Scope-starting)
-  val structural-prefix = cell(Owned-end)
+  val lifetime = new-lifetime-owner(Scope-starting)
+  val state = lifetime.lifetime-token
   val body = cell(Trace-end)
   val bootstrap-slot : ref<global,maybe<() -> <div|e> error<()>>> = cell(Nothing)
-  val current = Scope(state,structural-prefix,body,parent,bootstrap-slot)
+  val current = Scope(lifetime,body,parent,bootstrap-slot,cell(Nothing))
   val bootstrap-run = fn()
     match load(state)
       Scope-starting ->
-        val scope-frame = Frame(state,structural-prefix)
+        val scope-frame = Frame(lifetime)
         val drafts = cell([])
         val completed = cell(False)
         finally(
