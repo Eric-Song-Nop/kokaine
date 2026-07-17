@@ -5,7 +5,7 @@ module kokaine/reactive/internal/lifetime
 
 import kokaine/reactive/internal/model
 import kokaine/reactive/internal/resource
-import kokaine/reactive/internal/registry
+import kokaine/internal/registry
 import std/core/undiv
 
 // --------------------------------------------------------------------------

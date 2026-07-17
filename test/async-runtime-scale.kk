@@ -4,7 +4,7 @@ import kokaine/async/effects
 import kokaine/reactive/internal/model
 import kokaine/reactive/internal/runtime
 import kokaine/reactive/internal/async-runtime
-import kokaine/reactive/internal/registry
+import kokaine/internal/registry
 import std/core/undiv
 
 

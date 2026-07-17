@@ -22,7 +22,7 @@ import kokaine/reactive/internal/runtime
 import kokaine/reactive/internal/application-runner
 import kokaine/reactive/internal/one-shot-task
 import kokaine/reactive/internal/cancellation-supervisor
-import kokaine/reactive/internal/registry
+import kokaine/internal/registry
 import std/core/vector
 import std/core/undiv
 

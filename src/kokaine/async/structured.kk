@@ -9,6 +9,7 @@ module kokaine/async/structured
 
 import kokaine/async/effects
 import kokaine/async/channel
+import kokaine/internal/registry
 import std/core/unsafe
 import std/core/undiv
 
@@ -27,22 +28,19 @@ type group-outcome<a>
 
 type group-owned
   Group-owned(
-    group-owned-id      : int,
     group-owned-index   : int,
     group-owned-discard : ref<global,maybe<dispose-fn>>
   )
 
 abstract value type group-owned-registration
   Group-owned-registration(
-    registration-id      : int,
-    registration-discard : ref<global,maybe<dispose-fn>>,
-    registration-ledger  : ref<global,list<group-owned>>
+    registration-node    : maybe<registry-registration<group-owned>>,
+    registration-discard : ref<global,maybe<dispose-fn>>
   )
 
 type group-state<a>
   Group-state(active : int, outcome : group-outcome<a>,
-              next-owned-id : int,
-              owned : ref<global,list<group-owned>>)
+              owned : registry<group-owned>)
 
 // Structured awaits are one-shot. An invocation-local cell can consequently
 // hold the drain ledger without adding a private effect to every user thunk.
@@ -111,7 +109,7 @@ fun group-lift-exn(action : () -> e a) : <exn|e> a
 
 fun new-strand-group(require-all : bool) : strand-group<a>
   Strand-group(
-    group-cell(Group-state(0,Group-values([]),0,group-cell([]))),require-all)
+    group-cell(Group-state(0,Group-values([]),new-registry())),require-all)
 
 tail fun ordered-insert(values : list<(int,a)>, entry : (int,a))
                        : list<(int,a)>
@@ -176,19 +174,18 @@ fun strand-group/start(group : strand-group<a>) : ()
   match group
     Strand-group(state,_) ->
       match group-load(state)
-        Group-state(active,outcome,next-id,owned) ->
-          group-store(state,Group-state(active + 1,outcome,next-id,owned))
+        Group-state(active,outcome,owned) ->
+          group-store(state,Group-state(active + 1,outcome,owned))
 
 fun strand-group/finish(group : strand-group<a>, index : int,
                         result : strand-outcome<a>) : ()
   match group
     Strand-group(state,require-all) ->
       match group-load(state)
-        Group-state(active,outcome,next-id,owned) ->
+        Group-state(active,outcome,owned) ->
           group-store(state,Group-state(
             active - 1,
             outcome.add(index,result,require-all),
-            next-id,
             owned
           ))
 
@@ -198,28 +195,30 @@ fun strand-group/track-owned(group : strand-group<a>, index : int,
   match group
     Strand-group(state,_) ->
       match group-load(state)
-        Group-state(active,outcome,next-id,owned) ->
+        Group-state(_,_,owned) ->
           val discard-slot = group-cell(Just(discard))
-          group-store(owned,Cons(
-            Group-owned(next-id,index,discard-slot),group-load(owned)))
-          group-store(state,Group-state(
-            active,outcome,next-id + 1,owned))
-          Group-owned-registration(next-id,discard-slot,owned)
+          val node = owned.try-insert(Group-owned(index,discard-slot))
+          Group-owned-registration(node,discard-slot)
 
 // Explicit release and group rollback race for the same entry. A live entry
 // is physically removed before the lower ownership ledger is touched. The
-// registration captures only this ledger, never the group's sibling results.
+// registration captures only its intrusive node and one-shot gate, never the
+// group's sibling results. A kept winner's node may already be detached when
+// its public release later consumes that independent gate.
 fun group-owned-registration/try-untrack(
     registration : group-owned-registration) : bool
   match registration
-    Group-owned-registration(id,discard-slot,owned) ->
+    Group-owned-registration(node,discard-slot) ->
       val discard = group-load(discard-slot)
       group-store(discard-slot,Nothing)
       match discard
         Nothing -> False
         Just(_) ->
-          group-store(owned,group-load(owned).filter(
-            fn(entry) entry.group-owned-id != id))
+          match node
+            Nothing -> ()
+            Just(current) ->
+              val _ = current.take
+              ()
           True
 
 fun release-group-ownership(registration : group-owned-registration,
@@ -256,11 +255,12 @@ fun strand-group/results(group : strand-group<a>) : <async,exn> list<a>
   match group
     Strand-group(state,require-all) ->
       match group-load(state)
-        Group-state(_,outcome,_,owned) ->
+        Group-state(_,outcome,owned) ->
           // Detach the rollback ledger before invoking untrusted host
           // disposers, then claim every loser slot from the detached snapshot.
-          val snapshot = group-load(owned)
-          group-store(owned,[])
+          val snapshot = match owned.seal-detach
+            Nothing -> []
+            Just(values) -> values
           val discards = collect-group-discards(
             snapshot,outcome,require-all)
           discards.foreach fn(discard) async-host(discard)
