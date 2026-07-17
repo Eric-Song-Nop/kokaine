@@ -131,27 +131,34 @@ def main() -> None:
                 """async () => {
                     const adapter = await import('/dist/kokaine_web_window.mjs');
                     globalThis.__rawWindowRuns = 0;
+                    globalThis.__rawWindowRejects = [];
 
                     const completed = adapter.window_event_setup_raw(
                         'scroll',
-                        () => { globalThis.__rawWindowRuns += 1; }
+                        () => { globalThis.__rawWindowRuns += 1; },
+                        error => __rawWindowRejects.push(String(error?.message ?? error))
                     );
                     window.dispatchEvent(new Event('scroll'));
+                    adapter.retire_window_event(completed);
                     window.dispatchEvent(new Event('scroll'));
 
                     const retired = adapter.window_event_setup_raw(
                         'hashchange',
-                        () => { globalThis.__rawWindowRuns += 10; }
+                        () => { globalThis.__rawWindowRuns += 10; },
+                        error => __rawWindowRejects.push(String(error?.message ?? error))
                     );
                     __kokaineWindowTracker.throwOnRemove = true;
                     adapter.retire_window_event(retired);
                     const activeAfterThrow = __kokaineWindowTracker.records[1].active;
+                    window.dispatchEvent(new Event('hashchange'));
+                    const rejectsAfterRetiredThrow = __rawWindowRejects.length;
                     __kokaineWindowTracker.throwOnRemove = false;
                     window.dispatchEvent(new Event('hashchange'));
 
                     const removalFailure = adapter.window_event_setup_raw(
                         'scroll',
-                        () => { globalThis.__rawWindowRuns += 100; }
+                        () => { globalThis.__rawWindowRuns += 100; },
+                        error => __rawWindowRejects.push(String(error?.message ?? error))
                     );
                     __kokaineWindowTracker.throwOnRemove = true;
                     window.dispatchEvent(new Event('scroll'));
@@ -165,7 +172,9 @@ def main() -> None:
                         retiredOk: retired.ok,
                         removalFailureOk: removalFailure.ok,
                         runs: globalThis.__rawWindowRuns,
+                        rejects: globalThis.__rawWindowRejects,
                         activeAfterThrow,
+                        rejectsAfterRetiredThrow,
                         activeAfterStaleDelivery:
                             __kokaineWindowTracker.records[1].active,
                         activeAfterCompletionThrow,
@@ -181,12 +190,14 @@ def main() -> None:
                 "completedOk": True,
                 "retiredOk": True,
                 "removalFailureOk": True,
-                "runs": 101,
+                "runs": 1,
+                "rejects": ["forced window listener removal failure"],
                 "activeAfterThrow": True,
+                "rejectsAfterRetiredThrow": 0,
                 "activeAfterStaleDelivery": False,
                 "activeAfterCompletionThrow": True,
                 "activeAfterRepeatedDelivery": False,
-                "removalAttempts": [1, 2, 2],
+                "removalAttempts": [1, 3, 2],
             }, raw_result
             raw.close()
 
@@ -229,22 +240,40 @@ def main() -> None:
             # throwing removeEventListener may leave native closures attached,
             # but those closures must no longer retain or resume Koka code.
             page, page_errors, console_errors = load_fixture(browser, origin)
-            page.evaluate(
+            retired = page.evaluate(
                 """() => {
                     __kokaineWindowTracker.throwOnRemove = true;
                     __kokaineWindowFixture.disposeRoot();
-                    for (const record of __kokaineWindowTracker.records) {
-                        record.listener();
-                    }
+                    return __kokaineWindowTracker.records.map(record => ({
+                        name: record.name,
+                        active: record.active,
+                        attempts: record.removalAttempts
+                    }));
+                }"""
+            )
+            assert retired == [
+                {"name": "scroll", "active": True, "attempts": 1},
+                {"name": "hashchange", "active": True, "attempts": 1},
+            ], retired
+            page.evaluate(
+                """() => {
+                    __kokaineWindowTracker.throwOnRemove = false;
+                    window.dispatchEvent(new Event('scroll'));
+                    window.dispatchEvent(new Event('hashchange'));
                 }"""
             )
             page.wait_for_timeout(20)
             assert page.evaluate("__kokaineWindowFixture.runs") == 0
             assert page.evaluate(
-                """() => __kokaineWindowTracker.records.every(
-                    record => record.removalAttempts >= 1
-                )"""
-            )
+                """() => __kokaineWindowTracker.records.map(record => ({
+                    name: record.name,
+                    active: record.active,
+                    attempts: record.removalAttempts
+                }))"""
+            ) == [
+                {"name": "scroll", "active": False, "attempts": 2},
+                {"name": "hashchange", "active": False, "attempts": 2},
+            ]
             assert not page_errors, page_errors
             assert not console_errors, console_errors
             page.close()
@@ -253,6 +282,28 @@ def main() -> None:
             page, page_errors, console_errors = load_fixture(
                 browser, origin, throw_add=True
             )
+            assert not page_errors, page_errors
+            assert not console_errors, console_errors
+            page.close()
+
+            # Once delivery has won, failure to detach its native listener is
+            # an operation error, not a successful event. It must reject the
+            # await while leaving the now-inert native closure harmless.
+            page, page_errors, console_errors = load_fixture(browser, origin)
+            page.evaluate(
+                """() => {
+                    __kokaineWindowTracker.throwOnRemove = true;
+                    window.dispatchEvent(new Event('scroll'));
+                }"""
+            )
+            expect(page.locator("#window-phase")).to_have_text(
+                "monitor-error:browser window event completion failed: "
+                "forced window listener removal failure"
+            )
+            assert page.evaluate("__kokaineWindowFixture.runs") == 0
+            assert page.evaluate(
+                "__kokaineWindowTracker.records.length"
+            ) == 2
             assert not page_errors, page_errors
             assert not console_errors, console_errors
             page.close()
