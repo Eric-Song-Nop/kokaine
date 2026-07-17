@@ -15,7 +15,12 @@ test("creates a complete npm-compatible Kokaine project", async (t) => {
   assert.equal(manifest.kokaine.compiler, "3.2.3");
   assert.equal(manifest.scripts.dev, "kokaine dev");
   assert.ok((await readdir(path.join(target, "src", "app"))).includes("main.kk"));
-  assert.match(await readFile(path.join(target, ".gitignore"), "utf8"), /\.kokaine\//);
+  const editorConfig = JSON.parse(await readFile(path.join(target, "koka.json"), "utf8"));
+  assert.equal(editorConfig.target, "jsweb");
+  assert.deepEqual(editorConfig.include_dirs, ["src", "node_modules/@kokaine/core/src"]);
+  const gitignore = await readFile(path.join(target, ".gitignore"), "utf8");
+  assert.match(gitignore, /\.koka\//);
+  assert.match(gitignore, /\.kokaine\//);
 });
 
 test("refuses to overwrite a non-empty directory", async (t) => {

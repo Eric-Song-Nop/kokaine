@@ -1,0 +1,10 @@
+{
+  "target": "jsweb",
+  "cwd": ".",
+  "include_dirs": [
+    "src"
+  ],
+  "compiler_args": [
+    "-j1"
+  ]
+}

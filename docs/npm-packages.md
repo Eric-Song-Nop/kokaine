@@ -101,3 +101,22 @@ and sorted Koka package metadata. With the same lockfile, CLI version, compiler,
 and target, discovery and command construction are deterministic. Once the
 compiler exists in the cache, `doctor`, `check`, `build`, and `dev` do not need
 network access.
+
+## Neovim project configuration
+
+The generated application includes a `koka.json` understood by
+[`koka.nvim`](https://github.com/syaiful6/koka.nvim#project-configuration):
+
+```json
+{
+  "target": "jsweb",
+  "cwd": ".",
+  "include_dirs": ["src", "node_modules/@kokaine/core/src"],
+  "compiler_args": ["-j1"]
+}
+```
+
+This gives the language server and editor build commands the same application
+and core source roots as a minimal CLI project. Add direct editor-only source
+roots when introducing more Koka packages; `kokaine doctor --json` remains the
+authoritative source for the full canonical transitive graph used by builds.

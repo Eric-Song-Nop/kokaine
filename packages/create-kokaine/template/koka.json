@@ -1,0 +1,11 @@
+{
+  "target": "jsweb",
+  "cwd": ".",
+  "include_dirs": [
+    "src",
+    "node_modules/@kokaine/core/src"
+  ],
+  "compiler_args": [
+    "-j1"
+  ]
+}
