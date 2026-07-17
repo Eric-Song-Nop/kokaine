@@ -137,6 +137,14 @@ extern publish-stress(
   bootstrap-order : () -> ui bool) : ui ()
   js inline "Object.assign(globalThis.__kokaineKeyed, { disposeStress:#1, disposeStressReset:#2, rollbackStress:#3, rollbackStressReset:#4, bootstrapOrder:#5 })"
 
+extern iframe-body(value : node) : ui node
+  js inline "(#1).contentDocument.body"
+
+extern publish-iframe(
+  move : () -> ui bool,
+  move-reset : () -> ui bool) : ui ()
+  js inline "Object.assign(globalThis.__kokaineKeyed, { iframeMove:#1, iframeMoveReset:#2 })"
+
 fun safe-set(root : root<<ui>>, source : signal<list<item-data>>,
              next : list<item-data>) : ui bool
   with catch fn(_)
@@ -280,7 +288,7 @@ fun main-page(root : root<<ui>>, source : signal<list<item-data>>,
         ,fallback=fn() p("hidden",attrs=[id("keyed-hidden")]))
 
 fun simple-page(source : signal<list<item-data>>, list-id : string,
-                row-prefix : string) : view<total>
+                row-prefix : string, connection-probe : bool) : view<total>
   view
     ul(attrs=[id(list-id)])
       for(fn() source.get,fn(value) value.item-id) fn(current,index)
@@ -288,7 +296,11 @@ fun simple-page(source : signal<list<item-data>>, list-id : string,
         li(attrs=[id(row-prefix ++ initial.item-id.show),
                   data("key",initial.item-id.show)])
           text { index().show ++ ":" ++ current().item-label }
-          element-empty("x-kokaine-keyed-move-hook")
+          if connection-probe then
+            element-empty("x-kokaine-keyed-move-hook")
+          else
+            trusted(unsafe-trusted-html(
+              "<div class=\"keyed-raw-probe\">raw</div>"))
 
 fun bootstrap-page(source : signal<list<item-data>>) : view<total>
   view
@@ -359,13 +371,20 @@ pub fun main()
     signal(current-root,[item(1,"one"),item(2,"two")])
   val duplicate-dispose = mount(
     duplicate-root,query("#keyed-duplicate-root"),
-    simple-page(duplicate-source,"keyed-duplicate-list","keyed-duplicate-row-"))
+    simple-page(duplicate-source,"keyed-duplicate-list",
+                "keyed-duplicate-row-",True))
 
   val (move-root,move-source) = create-root fn(current-root)
     signal(current-root,[item(1,"one"),item(2,"two"),item(3,"three")])
   val move-dispose = mount(
     move-root,query("#keyed-move-root"),
-    simple-page(move-source,"keyed-move-list","keyed-move-row-"))
+    simple-page(move-source,"keyed-move-list","keyed-move-row-",False))
+
+  val (iframe-root,iframe-source) = create-root fn(current-root)
+    signal(current-root,[item(1,"one"),item(2,"two"),item(3,"three")])
+  val iframe-dispose = mount(
+    iframe-root,iframe-body(query("#keyed-iframe")),
+    simple-page(iframe-source,"keyed-iframe-list","keyed-iframe-row-",False))
 
   val (bootstrap-root,bootstrap-source) = create-root fn(current-root)
     val empty : list<item-data> = []
@@ -420,6 +439,7 @@ pub fun main()
       safe-dispose(root)
       safe-dispose(duplicate-root)
       safe-dispose(move-root)
+      safe-dispose(iframe-root)
       safe-dispose(bootstrap-root)
       safe-dispose(bootstrap-order-root)
       safe-dispose(compact-root)
@@ -451,4 +471,10 @@ pub fun main()
       rollback-stress-root,rollback-stress-source,stress-items()),
     fn() safe-set(bootstrap-order-root,bootstrap-order-source,
       [item(1,"one"),item(2,"two")])
+  )
+  publish-iframe(
+    fn() safe-set(iframe-root,iframe-source,
+      [item(3,"three"),item(1,"one"),item(2,"two")]),
+    fn() safe-set(iframe-root,iframe-source,
+      [item(1,"one"),item(2,"two"),item(3,"three")])
   )

@@ -322,7 +322,10 @@ before its bootstrap batch may flush; if any descendant bootstrap fails or
 control abandons the call, that disposer retires the complete partially
 published mount before the error escapes. Root construction applies the same
 principle at a wider boundary and retires the unpublished root on action or
-initial-drain failure.
+initial-drain failure. Before constructing the first view, `mount` also installs
+an idempotent `attachShadow` observer on the parent's DOM realm. Kokaine-created
+elements and trusted-HTML parse results are recorded at their creation boundary;
+imperative and declarative closed-shadow hosts are recorded separately.
 
 Managed element and trusted-HTML roots carry an internal same-root re-entry
 capability in a `WeakMap`. A later `mount` into such a node restores that exact
@@ -375,18 +378,52 @@ order and disposes draft owners before rethrowing. The range primitive validates
 common parentage, endpoint reachability, and an out-of-range insertion target
 before extraction;
 it moves existing nodes rather than cloning them and restores focus/selection
-when the host move disturbs it. If host interference makes restoration itself
-impossible, the adapter raises a combined rollback error instead of publishing
-the new table or retained-row sources.
+when the host move disturbs it. The snapshot follows open shadow roots and
+retains input selection direction or DOM Selection anchor/focus direction. It
+starts from the keyed parent's own document rather than the module's global
+document, so same-origin iframe mounts use that document's active element,
+Selection, fragment, and native Node operations. It replays state only when it
+changed, so a native state-preserving move does not redundantly invoke focus or
+selection restoration. A fragment fallback fails before the first move when
+focus is retargeted through an opaque shadow host or the host cannot inspect and
+restore a shadow-root selection. Every restoration is verified; a detached
+endpoint, ineffective `focus()`, or missing Selection API becomes a move
+failure. If host interference makes restoration itself impossible, the adapter
+raises a combined rollback error instead of publishing the new table or
+retained-row sources.
 
-On hosts with `moveBefore`, keyed ranges use its state-preserving move. A custom
-element that defines `connectedCallback` or `disconnectedCallback` must also
-define `connectedMoveCallback`; otherwise the reconciler rejects the reorder
-before touching the DOM, because a synchronous reconnect could observe a new
-physical order before retained item/index sources commit. Hosts without
-state-preserving moves likewise reject such lifecycle-bearing elements, while
-ordinary nodes and custom elements without connection callbacks retain the
-validated fragment fallback.
+The adapter resolves `moveBefore` from the keyed parent's same-realm prototype
+(`Element`, `DocumentFragment`, or `Document`) and uses it only when the parent
+exposes that exact primitive. Forward movement and rollback therefore share the
+same state-preserving operation and cannot be split by an instance polyfill.
+
+Every custom-element-shaped node reachable through light DOM or an open shadow
+root in a keyed region whose physical order changes makes the update fail before
+touching the DOM. This includes autonomous names and customized built-ins—even
+when `getAttribute("is")` does not reflect their internal `is` value, their
+prototype metadata is altered, or their definition lives in a scoped or foreign
+registry. Custom-element lifecycle callbacks are captured when the definition
+is registered, are not introspectable later, and run synchronously during a
+move; even a
+`connectedMoveCallback` could observe a partial physical order before retained
+item/index sources commit.
+
+Closed roots need a provenance check because the platform does not expose their
+contents. The per-realm observer records every closed root created through the
+current `attachShadow` primitive. A tracked closed host is rejected; a
+pre-mount external element that could host an untracked closed root is rejected
+conservatively; foreign-realm elements and a replaced observer also fail
+closed. Framework-created elements and trusted HTML remain eligible for the
+validated native or fragment paths, including ordinary `div`/`span` content.
+Initial mounts, data-only updates, and keyed updates whose physical order
+already matches remain unaffected.
+
+This provenance guarantee assumes cooperative DOM code. JavaScript can retain
+or borrow an unwrapped native `attachShadow` function and thereby create a
+closed root that no standards API can enumerate afterward. Direct calls through
+such saved or foreign primitives, masking native DOM accessors, and mutation of
+Kokaine's internal registries are outside the adapter contract; detectable
+prototype replacement still fails closed.
 
 SSR eliminates the same keyed plan as one snapshot. It performs the native
 sequential walk, checks keys through the balanced index, constructs constant

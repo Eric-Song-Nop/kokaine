@@ -58,6 +58,56 @@ with serve_project() as origin:
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         page = browser.new_page()
+        page.add_init_script(
+            """
+            globalThis.__kokaineClosedLifecycleEvents = [];
+            globalThis.__kokaineRecordClosedLifecycleEvents = false;
+            if (!customElements.get('x-kokaine-closed-lifecycle')) {
+                customElements.define(
+                    'x-kokaine-closed-lifecycle',
+                    class extends HTMLElement {
+                        connectedCallback() {
+                            if (
+                                globalThis
+                                    .__kokaineRecordClosedLifecycleEvents
+                            ) {
+                                globalThis.__kokaineClosedLifecycleEvents
+                                    .push('connect');
+                            }
+                        }
+
+                        disconnectedCallback() {
+                            if (
+                                globalThis
+                                    .__kokaineRecordClosedLifecycleEvents
+                            ) {
+                                globalThis.__kokaineClosedLifecycleEvents
+                                    .push('disconnect');
+                            }
+                        }
+
+                        connectedMoveCallback() {
+                            if (
+                                globalThis
+                                    .__kokaineRecordClosedLifecycleEvents
+                            ) {
+                                globalThis.__kokaineClosedLifecycleEvents
+                                    .push('move');
+                            }
+                        }
+                    }
+                );
+            }
+            const preexistingClosedHost = document.createElement('div');
+            preexistingClosedHost.id =
+                'keyed-preexisting-closed-lifecycle';
+            preexistingClosedHost.attachShadow({ mode: 'closed' }).append(
+                document.createElement('x-kokaine-closed-lifecycle')
+            );
+            globalThis.__kokainePreexistingClosedLifecycleHost =
+                preexistingClosedHost;
+            """
+        )
         page_errors: list[str] = []
         console_errors: list[str] = []
         response_errors: list[str] = []
@@ -124,11 +174,16 @@ with serve_project() as origin:
                     host.id = id;
                     document.body.append(host);
                 }
+                const iframe = document.createElement('iframe');
+                iframe.id = 'keyed-iframe';
+                document.body.append(iframe);
                 globalThis.__kokaineThrowKeyedBootstrap = true;
                 globalThis.__kokaineEscapeKeyedDescendant = false;
                 globalThis.__kokaineRetireKeyedMoveResult = null;
                 globalThis.__kokaineUnmovableEvents = [];
                 globalThis.__kokaineRecordUnmovableEvents = false;
+                globalThis.__kokaineClosedLifecycleEvents = [];
+                globalThis.__kokaineRecordClosedLifecycleEvents = false;
                 globalThis.__kokaineKeyedBootstrapOrder = [];
                 globalThis.__kokaineKeyedConnections = [];
                 if (!customElements.get('x-kokaine-keyed-fail')) {
@@ -165,46 +220,50 @@ with serve_project() as origin:
                                     );
                                 }
                             }
-
-                            connectedMoveCallback() {}
                         }
                     );
                 }
                 if (!customElements.get('x-kokaine-keyed-unmovable')) {
+                    const UnmovableElement = class extends HTMLElement {
+                        connectedCallback() {
+                            if (globalThis.__kokaineRecordUnmovableEvents) {
+                                globalThis.__kokaineUnmovableEvents.push(
+                                    'connect'
+                                );
+                            }
+                        }
+
+                        disconnectedCallback() {
+                            if (globalThis.__kokaineRecordUnmovableEvents) {
+                                globalThis.__kokaineUnmovableEvents.push(
+                                    'disconnect'
+                                );
+                            }
+                        }
+                    };
                     customElements.define(
                         'x-kokaine-keyed-unmovable',
-                        class extends HTMLElement {
-                            connectedCallback() {
-                                if (globalThis.__kokaineRecordUnmovableEvents) {
-                                    globalThis.__kokaineUnmovableEvents.push(
-                                        'connect'
-                                    );
-                                }
-                            }
-
-                            disconnectedCallback() {
-                                if (globalThis.__kokaineRecordUnmovableEvents) {
-                                    globalThis.__kokaineUnmovableEvents.push(
-                                        'disconnect'
-                                    );
-                                }
-                            }
-                        }
+                        UnmovableElement
                     );
+                    UnmovableElement.prototype.connectedMoveCallback = () => {
+                        globalThis.__kokaineUnmovableEvents.push('move');
+                    };
                 }
-                if (!customElements.get('x-kokaine-shadow-focus')) {
-                    customElements.define(
-                        'x-kokaine-shadow-focus',
-                        class extends HTMLElement {
-                            constructor() {
-                                super();
-                                const input = document.createElement('input');
-                                input.value = 'shadow-selection';
-                                this.attachShadow({ mode: 'open' }).append(input);
-                            }
-                        }
-                    );
-                }
+                globalThis.__createKokaineShadowInput = () => {
+                    const host = document.createElement('div');
+                    const input = document.createElement('input');
+                    input.value = 'shadow-selection';
+                    host.attachShadow({ mode: 'open' }).append(input);
+                    return host;
+                };
+                globalThis.__createKokaineShadowEditor = () => {
+                    const host = document.createElement('div');
+                    const editor = document.createElement('strong');
+                    editor.contentEditable = 'true';
+                    editor.textContent = 'abcdef';
+                    host.attachShadow({ mode: 'open' }).append(editor);
+                    return host;
+                };
                 if (!customElements.get('x-kokaine-keyed-bootstrap-order')) {
                     customElements.define(
                         'x-kokaine-keyed-bootstrap-order',
@@ -328,7 +387,7 @@ with serve_project() as origin:
                     configurable: true,
                     value: undefined
                 });
-                const host = document.createElement('x-kokaine-shadow-focus');
+                const host = globalThis.__createKokaineShadowInput();
                 host.id = 'keyed-shadow-focus';
                 document.querySelector('#keyed-row-2').append(host);
                 const input = host.shadowRoot.querySelector('input');
@@ -350,29 +409,119 @@ with serve_project() as origin:
         ), "fallback keyed move lost shadow input focus or selection"
         page.evaluate(
             """() => {
-                const editor = document.createElement('div');
-                editor.id = 'keyed-contenteditable-focus';
-                editor.contentEditable = 'true';
-                editor.textContent = 'abcdef';
-                document.querySelector('#keyed-row-2').append(editor);
+                const host = globalThis.__createKokaineShadowEditor();
+                host.id = 'keyed-contenteditable-focus';
+                document.querySelector('#keyed-row-2').append(host);
+                const editor = host.shadowRoot.querySelector('strong');
                 editor.focus();
                 const text = editor.firstChild;
-                getSelection().setBaseAndExtent(text, 4, text, 2);
+                host.shadowRoot.getSelection().setBaseAndExtent(
+                    text,
+                    4,
+                    text,
+                    2
+                );
             }"""
         )
         assert invoke(page, "permute") is True
         assert order(page, "#keyed-main-list") == [2, 0, 4, 1, 5]
         assert_indices(page, [2, 0, 4, 1, 5])
         assert page.locator("#keyed-contenteditable-focus").evaluate(
-            """editor => {
-                const selection = getSelection();
-                return document.activeElement === editor &&
+            """host => {
+                const editor = host.shadowRoot.querySelector('strong');
+                const selection = host.shadowRoot.getSelection();
+                return host.shadowRoot.activeElement === editor &&
                     selection.anchorNode === editor.firstChild &&
                     selection.anchorOffset === 4 &&
                     selection.focusNode === editor.firstChild &&
                     selection.focusOffset === 2;
             }"""
         ), "fallback keyed move lost contenteditable selection"
+        page.evaluate(
+            """() => {
+                const host = document.createElement('div');
+                const input = document.createElement('input');
+                host.id = 'keyed-closed-shadow-focus';
+                host.attachShadow({ mode: 'closed' }).append(input);
+                document.querySelector('#keyed-row-4').append(host);
+                globalThis.__kokaineClosedShadowInput = input;
+                input.focus();
+            }"""
+        )
+        assert page.evaluate(
+            """() => {
+                const host = document.querySelector(
+                    '#keyed-closed-shadow-focus'
+                );
+                const parent = document.querySelector('#keyed-main-list');
+                return typeof parent.moveBefore === 'undefined' &&
+                    document.activeElement === host &&
+                    host.shadowRoot === null &&
+                    globalThis.__kokaineClosedShadowInput.matches(':focus');
+            }"""
+        ), "closed-shadow fallback precondition was not established"
+        assert invoke(page, "reverse") is False
+        closed_shadow_order = order(page, "#keyed-main-list")
+        assert closed_shadow_order == [2, 0, 4, 1, 5], closed_shadow_order
+        assert page.evaluate(
+            "globalThis.__kokaineClosedShadowInput.matches(':focus')"
+        ), "an unsafe closed-shadow fallback move mutated the DOM"
+        page.locator("#keyed-closed-shadow-focus").evaluate(
+            "host => host.remove()"
+        )
+        assert invoke(page, "permute") is True
+        assert order(page, "#keyed-main-list") == [2, 0, 4, 1, 5]
+        page.evaluate(
+            """() => {
+                const host = globalThis.__createKokaineShadowEditor();
+                host.id = 'keyed-unsupported-shadow-selection';
+                document.querySelector('#keyed-row-4').append(host);
+                const root = host.shadowRoot;
+                const editor = root.querySelector('strong');
+                editor.focus();
+                root.getSelection().setBaseAndExtent(
+                    editor.firstChild,
+                    1,
+                    editor.firstChild,
+                    5
+                );
+                Object.defineProperty(root, 'getSelection', {
+                    configurable: true,
+                    value: undefined
+                });
+            }"""
+        )
+        assert page.evaluate(
+            """() => {
+                const host = document.querySelector(
+                    '#keyed-unsupported-shadow-selection'
+                );
+                const root = host.shadowRoot;
+                return typeof document.querySelector(
+                        '#keyed-main-list'
+                    ).moveBefore === 'undefined' &&
+                    document.activeElement === host &&
+                    root.activeElement === root.querySelector('strong') &&
+                    root.querySelector('strong').getRootNode() === root &&
+                    root.querySelector('strong').selectionStart === undefined &&
+                    root.host === host &&
+                    typeof root.getSelection === 'undefined';
+            }"""
+        ), "unsupported shadow-selection precondition was not established"
+        assert invoke(page, "reverse") is False
+        unsupported_selection_order = order(page, "#keyed-main-list")
+        assert unsupported_selection_order == [2, 0, 4, 1, 5], (
+            unsupported_selection_order
+        )
+        assert page.locator("#keyed-unsupported-shadow-selection").evaluate(
+            "host => host.shadowRoot.activeElement === "
+            "host.shadowRoot.querySelector('strong')"
+        ), "an unsupported shadow-selection move mutated the DOM"
+        page.locator("#keyed-unsupported-shadow-selection").evaluate(
+            "host => host.remove()"
+        )
+        assert invoke(page, "permute") is True
+        assert order(page, "#keyed-main-list") == [2, 0, 4, 1, 5]
         page.evaluate(
             """() => {
                 delete document.querySelector('#keyed-main-list').moveBefore;
@@ -435,12 +584,20 @@ with serve_project() as origin:
         move_one = page.locator("#keyed-move-row-1").element_handle()
         move_two = page.locator("#keyed-move-row-2").element_handle()
         move_three = page.locator("#keyed-move-row-3").element_handle()
+        move_raw = page.locator(
+            "#keyed-move-row-2 > .keyed-raw-probe"
+        ).element_handle()
+        assert move_raw is not None
         page.evaluate(
             """() => {
-                const parent = document.querySelector('#keyed-move-list');
-                const nativeMove = parent.moveBefore;
-                Object.defineProperty(parent, 'moveBefore', {
-                    configurable: true,
+                const prototype = Element.prototype;
+                const descriptor = Object.getOwnPropertyDescriptor(
+                    prototype,
+                    'moveBefore'
+                );
+                const nativeMove = descriptor.value;
+                Object.defineProperty(prototype, 'moveBefore', {
+                    ...descriptor,
                     value(node, before) {
                         const result = nativeMove.call(this, node, before);
                         if (++moves === 3) {
@@ -453,7 +610,11 @@ with serve_project() as origin:
                 });
                 let moves = 0;
                 globalThis.__restoreKeyedInsert = () => {
-                    delete parent.moveBefore;
+                    Object.defineProperty(
+                        prototype,
+                        'moveBefore',
+                        descriptor
+                    );
                 };
             }"""
         )
@@ -463,21 +624,401 @@ with serve_project() as origin:
         assert_same(move_one, "#keyed-move-row-1")
         assert_same(move_two, "#keyed-move-row-2")
         assert_same(move_three, "#keyed-move-row-3")
+        assert_same(move_raw, "#keyed-move-row-2 > .keyed-raw-probe")
         assert invoke(page, "moveReset") is True
-        page.evaluate("globalThis.__kokaineKeyedConnections = []")
+        page.evaluate(
+            """() => {
+                const input = document.createElement('input');
+                input.id = 'keyed-native-selection-probe';
+                input.value = 'native-selection';
+                document.querySelector('#keyed-move-row-3').append(input);
+                input.focus();
+                input.setSelectionRange(1, 5, 'backward');
+            }"""
+        )
+        page.evaluate(
+            "() => new Promise(resolve => requestAnimationFrame(resolve))"
+        )
+        page.evaluate(
+            """() => {
+                const input = document.querySelector(
+                    '#keyed-native-selection-probe'
+                );
+                const setSelectionRange = input.setSelectionRange;
+                globalThis.__kokaineNativeSelectionReplays = 0;
+                input.setSelectionRange = function(...args) {
+                    globalThis.__kokaineNativeSelectionReplays += 1;
+                    return setSelectionRange.apply(this, args);
+                };
+                globalThis.__removeNativeSelectionProbe = () => {
+                    input.setSelectionRange = setSelectionRange;
+                    input.remove();
+                };
+            }"""
+        )
         assert invoke(page, "move") is True
-        move_connections = page.evaluate("globalThis.__kokaineKeyedConnections")
-        assert move_connections == [], (
-            "a keyed move reconnected rows before their accessors committed: "
-            f"{move_connections!r}"
+        page.evaluate(
+            "() => new Promise(resolve => requestAnimationFrame(resolve))"
+        )
+        assert page.evaluate("globalThis.__kokaineNativeSelectionReplays") == 0, (
+            "native keyed move replayed an already-preserved selection"
+        )
+        assert page.locator("#keyed-native-selection-probe").evaluate(
+            """input => document.activeElement === input &&
+                input.selectionStart === 1 &&
+                input.selectionEnd === 5 &&
+                input.selectionDirection === 'backward'"""
         )
         assert order(page, "#keyed-move-list") == [3, 1, 2]
         assert_same(move_one, "#keyed-move-row-1")
         assert_same(move_two, "#keyed-move-row-2")
         assert_same(move_three, "#keyed-move-row-3")
+        assert_same(move_raw, "#keyed-move-row-2 > .keyed-raw-probe")
 
         assert invoke(page, "moveReset") is True
+        page.evaluate("globalThis.__removeNativeSelectionProbe()")
         assert order(page, "#keyed-move-list") == [1, 2, 3]
+        page.evaluate(
+            """() => {
+                const parent = document.querySelector('#keyed-move-list');
+                Object.defineProperty(parent, 'moveBefore', {
+                    configurable: true,
+                    value: undefined
+                });
+                const probe = document.querySelector(
+                    '#keyed-move-row-3 > .keyed-raw-probe'
+                );
+                probe.id = 'keyed-known-shadow-host-focus';
+                probe.tabIndex = 0;
+                probe.focus();
+            }"""
+        )
+        assert invoke(page, "move") is True
+        assert order(page, "#keyed-move-list") == [3, 1, 2]
+        assert page.locator("#keyed-known-shadow-host-focus").evaluate(
+            "node => document.activeElement === node"
+        ), "fallback rejected or lost focus on a known ordinary div"
+        page.evaluate(
+            """() => {
+                const probe = document.querySelector(
+                    '#keyed-known-shadow-host-focus'
+                );
+                probe.removeAttribute('id');
+                probe.removeAttribute('tabindex');
+                delete document.querySelector('#keyed-move-list').moveBefore;
+            }"""
+        )
+        assert invoke(page, "moveReset") is True
+        assert order(page, "#keyed-move-list") == [1, 2, 3]
+
+        iframe_handle = page.locator("#keyed-iframe").element_handle()
+        assert iframe_handle is not None
+        iframe = iframe_handle.content_frame()
+        assert iframe is not None
+        iframe.evaluate(
+            """() => {
+                const parent = document.querySelector('#keyed-iframe-list');
+                Object.defineProperty(parent, 'moveBefore', {
+                    configurable: true,
+                    value: undefined
+                });
+                const input = document.createElement('input');
+                input.id = 'keyed-iframe-focus';
+                input.value = 'iframe-selection';
+                document.querySelector('#keyed-iframe-row-3').append(input);
+                input.focus();
+                input.setSelectionRange(1, 4, 'backward');
+            }"""
+        )
+        assert iframe.locator("#keyed-iframe-focus").evaluate(
+            "input => document.activeElement === input"
+        ), "iframe focus precondition was not established"
+        assert invoke(page, "iframeMove") is True
+        assert order(iframe, "#keyed-iframe-list") == [3, 1, 2]
+        assert iframe.locator("#keyed-iframe-focus").evaluate(
+            """input => document.activeElement === input &&
+                input.selectionStart === 1 &&
+                input.selectionEnd === 4 &&
+                input.selectionDirection === 'backward'"""
+        ), "fallback keyed move lost foreign-parent focus or selection"
+        iframe.evaluate(
+            """() => {
+                document.querySelector('#keyed-iframe-focus').remove();
+                delete document.querySelector('#keyed-iframe-list').moveBefore;
+            }"""
+        )
+        assert invoke(page, "iframeMoveReset") is True
+        assert order(iframe, "#keyed-iframe-list") == [1, 2, 3]
+        page.evaluate(
+            """() => {
+                const parent = document.querySelector('#keyed-move-list');
+                const nativeInsert = parent.insertBefore;
+                const input = document.createElement('input');
+                input.id = 'keyed-detached-focus-probe';
+                document.querySelector('#keyed-move-row-3').append(input);
+                input.focus();
+                Object.defineProperty(parent, 'moveBefore', {
+                    configurable: true,
+                    value: undefined
+                });
+                let detached = false;
+                parent.insertBefore = function detachFocusedNode(child, before) {
+                    const result = nativeInsert.call(this, child, before);
+                    if (!detached) {
+                        detached = true;
+                        input.remove();
+                    }
+                    return result;
+                };
+                globalThis.__restoreDetachedFocusMove = () => {
+                    parent.insertBefore = nativeInsert;
+                    delete parent.moveBefore;
+                };
+            }"""
+        )
+        assert invoke(page, "move") is False
+        page.evaluate("globalThis.__restoreDetachedFocusMove()")
+        assert order(page, "#keyed-move-list") == [1, 2, 3]
+        assert page.locator("#keyed-detached-focus-probe").count() == 0
+        assert invoke(page, "moveReset") is True
+
+        page.evaluate(
+            """() => {
+                const parent = document.querySelector('#keyed-move-list');
+                Object.defineProperty(parent, 'moveBefore', {
+                    configurable: true,
+                    value: undefined
+                });
+                const host = document.createElement('div');
+                host.id = 'keyed-tracked-closed-lifecycle';
+                host.attachShadow({ mode: 'closed' }).append(
+                    document.createElement('x-kokaine-closed-lifecycle')
+                );
+                document.querySelector('#keyed-move-row-3').append(host);
+                globalThis.__kokaineClosedLifecycleEvents = [];
+                globalThis.__kokaineRecordClosedLifecycleEvents = true;
+            }"""
+        )
+        assert page.locator("#keyed-tracked-closed-lifecycle").evaluate(
+            """host => {
+                const tracker = globalThis[
+                    Symbol.for('kokaine.dom.shadow-roots')
+                ];
+                return host.shadowRoot === null &&
+                    tracker.known.has(host) && tracker.closed.has(host);
+            }"""
+        ), "post-mount closed-shadow host was not tracked"
+        assert invoke(page, "move") is False
+        assert page.evaluate("globalThis.__kokaineClosedLifecycleEvents") == [], (
+            "a tracked closed shadow root exposed lifecycle callbacks"
+        )
+        assert order(page, "#keyed-move-list") == [1, 2, 3]
+        page.evaluate(
+            """() => {
+                globalThis.__kokaineRecordClosedLifecycleEvents = false;
+                document.querySelector('#keyed-tracked-closed-lifecycle')
+                    .remove();
+                delete document.querySelector('#keyed-move-list').moveBefore;
+            }"""
+        )
+        assert invoke(page, "moveReset") is True
+
+        page.evaluate(
+            """() => {
+                const parent = document.querySelector('#keyed-move-list');
+                Object.defineProperty(parent, 'moveBefore', {
+                    configurable: true,
+                    value: undefined
+                });
+                document.querySelector('#keyed-move-row-3').append(
+                    globalThis.__kokainePreexistingClosedLifecycleHost
+                );
+                globalThis.__kokaineClosedLifecycleEvents = [];
+                globalThis.__kokaineRecordClosedLifecycleEvents = true;
+            }"""
+        )
+        assert page.locator(
+            "#keyed-preexisting-closed-lifecycle"
+        ).evaluate(
+            """host => {
+                const tracker = globalThis[
+                    Symbol.for('kokaine.dom.shadow-roots')
+                ];
+                return host.shadowRoot === null &&
+                    !tracker.known.has(host) && !tracker.closed.has(host);
+            }"""
+        ), "pre-mount closed-shadow host was accidentally tracked"
+        assert invoke(page, "move") is False
+        assert page.evaluate("globalThis.__kokaineClosedLifecycleEvents") == [], (
+            "a preexisting closed shadow root exposed lifecycle callbacks"
+        )
+        assert order(page, "#keyed-move-list") == [1, 2, 3]
+        page.evaluate(
+            """() => {
+                globalThis.__kokaineRecordClosedLifecycleEvents = false;
+                globalThis.__kokainePreexistingClosedLifecycleHost.remove();
+                delete document.querySelector('#keyed-move-list').moveBefore;
+            }"""
+        )
+        assert invoke(page, "moveReset") is True
+
+        page.evaluate(
+            """() => {
+                const prototype = Element.prototype;
+                const descriptor = Object.getOwnPropertyDescriptor(
+                    prototype,
+                    'attachShadow'
+                );
+                const trackedAttachShadow = descriptor.value;
+                Object.defineProperty(prototype, 'attachShadow', {
+                    ...descriptor,
+                    value(...args) {
+                        return trackedAttachShadow.apply(this, args);
+                    }
+                });
+                globalThis.__restoreKokaineShadowTracker = () => {
+                    Object.defineProperty(
+                        prototype,
+                        'attachShadow',
+                        descriptor
+                    );
+                };
+            }"""
+        )
+        assert invoke(page, "move") is False
+        assert order(page, "#keyed-move-list") == [1, 2, 3]
+        page.evaluate("globalThis.__restoreKokaineShadowTracker()")
+        assert invoke(page, "moveReset") is True
+
+        page.evaluate(
+            """() => {
+                const parent = document.querySelector('#keyed-move-list');
+                Object.defineProperty(parent, 'moveBefore', {
+                    configurable: true,
+                    value: undefined
+                });
+                const frame = document.createElement('iframe');
+                document.body.append(frame);
+                const foreign = frame.contentWindow;
+                globalThis.__kokaineForeignLifecycleEvents = [];
+                globalThis.__kokaineRecordForeignLifecycleEvents = false;
+                foreign.customElements.define(
+                    'x-kokaine-foreign-button',
+                    class extends foreign.HTMLButtonElement {
+                        connectedCallback() {
+                            if (
+                                globalThis
+                                    .__kokaineRecordForeignLifecycleEvents
+                            ) {
+                                globalThis.__kokaineForeignLifecycleEvents
+                                    .push('connect');
+                            }
+                        }
+
+                        disconnectedCallback() {
+                            if (
+                                globalThis
+                                    .__kokaineRecordForeignLifecycleEvents
+                            ) {
+                                globalThis.__kokaineForeignLifecycleEvents
+                                    .push('disconnect');
+                            }
+                        }
+                    },
+                    { extends: 'button' }
+                );
+                const probe = foreign.document.createElement(
+                    'button',
+                    { is: 'x-kokaine-foreign-button' }
+                );
+                probe.id = 'keyed-foreign-lifecycle';
+                document.querySelector('#keyed-move-row-3').append(probe);
+                globalThis.__kokaineForeignLifecycleFrame = frame;
+                globalThis.__kokaineForeignLifecycleEvents = [];
+                globalThis.__kokaineRecordForeignLifecycleEvents = true;
+            }"""
+        )
+        assert invoke(page, "move") is False
+        assert page.evaluate("globalThis.__kokaineForeignLifecycleEvents") == [], (
+            "a foreign-realm customized built-in bypassed lifecycle preflight"
+        )
+        assert order(page, "#keyed-move-list") == [1, 2, 3]
+        page.evaluate(
+            """() => {
+                globalThis.__kokaineRecordForeignLifecycleEvents = false;
+                document.querySelector('#keyed-foreign-lifecycle').remove();
+                globalThis.__kokaineForeignLifecycleFrame.remove();
+                delete document.querySelector('#keyed-move-list').moveBefore;
+            }"""
+        )
+        assert invoke(page, "moveReset") is True
+
+        customized_attribute = page.evaluate(
+            """() => {
+                if (!customElements.get('x-kokaine-customized-button')) {
+                    customElements.define(
+                        'x-kokaine-customized-button',
+                        class extends HTMLButtonElement {
+                            /* [native code] is ordinary user source here. */
+                            connectedCallback() {
+                                if (
+                                    globalThis
+                                        .__kokaineRecordCustomizedEvents
+                                ) {
+                                    globalThis.__kokaineCustomizedEvents
+                                        .push('connect');
+                                }
+                            }
+
+                            disconnectedCallback() {
+                                if (
+                                    globalThis
+                                        .__kokaineRecordCustomizedEvents
+                                ) {
+                                    globalThis.__kokaineCustomizedEvents
+                                        .push('disconnect');
+                                }
+                            }
+                        },
+                        { extends: 'button' }
+                    );
+                }
+                const parent = document.querySelector('#keyed-move-list');
+                Object.defineProperty(parent, 'moveBefore', {
+                    configurable: true,
+                    value: undefined
+                });
+                const probe = document.createElement(
+                    'button',
+                    { is: 'x-kokaine-customized-button' }
+                );
+                Object.setPrototypeOf(
+                    probe,
+                    HTMLButtonElement.prototype
+                );
+                probe.id = 'keyed-customized-lifecycle';
+                document.querySelector('#keyed-move-row-3').append(probe);
+                globalThis.__kokaineCustomizedEvents = [];
+                globalThis.__kokaineRecordCustomizedEvents = true;
+                return probe.getAttribute('is');
+            }"""
+        )
+        assert customized_attribute is None, (
+            "customized built-in precondition unexpectedly became inspectable"
+        )
+        assert invoke(page, "move") is False
+        assert page.evaluate("globalThis.__kokaineCustomizedEvents") == [], (
+            "a customized built-in bypassed lifecycle preflight"
+        )
+        assert order(page, "#keyed-move-list") == [1, 2, 3]
+        page.evaluate(
+            """() => {
+                globalThis.__kokaineRecordCustomizedEvents = false;
+                document.querySelector('#keyed-customized-lifecycle').remove();
+                delete document.querySelector('#keyed-move-list').moveBefore;
+            }"""
+        )
+        assert invoke(page, "moveReset") is True
         page.evaluate(
             """() => {
                 const probe = document.createElement(
@@ -490,7 +1031,9 @@ with serve_project() as origin:
             }"""
         )
         assert invoke(page, "move") is False
-        assert page.evaluate("globalThis.__kokaineUnmovableEvents") == []
+        assert page.evaluate("globalThis.__kokaineUnmovableEvents") == [], (
+            "a late-added move callback bypassed custom-element preflight"
+        )
         assert order(page, "#keyed-move-list") == [1, 2, 3]
         page.evaluate(
             """() => {
@@ -502,11 +1045,15 @@ with serve_project() as origin:
 
         page.evaluate(
             """() => {
-                const parent = document.querySelector('#keyed-move-list');
-                const nativeMove = parent.moveBefore;
+                const prototype = Element.prototype;
+                const descriptor = Object.getOwnPropertyDescriptor(
+                    prototype,
+                    'moveBefore'
+                );
+                const nativeMove = descriptor.value;
                 let injected = false;
-                Object.defineProperty(parent, 'moveBefore', {
-                    configurable: true,
+                Object.defineProperty(prototype, 'moveBefore', {
+                    ...descriptor,
                     value(node, before) {
                         const result = nativeMove.call(this, node, before);
                         if (!injected) {
@@ -522,10 +1069,17 @@ with serve_project() as origin:
                         return result;
                     }
                 });
+                globalThis.__restoreKeyedRogueMove = () => {
+                    Object.defineProperty(
+                        prototype,
+                        'moveBefore',
+                        descriptor
+                    );
+                };
             }"""
         )
         assert invoke(page, "move") is False
-        page.evaluate("delete document.querySelector('#keyed-move-list').moveBefore")
+        page.evaluate("globalThis.__restoreKeyedRogueMove()")
         assert page.locator("#keyed-move-rogue").count() == 1
         assert order(page, "#keyed-move-list") == [1, 2, 3]
         assert_same(move_one, "#keyed-move-row-1")
@@ -539,11 +1093,15 @@ with serve_project() as origin:
         assert invoke(page, "moveReset") is True
         page.evaluate(
             """() => {
-                const parent = document.querySelector('#keyed-move-list');
-                const nativeMove = parent.moveBefore;
+                const prototype = Element.prototype;
+                const descriptor = Object.getOwnPropertyDescriptor(
+                    prototype,
+                    'moveBefore'
+                );
+                const nativeMove = descriptor.value;
                 let retired = false;
-                Object.defineProperty(parent, 'moveBefore', {
-                    configurable: true,
+                Object.defineProperty(prototype, 'moveBefore', {
+                    ...descriptor,
                     value(node, before) {
                         const result = nativeMove.call(this, node, before);
                         if (!retired) {
@@ -554,9 +1112,17 @@ with serve_project() as origin:
                         return result;
                     }
                 });
+                globalThis.__restoreKeyedRetireMove = () => {
+                    Object.defineProperty(
+                        prototype,
+                        'moveBefore',
+                        descriptor
+                    );
+                };
             }"""
         )
         assert invoke(page, "move") is False
+        page.evaluate("globalThis.__restoreKeyedRetireMove()")
         assert page.evaluate("globalThis.__kokaineRetireKeyedMoveResult") is True
         assert page.locator("#keyed-move-root").evaluate(
             "node => node.childNodes.length"
@@ -721,6 +1287,7 @@ with serve_project() as origin:
             assert page.locator(selector).evaluate(
                 "node => node.childNodes.length"
             ) == 0
+        assert iframe.evaluate("document.body.childNodes.length") == 0
 
         assert page_errors == [], f"uncaught browser errors: {page_errors!r}"
         assert console_errors == [], f"console errors: {console_errors!r}"
