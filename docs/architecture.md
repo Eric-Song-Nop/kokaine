@@ -556,7 +556,14 @@ matching scope supervisor. A hostile disposer can therefore re-enter only after
 all affected tasks are terminal and every registry count is zero. The family
 indexes active scope supervisors directly by opaque scope identity and keeps a
 separate intrusive registry for subtree enumeration. Steady-state completion and
-sibling-heavy setup therefore do not scan or compact a stale task list.
+sibling-heavy setup therefore do not scan or compact a stale task list. The
+direct index is a reclaimable hash table: intrusive registrations unlink in
+O(1), geometric rehashing is amortized O(1), and deletion shrinks capacity back
+toward the number of active scopes instead of retaining a historical ID/vector
+high-water. Scope equality and ancestry require both namespace and process-wide
+identity, so a foreign root cannot cancel or mark the family's native scopes.
+The actual family root still claims every family-owned supervisor explicitly,
+including a deliberately routed foreign scope.
 
 Every lifetime in one root execution plane shares a retirement coordinator.
 If a detached cleanup snapshot requests `root.dispose()`, the root immediately
@@ -609,6 +616,8 @@ complete rollback snapshot, and stale handles no longer retain sibling values.
   cannot enter a retained callback.
 - `async-effects.kk` and `structured-async.kk` check await, final
   cancellation, ordered groups, loser draining, and cleanup failure rules.
+- `internal-int-index.kk` checks 12,000 keyed registrations, geometric growth
+  and shrink, collision unlink, key reuse, and stale-handle severance.
 - `async-owner-registration.kk` checks both completion-first and
   retirement-first races and requires every disposer/finally to observe all
   same-scope task and owner registrations already detached. It also covers
