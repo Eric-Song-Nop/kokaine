@@ -7,6 +7,7 @@ module examples/report/code-tabs
 import kokaine/reactive
 import kokaine/html
 import kokaine/dom
+import kokaine/web/window
 
 
 pub struct code-tabs-model(
@@ -35,6 +36,7 @@ fun code-tab-key-target(current : int, key : string) : maybe<int>
 
 fun activate-code-tab(model : code-tabs-model, index : int)
   model.code-tabs-active.set(index)
+  focus-selector("#" ++ code-tab-id(index))
 
 fun handle-code-tab-key(model : code-tabs-model, value : event)
   match code-tab-key-target(model.code-tabs-active.get,value.key)

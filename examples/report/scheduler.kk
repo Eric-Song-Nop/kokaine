@@ -11,6 +11,9 @@ module examples/report/scheduler
 import kokaine/reactive
 import kokaine/html
 import kokaine/dom
+import kokaine/async/web
+import kokaine/web/window
+import std/time/duration
 
 
 pub struct scheduler-model(
@@ -164,6 +167,12 @@ fun next-step(root : root<<ui>>, model : scheduler-model) : callback-effect ()
       else ()
       model.scheduler-step.set(following)
 
+fun scheduler-auto-delay() : ui duration
+  if prefers-reduced-motion() then 90.milli-seconds else 900.milli-seconds
+
+// The DOM callback already runs inside the generation async delimiter. Sleep
+// suspends this Koka continuation and its disposer belongs to that generation;
+// the host timer never invokes report policy directly.
 fun run-auto-step(auto-root : root<<ui>>, model : scheduler-model,
                   generation : int) : callback-effect ()
   if !model.scheduler-auto.get ||
@@ -177,7 +186,9 @@ fun run-auto-step(auto-root : root<<ui>>, model : scheduler-model,
 
     if model.scheduler-step.get >= 5
     then model.scheduler-auto.set(False)
-    else ()
+    else
+      sleep(scheduler-auto-delay())
+      run-auto-step(auto-root,model,generation)
 
 fun toggle-auto(auto-root : root<<ui>>, model : scheduler-model)
                 : callback-effect ()
