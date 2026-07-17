@@ -1,16 +1,26 @@
 /*--------------------------------------------------------------------------
-  One shared reactive graph for every executable island in the report.
+  One shared reactive graph for the complete executable report.
 
-  Keeping the sources and projections together makes an important property
-  visible: the four mounts are separate DOM ranges, but they are all owned by
-  one Kokaine root and participate in one scheduler.
+  Document chrome, narrative labs, and the embedded experiments all belong to
+  one Kokaine root, one scheduler, and one mounted DOM generation.
 --------------------------------------------------------------------------*/
 module examples/report/model
 
 import kokaine/reactive
+import examples/report/scheduler
+import examples/report/batching
+import examples/report/comparison
+import examples/report/code-tabs
 
 
 pub struct report-model(
+  report-scheduler           : scheduler-model,
+  report-batching            : batching-model,
+  report-comparison          : comparison-model,
+  report-code-tabs           : code-tabs-model,
+  report-toc-open            : signal<bool>,
+  report-active-section      : signal<string>,
+  report-demo-revision       : signal<int>,
   report-feature             : signal<string>,
   report-flow-count          : signal<int>,
   report-flow-square         : memo<int>,
@@ -33,6 +43,13 @@ fun magnitude(value : int) : int
   if value < 0 then 0 - value else value
 
 pub fun report-create(root)
+  val scheduler = scheduler-create(root)
+  val batching = batching-create(root)
+  val comparison = comparison-create(root)
+  val code-tabs = code-tabs-create(root)
+  val toc-open = signal(root,False)
+  val active-section = signal(root,"abstract")
+  val demo-revision = signal(root,0)
   val feature = signal(root,"effects")
 
   val flow-count = signal(root,2)
@@ -47,8 +64,8 @@ pub fun report-create(root)
   // These are state-entry computations: `previous` belongs to the memo
   // capability, not to a second mutable signal hidden behind the example.
   val flow-revision = memo(root,0,fn(previous)
-    val current = flow-count.get
-    if current == current then previous + 1 else previous + 1
+    val _ = flow-count.get
+    previous + 1
   )
   val flow-peak = memo(root,2,fn(previous)
     val current = magnitude(flow-count.get)
@@ -67,10 +84,10 @@ pub fun report-create(root)
     else "当前计数 " ++ dynamic-count.get
   )
   val dynamic-runs = memo(root,0,fn(previous)
-    val selected = if dynamic-name-mode.get
-                   then dynamic-name.get
-                   else dynamic-count.get
-    if selected == "" then previous + 1 else previous + 1
+    val _ = if dynamic-name-mode.get
+            then dynamic-name.get
+            else dynamic-count.get
+    previous + 1
   )
 
   val owner-visible = signal(root,True)
@@ -79,6 +96,13 @@ pub fun report-create(root)
   val owner-cleanups = signal(root,0)
 
   Report-model(
+    scheduler,
+    batching,
+    comparison,
+    code-tabs,
+    toc-open,
+    active-section,
+    demo-revision,
     feature,
     flow-count,
     flow-square,

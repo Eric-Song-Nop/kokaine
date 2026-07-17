@@ -39,7 +39,8 @@ memos, and re-entry capabilities. Its implementation is split by responsibility:
 | `kokaine/control.kk` | memo branches and list/vector keyed control flow |
 | `internal/runtime.kk` | roots and high-level signal, memo, and effect operations |
 | `internal/bridge.kk` | unambiguous calls from the opaque facade |
-| `kokaine/async/{effects,structured,web}.kk` | async algebra, groups, and host adapters |
+| `kokaine/async/{effects,structured,web}.kk` | async algebra, groups, and timer/fetch adapters |
+| `kokaine/web/window.kk` | one-shot window awaits, focus, and geometry |
 | `kokaine/resource.kk` | tracked-source async Resource |
 
 Koka has no package-private visibility. Concrete internal types are therefore
@@ -579,8 +580,11 @@ context solely to discontinue the parked strand after its frame is dead. The
 `AppRunner` still surrounds that complete cancellation turn, while any attempt
 by a canceling `finally` to register fresh work is rejected by the dead frame.
 
-Promise, timer, Fetch, structured concurrency, and `Resource` adapters all use
-this protocol. Host values which intentionally outlive one await use a separate
+Promise, timer, Fetch, window-event, structured concurrency, and `Resource`
+adapters all use this protocol. The window adapter races revocable one-shot
+`scroll` and `hashchange` awaits; its ABI callback only clears the subscription
+and completes the await, while application policy runs after generation
+re-entry. Host values which intentionally outlive one await use a separate
 one-shot disposer lease; Fetch transfers that lease from header delivery to
 body consumption or explicit discard instead of leaving it in the completed
 task. Both generation lease groups and structured child discard ledgers use the
@@ -629,6 +633,9 @@ complete rollback snapshot, and stale handles no longer retain sibling values.
   host protocol.
 - `async-resource.kk` checks refresh, cancellation, stale results, and host
   value lease promotion/replacement.
+- `report_html.py` and `browser_report.py` require one Koka-owned document,
+  revocable window awaits, scheduler sleep ownership, responsive navigation,
+  and the complete report interaction surface in Chromium.
 
 The browser renderer still replaces all content between an ordinary region's
 persistent markers. `Keyed-region` adds explicit business-key reconciliation;
