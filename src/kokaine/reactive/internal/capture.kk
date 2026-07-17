@@ -7,6 +7,7 @@ import kokaine/reactive/internal/model
 import kokaine/reactive/effects
 import kokaine/reactive/internal/lifetime
 import kokaine/reactive/internal/scheduler
+import kokaine/reactive/internal/registry
 import std/core/undiv
 
 // --------------------------------------------------------------------------
@@ -49,9 +50,7 @@ pub fun reify-trace(root : root<r>, plane : plane<e>,
               val gate = Continuation-gate(
                 state,load(plane.plane-current),Nothing)
               val child = cell(Trace-end)
-              val token = cell(Scope-starting)
-              val owned = cell(Owned-end)
-              val current-frame = Frame(token,owned)
+              val current-frame = Frame(new-lifetime-owner(Scope-starting))
               val current-frame-slot = cell(current-frame)
               val self = cell(Trace-end)
               val current = Trace-entry(
@@ -84,13 +83,16 @@ pub fun reify-trace(root : root<r>, plane : plane<e>,
               val gate = Continuation-gate(
                 state,load(plane.plane-current),producer)
               val child = cell(Trace-end)
-              val token = cell(Scope-starting)
-              val owned = cell(Owned-end)
-              val current-frame = Frame(token,owned)
+              val current-frame = Frame(new-lifetime-owner(Scope-starting))
               val current-frame-slot = cell(current-frame)
+              val registration : ref<global,maybe<registry-registration<packed-capture>>> = cell(Nothing)
               val unlink = fn()
-                store(source.source-captures,
-                      compact-captures(load(source.source-captures)))
+                match load(registration)
+                  Nothing -> ()
+                  Just(current-registration) ->
+                    store(registration,Nothing)
+                    val _ = current-registration.take
+                    ()
               val current = Trace-read(
                 gate,
                 owner-slot,
@@ -113,9 +115,9 @@ pub fun reify-trace(root : root<r>, plane : plane<e>,
               val target = match entry
                 Nothing -> current
                 Just(entry-target) -> entry-target
-              store(source.source-captures,
-                    Cons(pack-capture(plane,target,current),
-                         load(source.source-captures)))
+              val registered = source.source-captures.insert(
+                pack-capture(plane,target,current))
+              store(registration,Just(registered))
               val nested = with-entry(plane,entry,fn()
                 with-current(plane,current,current-frame,
                   fn() rcontext.resume(load(source.source-cell)))
@@ -136,24 +138,24 @@ pub fun prepare-trace(root : root<r>, plane : plane<e>,
                   track : () -> <signal-read,pure> a,
                   publish : (value : a) -> <div,exn|e> ())
                  : (continuation-scope<e>,work<e>,disposer<e>)
-  val state = cell(Scope-starting)
-  val structural-prefix = cell(Owned-end)
+  val lifetime = new-lifetime-owner(Scope-starting)
+  val state = lifetime.lifetime-token
   val body = cell(Trace-end)
   val bootstrap-slot : ref<global,maybe<() -> <div|e> error<()>>> = cell(Nothing)
-  val current = Scope(state,structural-prefix,body,parent,bootstrap-slot)
+  val current = Scope(lifetime,body,parent,bootstrap-slot,cell(Nothing))
   val bootstrap-run = fn()
     match load(state)
       Scope-starting ->
-        val scope-frame = Frame(state,structural-prefix)
+        val scope-frame = Frame(lifetime)
         val drafts = cell([])
         val completed = cell(False)
         finally(
           fn() lift-div(fn(){
             if load(completed) then () else
-              // `run-bootstrap` retires the scope on a non-local exit; these
-              // raw captures are not attached to scope.body yet and therefore
-              // need their own dynamic rollback.
-              val _ = try-retire-drafts(load(drafts))
+              // A final control operation cannot return through `error/try`.
+              // Claim both the unpublished scope and every raw capture before
+              // the first draft-owned cleanup is allowed to re-enter user code.
+              val _ = try-retire-scope-drafts(current,load(drafts))
               ()
           }),
           fn() lift-div(fn()
@@ -167,16 +169,14 @@ pub fun prepare-trace(root : root<r>, plane : plane<e>,
             }
             val result = match attempt
               Error(failure) ->
-                val _ = pretend-no-div{ error/try(fn() retire-scope(current)) }
-                val _ = try-retire-drafts(load(drafts))
+                val _ = try-retire-scope-drafts(current,load(drafts))
                 Error(failure)
               Ok(built) ->
                 val publish-built = built.built-publish
                 val publication = pretend-no-div{ publish-built() }
                 match publication
                   Error(failure) ->
-                    val _ = pretend-no-div{ error/try(fn() retire-scope(current)) }
-                    val _ = try-retire-drafts(load(drafts))
+                    val _ = try-retire-scope-drafts(current,load(drafts))
                     Error(failure)
                   Ok(_) ->
                     match load(state)
@@ -186,7 +186,7 @@ pub fun prepare-trace(root : root<r>, plane : plane<e>,
                         store(state,Scope-live)
                         Ok(())
                       _ ->
-                        val _ = try-retire-drafts(load(drafts))
+                        val _ = try-retire-scope-drafts(current,load(drafts))
                         Ok(())
             store(completed,True)
             result

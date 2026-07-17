@@ -26,8 +26,7 @@ effect resource-park
 abstract type resource-k<e::E>
   Resource-done
   Resource-parked(
-    resource-live     : ref<global,bool>,
-    resource-finalize : () -> <div,exn|e> ()
+    resource-finalizer : ref<global,maybe<() -> <div,exn|e> ()>>
   )
 
 fun run-finalizer(finalizer : () -> <div,exn|e> ())
@@ -41,23 +40,45 @@ pub fun capture-resource(finalizer : () -> <div,exn|e> ()) : resource-k<e>
   // locally handled `park-resource` is unconditionally reached before the
   // finalizer can execute. This is the same controlled cast used to package
   // other effectful computations as opaque capabilities.
+  val pending : ref<global,maybe<() -> <div,exn|e> ()>> = cell(Nothing)
   unsafe-total {
-    val live = cell(True)
     with raw ctl park-resource()
-      Resource-parked(live,fn()
+      val finalize = fn()
         val _ = rcontext.finalize(Resource-done)
         ()
-      )
+      store(pending,Just(finalize))
+      Resource-parked(pending)
     finally(fn() run-finalizer(finalizer),fn() park-resource())
     Resource-done
   }
 
-pub fun finalize-resource(resource : resource-k<e>) : <div,exn|e> ()
+fun claim-resource(resource : resource-k<e>)
+                  : maybe<() -> <div,exn|e> ()>
   match resource
-    Resource-done -> ()
-    Resource-parked(live,finalize) ->
-      if !load(live) then () else
-        // Consume before entering user cleanup. Recursive or aliased retirement
-        // therefore cannot finalize this one-shot continuation twice.
-        store(live,False)
-        finalize()
+    Resource-done -> Nothing
+    Resource-parked(pending) ->
+      val claimed = load(pending)
+      store(pending,Nothing)
+      claimed
+
+// Internal observability for ownership tests. This reports whether an aliased
+// resource still retains the parked continuation closure, not merely whether
+// that continuation is allowed to run.
+pub fun resource-retains-finalizer(resource : resource-k<e>) : bool
+  match resource
+    Resource-done -> False
+    Resource-parked(pending) -> load(pending).is-just
+
+pub fun finalize-resource(resource : resource-k<e>) : <div,exn|e> ()
+  match claim-resource(resource)
+    Nothing -> ()
+    Just(finalize) ->
+      // Consume before entering user cleanup. Recursive or aliased retirement
+      // therefore cannot finalize this one-shot continuation twice.
+      finalize()
+
+// Explicit unregistration consumes the capability without entering its
+// parked finalizer. This is intentionally distinct from retirement: callers
+// can prove that a detached cleanup can never be observed again.
+pub fun discard-resource(resource : resource-k<e>) : bool
+  claim-resource(resource).is-just
