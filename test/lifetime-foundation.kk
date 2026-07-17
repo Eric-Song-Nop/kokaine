@@ -2,8 +2,25 @@ module lifetime-foundation
 
 import kokaine/reactive/internal/model
 import kokaine/reactive/internal/runtime
+import kokaine/reactive/internal/capture
+import kokaine/reactive/internal/lifetime
+import kokaine/reactive/internal/registry
+import kokaine/reactive/internal/scheduler
 import std/core/unsafe
 import std/core/undiv
+
+
+effect ctl abandon-bootstrap() : ()
+
+fun completes-bootstrap(action : () -> <abandon-bootstrap,exn> bool)
+                       : exn bool
+  with final ctl abandon-bootstrap() False
+  action()
+
+fun require-bootstrap(action : () -> <abandon-bootstrap,exn> a) : exn a
+  with final ctl abandon-bootstrap()
+    throw("unexpected bootstrap abandonment")
+  action()
 
 
 fun hidden(value : a) : ref<global,a>
@@ -75,8 +92,84 @@ fun test-wide-retirement-is_stack_safe()
   root.dispose()
   check(hidden-load(runs) == size,"wide retirement remains idempotent")
 
+fun test-attempt-build-leaves-drafts-for-aggregate-retirement()
+  val (root,source) : (root<<abandon-bootstrap>>,signal<int>) =
+    require-bootstrap fn() create-root fn(root) signal(root,0)
+  val plane = root.root-effect-plane
+  val drafts : ref<global,list<trace<<abandon-bootstrap>>>> = hidden([])
+  val owner-slot : ref<global,maybe<derive-producer>> = cell(Nothing)
+
+  val completed = completes-bootstrap fn()
+    val _ = lift-exn(fn()
+      pretend-no-div{
+        attempt-build(plane,drafts,fn()
+          val built = reify-trace(
+            root,plane,owner-slot,fn() source.get,fn(_) ())
+          abandon-bootstrap()
+          built
+        )
+      }
+    )
+    True
+
+  check(!completed,"final control must abandon the draft transaction")
+  match hidden-load(drafts)
+    Nil -> throw("lifetime foundation: draft transaction captured no trace")
+    Cons(current,_) ->
+      match current.trace-state-of
+        Capture-draft -> ()
+        _ -> throw(
+          "lifetime foundation: attempt-build retired caller-owned drafts")
+  val cleaned = completes-bootstrap fn()
+    pretend-no-div{ retire-drafts(hidden-load(drafts)) }
+    root.dispose()
+    True
+  check(cleaned,"explicit aggregate cleanup must complete normally")
+
+fun test-bootstrap-abort-detaches-scope-before-draft-cleanup()
+  val scope-was-dead = hidden(False)
+  val scope-token : ref<global,maybe<ref<global,scope-state>>> = hidden(Nothing)
+  val (root,current) = require-bootstrap fn()
+    create-root fn(root)
+      val source = signal(root,0)
+      val owner-slot : ref<global,maybe<derive-producer>> = cell(Nothing)
+      val (current,_,_) = prepare-trace(
+        root,root.root-effect-plane,owner-slot,Nothing,
+        fn() source.get,
+        fn(_)
+          val frame = load(root.root-effect-plane.plane-current-frame)
+          val _ = frame.frame-lifetime.register-finalizer(
+            Retirement-finalizer(fn()
+              match hidden-load(scope-token)
+                Nothing -> ()
+                Just(token) ->
+                  match load(token)
+                    Scope-dead -> hidden-store(scope-was-dead,True)
+                    _ -> ()
+            )
+          )
+          abandon-bootstrap()
+      )
+      hidden-store(scope-token,Just(current.scope-lifetime.lifetime-token))
+      current
+
+  val completed = completes-bootstrap fn()
+    val _ = lift-exn(fn()
+      pretend-no-div{ run-bootstrap(current) }
+    )
+    True
+  check(!completed,"final control must abandon the bootstrap publication")
+  check(hidden-load(scope-was-dead),
+        "bootstrap rollback must detach its scope before raw draft cleanup")
+  val disposed = completes-bootstrap fn()
+    root.dispose()
+    True
+  check(disposed,"root disposal after bootstrap rollback must complete")
+
 pub fun main()
   test-explicit-unregister-discards-without-running()
   test-retirement-snapshot-cannot-lose-a-sibling()
   test-wide-retirement-is_stack_safe()
+  test-attempt-build-leaves-drafts-for-aggregate-retirement()
+  test-bootstrap-abort-detaches-scope-before-draft-cleanup()
   println("lifetime-foundation: all checks passed")
