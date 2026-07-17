@@ -71,20 +71,52 @@ def exclusive_lock(
 
 def _forward_signal(process: subprocess.Popen, number: int) -> None:
     try:
-        if os.name == "nt":
-            if number == signal.SIGINT:
-                process.send_signal(signal.CTRL_C_EVENT)
-            elif number == getattr(signal, "SIGBREAK", None):
-                process.send_signal(signal.CTRL_BREAK_EVENT)
-            else:
-                process.terminate()
-        else:
-            os.killpg(process.pid, number)
+        os.killpg(process.pid, number)
     except ProcessLookupError:
         pass
 
 
-def _run_command(command):
+def _process_group_has_live_members(group: int) -> bool:
+    try:
+        snapshot = subprocess.run(
+            ["ps", "-A", "-o", "pgid=", "-o", "state="],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    except OSError:
+        snapshot = None
+
+    if snapshot is not None and snapshot.returncode == 0:
+        for line in snapshot.stdout.splitlines():
+            fields = line.split()
+            if len(fields) < 2:
+                continue
+            try:
+                member_group = int(fields[0])
+            except ValueError:
+                continue
+            if member_group == group and not fields[1].startswith("Z"):
+                return True
+        return False
+
+    try:
+        os.killpg(group, 0)
+    except ProcessLookupError:
+        return False
+    return True
+
+
+def _wait_for_process_group(group: int) -> None:
+    while _process_group_has_live_members(group):
+        time.sleep(0.05)
+
+
+def _run_command(command, platform: str = os.name):
+    if platform == "nt":
+        return subprocess.run(command, check=False).returncode, None
+
     received_signals = []
     forwarded_count = 0
     process = None
@@ -100,7 +132,7 @@ def _run_command(command):
         forward_pending()
 
     handled_signals = []
-    for name in ("SIGHUP", "SIGINT", "SIGTERM", "SIGBREAK"):
+    for name in ("SIGHUP", "SIGINT", "SIGQUIT", "SIGTERM"):
         number = getattr(signal, name, None)
         if number is not None and number not in handled_signals:
             handled_signals.append(number)
@@ -111,14 +143,13 @@ def _run_command(command):
         signal.signal(number, handle_signal)
 
     try:
-        options = {}
-        if os.name == "nt":
-            options["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
-        else:
-            options["start_new_session"] = True
-        process = subprocess.Popen(command, **options)
+        process = subprocess.Popen(command, start_new_session=True)
         forward_pending()
         returncode = process.wait()
+        if returncode < 0 and not received_signals:
+            _forward_signal(process, -returncode)
+        if received_signals or returncode < 0:
+            _wait_for_process_group(process.pid)
     finally:
         for number, handler in previous_handlers.items():
             signal.signal(number, handler)
@@ -128,7 +159,13 @@ def _run_command(command):
 
 
 def _exit_with_signal(number: int) -> int:
-    signal.signal(number, signal.SIG_DFL)
+    uncatchable = {
+        getattr(signal, name)
+        for name in ("SIGKILL", "SIGSTOP")
+        if hasattr(signal, name)
+    }
+    if number not in uncatchable:
+        signal.signal(number, signal.SIG_DFL)
     os.kill(os.getpid(), number)
     return 128 + number
 
