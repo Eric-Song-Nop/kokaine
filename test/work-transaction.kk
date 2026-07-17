@@ -167,11 +167,72 @@ fun test-abort-retires-an-unstarted-derived-scope()
         "abort retires the derived bootstrap closure without running it")
   root.dispose()
 
+fun test-abort-retires-successfully-drained-scopes()
+  val events = hidden([])
+  val (root,(source,transaction)) = create-root fn(root)
+    val source = signal(root,0)
+    val transaction = open-work-transaction(root)
+    val stop = create-effect(root,fn() source.get,fn(value)
+      emit(events,"run:" ++ value.show)
+      on-cleanup(root,fn() emit(events,"clean:" ++ value.show))
+    )
+    (source,transaction)
+
+  pretend-no-div{ drain-work-transaction(root,transaction) }
+  check(hidden-load(events) == ["run:0"],
+        "the ready transaction publishes its local scope once")
+
+  abort-work-transaction(root,transaction)
+  check(hidden-load(events) == ["run:0","clean:0"],
+        "aborting ready work retires every successfully drained scope")
+
+  update(root){ source.set(1) }
+  check(hidden-load(events) == ["run:0","clean:0"],
+        "an aborted ready scope cannot remain subscribed")
+  root.dispose()
+
+fun test-failed-transaction-abort-retires-successful-prefix()
+  val events = hidden([])
+  val (root,transaction) : (root<total>,scheduler-transaction<total>) =
+    create-root fn(root)
+      val transaction = open-work-transaction(root)
+      val first = create-effect(root,fn() (),fn(_)
+        emit(events,"first-run")
+        on-cleanup(root,fn() emit(events,"first-clean"))
+      )
+      val second = create-effect(root,fn() (),fn(_)
+        emit(events,"second-fails")
+        throw("intentional transaction drain failure")
+      )
+      transaction
+
+  val drained : error<()> = mask<exn>{
+    error/try(fn() pretend-no-div{
+      drain-work-transaction(root,transaction)
+    })
+  }
+  check(drained.is-error,"the failing local bootstrap escapes the drain")
+  match transaction.state
+    Work-failed(_) -> ()
+    _ -> throw("work transaction: a failed drain must retain failure state")
+
+  abort-work-transaction(root,transaction)
+  check(hidden-load(events) ==
+          ["first-run","second-fails","first-clean"],
+        "aborting failed work retires its successful prefix")
+  root.dispose()
+
 fun test-final-control-aborts_and_detaches_the_active_transaction()
   val abandoned-runs = hidden(0)
+  val prefix-cleanups = hidden(0)
   val built = require-transaction fn()
     create-root fn(root)
       val transaction = open-work-transaction(root)
+      val prefix-stop = create-effect(root,fn() (),fn(_)
+        on-cleanup(root,fn()
+          hidden-store(prefix-cleanups,hidden-load(prefix-cleanups) + 1)
+        )
+      )
       val pending = create-effect(root,fn() (),fn(_)
         hidden-store(abandoned-runs,hidden-load(abandoned-runs) + 1)
         abandon-transaction()
@@ -185,6 +246,8 @@ fun test-final-control-aborts_and_detaches_the_active_transaction()
   check(!completed,"final control abandons the local bootstrap turn")
   check(hidden-load(abandoned-runs) == 1,
         "the abandoning bootstrap starts exactly once")
+  check(hidden-load(prefix-cleanups) == 1,
+        "dynamic abort retires every successfully drained prefix scope")
   match transaction.state
     Work-aborted -> ()
     _ -> throw("work transaction: final control must abort the transaction")
@@ -212,5 +275,7 @@ pub fun main()
   test-scheduler-drains_only_the_local_bootstrap_group()
   test-resume_is_global_and_abort_discards_bootstrap_work()
   test-abort-retires-an-unstarted-derived-scope()
+  test-abort-retires-successfully-drained-scopes()
+  test-failed-transaction-abort-retires-successful-prefix()
   test-final-control-aborts_and_detaches_the_active_transaction()
   println("work-transaction: all checks passed")
