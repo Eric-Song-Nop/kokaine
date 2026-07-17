@@ -267,6 +267,49 @@ fun test-targeted-bootstrap-respects-invalidated-parent()
     ["parent:0","parent:1","parent:2"],
     "targeted bootstrap defers a child of a pending parent")
 
+fun run-recursive-bootstrap-order(targeted : bool) : exn list<string>
+  val events = cell([])
+  val (root,attempted) : (root<total>,error<()>) = create-root fn(root)
+    error/try fn()
+      pretend-no-div{
+        val first = internal/open-structural-owner(root)
+        internal/with-structural-owner(root,first,fn()
+          val stop = create-effect(root,fn() (),fn(_)
+            emit(events,"A:start")
+            val child = internal/open-structural-owner(root)
+            internal/with-structural-owner(root,child,fn()
+              val nested = create-effect(root,fn() (),fn(_) emit(events,"C"))
+              ()
+            )
+            if targeted then bootstrap-total(child).untry else ()
+            emit(events,"A:end")
+          )
+          ()
+        )
+
+        val second = internal/open-structural-owner(root)
+        internal/with-structural-owner(root,second,fn()
+          val stop = create-effect(root,fn() (),fn(_) emit(events,"B"))
+          ()
+        )
+
+        if targeted then bootstrap-many-total([first,second]).untry else ()
+        batch(root){ () }
+      }
+  attempted.untry
+  val result = load(events)
+  root.dispose()
+  result
+
+fun test-recursive-targeted-bootstrap-preserves-fifo()
+  val scheduled = run-recursive-bootstrap-order(False)
+  val targeted = run-recursive-bootstrap-order(True)
+  scheduled.assert-events(
+    ["A:start","A:end","B","C"],
+    "ordinary recursive registration follows scheduler FIFO")
+  targeted.assert-events(scheduled,
+    "recursive targeted bootstrap does not overtake queued owners")
+
 pub fun main()
   val row-runs = cell(0)
   val row-owner-cleanups = cell(0)
@@ -352,5 +395,6 @@ pub fun main()
   test-targeted-bootstrap-is-stack-safe()
   test-targeted-bootstrap-rejects-pure-plane()
   test-targeted-bootstrap-respects-invalidated-parent()
+  test-recursive-targeted-bootstrap-preserves-fifo()
 
   println("structural-owners: persistence, recursion, staleness, and purity passed")

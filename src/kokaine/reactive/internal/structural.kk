@@ -22,7 +22,8 @@ pub fun open-structural-owner(root : root<e>) : exn structural-owner<e>
   check-frame-registration(root,parent)
   val frame = Frame(cell(Scope-live),cell(Owned-end))
   val owner = Structural-owner(
-    root.root-key,load(plane.plane-current),frame,plane.plane-queue)
+    root.root-key,load(plane.plane-current),frame,plane.plane-queue,
+    plane.plane-structural-mark,plane.plane-structural-targets)
   // Link before returning.  Draft/bootstrap/final-control rollback can now
   // discover this owner through the ordinary frame ledger.
   store(parent.frame-owned,
@@ -176,24 +177,43 @@ fun validate-structural-owner-roots(
       then validate-structural-owner-roots(expected,rest)
       else throw("structural owners belong to different reactive roots")
 
-fun mark-structural-owners(owners : list<structural-owner<e>>,
+fun mark-structural-frames(frames : list<frame<e>>,
                            mark : ref<global,bool>) : <div> ()
+  match frames
+    Nil -> ()
+    Cons(frame,rest) ->
+      mark-structural-scopes(
+        [Bootstrap-frame-task(frame)],mark)
+      mark-structural-frames(rest,mark)
+
+fun structural-frame-member(frame : frame<e>,
+                            frames : list<frame<e>>) : bool
+  match frames
+    Nil -> False
+    Cons(current,rest) ->
+      if unsafe-ptr-eq(frame.frame-token,current.frame-token) then True
+      else structural-frame-member(frame,rest)
+
+fun register-structural-targets(owners : list<structural-owner<e>>,
+                                targets : ref<global,list<frame<e>>>) : ()
   match owners
     Nil -> ()
     Cons(owner,rest) ->
-      mark-structural-scopes(
-        [Bootstrap-frame-task(owner.structural-frame)],mark)
-      mark-structural-owners(rest,mark)
+      val frame = owner.structural-frame
+      val current = load(targets)
+      if structural-frame-member(frame,current) then ()
+      else store(targets,Cons(frame,current))
+      register-structural-targets(rest,targets)
 
 fun bootstrap-structural-owners-loop(
       queue : ref<global,work-queue<e>>,
-      owners : list<structural-owner<e>>) : <div|e> error<()>
-  val mark = cell(False)
-  mark-structural-owners(owners,mark)
+      targets : ref<global,list<frame<e>>>,
+      mark : ref<global,bool>) : <div|e> error<()>
+  mark-structural-frames(load(targets),mark)
   match bootstrap-structural-queue(
           mark,work-queue-values(load(queue)),False)
     Error(problem) -> Error(problem)
-    Ok(True) -> bootstrap-structural-owners-loop(queue,owners)
+    Ok(True) -> bootstrap-structural-owners-loop(queue,targets,mark)
     Ok(False) -> Ok(())
 
 pub fun bootstrap-structural-owners(owners : list<structural-owner<e>>)
@@ -203,9 +223,26 @@ pub fun bootstrap-structural-owners(owners : list<structural-owner<e>>)
     Nil -> ()
     Cons(first,rest) ->
       validate-structural-owner-roots(first.structural-root,rest)
-      val result = lift-exn(fn() bootstrap-structural-owners-loop(
-        first.structural-queue,owners))
-      result.untry
+      val active = first.structural-active-mark
+      val targets = first.structural-targets
+      register-structural-targets(owners,targets)
+      match load(active)
+        Just(_) -> ()
+        Nothing ->
+          val mark = cell(True)
+          store(active,Just(mark))
+          val result = lift-exn(fn()
+            finally(
+              fn() {
+                store(mark,False)
+                store(active,Nothing)
+                store(targets,[])
+              },
+              fn() bootstrap-structural-owners-loop(
+                first.structural-queue,targets,mark)
+            )
+          )
+          result.untry
 
 pub fun bootstrap-structural-owner(owner : structural-owner<e>)
                               : <div,exn|e> ()

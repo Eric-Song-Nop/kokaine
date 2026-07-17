@@ -26,7 +26,14 @@ pub fun dispatch(root : root<e>,
 fun fresh-plane(current-frame : frame<e>) : plane<e>
   Plane(
     cell(empty-work-queue()),cell(Nothing),cell(Nothing),
-    cell(current-frame),cell(Nothing))
+    cell(current-frame),cell(Nothing),cell(Nothing),cell([]))
+
+fun clear-structural-bootstrap(plane : plane<e>) : ()
+  match load(plane.plane-structural-mark)
+    Nothing -> ()
+    Just(mark) -> store(mark,False)
+  store(plane.plane-structural-mark,Nothing)
+  store(plane.plane-structural-targets,[])
 
 fun fresh-root() : root<e>
   val token = cell(Scope-live)
@@ -59,6 +66,8 @@ fun retire-root-now(root : root<e>) : <div,exn|e> ()
       store(root.root-effect-plane.plane-current-entry,Nothing)
       store(root.root-derive-plane.plane-draft,Nothing)
       store(root.root-effect-plane.plane-draft,Nothing)
+      clear-structural-bootstrap(root.root-derive-plane)
+      clear-structural-bootstrap(root.root-effect-plane)
       store(root.root-owned,Owned-end)
     },
     fn()

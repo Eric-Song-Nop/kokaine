@@ -160,7 +160,9 @@ pub type structural-owner<e::E>
     structural-root       : root-key,
     structural-checkpoint : maybe<continuation-gate>,
     structural-frame      : frame<e>,
-    structural-queue      : ref<global,work-queue<e>>
+    structural-queue      : ref<global,work-queue<e>>,
+    structural-active-mark : ref<global,maybe<ref<global,bool>>>,
+    structural-targets    : ref<global,list<frame<e>>>
   )
 
 pub type owned<e::E>
@@ -218,7 +220,9 @@ pub type plane<e::E>
     plane-current       : ref<global,maybe<continuation-gate>>,
     plane-current-entry : ref<global,maybe<trace<e>>>,
     plane-current-frame : ref<global,frame<e>>,
-    plane-draft         : ref<global,maybe<ref<global,list<trace<e>>>>>
+    plane-draft         : ref<global,maybe<ref<global,list<trace<e>>>>>,
+    plane-structural-mark : ref<global,maybe<ref<global,bool>>>,
+    plane-structural-targets : ref<global,list<frame<e>>>
   )
 
 pub type root<e::E>
