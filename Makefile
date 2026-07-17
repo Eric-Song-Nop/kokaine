@@ -9,9 +9,12 @@ KOKA_FLAGS := -j1 -i./src
 DIST_KOKA = $(PYTHON) "$(RUN_LOCKED)" dist/.koka-build.lock \
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist
 
-.PHONY: test test-native test-all test-wasm test-report build-counter build-top-layer build-keyed build-report build-window-fixture build-browser-fixtures browser-install test-browser serve serve-top-layer serve-keyed serve-report
+.PHONY: test test-native test-tooling test-all test-wasm test-report build-counter build-top-layer build-keyed build-report build-window-fixture build-browser-fixtures browser-install test-browser serve serve-top-layer serve-keyed serve-report
 
 test: test-native
+
+test-tooling:
+	npm test
 
 test-native:
 	$(KOKA) $(KOKA_FLAGS) -e test/root-construction.kk
@@ -114,7 +117,7 @@ test-report: build-report build-counter build-window-fixture
 	$(UV) run --with playwright python test/browser_window.py
 	$(UV) run --with playwright python test/browser_report.py
 
-test-all: test-native test-browser test-wasm test-report
+test-all: test-tooling test-native test-browser test-wasm test-report
 
 serve: build-counter
 	$(PYTHON) -m http.server 4173 --bind 127.0.0.1

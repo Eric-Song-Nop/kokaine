@@ -1,0 +1,29 @@
+{
+  "name": "kokaine-app",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "kokaine dev",
+    "build": "kokaine build",
+    "check": "kokaine check",
+    "doctor": "kokaine doctor"
+  },
+  "dependencies": {
+    "@kokaine/core": "^0.1.0"
+  },
+  "devDependencies": {
+    "@kokaine/cli": "^0.1.0",
+    "vite": "^8.1.5"
+  },
+  "kokaine": {
+    "schemaVersion": 1,
+    "entry": "src/app/main.kk",
+    "sources": [
+      "src"
+    ],
+    "compiler": "3.2.3",
+    "target": "jsweb",
+    "outDir": ".kokaine/generated"
+  }
+}

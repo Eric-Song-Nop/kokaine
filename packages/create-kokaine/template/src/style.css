@@ -1,0 +1,33 @@
+:root {
+  color: #24231f;
+  background: #f4f2ec;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  margin: 0;
+}
+
+.counter {
+  display: grid;
+  gap: 1rem;
+  padding: 2rem;
+  border: 1px solid #c9c4b8;
+  border-radius: 1rem;
+  background: #fffdf8;
+  box-shadow: 0 1rem 3rem rgb(58 51 37 / 12%);
+  text-align: center;
+}
+
+button {
+  padding: 0.7rem 1rem;
+  border: 0;
+  border-radius: 999px;
+  color: white;
+  background: #315c4d;
+  font: inherit;
+  cursor: pointer;
+}
