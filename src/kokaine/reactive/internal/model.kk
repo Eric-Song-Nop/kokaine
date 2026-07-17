@@ -150,31 +150,45 @@ pub type scope-state
   Scope-branch-dead
   Scope-dead
 
-pub type owned<e::E>
-  Owned-end
-  Owned-fork(owned-scope : continuation-scope<e>, owned-next : owned<e>)
-  Owned-derive-fork(
-    owned-derive-scope : continuation-scope<total>,
-    owned-next         : owned<e>
+// Retirement is represented as data so the complete structural subtree can
+// be marked and detached before the first user finalizer runs. Step expansion
+// is pure structural work; only Finalizer carries the owner's effect row.
+pub type retirement-work<e::E>
+  Retirement-step(
+    retirement-expand : () -> <div> list<retirement-work<e>>
   )
-  Owned-resource(
-    owned-resource : resource-k<e>,
-    resource-next  : owned<e>
+  Retirement-finalizer(
+    retirement-action : () -> <div,exn|e> ()
+  )
+
+// Causal continuation gates and resource lifetime are deliberately separate.
+// Children and user finalizers have distinct registries so every descendant
+// is closed before any cleanup runs, while both classes retain LIFO order.
+pub type lifetime-owner<e::E>
+  Lifetime-owner(
+    lifetime-token      : ref<global,scope-state>,
+    lifetime-children   : registry<retirement-work<e>>,
+    lifetime-finalizers : registry<retirement-work<e>>
+  )
+
+pub type cleanup-registration<e::E>
+  Cleanup-registration(
+    cleanup-node     : registry-registration<retirement-work<e>>,
+    cleanup-resource : resource-k<e>
   )
 
 pub type continuation-scope<e::E>
   Scope(
-    scope-state  : ref<global,scope-state>,
-    scope-prefix : ref<global,owned<e>>,
-    scope-body   : ref<global,trace<e>>,
-    scope-parent : maybe<continuation-gate>,
-    scope-bootstrap-slot : ref<global,maybe<() -> <div|e> error<()>>>
+    scope-lifetime       : lifetime-owner<e>,
+    scope-body           : ref<global,trace<e>>,
+    scope-parent         : maybe<continuation-gate>,
+    scope-bootstrap-slot : ref<global,maybe<() -> <div|e> error<()>>>,
+    scope-unlink         : ref<global,maybe<() -> bool>>
   )
 
 pub type frame<e::E>
   Frame(
-    frame-token : ref<global,scope-state>,
-    frame-owned : ref<global,owned<e>>
+    frame-lifetime : lifetime-owner<e>
   )
 
 pub type work<e::E>
@@ -199,8 +213,7 @@ pub type root<e::E>
     root-key          : root-key,
     root-derive-plane : plane<total>,
     root-effect-plane : plane<e>,
-    root-token        : ref<global,scope-state>,
-    root-owned        : ref<global,owned<e>>,
+    root-lifetime     : lifetime-owner<e>,
     root-batch-depth  : ref<global,int>,
     root-flushing     : ref<global,bool>,
     root-disposing    : ref<global,bool>,
