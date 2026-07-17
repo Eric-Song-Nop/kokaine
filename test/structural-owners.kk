@@ -37,6 +37,12 @@ fun bootstrap-total(owner : structural-owner<total>) : error<()>
       internal/bootstrap-structural-owner(owner)
     }
 
+fun bootstrap-many-total(owners : list<structural-owner<total>>) : error<()>
+  error/try fn()
+    pretend-no-div{
+      internal/bootstrap-structural-owners(owners)
+    }
+
 fun register-bootstrap-order(root : root<total>,
                              events : ref<global,list<string>>,
                              targeted : bool)
@@ -109,6 +115,70 @@ fun test-targeted-bootstrap-preserves-global-fifo()
     "ordinary scheduler preserves cross-owner registration order")
   assert-events(targeted,scheduled,
     "targeted bootstrap preserves cross-owner registration order")
+
+fun test-bulk-targeted-bootstrap-is-fifo-and-isolated()
+  val events = cell([])
+  val (root,attempted) : (root<total>,error<()>) = create-root fn(root)
+    error/try fn()
+      pretend-no-div{
+        val unrelated = internal/open-structural-owner(root)
+        internal/with-structural-owner(root,unrelated,fn()
+          val stop = create-effect(root,fn() (),fn(_) emit(events,"U"))
+          ()
+        )
+
+        val first = internal/open-structural-owner(root)
+        internal/with-structural-owner(root,first,fn()
+          val stop = create-effect(root,fn() (),fn(_)
+            emit(events,"A")
+            val nested = create-effect(root,fn() (),fn(_) emit(events,"C"))
+            ()
+          )
+          ()
+        )
+
+        val second = internal/open-structural-owner(root)
+        internal/with-structural-owner(root,second,fn()
+          val stop = create-effect(root,fn() (),fn(_) emit(events,"B"))
+          ()
+        )
+
+        bootstrap-many-total([first,second]).untry
+        load(events).assert-events(
+          ["A","B","C"],
+          "bulk bootstrap follows canonical FIFO without unrelated work")
+      }
+  attempted.untry
+  load(events).assert-events(
+    ["A","B","C","U"],
+    "ordinary flush later runs the unmarked structural owner")
+  root.dispose()
+
+fun register-bulk-owner-stress(root : root<total>,
+                               runs : ref<global,int>, count : int)
+                              : <signal-write,div,exn> ()
+  val owners = cell([])
+  for(count) fn(_)
+    val owner = internal/open-structural-owner(root)
+    internal/with-structural-owner(root,owner,fn()
+      val stop = create-effect(root,fn() (),fn(_) increment(runs))
+      ()
+    )
+    store(owners,Cons(owner,load(owners)))
+  bootstrap-many-total(load(owners).reverse).untry
+
+fun test-bulk-targeted-bootstrap-is-stack-safe()
+  val count = 4096
+  val runs = cell(0)
+  val (root,attempted) : (root<total>,error<()>) = create-root fn(root)
+    error/try fn()
+      pretend-no-div{
+        register-bulk-owner-stress(root,runs,count)
+      }
+  attempted.untry
+  load(runs).assert-int(count,
+    "bulk bootstrap drains wide sibling owners without stack growth")
+  root.dispose()
 
 fun register-targeted-bootstrap-stress(root : root<total>,
                                        runs : ref<global,int>, count : int)
@@ -277,6 +347,8 @@ pub fun main()
 
   test-targeted-bootstrap-preserves-fifo()
   test-targeted-bootstrap-preserves-global-fifo()
+  test-bulk-targeted-bootstrap-is-fifo-and-isolated()
+  test-bulk-targeted-bootstrap-is-stack-safe()
   test-targeted-bootstrap-is-stack-safe()
   test-targeted-bootstrap-rejects-pure-plane()
   test-targeted-bootstrap-respects-invalidated-parent()

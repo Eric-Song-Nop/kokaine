@@ -116,6 +116,7 @@ with serve_project() as origin:
                     'keyed-duplicate-root',
                     'keyed-move-root',
                     'keyed-bootstrap-root',
+                    'keyed-bootstrap-order-root',
                     'keyed-dispose-stress-root',
                     'keyed-rollback-stress-root'
                 ]) {
@@ -125,6 +126,7 @@ with serve_project() as origin:
                 }
                 globalThis.__kokaineThrowKeyedBootstrap = true;
                 globalThis.__kokaineInjectKeyedRogue = false;
+                globalThis.__kokaineKeyedBootstrapOrder = [];
                 if (!customElements.get('x-kokaine-keyed-fail')) {
                     customElements.define(
                         'x-kokaine-keyed-fail',
@@ -156,6 +158,24 @@ with serve_project() as origin:
                                     parent,
                                     rogue,
                                     parent.firstChild.nextSibling
+                                );
+                            }
+                        }
+                    );
+                }
+                if (!customElements.get('x-kokaine-keyed-bootstrap-order')) {
+                    customElements.define(
+                        'x-kokaine-keyed-bootstrap-order',
+                        class extends HTMLElement {
+                            connectedCallback() {
+                                globalThis.__kokaineKeyedBootstrapOrder.push(
+                                    `connect:${this.dataset.key}`
+                                );
+                            }
+
+                            set probe(value) {
+                                globalThis.__kokaineKeyedBootstrapOrder.push(
+                                    `apply:${this.dataset.key}:${value}`
                                 );
                             }
                         }
@@ -343,6 +363,17 @@ with serve_project() as origin:
             "data-boom", "seven"
         )
 
+        assert invoke(page, "bootstrapOrder") is True
+        bootstrap_order = page.evaluate(
+            "globalThis.__kokaineKeyedBootstrapOrder"
+        )
+        assert bootstrap_order == [
+            "connect:1",
+            "connect:2",
+            "apply:1:one",
+            "apply:2:two",
+        ], f"keyed rows bootstrapped before all drafts were built: {bootstrap_order!r}"
+
         compaction = page.evaluate(
             """() => {
                 try {
@@ -465,6 +496,7 @@ with serve_project() as origin:
             "#keyed-duplicate-root",
             "#keyed-move-root",
             "#keyed-bootstrap-root",
+            "#keyed-bootstrap-order-root",
             "#keyed-dispose-stress-root",
             "#keyed-rollback-stress-root",
         ):

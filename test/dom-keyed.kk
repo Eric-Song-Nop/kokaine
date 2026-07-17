@@ -132,8 +132,9 @@ extern publish-stress(
   dispose-stress : () -> ui bool,
   dispose-stress-reset : () -> ui bool,
   rollback-stress : () -> ui bool,
-  rollback-stress-reset : () -> ui bool) : ui ()
-  js inline "Object.assign(globalThis.__kokaineKeyed, { disposeStress:#1, disposeStressReset:#2, rollbackStress:#3, rollbackStressReset:#4 })"
+  rollback-stress-reset : () -> ui bool,
+  bootstrap-order : () -> ui bool) : ui ()
+  js inline "Object.assign(globalThis.__kokaineKeyed, { disposeStress:#1, disposeStressReset:#2, rollbackStress:#3, rollbackStressReset:#4, bootstrapOrder:#5 })"
 
 fun safe-set(root : root<<ui>>, source : signal<list<item-data>>,
              next : list<item-data>) : ui bool
@@ -293,6 +294,18 @@ fun bootstrap-page(source : signal<list<item-data>>) : view<total>
           })
         ])
 
+fun bootstrap-order-page(source : signal<list<item-data>>) : view<total>
+  view
+    div(attrs=[id("keyed-bootstrap-order-list")])
+      for(fn() source.get,fn(value) value.item-id) fn(current,_)
+        val initial = current()
+        element-empty("x-kokaine-keyed-bootstrap-order",attrs=[
+          data("key",initial.item-id.show),
+          Live-property("probe",fn() {
+            String-property(current().item-label)
+          })
+        ])
+
 fun stress-items() : list<item-data>
   fold(4096,[]) fn(index,items)
     Cons(item(index,"stress"),items)
@@ -354,6 +367,14 @@ pub fun main()
     bootstrap-root,query("#keyed-bootstrap-root"),
     bootstrap-page(bootstrap-source))
 
+  val (bootstrap-order-root,bootstrap-order-source) =
+    create-root fn(current-root)
+      val empty : list<item-data> = []
+      signal(current-root,empty)
+  val bootstrap-order-dispose = mount(
+    bootstrap-order-root,query("#keyed-bootstrap-order-root"),
+    bootstrap-order-page(bootstrap-order-source))
+
   val (compact-root,compact-owner) = create-root fn(current-root)
     internal/open-structural-owner(current-root)
 
@@ -393,6 +414,7 @@ pub fun main()
       safe-dispose(duplicate-root)
       safe-dispose(move-root)
       safe-dispose(bootstrap-root)
+      safe-dispose(bootstrap-order-root)
       safe-dispose(compact-root)
       safe-dispose(dispose-stress-root)
       safe-dispose(rollback-stress-root)
@@ -418,5 +440,7 @@ pub fun main()
     fn() safe-set(
       rollback-stress-root,rollback-stress-source,stress-items().reverse),
     fn() safe-set(
-      rollback-stress-root,rollback-stress-source,stress-items())
+      rollback-stress-root,rollback-stress-source,stress-items()),
+    fn() safe-set(bootstrap-order-root,bootstrap-order-source,
+      [item(1,"one"),item(2,"two")])
   )
