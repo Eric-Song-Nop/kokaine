@@ -428,6 +428,13 @@ pub noinline fun scheduler-transaction/state(
     transaction : scheduler-transaction<e>) : work-transaction-state
   transaction.transaction-derive-group.state
 
+// Internal invariant probe used by transaction/root-retirement tests. A
+// terminal capability must not retain publication callbacks after ownership
+// has been claimed.
+pub fun scheduler-transaction/has-pending-publications(
+    transaction : scheduler-transaction<e>) : bool
+  !transaction.transaction-publications.values.is-nil
+
 fun plane-has-group(plane : plane<e>, expected : work-group<work<e>>) : bool
   match load(plane.plane-work-group)
     Nothing -> False
