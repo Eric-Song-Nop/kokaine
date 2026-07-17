@@ -198,6 +198,66 @@ with serve_project() as origin:
         assert_error(wrong_non_modal_state, "browser dom exception", "modal")
         assert_ok(fixture.evaluate(f"{controls}.dialog.close('modal')"))
 
+        # Safari 15.4 and 15.5 shipped HTMLDialogElement before the :modal
+        # selector. Modality detection must still distinguish show() from
+        # showModal() when the selector parser rejects that pseudo-class.
+        selectorless_modal = fixture.evaluate(
+            f"""() => {{
+                const target = document.querySelector('#fixture-dialog');
+                const proto = Element.prototype;
+                const descriptor = Object.getOwnPropertyDescriptor(
+                    proto,
+                    'matches'
+                );
+                const nativeMatches = descriptor.value;
+                Object.defineProperty(proto, 'matches', {{
+                    configurable: descriptor.configurable,
+                    enumerable: descriptor.enumerable,
+                    writable: descriptor.writable,
+                    value(selector) {{
+                        if (selector === ':modal') {{
+                            throw new DOMException(
+                                'unsupported selector',
+                                'SyntaxError'
+                            );
+                        }}
+                        return Reflect.apply(
+                            nativeMatches,
+                            this,
+                            [selector]
+                        );
+                    }}
+                }});
+                try {{
+                    const nonModalShow = {controls}.dialog.show();
+                    const nonModal = {controls}.dialog.isModal();
+                    const nonModalClose =
+                        {controls}.dialog.close('selectorless-non-modal');
+                    const modalShow = {controls}.dialog.showModal();
+                    const modal = {controls}.dialog.isModal();
+                    const modalClose =
+                        {controls}.dialog.close('selectorless-modal');
+                    return {{
+                        nonModalShow,
+                        nonModal,
+                        nonModalClose,
+                        modalShow,
+                        modal,
+                        modalClose
+                    }};
+                }} finally {{
+                    Object.defineProperty(proto, 'matches', descriptor);
+                    if (target.open) target.close();
+                }}
+            }}"""
+        )
+        assert_ok(selectorless_modal["nonModalShow"])
+        assert_bool_result(selectorless_modal["nonModal"], False)
+        assert_ok(selectorless_modal["nonModalClose"])
+        assert_ok(selectorless_modal["modalShow"])
+        assert_bool_result(selectorless_modal["modal"], True)
+        assert_ok(selectorless_modal["modalClose"])
+
         has_request_close = fixture.evaluate(
             "typeof HTMLDialogElement.prototype.requestClose === 'function'"
         )
