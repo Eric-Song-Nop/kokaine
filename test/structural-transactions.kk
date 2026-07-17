@@ -62,11 +62,11 @@ fun test-nested-transaction-borrows_the_outer_fifo()
   check(hidden-load(events).is-nil,
         "an open transaction isolates bootstrap work")
   pretend-no-div{ internal/drain-structural-transaction(joined) }
-  internal/commit-structural-transaction(joined)
+  pretend-no-div{ internal/commit-structural-transaction(joined) }
   pretend-no-div{ internal/drain-structural-transaction(outer) }
   check(hidden-load(events) == ["outer","inner"],
         "a nested lease leaves work in the outer FIFO drain")
-  internal/commit-structural-transaction(outer)
+  pretend-no-div{ internal/commit-structural-transaction(outer) }
   root.dispose()
 
 fun test_joined_abort_does_not_steal_the_outer_lease()
@@ -79,7 +79,7 @@ fun test_joined_abort_does_not_steal_the_outer_lease()
 
   internal/abort-structural-transaction(joined)
   pretend-no-div{ internal/drain-structural-transaction(outer) }
-  internal/commit-structural-transaction(outer)
+  pretend-no-div{ internal/commit-structural-transaction(outer) }
   check(hidden-load(events) == ["committed"],
         "only the outer lease owns commit or abort")
   root.dispose()
@@ -106,7 +106,7 @@ fun test_joined_publication_waits_for_outer_commit()
         "joined publication is not prepared during the outer drain")
   check(!hidden-load(published),
         "joined publication remains private before the outer commit")
-  internal/commit-structural-transaction(outer)
+  pretend-no-div{ internal/commit-structural-transaction(outer) }
   check(hidden-load(prepared) == 1,
         "outer commit prepares each joined publication once")
   check(hidden-load(published),
@@ -142,8 +142,10 @@ fun test_joined_outer_abort_rolls_back_without_publication()
     )
     outer
 
-  val attempted : error<()> = error/try fn()
-    pretend-no-div{ internal/drain-structural-transaction(outer) }
+  val attempted : error<()> = mask<exn>{
+    error/try fn()
+      pretend-no-div{ internal/drain-structural-transaction(outer) }
+  }
   check(attempted.is-error,
         "a later joined child failure rejects the outer drain")
   internal/abort-structural-transaction(outer)
@@ -165,9 +167,11 @@ fun test-failed-outer-commit-cannot-reach-publication()
     internal/open-structural-transaction(root)
 
   internal/abort-structural-transaction(transaction)
-  val attempted : error<()> = error/try fn()
-    internal/commit-structural-transaction(transaction)
-    hidden-store(published,True)
+  val attempted : error<()> = mask<exn>{
+    error/try fn()
+      pretend-no-div{ internal/commit-structural-transaction(transaction) }
+      hidden-store(published,True)
+  }
 
   check(attempted.is-error,"a terminal transaction rejects commit")
   check(!hidden-load(published),

@@ -215,6 +215,8 @@ pub type root<e::E>
     root-key          : root-key,
     root-derive-plane : plane<total>,
     root-effect-plane : plane<e>,
+    root-work-publications
+                      : ref<global,maybe<work-queue<work-publication<e>>>>,
     root-lifetime     : lifetime-owner<e>,
     root-batch-depth  : ref<global,int>,
     root-flushing     : ref<global,bool>,

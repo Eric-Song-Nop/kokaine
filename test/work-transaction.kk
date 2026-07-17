@@ -107,7 +107,7 @@ fun test-scheduler-drains_only_the_local_bootstrap_group()
   match transaction.state
     Work-ready -> ()
     _ -> throw("work transaction: a successful local drain must be ready")
-  commit-work-transaction(root,transaction)
+  pretend-no-div{ commit-work-transaction(root,transaction) }
   match transaction.state
     Work-committed -> ()
     _ -> throw("work transaction: a ready group must commit exactly once")
@@ -262,7 +262,8 @@ fun test-final-control-aborts_and_detaches_the_active_transaction()
   }
   require-transaction fn()
     pretend-no-div{ drain-work-transaction(root,recovery) }
-  commit-work-transaction(root,recovery)
+  require-transaction fn()
+    pretend-no-div{ commit-work-transaction(root,recovery) }
   check(hidden-load(recovery-runs) == 1,
         "a fresh transaction opens and drains after dynamic rollback")
   require-transaction fn()

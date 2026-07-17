@@ -35,8 +35,20 @@ fun fresh-root() : root<e>
   val derive-frame = Frame(new-lifetime-owner(Scope-live))
   Root(
     Root-key(cell(True)),fresh-plane(derive-frame),fresh-plane(effect-frame),
-    lifetime,cell(0),cell(False),cell(False),cell(False)
+    cell(Nothing),lifetime,cell(0),cell(False),cell(False),cell(False)
   )
+
+tail fun prepend-root-publication-rollbacks(
+    values : list<work-publication<e>>,
+    collected : list<retirement-work<e>>)
+    : <div> list<retirement-work<e>>
+  match values
+    Nil -> collected
+    Cons(current,rest) ->
+      val rollback = current.publication-rollback
+      prepend-root-publication-rollbacks(
+        rest,Cons(Retirement-finalizer(
+          fn() lift-div(fn() rollback())),collected))
 
 // This is the non-validating half of root disposal. Besides ordinary public
 // disposal, it is used to roll back a root whose construction has not been
@@ -45,6 +57,10 @@ fun fresh-root() : root<e>
 fun retire-root-now(root : root<e>) : <div,exn|e> ()
   store(root.root-disposing,True)
   store(root.root-lifetime.lifetime-token,Scope-dead)
+  val publications = match load(root.root-work-publications)
+    Nothing -> []
+    Just(pending) -> pending.values
+  store(root.root-work-publications,Nothing)
   finally(
     fn() {
       store(root.root-batch-depth,0)
@@ -71,7 +87,12 @@ fun retire-root-now(root : root<e>) : <div,exn|e> ()
       store(root.root-effect-plane.plane-draft,Nothing)
     },
     fn()
-      val finalizers = collect-lifetime(root.root-lifetime)
+      val lifetime-finalizers = collect-lifetime(root.root-lifetime)
+      val publication-rollbacks = prepend-root-publication-rollbacks(
+        publications,[])
+      val finalizers = pretend-no-div{
+        lifetime-finalizers ++ publication-rollbacks
+      }
       run-finalizers(finalizers)
   )
 

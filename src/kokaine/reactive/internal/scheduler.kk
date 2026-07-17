@@ -420,7 +420,8 @@ abstract type scheduler-transaction<e::E>
   Scheduler-transaction(
     transaction-root-key     : root-key,
     transaction-derive-group : work-group<work<total>>,
-    transaction-effect-group : work-group<work<e>>
+    transaction-effect-group : work-group<work<e>>,
+    transaction-publications : work-queue<work-publication<e>>
   )
 
 pub noinline fun scheduler-transaction/state(
@@ -442,25 +443,33 @@ fun check-transaction-root(root : root<e>,
 fun check-active-transaction(root : root<e>,
                              transaction : scheduler-transaction<e>) : exn ()
   check-transaction-root(root,transaction)
+  val publications-active = match load(root.root-work-publications)
+    Just(publications) -> publications.same(
+      transaction.transaction-publications)
+    Nothing -> False
   if root.root-derive-plane.plane-has-group(
        transaction.transaction-derive-group) &&
      root.root-effect-plane.plane-has-group(
-       transaction.transaction-effect-group)
+       transaction.transaction-effect-group) && publications-active
   then ()
   else throw("scheduler transaction is not active on this root")
 
 pub fun open-work-transaction(root : root<e>) : exn scheduler-transaction<e>
   check-registration(root)
   if load(root.root-derive-plane.plane-work-group).is-just ||
-     load(root.root-effect-plane.plane-work-group).is-just
+     load(root.root-effect-plane.plane-work-group).is-just ||
+     load(root.root-work-publications).is-just
   then throw("a scheduler transaction is already active on this root")
   else lift-exn(fn(){
     val state = new-work-transaction-state()
     val derive-group : work-group<work<total>> = new-work-group(state)
     val effect-group : work-group<work<e>> = new-work-group(state)
+    val publications : work-queue<work-publication<e>> = new-work-queue()
     store(root.root-derive-plane.plane-work-group,Just(derive-group))
     store(root.root-effect-plane.plane-work-group,Just(effect-group))
-    Scheduler-transaction(root.root-key,derive-group,effect-group)
+    store(root.root-work-publications,Just(publications))
+    Scheduler-transaction(
+      root.root-key,derive-group,effect-group,publications)
   })
 
 // Structural adapters can be invoked recursively while an outer bootstrap is
@@ -472,18 +481,19 @@ pub fun current-work-transaction(root : root<e>)
                                  : exn maybe<scheduler-transaction<e>>
   check-registration(root)
   match (load(root.root-derive-plane.plane-work-group),
-         load(root.root-effect-plane.plane-work-group))
-    (Nothing,Nothing) -> Nothing
-    (Just(derive-group),Just(effect-group)) ->
+         load(root.root-effect-plane.plane-work-group),
+         load(root.root-work-publications))
+    (Nothing,Nothing,Nothing) -> Nothing
+    (Just(derive-group),Just(effect-group),Just(publications)) ->
       if !derive-group.same-transaction(effect-group)
       then throw("reactive planes disagree about the active transaction")
       else match derive-group.state
         Work-open -> Just(Scheduler-transaction(
-          root.root-key,derive-group,effect-group))
+          root.root-key,derive-group,effect-group,publications))
         Work-draining -> Just(Scheduler-transaction(
-          root.root-key,derive-group,effect-group))
+          root.root-key,derive-group,effect-group,publications))
         _ -> throw("cannot join a terminal scheduler transaction")
-    _ -> throw("reactive planes have a partially attached transaction")
+    _ -> throw("reactive root has a partially attached transaction")
 
 tail fun restore-group-skipped(group : work-group<work<e>>,
                                skipped : list<work<e>>) : <div> ()
@@ -614,27 +624,92 @@ fun detach-matching-group(plane : plane<e>,
       then store(plane.plane-work-group,Nothing)
       else ()
 
+fun detach-matching-publications(
+      root : root<e>, expected : work-queue<work-publication<e>>) : ()
+  match load(root.root-work-publications)
+    Nothing -> ()
+    Just(actual) ->
+      if actual.same(expected)
+      then store(root.root-work-publications,Nothing)
+      else ()
+
+pub fun stage-work-publication(
+      root : root<e>, transaction : scheduler-transaction<e>,
+      prepare : () -> <exn|e> (), publish : () -> (),
+      rollback : () -> <exn|e> ()) : exn ()
+  check-active-transaction(root,transaction)
+  match transaction.state
+    Work-open -> transaction.transaction-publications.append(
+      Work-publication(prepare,publish,rollback))
+    Work-draining -> transaction.transaction-publications.append(
+      Work-publication(prepare,publish,rollback))
+    _ -> throw("cannot enlist publication in a terminal scheduler transaction")
+
+tail fun prepare-work-publications-loop(values : list<work-publication<e>>)
+                                        : <exn|e> ()
+  match values
+    Nil -> ()
+    Cons(current,rest) ->
+      val prepare = current.publication-prepare
+      val _ = prepare()
+      prepare-work-publications-loop(rest)
+
+fun prepare-work-publications(values : list<work-publication<e>>)
+                              : <exn|e> ()
+  prepare-work-publications-loop(values)
+
+tail fun publish-work-publications-loop(values : list<work-publication<e>>)
+                                        : ()
+  match values
+    Nil -> ()
+    Cons(current,rest) ->
+      val publish = current.publication-publish
+      val _ = publish()
+      publish-work-publications-loop(rest)
+
+fun publish-work-publications(values : list<work-publication<e>>) : ()
+  publish-work-publications-loop(values)
+
 pub fun commit-work-transaction(root : root<e>,
                                 transaction : scheduler-transaction<e>)
-                               : exn ()
-  check-active-transaction(root,transaction)
-  val derive-group = transaction.transaction-derive-group
-  val effect-group = transaction.transaction-effect-group
-  match derive-group.state
-    Work-ready ->
-      val derive-residual = derive-group.take-all
-      val effect-residual = effect-group.take-all
-      root.root-derive-plane.detach-matching-group(derive-group)
-      root.root-effect-plane.detach-matching-group(effect-group)
-      root.root-derive-plane.plane-queue.append-values(derive-residual)
-      root.root-effect-plane.plane-queue.append-values(effect-residual)
-      if derive-group.mark-committed then
-        // Structural owners retain committed scopes; the transaction no longer
-        // needs its rollback-only references after the state becomes terminal.
-        derive-group.release-rollback
-        effect-group.release-rollback
-      else throw("scheduler transaction commit lost its ready state")
-    _ -> throw("scheduler transaction must drain successfully before commit")
+                               : <div,exn|e> ()
+  lift-div(fn()
+    check-active-transaction(root,transaction)
+    val derive-group = transaction.transaction-derive-group
+    val effect-group = transaction.transaction-effect-group
+    match derive-group.state
+      Work-ready ->
+        val completed = cell(False)
+        finally(
+          fn() {
+            if load(completed) then ()
+            else abort-work-transaction(root,transaction)
+          },
+          fn()
+            val publications = transaction.transaction-publications.values
+            // Every participant must prepare successfully before the scheduler
+            // lease is detached or any total state publication becomes visible.
+            prepare-work-publications(publications)
+            val derive-residual = derive-group.take-all
+            val effect-residual = effect-group.take-all
+            root.root-derive-plane.detach-matching-group(derive-group)
+            root.root-effect-plane.detach-matching-group(effect-group)
+            root.detach-matching-publications(
+              transaction.transaction-publications)
+            root.root-derive-plane.plane-queue.append-values(derive-residual)
+            root.root-effect-plane.plane-queue.append-values(effect-residual)
+            if derive-group.mark-committed then
+              // Publication callbacks are deliberately total. Once the state is
+              // committed there is no fallible gap between participant tables.
+              publish-work-publications(publications)
+              transaction.transaction-publications.clear
+              derive-group.release-rollback
+              effect-group.release-rollback
+              store(completed,True)
+            else throw("scheduler transaction commit lost its ready state")
+        )
+      _ -> throw("scheduler transaction must drain successfully before commit")
+  )
 
 tail fun prepend-bootstrap-retirements(
     values : list<work<e>>, collected : list<retirement-work<e>>)
@@ -663,10 +738,25 @@ tail fun prepend-pure-bootstrap-retirements(
             rest,Cons(structural,collected))
         Resume-work(_) -> prepend-pure-bootstrap-retirements(rest,collected)
 
+tail fun prepend-publication-rollbacks(
+    values : list<work-publication<e>>,
+    collected : list<retirement-work<e>>)
+    : <div> list<retirement-work<e>>
+  match values
+    Nil -> collected
+    Cons(current,rest) ->
+      val rollback = current.publication-rollback
+      prepend-publication-rollbacks(
+        rest,Cons(Retirement-finalizer(
+          fn() lift-div(fn() rollback())),collected))
+
 fun retire-transaction-bootstraps(
-    derive-owned : list<work<total>>, effect-owned : list<work<e>>)
+    derive-owned : list<work<total>>, effect-owned : list<work<e>>,
+    publications : list<work-publication<e>>)
     : <div,exn|e> ()
-  val effect-structural = prepend-bootstrap-retirements(effect-owned,[])
+  val rollbacks = prepend-publication-rollbacks(publications,[])
+  val effect-structural = prepend-bootstrap-retirements(
+    effect-owned,rollbacks)
   val structural = prepend-pure-bootstrap-retirements(
     derive-owned,effect-structural)
   // Expand every transaction-owned scope first. All bootstrap slots are
@@ -689,21 +779,29 @@ pub fun abort-work-transaction(root : root<e>,
           // left through final control while running retirement finalizers.
           root.root-derive-plane.detach-matching-group(derive-group)
           root.root-effect-plane.detach-matching-group(effect-group)
+          root.detach-matching-publications(
+            transaction.transaction-publications)
           derive-group.clear
           effect-group.clear
+          transaction.transaction-publications.clear
         _ ->
           // Claim the complete rollback ledgers before clearing runnable queues.
           // A successful drain has already discarded its stale queue ticket but
           // remains transaction-owned until this claim or an explicit commit.
           val derive-owned = derive-group.take-rollback
           val effect-owned = effect-group.take-rollback
+          val publications = transaction.transaction-publications.values
+          transaction.transaction-publications.clear
           root.root-derive-plane.detach-matching-group(derive-group)
           root.root-effect-plane.detach-matching-group(effect-group)
+          root.detach-matching-publications(
+            transaction.transaction-publications)
           val claimed = derive-group.mark-aborted
           effect-group.clear
           if !claimed
           then throw("scheduler transaction abort lost its active state")
-          else retire-transaction-bootstraps(derive-owned,effect-owned)
+          else retire-transaction-bootstraps(
+            derive-owned,effect-owned,publications)
   }
 
 pub fun settle-failure(message : string) : settle-result
