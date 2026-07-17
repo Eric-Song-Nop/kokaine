@@ -9,7 +9,7 @@ KOKA_FLAGS := -j1 -i./src
 DIST_KOKA = $(PYTHON) "$(RUN_LOCKED)" dist/.koka-build.lock \
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist
 
-.PHONY: test test-native test-all test-wasm test-report build-counter build-top-layer build-report build-browser-fixtures browser-install test-browser serve serve-top-layer serve-report
+.PHONY: test test-native test-all test-wasm test-report build-counter build-top-layer build-keyed build-report build-browser-fixtures browser-install test-browser serve serve-top-layer serve-keyed serve-report
 
 test: test-native
 
@@ -20,6 +20,7 @@ test-native:
 	$(KOKA) $(KOKA_FLAGS) -e test/source-capture-registry.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/lifetime-foundation.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/work-transaction.kk
+	$(KOKA) $(KOKA_FLAGS) -e test/structural-transactions.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/application-runner.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/one-shot-task.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/cancellation-supervisor.kk
@@ -39,6 +40,9 @@ test-native:
 	$(KOKA) $(KOKA_FLAGS) -e test/reactive-advanced.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/reactive-stress.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/html.kk
+	$(KOKA) $(KOKA_FLAGS) -e test/key-index.kk
+	$(KOKA) $(KOKA_FLAGS) -e test/control-flow.kk
+	$(PYTHON) test/keyed_transaction_boundary.py
 	$(PYTHON) test/event_effect_boundary.py $(KOKA)
 	$(PYTHON) test/run_locked.py
 	$(PYTHON) test/make_parallel.py
@@ -51,11 +55,15 @@ build-top-layer:
 	$(DIST_KOKA) \
 		--buildname=top-layer examples/top-layer.kk
 
+build-keyed:
+	$(DIST_KOKA) \
+		--buildname=keyed examples/keyed.kk
+
 build-report:
 	$(DIST_KOKA) \
 		--buildname=report examples/report.kk
 
-build-browser-fixtures: build-counter build-top-layer
+build-browser-fixtures: build-counter build-top-layer build-keyed
 	$(DIST_KOKA) \
 		--buildname=dom-errors test/dom-errors.kk
 	$(DIST_KOKA) \
@@ -70,6 +78,8 @@ build-browser-fixtures: build-counter build-top-layer
 		--buildname=dom-event-continuation test/dom-event-continuation.kk
 	$(DIST_KOKA) \
 		--buildname=dom-top-layer test/dom-top-layer.kk
+	$(DIST_KOKA) \
+		--buildname=dom-keyed test/dom-keyed.kk
 
 browser-install:
 	$(UV) run --with playwright python -m playwright install chromium
@@ -77,6 +87,7 @@ browser-install:
 test-browser: build-browser-fixtures
 	$(UV) run --with playwright python test/browser_counter.py
 	$(UV) run --with playwright python test/browser_top_layer.py
+	$(UV) run --with playwright python test/browser_keyed.py
 
 test-wasm:
 	./support/wasmweb-proof/run.sh test
@@ -92,6 +103,10 @@ serve: build-counter
 
 serve-top-layer: build-top-layer
 	@echo "Kokaine top-layer example: http://127.0.0.1:4173/examples/top-layer/"
+	$(PYTHON) -m http.server 4173 --bind 127.0.0.1
+
+serve-keyed: build-keyed
+	@echo "Kokaine keyed example: http://127.0.0.1:4173/examples/keyed/"
 	$(PYTHON) -m http.server 4173 --bind 127.0.0.1
 
 serve-report: build-report build-counter

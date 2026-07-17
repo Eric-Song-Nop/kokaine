@@ -60,7 +60,11 @@ if [ -d /opt/homebrew/opt/emscripten/libexec ]; then
   EM_LLVM_ROOT=${EM_LLVM_ROOT:-/opt/homebrew/opt/emscripten/libexec/llvm/bin}
   EM_BINARYEN_ROOT=${EM_BINARYEN_ROOT:-/opt/homebrew/opt/emscripten/libexec/binaryen}
   EM_NODE_JS=${EM_NODE_JS:-/opt/homebrew/opt/node/bin/node}
-  export EMSDK_PYTHON EM_LLVM_ROOT EM_BINARYEN_ROOT EM_NODE_JS
+  # Emscripten 6 no longer reads the legacy EM_* roots early enough when its
+  # Homebrew config file is absent. Its driver still discovers the same tools
+  # from PATH, so make those explicit roots visible there as well.
+  PATH="$EM_LLVM_ROOT:$EM_BINARYEN_ROOT/bin:$PATH"
+  export EMSDK_PYTHON EM_LLVM_ROOT EM_BINARYEN_ROOT EM_NODE_JS PATH
 fi
 
 if [ "${EMCC:-}" ]; then

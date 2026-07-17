@@ -19,6 +19,7 @@ SCRIPT = Path(__file__).resolve()
 BROWSER_APP_SOURCES = [
     "examples/counter.kk",
     "examples/top-layer.kk",
+    "examples/keyed.kk",
 ]
 BROWSER_FIXTURE_SOURCES = [
     "test/dom-errors.kk",
@@ -28,6 +29,7 @@ BROWSER_FIXTURE_SOURCES = [
     "test/dom-ownership.kk",
     "test/dom-event-continuation.kk",
     "test/dom-top-layer.kk",
+    "test/dom-keyed.kk",
 ]
 BROWSER_BUILD_SOURCES = [*BROWSER_APP_SOURCES, *BROWSER_FIXTURE_SOURCES]
 REPORT_SOURCE = "examples/report.kk"
@@ -280,13 +282,13 @@ def check_parallel_build() -> None:
                 str(MAKEFILE),
                 "-f",
                 str(release_makefile),
-                "-j4",
+                "-j5",
                 f"KOKA={fake_command}",
                 "build-browser-fixtures",
                 # The standalone goal must share the fixture build's node in
                 # the Make DAG instead of launching a duplicate compilation.
                 "build-top-layer",
-                # Report writes the same dist directory. The fourth job slot
+                # Report writes the same dist directory. The fifth job slot
                 # lets the control target release every active fake compiler
                 # while other dist builds wait on the serialization lock.
                 "build-report",
@@ -307,10 +309,11 @@ def check_parallel_build() -> None:
             f"expected one invocation per dist build, got {calls}"
         )
         browser_calls = [call for call in calls if call != REPORT_SOURCE]
-        assert set(browser_calls[:2]) == set(BROWSER_APP_SOURCES), (
+        app_count = len(BROWSER_APP_SOURCES)
+        assert set(browser_calls[:app_count]) == set(BROWSER_APP_SOURCES), (
             f"expected independent browser applications first, got {browser_calls}"
         )
-        assert browser_calls[2:] == BROWSER_FIXTURE_SOURCES, (
+        assert browser_calls[app_count:] == BROWSER_FIXTURE_SOURCES, (
             f"expected ordered browser fixtures, got {browser_calls}"
         )
         assert not (temporary / "abort").exists()
@@ -331,9 +334,11 @@ def check_parallel_build() -> None:
         assert REPORT_SOURCE in report_dry_run
         assert "examples/counter.kk" not in report_dry_run
         assert "examples/top-layer.kk" not in report_dry_run
+        assert "examples/keyed.kk" not in report_dry_run
 
         top_layer_dry_run = dry_run(temporary, "build-top-layer")
         assert "examples/counter.kk" not in top_layer_dry_run
+        assert "examples/keyed.kk" not in top_layer_dry_run
         assert REPORT_SOURCE not in top_layer_dry_run
 
     print("make-parallel: shared dist builds are serialized and independent")

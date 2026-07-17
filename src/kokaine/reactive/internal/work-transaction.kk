@@ -73,6 +73,10 @@ pub fun work-queue/values(target : work-queue<a>) : list<a>
 pub fun work-queue/clear(target : work-queue<a>) : ()
   store(target,empty-deque())
 
+pub fun work-queue/same(left : work-queue<a>,
+                        right : work-queue<a>) : bool
+  unsafe-ptr-eq(left,right)
+
 tail fun append-values-loop(target : work-queue<a>, values : list<a>)
                            : <div> ()
   match values
@@ -92,6 +96,16 @@ pub type work-transaction-state
   Work-failed(work-failure : exception)
   Work-committed
   Work-aborted
+
+// Structural adapters which join an outer bootstrap transaction cannot
+// publish independently. They enlist a fallible preparation, a total state
+// publication, and a rollback action in the outer transaction instead.
+pub type work-publication<e::E>
+  Work-publication(
+    publication-prepare  : () -> <exn|e> (),
+    publication-publish  : () -> (),
+    publication-rollback : () -> <exn|e> ()
+  )
 
 pub type work-group<a>
   Work-group(
