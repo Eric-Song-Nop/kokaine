@@ -105,9 +105,9 @@ test-browser: build-browser-fixtures
 test-wasm:
 	./support/wasmweb-proof/run.sh test
 
-test-report: build-report
-	node --check docs/algebraic-effects-ui-report/report.js
+test-report: build-report build-counter
 	$(PYTHON) test/report_html.py
+	$(UV) run --with playwright python test/browser_report.py
 
 test-all: test-native test-browser test-wasm test-report
 
