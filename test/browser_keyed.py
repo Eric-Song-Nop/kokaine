@@ -364,6 +364,60 @@ with serve_project() as origin:
         assert invoke(page, "insertMiddle") is True
         assert order(page, "#keyed-main-list") == [0, 1, 5, 2, 3, 4]
 
+        # A stale row remains part of the physical rollback domain until commit.
+        # If it contains a custom element, a later forward-move failure must not
+        # make rollback attempt to move that unvalidated row and poison the old
+        # authoritative table/DOM pair.
+        page.evaluate(
+            """() => {
+                const probe = document.createElement(
+                    'x-kokaine-keyed-unmovable'
+                );
+                probe.id = 'keyed-stale-rollback-probe';
+                document.querySelector('#keyed-row-3').append(probe);
+
+                const prototype = Element.prototype;
+                const descriptor = Object.getOwnPropertyDescriptor(
+                    prototype,
+                    'moveBefore'
+                );
+                const nativeMove = descriptor.value;
+                let moves = 0;
+                Object.defineProperty(prototype, 'moveBefore', {
+                    ...descriptor,
+                    value(node, before) {
+                        const result = nativeMove.call(this, node, before);
+                        // One complete row has moved; the second row's host move
+                        // commits and then throws before the outer rollback.
+                        if (++moves === 6) {
+                            throw new Error(
+                                'forced stale-domain keyed move failure'
+                            );
+                        }
+                        return result;
+                    }
+                });
+                globalThis.__restoreStaleDomainMove = () => {
+                    Object.defineProperty(
+                        prototype,
+                        'moveBefore',
+                        descriptor
+                    );
+                };
+            }"""
+        )
+        stale_domain_failure = invoke(page, "reverse")
+        page.evaluate("globalThis.__restoreStaleDomainMove()")
+        assert stale_domain_failure is False
+        assert order(page, "#keyed-main-list") == [0, 1, 5, 2, 3, 4], (
+            "a stale custom row made failed move rollback corrupt the old order"
+        )
+        page.locator("#keyed-stale-rollback-probe").evaluate(
+            "node => node.remove()"
+        )
+        assert invoke(page, "insertMiddle") is True
+        assert order(page, "#keyed-main-list") == [0, 1, 5, 2, 3, 4]
+
         # A stale row is no longer part of the committed key table, but its
         # physical retirement can still meet an unreliable host primitive.
         # Once that primitive recovers, an exact-K retry must finish retirement
@@ -1214,6 +1268,61 @@ with serve_project() as origin:
         }, f"structural registry unlink was not stack-safe: {compaction!r}"
 
         assert invoke(page, "bulkRetirement") is True
+
+        # The all-stale deletion is already in final+stale order, so no physical
+        # move is needed. A later retirement-stage failure must not manufacture a
+        # rollback move merely because reconciliation reached its DOM phase.
+        no_move_order = order(page, "#keyed-dispose-stress-list")
+        page.evaluate(
+            """() => {
+                const probe = document.createElement(
+                    'x-kokaine-keyed-unmovable'
+                );
+                probe.id = 'keyed-no-move-rollback-probe';
+                document.querySelector(
+                    '#keyed-dispose-stress-row-2048'
+                ).append(probe);
+
+                const opening = document.querySelector(
+                    '#keyed-dispose-stress-row-4095'
+                ).previousSibling;
+                const prototype = Node.prototype;
+                const descriptor = Object.getOwnPropertyDescriptor(
+                    prototype,
+                    'nextSibling'
+                );
+                const nativeGet = descriptor.get;
+                let openingReads = 0;
+                Object.defineProperty(prototype, 'nextSibling', {
+                    ...descriptor,
+                    get() {
+                        if (this === opening && ++openingReads === 4) {
+                            throw new Error(
+                                'forced no-move keyed retirement stage failure'
+                            );
+                        }
+                        return nativeGet.call(this);
+                    }
+                });
+                globalThis.__restoreNoMoveNextSibling = () => {
+                    Object.defineProperty(
+                        prototype,
+                        'nextSibling',
+                        descriptor
+                    );
+                };
+            }"""
+        )
+        no_move_failure = invoke(page, "disposeStress")
+        page.evaluate("globalThis.__restoreNoMoveNextSibling()")
+        assert no_move_failure is False
+        assert order(page, "#keyed-dispose-stress-list") == no_move_order, (
+            "a no-move retirement failure performed a destructive rollback move"
+        )
+        page.locator("#keyed-no-move-rollback-probe").evaluate(
+            "node => node.remove()"
+        )
+        assert invoke(page, "disposeStressReset") is True
 
         disposal = page.evaluate(
             """() => {
