@@ -5,7 +5,7 @@ module kokaine/reactive/internal/scheduler
 
 import kokaine/reactive/internal/model
 import kokaine/reactive/internal/lifetime
-import kokaine/reactive/internal/registry
+import kokaine/internal/registry
 import kokaine/reactive/internal/work-transaction
 import std/core/undiv
 
@@ -219,7 +219,8 @@ pub fun resume-node(plane : plane<e>, current : trace<e>,
     Capture-pending ->
       store(state,Capture-running)
       val old-frame = load(current-frame-slot)
-      val draft-frame = Frame(new-lifetime-owner(Scope-starting))
+      val draft-frame = Frame(new-lifetime-owner(
+        Scope-starting,plane.plane-retirement))
       val drafts = cell([])
       val completed = cell(False)
       val resume-draft = fn() resume(draft-frame)
@@ -260,7 +261,8 @@ pub fun resume-node(plane : plane<e>, current : trace<e>,
                 ])
               }
               val retired = pretend-no-div{
-                error/try(fn() run-finalizers(retirement))
+                error/try(fn() run-finalizers(
+                  old-frame.frame-lifetime.lifetime-retirement,retirement))
               }
               match retired
                 Error(failure) ->
@@ -758,6 +760,7 @@ tail fun prepend-publication-rollbacks(
           fn() lift-div(fn() rollback())),collected))
 
 fun retire-transaction-bootstraps(
+    root : root<e>,
     derive-owned : list<work<total>>, effect-owned : list<work<e>>,
     publications : list<work-publication<e>>)
     : <div,exn|e> ()
@@ -770,7 +773,7 @@ fun retire-transaction-bootstraps(
   // cleared, scopes are dead, and owner registrations are unlinked before
   // cleanup can run, including scopes which already drained successfully.
   val finalizers = collect-retirement-work(structural)
-  run-finalizers(finalizers)
+  run-finalizers(root.root-lifetime.lifetime-retirement,finalizers)
 
 pub fun abort-work-transaction(root : root<e>,
                                transaction : scheduler-transaction<e>)
@@ -808,7 +811,7 @@ pub fun abort-work-transaction(root : root<e>,
           if !claimed
           then throw("scheduler transaction abort lost its active state")
           else retire-transaction-bootstraps(
-            derive-owned,effect-owned,publications)
+            root,derive-owned,effect-owned,publications)
   }
 
 pub fun settle-failure(message : string) : settle-result

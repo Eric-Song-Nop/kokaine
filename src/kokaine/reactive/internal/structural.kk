@@ -10,7 +10,7 @@ module kokaine/reactive/internal/structural
 
 import kokaine/reactive/internal/model
 import kokaine/reactive/internal/lifetime
-import kokaine/reactive/internal/registry
+import kokaine/internal/registry
 import kokaine/reactive/internal/scheduler
 import std/core/undiv
 
@@ -39,7 +39,7 @@ pub fun open-structural-owner(root : root<e>) : exn structural-owner<e>
   val plane = root.root-effect-plane
   val parent = load(plane.plane-current-frame)
   check-frame-registration(root,parent)
-  val lifetime = new-lifetime-owner(Scope-live)
+  val lifetime = new-lifetime-owner(Scope-live,plane.plane-retirement)
   val frame = Frame(lifetime)
   val registration = parent.frame-lifetime.register-child(
     lifetime-retirement-work(lifetime))
