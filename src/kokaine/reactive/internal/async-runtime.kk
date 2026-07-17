@@ -35,7 +35,18 @@ import std/core/undiv
 // callback boundary become the nearest base interpreter for the next await.
 alias taskresume<e,a> = (await-result<a>,bool) -> <async,signal-read,signal-write,pure,ui|e> ()
 
-alias task-cancel-action<e> = () -> <signal-write,pure,ui|e> ()
+alias task-cancel-strand = () -> ui ()
+
+// Cancellation is deliberately represented as two capabilities. A claimed
+// batch first unwinds every parked Koka strand while its captured root context
+// is still available; only afterward may an untrusted host disposer invalidate
+// that context. Both capabilities remain one-shot because their TaskState was
+// made terminal before this value became reachable.
+type task-cancellation
+  Task-cancellation(
+    cancellation-strand  : task-cancel-strand,
+    cancellation-dispose : dispose-fn
+  )
 
 type task-payload<a,e::E>
   Task-payload(
@@ -50,7 +61,7 @@ type task-payload<a,e::E>
 type runtime-supervisor<e::E>
   Runtime-supervisor(
     supervisor-scope  : async-scope,
-    supervisor-tasks  : cancellation-supervisor<task-cancel-action<e>>,
+    supervisor-tasks  : cancellation-supervisor<task-cancellation>,
     supervisor-reason : ref<global,task-stop-reason>,
     supervisor-owner  : ref<global,maybe<cleanup-registration<<ui|e>>>>,
     supervisor-family : ref<global,maybe<registry-registration<runtime-supervisor<e>>>>
@@ -60,7 +71,7 @@ type generation-task<a,e::E>
   Generation-task(
     task-state      : one-shot-task<task-payload<a,e>,await-result<a>,dispose-fn>,
     task-supervisor : runtime-supervisor<e>,
-    task-cancel     : ref<global,maybe<cancellation-registration<task-cancel-action<e>>>>
+    task-cancel     : ref<global,maybe<cancellation-registration<task-cancellation>>>
   )
 
 // A family is the structured lifetime shared by all fresh turn interpreters
@@ -180,13 +191,15 @@ fun claim-async-lease-disposers(entries : list<async-lease-entry>)
           Cons(current-dispose,claim-async-lease-disposers(rest))
 
 fun run-async-lease-disposers(disposers : list<dispose-fn>) : ui ()
-  match disposers
-    Nil -> ()
-    Cons(dispose,rest) ->
-      // A later disposer still runs if an earlier hostile host callback
-      // escapes unexpectedly. Koka's finally lowering also preserves this
-      // ordering on the JavaScript backend.
-      finally(fn() run-async-lease-disposers(rest),dispose)
+  pretend-no-div{
+    var pending := disposers
+    while { !pending.is-nil }
+      match pending
+        Nil -> ()
+        Cons(dispose,rest) ->
+          pending := rest
+          dispose()
+  }
 
 pub fun async-lease-group/dispose(group : async-lease-group) : ui ()
   match group
@@ -241,7 +254,7 @@ fun runtime-supervisor/detach(supervisor : runtime-supervisor<e>) : ()
 
 fun runtime-supervisor/claim(
     supervisor : runtime-supervisor<e>, reason : task-stop-reason)
-    : list<task-cancel-action<e>>
+    : list<task-cancellation>
   store(supervisor.supervisor-reason,reason)
   match supervisor.supervisor-tasks.claim-cancel
     Nothing -> []
@@ -251,14 +264,36 @@ fun runtime-supervisor/claim(
       supervisor.detach
       actions
 
-fun run-task-cancellations(actions : list<task-cancel-action<e>>)
-                           : <signal-write,pure,ui|e> ()
-  match actions
-    Nil -> ()
-    Cons(action,rest) ->
-      // A hostile disposer or abortive finalizer must not prevent already
-      // claimed siblings from losing their host/Koka payloads exactly once.
-      finally(fn() run-task-cancellations(rest),action)
+fun run-task-cancel-strands(actions : list<task-cancellation>) : ui ()
+  pretend-no-div{
+    var pending := actions
+    while { !pending.is-nil }
+      match pending
+        Nil -> ()
+        Cons(Task-cancellation(unwind,_),rest) ->
+          pending := rest
+          unwind()
+  }
+
+fun run-task-host-disposers(actions : list<task-cancellation>) : ui ()
+  pretend-no-div{
+    var pending := actions
+    while { !pending.is-nil }
+      match pending
+        Nil -> ()
+        Cons(Task-cancellation(_,dispose),rest) ->
+          pending := rest
+          dispose()
+  }
+
+fun run-task-cancellations(actions : list<task-cancellation>) : ui ()
+  // Both capabilities are `ui`-closed. Modeled exceptions and final control
+  // are consumed inside the cancellation strand; a raw JavaScript throw would
+  // violate the host callback contract and cannot be recovered by Koka code.
+  finally(
+    fn() run-task-host-disposers(actions),
+    fn() run-task-cancel-strands(actions)
+  )
 
 tail fun find-runtime-supervisor(
     values : list<runtime-supervisor<e>>, scope : async-scope)
@@ -354,48 +389,49 @@ fun accept-task-result(task : generation-task<a,e>, family : async-family<e>,
     then enqueue-microtask(as-host-action(fn() run-task-result(task,family)))
     else ()
 
-fun run-stopped-task(
+fun stopped-task-cancellation(
     family : async-family<e>,
     claim : task-claim<task-payload<a,e>,await-result<a>,dispose-fn>)
-    : <signal-write,pure,ui|e> ()
-  match claim
-    Task-claim(Task-payload(portal,resume-action,label),_result,disposer) ->
-      val cancel-strand = fn()
-        // The task was made terminal and unlinked during the claim phase. A
-        // stale/re-entrant host callback therefore cannot win while its parked
-        // strand unwinds lexical finalizers under the application runner.
-        with catch fn(problem)
-          report-async-error("uncaught Kokaine async cancellation exception (" ++
-                             label ++ "): " ++ problem.show)
-        match portal
-          Reentry(root,_,_) ->
-            run-application-retirement-reentry(
-              family.family-runner,portal,fn() {
-                resume-generation(root,family,fn() {
-                  resume-action(Cancel,True)
+    : <div> task-cancellation
+  lift-div fn() {
+    match claim
+      Task-claim(Task-payload(portal,resume-action,label),_result,disposer) ->
+        val cancel-strand = fn()
+          // The task was made terminal and unlinked during the claim phase. A
+          // stale/re-entrant host callback therefore cannot win while its parked
+          // strand unwinds lexical finalizers under the application runner.
+          with catch fn(problem)
+            report-async-error("uncaught Kokaine async cancellation exception (" ++
+                               label ++ "): " ++ problem.show)
+          match portal
+            Reentry(root,_,_) ->
+              run-application-retirement-reentry(
+                family.family-runner,portal,fn() {
+                  resume-generation(root,family,fn() {
+                    resume-action(Cancel,True)
+                  })
                 })
-              })
-      val dispose-host = fn()
-        match disposer
-          Nothing -> ()
-          Just(dispose) -> dispose()
-      mask<signal-write>{
-        lift-exn(fn() lift-div(fn() finally(dispose-host,cancel-strand)))
-      }
+        val dispose-host = fn()
+          match disposer
+            Nothing -> ()
+            Just(dispose) -> dispose()
+        Task-cancellation(
+          cancel-strand,
+          dispose-host)
+  }
 
 noinline fun task/claim-stop(task : generation-task<a,e>,
                              family : async-family<e>)
-                    : <div> maybe<task-cancel-action<e>>
-  lift-div fn()
-    val reason = load(task.task-supervisor.supervisor-reason)
-    match task.task-state.claim-stop(reason)
-      Nothing -> Nothing
-      Just(claim) ->
-        // `claim-cancel` already detached the supervisor registry snapshot.
-        // Drop this stale handle before returning an action which can re-enter.
-        store(task.task-cancel,Nothing)
-        decrement-outstanding()
-        Just(fn() run-stopped-task(family,claim))
+                    : <div> maybe<task-cancellation>
+  val reason = load(task.task-supervisor.supervisor-reason)
+  match task.task-state.claim-stop(reason)
+    Nothing -> lift-div(fn() Nothing)
+    Just(claim) ->
+      // `claim-cancel` already detached the supervisor registry snapshot.
+      // Drop this stale handle before returning an action which can re-enter.
+      store(task.task-cancel,Nothing)
+      decrement-outstanding()
+      Just(stopped-task-cancellation(family,claim))
 
 
 // --------------------------------------------------------------------------
@@ -440,16 +476,31 @@ fun register-task(
         Nothing -> ()
         Just(unclaimed) -> unclaimed()
 
+tail fun reverse-cancellations-onto(
+    values : list<task-cancellation>, collected : list<task-cancellation>)
+    : <div> list<task-cancellation>
+  match values
+    Nil -> collected
+    Cons(current,rest) ->
+      reverse-cancellations-onto(rest,Cons(current,collected))
+
+tail fun claim-scope-supervisors-loop(
+    supervisors : list<runtime-supervisor<e>>, scope : async-scope,
+    collected : list<task-cancellation>)
+    : <div> list<task-cancellation>
+  match supervisors
+    Nil -> collected.reverse
+    Cons(supervisor,rest) ->
+      val next = if supervisor.supervisor-scope <= scope
+                 then reverse-cancellations-onto(
+                        supervisor.claim(Task-canceled),collected)
+                 else collected
+      claim-scope-supervisors-loop(rest,scope,next)
+
 fun claim-scope-supervisors(
     supervisors : list<runtime-supervisor<e>>, scope : async-scope)
-    : list<task-cancel-action<e>>
-  match supervisors
-    Nil -> []
-    Cons(supervisor,rest) ->
-      val tail = claim-scope-supervisors(rest,scope)
-      if supervisor.supervisor-scope <= scope
-      then supervisor.claim(Task-canceled) ++ tail
-      else tail
+    : <div> list<task-cancellation>
+  claim-scope-supervisors-loop(supervisors,scope,[])
 
 noinline fun cancel-runtime-scope(runtime : generation-runtime<e>,
                                   scope : async-scope)

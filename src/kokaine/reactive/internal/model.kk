@@ -162,6 +162,16 @@ pub type retirement-work<e::E>
     retirement-action : () -> <div,exn|e> ()
   )
 
+// Every structural lifetime in one execution plane shares a retirement
+// coordinator. A root-disposal request made by a re-entrant cleanup is held
+// until the outermost already-detached finalizer snapshot has drained.
+pub type retirement-coordinator<e::E>
+  Retirement-coordinator(
+    retirement-depth             : ref<global,int>,
+    retirement-disposal-requested: ref<global,bool>,
+    retirement-dispose-root      : ref<global,maybe<() -> <div,exn|e> ()>>
+  )
+
 // Causal continuation gates and resource lifetime are deliberately separate.
 // Children and user finalizers have distinct registries so every descendant
 // is closed before any cleanup runs, while both classes retain LIFO order.
@@ -169,7 +179,8 @@ pub type lifetime-owner<e::E>
   Lifetime-owner(
     lifetime-token      : ref<global,scope-state>,
     lifetime-children   : registry<retirement-work<e>>,
-    lifetime-finalizers : registry<retirement-work<e>>
+    lifetime-finalizers : registry<retirement-work<e>>,
+    lifetime-retirement : retirement-coordinator<e>
   )
 
 pub type cleanup-registration<e::E>
@@ -207,7 +218,8 @@ pub type plane<e::E>
     plane-current       : ref<global,maybe<continuation-gate>>,
     plane-current-entry : ref<global,maybe<trace<e>>>,
     plane-current-frame : ref<global,frame<e>>,
-    plane-draft         : ref<global,maybe<ref<global,list<trace<e>>>>>
+    plane-draft         : ref<global,maybe<ref<global,list<trace<e>>>>>,
+    plane-retirement    : retirement-coordinator<e>
   )
 
 pub type root<e::E>

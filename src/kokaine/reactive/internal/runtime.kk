@@ -25,18 +25,28 @@ pub fun dispatch(root : root<e>,
 // Roots
 // --------------------------------------------------------------------------
 
-fun fresh-plane(current-frame : frame<e>) : plane<e>
+fun fresh-plane(current-frame : frame<e>,
+                retirement : retirement-coordinator<e>) : plane<e>
   Plane(new-work-queue(),cell(Nothing),cell(Nothing),cell(Nothing),
-        cell(current-frame),cell(Nothing))
+        cell(current-frame),cell(Nothing),retirement)
 
 fun fresh-root() : root<e>
-  val lifetime = new-lifetime-owner(Scope-live)
+  val effect-retirement : retirement-coordinator<e> =
+    new-retirement-coordinator()
+  val derive-retirement : retirement-coordinator<total> =
+    new-retirement-coordinator()
+  val lifetime = new-lifetime-owner(Scope-live,effect-retirement)
   val effect-frame = Frame(lifetime)
-  val derive-frame = Frame(new-lifetime-owner(Scope-live))
-  Root(
-    Root-key(cell(True)),fresh-plane(derive-frame),fresh-plane(effect-frame),
+  val derive-frame = Frame(
+    new-lifetime-owner(Scope-live,derive-retirement))
+  val root = Root(
+    Root-key(cell(True)),
+    fresh-plane(derive-frame,derive-retirement),
+    fresh-plane(effect-frame,effect-retirement),
     cell(Nothing),lifetime,cell(0),cell(False),cell(False),cell(False)
   )
+  effect-retirement.install-root-disposal(fn() retire-root-now(root))
+  root
 
 tail fun prepend-root-publication-rollbacks(
     values : list<work-publication<e>>,
@@ -110,7 +120,7 @@ fun retire-root-now(root : root<e>) : <div,exn|e> ()
       val finalizers = pretend-no-div{
         lifetime-finalizers ++ publication-rollbacks
       }
-      run-finalizers(finalizers)
+      run-finalizers(root.root-lifetime.lifetime-retirement,finalizers)
   )
 
 pub fun create-root(action : (root<e>) -> <signal-write,pure|e> a)
@@ -138,6 +148,10 @@ pub fun create-root(action : (root<e>) -> <signal-write,pure|e> a)
 pub fun root/dispose(root : root<e>) : <exn|e> ()
   check-not-pure-plane("reactive root disposal")
   if load(root.root-disposed) || load(root.root-disposing) then ()
+  elif root.root-lifetime.lifetime-retirement.request-root-disposal then
+    // Reject new ownership immediately, but keep `disposed=False` so the
+    // already-claimed outer retirement snapshot can finish signal cleanup.
+    store(root.root-disposing,True)
   elif load(root.root-batch-depth) > 0 ||
        load(root.root-flushing) ||
        load(root.root-effect-plane.plane-current).is-just ||
