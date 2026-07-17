@@ -8,6 +8,19 @@ import std/core/unsafe
 import std/core/undiv
 
 
+effect ctl abandon-transaction() : ()
+
+fun completes-transaction(action : () -> <abandon-transaction,pure|e> bool)
+                         : <pure|e> bool
+  with final ctl abandon-transaction() False
+  action()
+
+fun require-transaction(action : () -> <abandon-transaction,pure|e> a)
+                        : <div,exn|e> a
+  with final ctl abandon-transaction()
+    throw("unexpected scheduler transaction abandonment")
+  action()
+
 fun check(ok : bool, message : string)
   if ok then () else throw("work transaction: " ++ message)
 
@@ -130,9 +143,74 @@ fun test-resume_is_global_and_abort_discards_bootstrap_work()
   check(!hidden-load(abandoned),"abort drops an unstarted local bootstrap")
   other.dispose()
 
+fun test-abort-retires-an-unstarted-derived-scope()
+  val runs = hidden(0)
+  val (root,(transaction,value))
+      : (root<total>,(scheduler-transaction<total>,memo<int>)) =
+    create-root fn(root)
+      val transaction = open-work-transaction(root)
+      val value = derive(root,0,fn()
+        hidden-store(runs,hidden-load(runs) + 1)
+        42
+      )
+      (transaction,value)
+
+  check(hidden-load(runs) == 0,
+        "an open transaction keeps the derived bootstrap local")
+  abort-work-transaction(root,transaction)
+  val pulled : error<int> = mask<exn>{
+    error/try(fn() sample(root){ value.get })
+  }
+  check(pulled.is-error,
+        "an aborted derived scope cannot bootstrap through a direct pull")
+  check(hidden-load(runs) == 0,
+        "abort retires the derived bootstrap closure without running it")
+  root.dispose()
+
+fun test-final-control-aborts_and_detaches_the_active_transaction()
+  val abandoned-runs = hidden(0)
+  val built = require-transaction fn()
+    create-root fn(root)
+      val transaction = open-work-transaction(root)
+      val pending = create-effect(root,fn() (),fn(_)
+        hidden-store(abandoned-runs,hidden-load(abandoned-runs) + 1)
+        abandon-transaction()
+      )
+      transaction
+  val (root,transaction) = built
+
+  val completed = completes-transaction fn()
+    pretend-no-div{ drain-work-transaction(root,transaction) }
+    True
+  check(!completed,"final control abandons the local bootstrap turn")
+  check(hidden-load(abandoned-runs) == 1,
+        "the abandoning bootstrap starts exactly once")
+  match transaction.state
+    Work-aborted -> ()
+    _ -> throw("work transaction: final control must abort the transaction")
+
+  val recovery-runs = hidden(0)
+  val recovery = open-work-transaction(root)
+  val recovery-stop = require-transaction fn()
+    update(root){
+      create-effect(root,fn() (),fn(_)
+        hidden-store(recovery-runs,hidden-load(recovery-runs) + 1)
+      )
+  }
+  require-transaction fn()
+    pretend-no-div{ drain-work-transaction(root,recovery) }
+  commit-work-transaction(root,recovery)
+  check(hidden-load(recovery-runs) == 1,
+        "a fresh transaction opens and drains after dynamic rollback")
+  require-transaction fn()
+    recovery-stop()
+    root.dispose()
+
 pub fun main()
   test-deque-routing-is-stack-safe()
   test-bootstrap-routing-follows-the-transaction-state()
   test-scheduler-drains_only_the_local_bootstrap_group()
   test-resume_is_global_and_abort_discards_bootstrap_work()
+  test-abort-retires-an-unstarted-derived-scope()
+  test-final-control-aborts_and_detaches_the_active_transaction()
   println("work-transaction: all checks passed")
