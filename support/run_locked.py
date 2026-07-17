@@ -72,7 +72,7 @@ def exclusive_lock(
 def _forward_signal(process: subprocess.Popen, number: int) -> None:
     try:
         os.killpg(process.pid, number)
-    except ProcessLookupError:
+    except (ProcessLookupError, PermissionError):
         pass
 
 
@@ -105,6 +105,8 @@ def _process_group_has_live_members(group: int) -> bool:
         os.killpg(group, 0)
     except ProcessLookupError:
         return False
+    except PermissionError:
+        return True
     return True
 
 
@@ -146,7 +148,11 @@ def _run_command(command, platform: str = os.name):
         process = subprocess.Popen(command, start_new_session=True)
         forward_pending()
         returncode = process.wait()
-        if returncode < 0 and not received_signals:
+        if (
+            returncode < 0
+            and not received_signals
+            and _process_group_has_live_members(process.pid)
+        ):
             _forward_signal(process, -returncode)
         if received_signals or returncode < 0:
             _wait_for_process_group(process.pid)
