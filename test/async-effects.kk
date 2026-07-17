@@ -105,7 +105,31 @@ fun test-scopes()
   )
   check(parent == Just(root-scope),"in-parent-scope restores the parent")
 
+tail fun churn-global-scopes(scope : async-scope, remaining : int) : <div> ()
+  if remaining <= 0 then () else
+    val _ = new-child-scope(scope)
+    churn-global-scopes(scope,remaining - 1)
+
+fun test-scope-namespaces()
+  // Runtime identities remain isolated even after unrelated scope-heavy code
+  // has advanced the process-wide allocator.
+  churn-global-scopes(root-scope,12000)
+  val first-root = new-runtime-scope-root()
+  val first-child = new-child-scope(first-root)
+  val second-root = new-runtime-scope-root()
+  val second-child = new-child-scope(second-root)
+  check(first-root != second-root && first-root != root-scope,
+        "runtime roots retain isolated cancellation identity")
+  check(first-child != second-child,
+        "runtime children retain process-wide identity")
+  check(first-root.identity-key != second-root.identity-key &&
+        first-child.identity-key != second-child.identity-key,
+        "hash keys remain unique across runtime namespaces")
+  check(!(first-child <= second-root) && !(second-child <= first-root),
+        "scope ancestry cannot cross runtime namespaces")
+
 pub fun main()
   test-await-results()
   test-scopes()
+  test-scope-namespaces()
   println("async-effects: all checks passed")
