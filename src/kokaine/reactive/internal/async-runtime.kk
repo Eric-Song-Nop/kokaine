@@ -23,6 +23,7 @@ import kokaine/reactive/internal/application-runner
 import kokaine/reactive/internal/one-shot-task
 import kokaine/reactive/internal/cancellation-supervisor
 import kokaine/reactive/internal/registry
+import std/core/vector
 import std/core/undiv
 
 
@@ -64,7 +65,8 @@ type runtime-supervisor<e::E>
     supervisor-tasks  : cancellation-supervisor<task-cancellation>,
     supervisor-reason : ref<global,task-stop-reason>,
     supervisor-owner  : ref<global,maybe<cleanup-registration<<ui|e>>>>,
-    supervisor-family : ref<global,maybe<registry-registration<runtime-supervisor<e>>>>
+    supervisor-family : ref<global,maybe<registry-registration<runtime-supervisor<e>>>>,
+    supervisor-index  : ref<global,maybe<runtime-supervisor<e>>>
   )
 
 type generation-task<a,e::E>
@@ -80,6 +82,7 @@ type generation-task<a,e::E>
 type async-family<e::E>
   Async-family(
     family-supervisors : registry<runtime-supervisor<e>>,
+    family-index       : ref<global,vector<ref<global,maybe<runtime-supervisor<e>>>>>,
     family-canceled    : ref<global,list<async-scope>>,
     family-runner      : app-runner<<exn,ui|e>,<exn,ui>>
   )
@@ -218,6 +221,9 @@ noinline fun runtime/release-canceled(runtime : generation-runtime<e>,
   store(canceled,load(canceled).filter(fn(current) !(current == scope)))
 
 fun runtime-supervisor/detach(supervisor : runtime-supervisor<e>) : ()
+  // Break the direct scope lookup cycle before unlinking either enumeration
+  // owner. A completed scope therefore cannot retain its family or siblings.
+  store(supervisor.supervisor-index,Nothing)
   val owner = load(supervisor.supervisor-owner)
   store(supervisor.supervisor-owner,Nothing)
   match owner
@@ -276,21 +282,38 @@ fun run-task-cancellations(actions : list<task-cancellation>) : ui ()
     fn() run-task-cancel-strands(actions)
   )
 
-tail fun find-runtime-supervisor(
-    values : list<runtime-supervisor<e>>, scope : async-scope)
-    : maybe<runtime-supervisor<e>>
-  match values
-    Nil -> Nothing
-    Cons(supervisor,rest) ->
-      if supervisor.supervisor-scope == scope then Just(supervisor)
-      else find-runtime-supervisor(rest,scope)
+fun new-supervisor-index()
+    : vector<ref<global,maybe<runtime-supervisor<e>>>>
+  vector-init-total(8,fn(_) cell(Nothing))
+
+fun async-family/supervisor-slot(family : async-family<e>,
+                                 scope : async-scope)
+    : ref<global,maybe<runtime-supervisor<e>>>
+  val key = scope.key
+  val current = load(family.family-index)
+  match current.at(key)
+    Just(slot) -> slot
+    Nothing ->
+      // Scope IDs are monotonic. Geometric growth makes the total copying
+      // linear while direct lookup stays O(1) for sibling-heavy workloads.
+      val size = max(key + 1,max(8,current.length * 2))
+      val grown = vector-init-total(size,fn(index)
+        match current.at(index)
+          Nothing -> cell(Nothing)
+          Just(slot) -> slot
+      )
+      store(family.family-index,grown)
+      match grown.at(key)
+        Just(slot) -> slot
+        Nothing -> cell(Nothing)
 
 fun new-runtime-supervisor(
-    root : root<<ui|e>>, family : async-family<e>, scope : async-scope)
+    root : root<<ui|e>>, family : async-family<e>, scope : async-scope,
+    index-slot : ref<global,maybe<runtime-supervisor<e>>>)
     : <signal-write,pure,ui|e> runtime-supervisor<e>
   val supervisor = Runtime-supervisor(
     scope,new-cancellation-supervisor(),cell(Task-canceled),
-    cell(Nothing),cell(Nothing))
+    cell(Nothing),cell(Nothing),index-slot)
   // One cleanup represents the whole lexical scope. Retirement claims every
   // TaskState first; only the detached action list may resume/dispose tasks.
   val owner = register-cleanup(root,fn()
@@ -300,15 +323,18 @@ fun new-runtime-supervisor(
   store(supervisor.supervisor-owner,Just(owner))
   val family-registration = family.family-supervisors.insert(supervisor)
   store(supervisor.supervisor-family,Just(family-registration))
+  // Publish direct lookup only after both cleanup/enumeration owners exist.
+  store(index-slot,Just(supervisor))
   supervisor
 
 fun runtime/supervisor(
     runtime : generation-runtime<e>, root : root<<ui|e>>, scope : async-scope)
     : <signal-write,pure,ui|e> runtime-supervisor<e>
   val family = runtime.runtime-family
-  match find-runtime-supervisor(family.family-supervisors.snapshot,scope)
+  val index-slot = family.supervisor-slot(scope)
+  match load(index-slot)
     Just(supervisor) -> supervisor
-    Nothing -> new-runtime-supervisor(root,family,scope)
+    Nothing -> new-runtime-supervisor(root,family,scope,index-slot)
 
 fun task/detach-cancellation(task : generation-task<a,e>) : ()
   val registration = load(task.task-cancel)
@@ -702,5 +728,6 @@ pub fun run-generation-async(
   val runner : app-runner<<exn,ui>,<exn,ui>> =
     App-runner(fn(run-action) run-action())
   run-generation-async-with-family(
-    root,Async-family(new-registry(),cell([]),runner),action
+    root,Async-family(new-registry(),cell(new-supervisor-index()),
+                      cell([]),runner),action
   )

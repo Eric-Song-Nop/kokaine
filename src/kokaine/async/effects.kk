@@ -114,6 +114,11 @@ pub fun new-child-scope(Scope(ids) : async-scope) : async-scope
 fun current-scope-id(Scope(ids) : async-scope) : scope-id
   ids.head(0)
 
+// Internal runtime indexes use the opaque scope's stable head identity. The
+// abstract alias prevents callers from forging a scope from this integer.
+pub fun async-scope/key(scope : async-scope) : int
+  scope.current-scope-id
+
 pub fun async-scope/parent(Scope(ids) : async-scope) : async-scope
   match ids
     Cons(_,parents as Cons) -> Scope(parents)
