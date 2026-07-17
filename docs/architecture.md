@@ -386,7 +386,23 @@ rollback-reachable draft and rolls back every enlisted publication. On a move
 or participant-prepare failure, it restores the previous row order and disposes
 draft owners before rethrowing. A joined nested lease cannot steal commit or
 abort authority from its outer owner, and cannot publish merely because its own
-adapter call returned. The range primitive validates
+adapter call returned. Structural transactions encode that distinction as
+`Owned` versus `Joined` authority rather than inferring it from a no-op commit.
+Joined keyed reconciliation is intentionally initial-only: updating retained
+rows would require signal writes in the journal's total publication suffix, so
+that case fails closed instead of weakening the two-phase contract.
+
+The pending-retirement ledger is part of the authoritative keyed table, not a
+best-effort cleanup list kept off to the side. Each entry owns a one-time DOM
+snapshot of the complete stale range. Successful physical removal pops the
+entry before owner cleanup runs; a host failure leaves the unconsumed suffix in
+the table and later reconciliation retries from the snapshot even when marker
+endpoints were already detached by a commit-then-throw primitive. Explicit
+reactive `update` boundaries flush previously failed work even when the new
+signal value compares equal, so an exact-value retry can make progress after
+the host primitive recovers.
+
+The range primitive validates
 common parentage, endpoint reachability, and an out-of-range insertion target
 before extraction;
 it moves existing nodes rather than cloning them and restores focus/selection
@@ -429,6 +445,18 @@ closed. Framework-created elements and trusted HTML remain eligible for the
 validated native or fragment paths, including ordinary `div`/`span` content.
 Initial mounts, data-only updates, and keyed updates whose physical order
 already matches remain unaffected.
+
+The atomicity claim is about scheduler ownership and authoritative reactive
+publication: no joined or outer table/source state becomes visible until every
+enlisted prepare succeeds. Browser DOM preparation itself is not a reversible
+database transaction. Ordinary ranges are restored on modeled failure, and
+custom-element or opaque lifecycle cases which could synchronously observe an
+unrecoverable partial move are rejected before mutation. Stale-row removal is
+deliberately post-commit; while it is pending, the table explicitly records the
+physical retirement rather than pretending the leftover DOM is unmanaged.
+Arbitrary external MutationObserver callbacks or hostile DOM monkeypatches may
+observe transient preparation steps, but cannot silently transfer or erase the
+adapter's publication/rollback authority.
 
 This provenance guarantee assumes cooperative DOM code. JavaScript can retain
 or borrow an unwrapped native `attachShadow` function and thereby create a
@@ -499,7 +527,8 @@ innermost boundary and translate them to Koka `exn`, as the DOM adapter does.
   `entry-structural.kk` check state-entry routing and ownership.
 - `structural-scopes.kk` checks replacement cleanup and stale-frame rejection.
 - `structural-transactions.kk` checks persistent row ownership, parent/root
-  retirement, stale-owner rejection, and outer-versus-joined leases.
+  retirement, stale-owner rejection, outer-versus-joined leases, and the
+  prepare/publish/rollback journal.
 - `control-flow.kk` checks conditional/list/vector snapshots and duplicate-key
   parity; `key-index.kk` checks balanced lookup under adversarial insertion.
 - `final-control-rollback.kk` checks abandoned drafts and exact-K retry.
@@ -507,7 +536,8 @@ innermost boundary and translate them to Koka `exn`, as the DOM adapter does.
 - `dom-lifecycle.kk` plus `browser_counter.py` check listener, region, and mount
   retirement in a real browser.
 - `dom-keyed.kk` exercises retained node identity, item/index publication,
-  reorder/insert/delete, focus, event re-entry, cleanup, and rollback.
+  reorder/insert/delete, focus, event re-entry, cleanup, rollback, and exact-
+  value recovery of a failed pending retirement.
 - `dom-event-continuation.kk` checks repeated multi-shot delivery, synchronous
   nested dispatch and `preventDefault`, plus rejection after retirement.
 - `root-construction.kk`, `dom-mount-rollback.kk`, `dom-ownership.kk`, and
