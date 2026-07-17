@@ -9,7 +9,7 @@ import std/core/undiv
 
 
 extern begin-scale() : ui ()
-  js inline "globalThis.__kokaineAsyncScale={ done:false, count:0, canceled:0, disposed:0, scopedCanceled:0, scopedDisposed:0, elapsed:-1, outstanding:-1, owned:-1 }"
+  js inline "globalThis.__kokaineAsyncScale={ done:false, count:0, canceled:0, disposed:0, scopedCanceled:0, scopedDisposed:0, leaseReleased:0, leaseDisposed:0, leaseCount:-1, leaseLinked:true, elapsed:-1, outstanding:-1, owned:-1 }"
 
 extern bump-scale() : ui ()
   js inline "globalThis.__kokaineAsyncScale.count += 1"
@@ -25,6 +25,15 @@ extern bump-scoped-canceled() : ui ()
 
 extern bump-scoped-disposed() : ui ()
   js inline "globalThis.__kokaineAsyncScale.scopedDisposed += 1"
+
+extern bump-lease-released() : ui ()
+  js inline "globalThis.__kokaineAsyncScale.leaseReleased += 1"
+
+extern bump-lease-disposed() : ui ()
+  js inline "globalThis.__kokaineAsyncScale.leaseDisposed += 1"
+
+extern publish-lease-registry(count : int, linked : bool) : ui ()
+  js inline "Object.assign(globalThis.__kokaineAsyncScale,{ leaseCount:#1, leaseLinked:#2 })"
 
 extern start-scale-clock() : ui ()
   js inline "globalThis.__kokaineAsyncScaleStart=performance.now()"
@@ -70,10 +79,51 @@ fun cancel-pending-wave(distinct-scopes : bool) : <ui,exn> ()
   )
   root.dispose()
 
+fun acquire-leases(group : async-lease-group, count : int,
+                   dispose : dispose-fn) : ui list<ownership-release-fn>
+  pretend-no-div{
+    var remaining := count
+    var releases : list<ownership-release-fn> := []
+    while { remaining > 0 }
+      releases := Cons(group.own(dispose),releases)
+      remaining := remaining - 1
+    releases
+  }
+
+fun release-leases(releases : list<ownership-release-fn>) : ui ()
+  pretend-no-div{
+    var pending := releases
+    while { !pending.is-nil }
+      match pending
+        Nil -> ()
+        Cons(release,rest) ->
+          pending := rest
+          if release() then bump-lease-released() else ()
+  }
+
+fun exercise-lease-registry() : ui ()
+  val released = new-async-lease-group()
+  val releases = acquire-leases(released,12000,fn() ())
+  release-leases(releases)
+  released.dispose
+
+  val retired = new-async-lease-group()
+  val retained = acquire-leases(
+    retired,12000,fn() bump-lease-disposed())
+  retired.dispose
+  // Both explicit unlink and seal-detach must sever the intrusive chain. A
+  // stale capability remains one-shot without scanning or retaining siblings.
+  match retained
+    Nil -> ()
+    Cons(stale,_) ->
+      if stale() then bump-lease-released() else ()
+  publish-lease-registry(retired.count,retired.has-linked-entries)
+
 pub fun main()
   begin-scale()
   cancel-pending-wave(False)
   cancel-pending-wave(True)
+  exercise-lease-registry()
   val (root,()) : (root<<ui>>,()) = create-root fn(_root) ()
   dispatch(root,fn()
     run-generation-async(root,fn() pretend-no-div{ schedule-many(12000) })

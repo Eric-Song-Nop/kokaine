@@ -912,6 +912,10 @@ with serve_project() as origin:
         assert scale_result["disposed"] == 12_000, scale_result
         assert scale_result["scopedCanceled"] == 12_000, scale_result
         assert scale_result["scopedDisposed"] == 12_000, scale_result
+        assert scale_result["leaseReleased"] == 12_000, scale_result
+        assert scale_result["leaseDisposed"] == 12_000, scale_result
+        assert scale_result["leaseCount"] == 0, scale_result
+        assert not scale_result["leaseLinked"], scale_result
         assert scale_result["outstanding"] == 0, scale_result
         assert scale_result["owned"] == 0, scale_result
         assert scale_result["elapsed"] < 5_000, scale_result
