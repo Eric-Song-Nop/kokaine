@@ -19,10 +19,13 @@ fun store(target : ref<global,a>, value : a) : ()
   unsafe-total { target := value }
 
 
-pub type task-terminal
-  Task-completed
+pub type task-stop-reason
   Task-canceled
   Task-retired
+
+pub type task-terminal
+  Task-completed
+  Task-stopped(task-stop-state : task-stop-reason)
 
 pub type task-phase
   Task-pending
@@ -98,15 +101,15 @@ pub fun one-shot-task/claim-ready(task : one-shot-task<p,r,d>)
     _ -> Nothing
 
 pub fun one-shot-task/claim-stop(task : one-shot-task<p,r,d>,
-                                 reason : task-terminal)
+                                 reason : task-stop-reason)
                              : maybe<task-claim<p,r,d>>
   val target = task.task-cell
   match load(target)
     Task-state-pending(payload,disposer) ->
-      store(target,Task-state-terminal(reason))
+      store(target,Task-state-terminal(Task-stopped(reason)))
       Just(Task-claim(payload,Nothing,disposer))
     Task-state-ready(payload,result,disposer) ->
-      store(target,Task-state-terminal(reason))
+      store(target,Task-state-terminal(Task-stopped(reason)))
       Just(Task-claim(payload,Just(result),disposer))
     _ -> Nothing
 
