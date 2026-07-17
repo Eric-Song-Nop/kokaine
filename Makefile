@@ -40,6 +40,8 @@ test-native:
 	$(KOKA) $(KOKA_FLAGS) -e test/reactive-advanced.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/reactive-stress.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/html.kk
+	$(KOKA) $(KOKA_FLAGS) -e test/key-index.kk
+	$(KOKA) $(KOKA_FLAGS) -e test/control-flow.kk
 	$(PYTHON) test/event_effect_boundary.py $(KOKA)
 	$(PYTHON) test/run_locked.py
 	$(PYTHON) test/make_parallel.py
