@@ -27,11 +27,13 @@ type pending-await
 val pending : ref<global,list<pending-await>> = hidden([])
 val canceled : ref<global,list<async-scope>> = hidden([])
 val installed-scopes : ref<global,list<async-scope>> = hidden([])
+val ownership-release-calls : ref<global,int> = hidden(0)
 
 fun reset-host() : ()
   store(pending,[])
   store(canceled,[])
   store(installed-scopes,[])
+  store(ownership-release-calls,0)
 
 fun scope-is-canceled(scope : async-scope) : bool
   load(canceled).any(fn(parent) scope <= parent)
@@ -88,7 +90,14 @@ fun run-async(action : () -> <async,exn> a) : <ui,exn> maybe<a>
     fun async-ioc(host-action) host-action()
     fun async-schedule-ioc(_scope,host-action) host-action()
   with handler<async-ownership>
-    fun async-own-disposer(_dispose) fn() True
+    fun async-own-disposer(_dispose)
+      val live = hidden(True)
+      fn()
+        store(ownership-release-calls,load(ownership-release-calls) + 1)
+        if load(live) then
+          store(live,False)
+          True
+        else False
   with handler<async-cancel>
     val async-scope = root-scope
     fun cancel-scope(scope) cancel-pending(scope)
@@ -314,6 +323,31 @@ fun test-parallel-disposes-synchronously-completed-loser()
   check(load(disposals) == 1,
         "synthetic cancellation disposes synchronous setup exactly once")
 
+fun test-parallel-unlinks-explicitly-released-ownership()
+  val disposals = hidden(0)
+  val failed = error/try(fn()
+    run-async(fn()
+      parallel(
+        fn() {
+          val release = async-own(
+            fn() store(disposals,load(disposals) + 1))
+          async-host(release)
+          43
+        },
+        fn() fail-after-await()
+      )
+    )
+  )
+  match failed
+    Error(problem) ->
+      check(problem.message == "expected strand failure",
+            "parallel propagates failure after explicit ownership release")
+    Ok(_) -> check(False,"parallel must propagate the sibling failure")
+  check(load(ownership-release-calls) == 1,
+        "explicit ownership release unlinks the group rollback entry")
+  check(load(disposals) == 0,
+        "explicit ownership release transfers rather than disposes")
+
 fun test-race-propagates-loser-cleanup-error()
   val disposed = hidden(False)
   val failed = error/try(fn()
@@ -396,6 +430,7 @@ pub fun main()
   test-race-drains-after-error()
   test-parallel-error-cancels-queued-result()
   test-parallel-disposes-synchronously-completed-loser()
+  test-parallel-unlinks-explicitly-released-ownership()
   test-race-propagates-loser-cleanup-error()
   test-parallel-prefers-cleanup-error()
   test-race-resumes-awaits-in-loser-cleanup()
