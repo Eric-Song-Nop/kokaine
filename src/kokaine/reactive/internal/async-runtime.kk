@@ -23,7 +23,7 @@ import kokaine/reactive/internal/application-runner
 import kokaine/reactive/internal/one-shot-task
 import kokaine/reactive/internal/cancellation-supervisor
 import kokaine/internal/registry
-import std/core/vector
+import kokaine/internal/int-index
 import std/core/undiv
 
 
@@ -66,7 +66,7 @@ type runtime-supervisor<e::E>
     supervisor-reason : ref<global,task-stop-reason>,
     supervisor-owner  : ref<global,maybe<cleanup-registration<<ui|e>>>>,
     supervisor-family : ref<global,maybe<registry-registration<runtime-supervisor<e>>>>,
-    supervisor-index  : ref<global,maybe<runtime-supervisor<e>>>
+    supervisor-index  : ref<global,maybe<int-index-registration<runtime-supervisor<e>>>>
   )
 
 type generation-task<a,e::E>
@@ -82,8 +82,9 @@ type generation-task<a,e::E>
 type async-family<e::E>
   Async-family(
     family-supervisors : registry<runtime-supervisor<e>>,
-    family-index       : ref<global,vector<ref<global,maybe<runtime-supervisor<e>>>>>,
+    family-index       : int-index<runtime-supervisor<e>>,
     family-canceled    : ref<global,list<async-scope>>,
+    family-root-scope  : async-scope,
     family-runner      : app-runner<<exn,ui|e>,<exn,ui>>
   )
 
@@ -202,10 +203,18 @@ pub fun async-lease-group/dispose(group : async-lease-group) : ui ()
 
 // Keep row-polymorphic family internals out of generated Koka 3.2 `.kki`
 // inline bodies; its interface printer otherwise emits an unparseable cache.
+fun async-family/scope-is-within(family : async-family<e>,
+                                 child : async-scope,
+                                 ancestor : async-scope) : bool
+  // The family's own root owns every task interpreted by the family, including
+  // an explicitly routed foreign scope. Other namespace roots remain isolated.
+  ancestor == family.family-root-scope || child <= ancestor
+
 noinline fun runtime/is-canceled(runtime : generation-runtime<e>,
                                  scope : async-scope) : bool
-  load(runtime.runtime-family.family-canceled)
-    .any(fn(canceled) scope <= canceled)
+  val family = runtime.runtime-family
+  load(family.family-canceled)
+    .any(fn(canceled) family.scope-is-within(scope,canceled))
 
 noinline fun runtime/record-canceled(runtime : generation-runtime<e>,
                                      scope : async-scope) : ()
@@ -223,7 +232,13 @@ noinline fun runtime/release-canceled(runtime : generation-runtime<e>,
 fun runtime-supervisor/detach(supervisor : runtime-supervisor<e>) : ()
   // Break the direct scope lookup cycle before unlinking either enumeration
   // owner. A completed scope therefore cannot retain its family or siblings.
+  val index = load(supervisor.supervisor-index)
   store(supervisor.supervisor-index,Nothing)
+  match index
+    Nothing -> ()
+    Just(registration) ->
+      val _ = registration.take
+      ()
   val owner = load(supervisor.supervisor-owner)
   store(supervisor.supervisor-owner,Nothing)
   match owner
@@ -282,38 +297,12 @@ fun run-task-cancellations(actions : list<task-cancellation>) : ui ()
     fn() run-task-cancel-strands(actions)
   )
 
-fun new-supervisor-index()
-    : vector<ref<global,maybe<runtime-supervisor<e>>>>
-  vector-init-total(8,fn(_) cell(Nothing))
-
-fun async-family/supervisor-slot(family : async-family<e>,
-                                 scope : async-scope)
-    : ref<global,maybe<runtime-supervisor<e>>>
-  val key = scope.key
-  val current = load(family.family-index)
-  match current.at(key)
-    Just(slot) -> slot
-    Nothing ->
-      // Scope IDs are monotonic. Geometric growth makes the total copying
-      // linear while direct lookup stays O(1) for sibling-heavy workloads.
-      val size = max(key + 1,max(8,current.length * 2))
-      val grown = vector-init-total(size,fn(index)
-        match current.at(index)
-          Nothing -> cell(Nothing)
-          Just(slot) -> slot
-      )
-      store(family.family-index,grown)
-      match grown.at(key)
-        Just(slot) -> slot
-        Nothing -> cell(Nothing)
-
 fun new-runtime-supervisor(
-    root : root<<ui|e>>, family : async-family<e>, scope : async-scope,
-    index-slot : ref<global,maybe<runtime-supervisor<e>>>)
+    root : root<<ui|e>>, family : async-family<e>, scope : async-scope)
     : <signal-write,pure,ui|e> runtime-supervisor<e>
   val supervisor = Runtime-supervisor(
     scope,new-cancellation-supervisor(),cell(Task-canceled),
-    cell(Nothing),cell(Nothing),index-slot)
+    cell(Nothing),cell(Nothing),cell(Nothing))
   // One cleanup represents the whole lexical scope. Retirement claims every
   // TaskState first; only the detached action list may resume/dispose tasks.
   val owner = register-cleanup(root,fn()
@@ -323,18 +312,19 @@ fun new-runtime-supervisor(
   store(supervisor.supervisor-owner,Just(owner))
   val family-registration = family.family-supervisors.insert(supervisor)
   store(supervisor.supervisor-family,Just(family-registration))
-  // Publish direct lookup only after both cleanup/enumeration owners exist.
-  store(index-slot,Just(supervisor))
+  // Publish keyed lookup only after both cleanup/enumeration owners exist.
+  val index-registration = family.family-index.insert(
+    scope.identity-key,supervisor)
+  store(supervisor.supervisor-index,Just(index-registration))
   supervisor
 
 fun runtime/supervisor(
     runtime : generation-runtime<e>, root : root<<ui|e>>, scope : async-scope)
     : <signal-write,pure,ui|e> runtime-supervisor<e>
   val family = runtime.runtime-family
-  val index-slot = family.supervisor-slot(scope)
-  match load(index-slot)
+  match family.family-index.lookup(scope.identity-key)
     Just(supervisor) -> supervisor
-    Nothing -> new-runtime-supervisor(root,family,scope,index-slot)
+    Nothing -> new-runtime-supervisor(root,family,scope)
 
 fun task/detach-cancellation(task : generation-task<a,e>) : ()
   val registration = load(task.task-cancel)
@@ -493,21 +483,22 @@ tail fun reverse-cancellations-onto(
 
 tail fun claim-scope-supervisors-loop(
     supervisors : list<runtime-supervisor<e>>, scope : async-scope,
-    collected : list<task-cancellation>)
+    include-all : bool, collected : list<task-cancellation>)
     : <div> list<task-cancellation>
   match supervisors
     Nil -> collected.reverse
     Cons(supervisor,rest) ->
-      val next = if supervisor.supervisor-scope <= scope
+      val next = if include-all || supervisor.supervisor-scope <= scope
                  then reverse-cancellations-onto(
                         supervisor.claim(Task-canceled),collected)
                  else collected
-      claim-scope-supervisors-loop(rest,scope,next)
+      claim-scope-supervisors-loop(rest,scope,include-all,next)
 
 fun claim-scope-supervisors(
-    supervisors : list<runtime-supervisor<e>>, scope : async-scope)
+    supervisors : list<runtime-supervisor<e>>, scope : async-scope,
+    include-all : bool)
     : <div> list<task-cancellation>
-  claim-scope-supervisors-loop(supervisors,scope,[])
+  claim-scope-supervisors-loop(supervisors,scope,include-all,[])
 
 noinline fun cancel-runtime-scope(runtime : generation-runtime<e>,
                                   scope : async-scope)
@@ -515,9 +506,12 @@ noinline fun cancel-runtime-scope(runtime : generation-runtime<e>,
   runtime.record-canceled(scope)
   val family = runtime.runtime-family
   // First claim every matching supervisor/task in the immutable registry
-  // snapshot. Only after the full subtree is terminal may cancellation run.
+  // snapshot. The family root explicitly includes routed foreign scopes; no
+  // other namespace root can match them. Only after the full subtree is
+  // terminal may cancellation run.
   val actions = claim-scope-supervisors(
-    family.family-supervisors.snapshot,scope)
+    family.family-supervisors.snapshot,scope,
+    scope == family.family-root-scope)
   run-task-cancellations(actions)
 
 noinline fun release-runtime-scope(runtime : generation-runtime<e>,
@@ -674,7 +668,7 @@ fun run-generation-async-with-family(
       }
 
   with handler<async-cancel>
-    val async-scope = root-scope
+    val async-scope = family.family-root-scope
 
     fun cancel-scope(scope)
       // Cancellation itself needs the live signal-write evidence below these
@@ -728,6 +722,6 @@ pub fun run-generation-async(
   val runner : app-runner<<exn,ui>,<exn,ui>> =
     App-runner(fn(run-action) run-action())
   run-generation-async-with-family(
-    root,Async-family(new-registry(),cell(new-supervisor-index()),
-                      cell([]),runner),action
+    root,Async-family(new-registry(),new-int-index(),
+                      cell([]),new-runtime-scope-root(),runner),action
   )

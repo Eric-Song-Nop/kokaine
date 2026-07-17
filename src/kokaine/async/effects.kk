@@ -91,13 +91,18 @@ alias scope-id = int
 // forge an unrelated scope. The head is the current scope and the tail its
 // ancestors through the root.
 abstract value type async-scope
-  Scope(ids : list<scope-id>)
-
-pub val root-scope : async-scope = Scope([0])
+  Scope(
+    ids             : list<scope-id>,
+    scope-namespace : int
+  )
 
 // Kokaine's browser runtime is single-threaded. Keep scope identity allocation
 // behind total helpers just like the rest of its opaque generation metadata.
 val next-scope-id : ref<global,int> = unsafe-total { ref(1) }
+
+// The public root is used by standalone interpreters. Generation runtimes
+// allocate separate cancellation namespaces from the same identity source.
+pub val root-scope : async-scope = Scope([0],0)
 
 fun fresh-scope-id() : int
   unsafe-total
@@ -105,32 +110,50 @@ fun fresh-scope-id() : int
     next-scope-id := current + 1
     current
 
-pub fun async-scope/show(Scope(ids) : async-scope) : string
+// Runtime support: every interpreter gets an isolated cancellation namespace.
+pub fun new-runtime-scope-root() : async-scope
+  val namespace = fresh-scope-id()
+  Scope([0],namespace)
+
+pub fun async-scope/show(Scope(ids,_) : async-scope) : string
   ids.map(show).join("<")
 
-pub fun new-child-scope(Scope(ids) : async-scope) : async-scope
-  Scope(Cons(fresh-scope-id(),ids))
+pub fun new-child-scope(Scope(ids,namespace) : async-scope) : async-scope
+  Scope(Cons(fresh-scope-id(),ids),namespace)
 
-fun current-scope-id(Scope(ids) : async-scope) : scope-id
+fun current-scope-id(Scope(ids,_) : async-scope) : scope-id
   ids.head(0)
 
-// Internal runtime indexes use the opaque scope's stable head identity. The
-// abstract alias prevents callers from forging a scope from this integer.
-pub fun async-scope/key(scope : async-scope) : int
-  scope.current-scope-id
+// Runtime-root namespaces consume the same global ID source as children, so
+// the root namespace and every non-root head ID are mutually unique hash keys.
+pub fun async-scope/identity-key(scope : async-scope) : int
+  match scope
+    Scope(ids,namespace) ->
+      val current = ids.head(0)
+      if current == 0 then namespace else current
 
-pub fun async-scope/parent(Scope(ids) : async-scope) : async-scope
+// Namespace membership is part of equality and ancestry even though hash keys
+// are globally unique. Cancellation capabilities cannot cross runtimes.
+pub fun async-scope/same-namespace(left : async-scope,
+                                   right : async-scope) : bool
+  match (left,right)
+    (Scope(_,left-namespace),Scope(_,right-namespace)) ->
+      left-namespace == right-namespace
+
+pub fun async-scope/parent(
+    Scope(ids,namespace) : async-scope) : async-scope
   match ids
-    Cons(_,parents as Cons) -> Scope(parents)
-    _ -> root-scope
+    Cons(_,parents as Cons) -> Scope(parents,namespace)
+    _ -> Scope(ids,namespace)
 
 // Is `child` the same scope as, or a descendant of, `ancestor`?
 pub fun async-scope/is-within(child : async-scope,
                               ancestor : async-scope) : bool
-  match child
-    Scope(ids) ->
-      val target = ancestor.current-scope-id
-      ids.any(fn(id) id == target)
+  if !child.same-namespace(ancestor) then False else
+    match child
+      Scope(ids,_) ->
+        val target = ancestor.current-scope-id
+        ids.any(fn(id) id == target)
 
 pub fun async-scope/(<=)(child : async-scope,
                          ancestor : async-scope) : bool
@@ -138,6 +161,7 @@ pub fun async-scope/(<=)(child : async-scope,
 
 pub fun async-scope/(==)(left : async-scope,
                          right : async-scope) : bool
+  left.same-namespace(right) &&
   left.current-scope-id == right.current-scope-id
 
 
