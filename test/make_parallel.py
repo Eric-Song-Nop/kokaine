@@ -39,6 +39,8 @@ assert MAKE is not None, "make is required for this regression check"
 
 
 def shell_command(arguments: list[str], platform: str = os.name) -> str:
+    if platform == "nt":
+        return subprocess.list2cmdline(arguments)
     return shlex.join(arguments)
 
 
