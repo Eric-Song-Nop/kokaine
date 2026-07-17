@@ -886,6 +886,13 @@ with serve_project() as origin:
             "familyFinalizers": 2,
             "familyDisposals": 2,
             "familyRootDisposed": True,
+            "deferredCleanupCompletions": 1,
+            "deferredLeaseDisposals": 1,
+            "deferredRootDisposed": True,
+            "crossRootACleanups": 1,
+            "crossRootBCleanups": 1,
+            "crossRootADisposed": True,
+            "crossRootBDisposed": True,
         }, owner_result
 
         # Completing a wave of same-generation scheduled tasks must remain

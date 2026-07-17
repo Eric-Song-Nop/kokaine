@@ -12,7 +12,7 @@ import std/core/undiv
 
 
 extern begin-result() : ui ()
-  js inline "globalThis.__kokaineAsyncOwner={ done:false, owned:-1, outstanding:-1, leasedOwned:-1, leasedOutstanding:-1, leaseDisposals:0, snapshotLeaseDisposals:0, structuredSnapshotLeaseDisposals:0, reentrantDisposals:0, reentrantFinalizers:0, reentrantRootDisposed:false, siblingCancellations:0, siblingDisposals:0, siblingRootDisposed:false, familyFinalizers:0, familyDisposals:0, familyRootDisposed:false, claimMode:'', claimObservations:{ retireFirst:{ count:0, violation:false, maxOutstanding:0, maxOwned:0 }, completionFirst:{ count:0, violation:false, maxOutstanding:0, maxOwned:0 } } }"
+  js inline "globalThis.__kokaineAsyncOwner={ done:false, owned:-1, outstanding:-1, leasedOwned:-1, leasedOutstanding:-1, leaseDisposals:0, snapshotLeaseDisposals:0, structuredSnapshotLeaseDisposals:0, reentrantDisposals:0, reentrantFinalizers:0, reentrantRootDisposed:false, siblingCancellations:0, siblingDisposals:0, siblingRootDisposed:false, familyFinalizers:0, familyDisposals:0, familyRootDisposed:false, deferredCleanupCompletions:0, deferredLeaseDisposals:0, deferredRootDisposed:false, crossRootACleanups:0, crossRootBCleanups:0, crossRootADisposed:false, crossRootBDisposed:false, claimMode:'', claimObservations:{ retireFirst:{ count:0, violation:false, maxOutstanding:0, maxOwned:0 }, completionFirst:{ count:0, violation:false, maxOutstanding:0, maxOwned:0 } } }"
 
 extern select-claim-mode(mode : string) : ui ()
   js inline "globalThis.__kokaineAsyncOwner.claimMode=#1"
@@ -58,6 +58,25 @@ extern record-family-disposal() : ui ()
 
 extern record-family-root-disposed(disposed : bool) : ui ()
   js inline "globalThis.__kokaineAsyncOwner.familyRootDisposed=#1"
+
+extern record-deferred-cleanup-completion() : ui ()
+  js inline "globalThis.__kokaineAsyncOwner.deferredCleanupCompletions += 1"
+
+extern record-deferred-lease-disposal() : ui ()
+  js inline "globalThis.__kokaineAsyncOwner.deferredLeaseDisposals += 1"
+
+extern record-deferred-root-disposed(disposed : bool) : ui ()
+  js inline "globalThis.__kokaineAsyncOwner.deferredRootDisposed=#1"
+
+extern record-cross-root-a-cleanup() : ui ()
+  js inline "globalThis.__kokaineAsyncOwner.crossRootACleanups += 1"
+
+extern record-cross-root-b-cleanup() : ui ()
+  js inline "globalThis.__kokaineAsyncOwner.crossRootBCleanups += 1"
+
+extern record-cross-root-disposed(a-disposed : bool,
+                                  b-disposed : bool) : ui ()
+  js inline "Object.assign(globalThis.__kokaineAsyncOwner,{ crossRootADisposed:#1, crossRootBDisposed:#2 })"
 
 extern publish-result(owned : int, outstanding : int,
                       leased-owned : int, leased-outstanding : int) : ui ()
@@ -280,6 +299,85 @@ fun exercise-detached-family-disposal() : <ui,exn> ()
   stop()
   record-family-root-disposed(root.is-disposed)
 
+fun park-root-disposing-host(root : root<<ui>>) : <async,ui> ()
+  val _ : () = setup/await-noexn(
+    "root-disposing host",fn(_complete)
+      fn() dispose-root-from-host(root)
+  )
+  ()
+
+// A root-disposal request from an untrusted async disposer must be coalesced
+// until the frame's already-detached retirement snapshot is drained. Otherwise
+// older ordinary cleanups lose signal-write authority and an older host lease
+// can be detached from its slot without ever reaching its disposer.
+fun install-deferred-retirement-siblings(root : root<<ui>>,
+                                         marker : signal<int>)
+                                        : <signal-write,pure,ui> ()
+  mask<div>{
+    mask<signal-write>{
+      dispatch(root,fn() {
+        val leases = new-async-lease-group()
+        val release = leases.own(fn() record-deferred-lease-disposal())
+        on-cleanup(root,fn() {
+          marker.set(1)
+          record-deferred-cleanup-completion()
+        })
+        on-cleanup(root,fn() {
+          marker.set(2)
+          leases.dispose
+        })
+        run-generation-async(root,fn() park-root-disposing-host(root))
+      })
+    }
+  }
+
+fun exercise-deferred-root-disposal() : <ui,exn> ()
+  val (root,stop) = create-root fn(root)
+    val marker = signal(root,0)
+    create-effect(root,fn() 0,fn(_)
+      install-deferred-retirement-siblings(root,marker)
+    )
+  stop()
+  record-deferred-root-disposed(root.is-disposed)
+
+fun install-cross-root-retirement(root : root<<ui>>,
+                                  dispose-other : () -> ui ())
+                                 : <signal-write,pure,ui> ()
+  mask<div>{
+    mask<signal-write>{
+      dispatch(root,fn() {
+        on-cleanup(root,fn() {
+          dispose-other()
+          record-cross-root-a-cleanup()
+        })
+        run-generation-async(root,fn() park-root-disposing-host(root))
+      })
+    }
+  }
+
+// Coordinators are per root. While A defers its own hostile disposal, an older
+// A cleanup may retire B immediately; B can request A again without consuming
+// or blocking A's outer drain.
+fun exercise-cross-root-retirement() : <ui,exn> ()
+  val dispose-b : ref<global,() -> ui ()> = cell(fn() ())
+  val (root-a,(trigger,stop-a)) = create-root fn(root)
+    val trigger = signal(root,False)
+    val stop = create-effect(root,fn() trigger.get,fn(active)
+      if active then
+        install-cross-root-retirement(root,fn() load(dispose-b)())
+      else ()
+    )
+    (trigger,stop)
+  val (root-b,()) : (root<<ui>>,()) = create-root fn(root)
+    on-cleanup(root,fn() {
+      record-cross-root-b-cleanup()
+      dispose-root-from-host(root-a)
+    })
+  store(dispose-b,fn() dispose-root-from-host(root-b))
+  dispatch(root-a,fn() trigger.set(True))
+  stop-a()
+  record-cross-root-disposed(root-a.is-disposed,root-b.is-disposed)
+
 pub fun main()
   begin-result()
   exercise-snapshot-release-race()
@@ -287,4 +385,6 @@ pub fun main()
   exercise-reentrant-host-disposal()
   exercise-hostile-sibling-disposal()
   exercise-detached-family-disposal()
+  exercise-deferred-root-disposal()
+  exercise-cross-root-retirement()
   exercise-supervisor-claim-order()
