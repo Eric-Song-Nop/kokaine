@@ -2,7 +2,8 @@ module work-transaction
 
 import kokaine/reactive/internal/work-transaction
 import kokaine/reactive/internal/scheduler
-import kokaine/reactive
+import kokaine/reactive/internal/model
+import kokaine/reactive/internal/runtime
 import std/core/unsafe
 import std/core/undiv
 
@@ -76,9 +77,9 @@ fun test-scheduler-drains_only_the_local_bootstrap_group()
   val (root,transaction) : (root<total>,scheduler-transaction<total>) =
     create-root fn(root)
       val transaction = open-work-transaction(root)
-      val _ = create-effect(root,fn() 1,fn(_)
+      val outer = create-effect(root,fn() 1,fn(_)
         emit(events,"outer")
-        val _ = create-effect(root,fn() 2,fn(_)
+        val inner = create-effect(root,fn() 2,fn(_)
           emit(events,"inner")
         )
         ()
@@ -87,7 +88,7 @@ fun test-scheduler-drains_only_the_local_bootstrap_group()
 
   check(hidden-load(events).is-nil,
         "global flushing cannot consume an open transaction")
-  drain-work-transaction(root,transaction)
+  pretend-no-div{ drain-work-transaction(root,transaction) }
   check(hidden-load(events) == ["outer","inner"],
         "local draining includes nested bootstrap work in FIFO order")
   match transaction.state
@@ -119,9 +120,9 @@ fun test-resume_is_global_and_abort_discards_bootstrap_work()
 
   val abandoned = hidden(False)
   val (other,pending) : (root<total>,scheduler-transaction<total>) =
-    create-root fn(root)
-      val pending = open-work-transaction(root)
-      val _ = create-effect(root,fn() (),fn(_)
+    create-root fn(other-root)
+      val pending = open-work-transaction(other-root)
+      val pending-effect = create-effect(other-root,fn() (),fn(_)
         hidden-store(abandoned,True)
       )
       pending

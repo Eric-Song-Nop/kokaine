@@ -107,7 +107,8 @@ pub fun new-work-group(state : ref<global,work-transaction-state>)
                       : work-group<a>
   Work-group(state,new-work-queue())
 
-pub fun work-group/state(group : work-group<a>) : work-transaction-state
+pub noinline fun work-group/state(group : work-group<a>)
+                                  : work-transaction-state
   load(group.group-state)
 
 pub fun work-group/same-transaction(left : work-group<a>,
@@ -116,6 +117,9 @@ pub fun work-group/same-transaction(left : work-group<a>,
 
 pub fun work-group/append(group : work-group<a>, value : a) : ()
   group.group-queue.append(value)
+
+pub fun work-group/prepend(group : work-group<a>, value : a) : ()
+  group.group-queue.prepend(value)
 
 pub fun work-group/pop(group : work-group<a>) : maybe<a>
   group.group-queue.pop
@@ -127,6 +131,9 @@ pub fun work-group/take-all(group : work-group<a>) : list<a>
   val values = group.values
   group.group-queue.clear
   values
+
+pub fun work-group/append-values(group : work-group<a>, values : list<a>) : ()
+  group.group-queue.append-values(values)
 
 pub fun work-group/clear(group : work-group<a>) : ()
   group.group-queue.clear

@@ -6,6 +6,7 @@ module kokaine/reactive/internal/scheduler
 import kokaine/reactive/internal/model
 import kokaine/reactive/internal/lifetime
 import kokaine/reactive/internal/registry
+import kokaine/reactive/internal/work-transaction
 import std/core/undiv
 
 // --------------------------------------------------------------------------
@@ -68,8 +69,7 @@ pub fun enqueue-trace(plane : plane<e>, current : trace<e>) : ()
       match load(state)
         Capture-live ->
           store(state,Capture-pending)
-          store(plane.plane-queue,
-                Cons(Resume-work(current),load(plane.plane-queue)))
+          route-resume(plane.plane-queue,Resume-work(current))
         Capture-running ->
           // The scheduler owns the current ticket while this turn executes.
           // A self-write only changes the capability state; success/failure or
@@ -81,8 +81,7 @@ pub fun enqueue-trace(plane : plane<e>, current : trace<e>) : ()
       match load(state)
         Capture-live ->
           store(state,Capture-pending)
-          store(plane.plane-queue,
-                Cons(Resume-work(current),load(plane.plane-queue)))
+          route-resume(plane.plane-queue,Resume-work(current))
         Capture-running ->
           // A write from the currently resumed suffix schedules a later turn;
           // the active queue ticket remains in place until this turn settles.
@@ -168,12 +167,41 @@ pub fun take-work(values : list<work<e>>)
              : (maybe<work<e>>,list<work<e>>)
   pretend-no-div{ take-work-loop(values,[]) }
 
+tail fun restore-skipped(queue : work-queue<work<e>>,
+                         skipped : list<work<e>>) : <div> ()
+  match skipped
+    Nil -> ()
+    Cons(current,rest) ->
+      queue.prepend(current)
+      restore-skipped(queue,rest)
+
+tail fun take-queued-work-loop(queue : work-queue<work<e>>,
+                               skipped : list<work<e>>)
+                              : <div> maybe<work<e>>
+  match queue.pop
+    Nothing ->
+      restore-skipped(queue,skipped)
+      Nothing
+    Just(current) ->
+      if current.work-runnable then
+        restore-skipped(queue,skipped)
+        Just(current)
+      elif current.work-stale then take-queued-work-loop(queue,skipped)
+      else take-queued-work-loop(queue,Cons(current,skipped))
+
+pub fun take-queued-work(queue : work-queue<work<e>>) : maybe<work<e>>
+  pretend-no-div{ take-queued-work-loop(queue,[]) }
+
+fun queue-global-work(queue : work-queue<work<e>>, current : work<e>) : ()
+  match current
+    Bootstrap-work(_,_) -> queue.append(current)
+    Resume-work(_) -> queue.prepend(current)
+
 pub fun queue-work(plane : plane<e>, current : work<e>) : ()
-  val values = load(plane.plane-queue)
-  val queued = match current
-    Bootstrap-work(_,_) -> values ++ [current]
-    Resume-work(_) -> Cons(current,values)
-  store(plane.plane-queue,queued)
+  match current
+    Bootstrap-work(_,_) ->
+      route-bootstrap(plane.plane-queue,load(plane.plane-work-group),current)
+    Resume-work(_) -> route-resume(plane.plane-queue,current)
 
 pub fun abandon-draft-frame(current : frame<e>, drafts : list<trace<e>>) : e ()
   store(current.frame-lifetime.lifetime-token,Scope-branch-dead)
@@ -338,13 +366,11 @@ pub fun run-derive-work(plane : plane<total>, current : work<total>)
   )
 
 pub fun restore-deferred(plane : plane<total>, deferred : list<work<total>>) : ()
-  store(plane.plane-queue,
-        load(plane.plane-queue) ++ deferred.reverse)
+  plane.plane-queue.append-values(pretend-no-div{ deferred.reverse })
 
 pub fun run-next-derived-loop(plane : plane<total>,
                           deferred : list<work<total>>) : div error<bool>
-  val (next,rest) = take-work(load(plane.plane-queue))
-  store(plane.plane-queue,rest)
+  val next = take-queued-work(plane.plane-queue)
   match next
     Nothing ->
       restore-deferred(plane,deferred)
@@ -352,7 +378,8 @@ pub fun run-next-derived-loop(plane : plane<total>,
     Just(current) ->
       match run-derive-work(plane,current)
         Settle-ok ->
-          if current.work-stale then () else queue-work(plane,current)
+          if current.work-stale then ()
+          else queue-global-work(plane.plane-queue,current)
           restore-deferred(plane,deferred)
           Ok(True)
         Settle-deferred ->
@@ -361,7 +388,8 @@ pub fun run-next-derived-loop(plane : plane<total>,
           // effect plane without turning deferral into user failure.
           run-next-derived-loop(plane,Cons(current,deferred))
         Settle-failed(failure) ->
-          if current.work-stale then () else queue-work(plane,current)
+          if current.work-stale then ()
+          else queue-global-work(plane.plane-queue,current)
           restore-deferred(plane,deferred)
           Error(failure)
 
@@ -369,22 +397,210 @@ pub fun run-next-derived(plane : plane<total>) : div error<bool>
   run-next-derived-loop(plane,[])
 
 pub fun run-next-effect(plane : plane<e>) : <div|e> error<bool>
-  val (next,rest) = take-work(load(plane.plane-queue))
+  val next = take-queued-work(plane.plane-queue)
   match next
-    Nothing ->
-      store(plane.plane-queue,rest)
-      Ok(False)
+    Nothing -> Ok(False)
     Just(current) ->
       // Effect work can be abandoned by an ambient final control operation,
       // so its actual ticket stays queued across invocation. A normal success
       // makes it stale; abort/failure leaves the Pending capability recoverable.
-      store(plane.plane-queue,Cons(current,rest))
+      plane.plane-queue.prepend(current)
       match run-work-raw(plane,current)
         Error(failure) -> Error(failure)
         Ok(_) -> Ok(True)
 
 pub fun run-next-pure(plane : plane<total>) : error<bool>
   pretend-no-div{ run-next-derived(plane) }
+
+
+// --------------------------------------------------------------------------
+// Isolated bootstrap transactions
+// --------------------------------------------------------------------------
+
+abstract type scheduler-transaction<e::E>
+  Scheduler-transaction(
+    transaction-root-key     : root-key,
+    transaction-derive-group : work-group<work<total>>,
+    transaction-effect-group : work-group<work<e>>
+  )
+
+pub noinline fun scheduler-transaction/state(
+    transaction : scheduler-transaction<e>) : work-transaction-state
+  transaction.transaction-derive-group.state
+
+fun plane-has-group(plane : plane<e>, expected : work-group<work<e>>) : bool
+  match load(plane.plane-work-group)
+    Nothing -> False
+    Just(actual) -> actual.same-transaction(expected)
+
+fun check-transaction-root(root : root<e>,
+                           transaction : scheduler-transaction<e>) : exn ()
+  if same-root(root.root-key,transaction.transaction-root-key) &&
+     !load(root.root-disposed) && !load(root.root-disposing)
+  then ()
+  else throw("scheduler transaction used outside its live reactive root")
+
+fun check-active-transaction(root : root<e>,
+                             transaction : scheduler-transaction<e>) : exn ()
+  check-transaction-root(root,transaction)
+  if root.root-derive-plane.plane-has-group(
+       transaction.transaction-derive-group) &&
+     root.root-effect-plane.plane-has-group(
+       transaction.transaction-effect-group)
+  then ()
+  else throw("scheduler transaction is not active on this root")
+
+pub fun open-work-transaction(root : root<e>) : exn scheduler-transaction<e>
+  check-registration(root)
+  if load(root.root-derive-plane.plane-work-group).is-just ||
+     load(root.root-effect-plane.plane-work-group).is-just
+  then throw("a scheduler transaction is already active on this root")
+  else lift-exn(fn(){
+    val state = new-work-transaction-state()
+    val derive-group : work-group<work<total>> = new-work-group(state)
+    val effect-group : work-group<work<e>> = new-work-group(state)
+    store(root.root-derive-plane.plane-work-group,Just(derive-group))
+    store(root.root-effect-plane.plane-work-group,Just(effect-group))
+    Scheduler-transaction(root.root-key,derive-group,effect-group)
+  })
+
+tail fun restore-group-skipped(group : work-group<work<e>>,
+                               skipped : list<work<e>>) : <div> ()
+  match skipped
+    Nil -> ()
+    Cons(current,rest) ->
+      group.prepend(current)
+      restore-group-skipped(group,rest)
+
+tail fun take-group-work-loop(group : work-group<work<e>>,
+                              skipped : list<work<e>>)
+                             : <div> maybe<work<e>>
+  match group.pop
+    Nothing ->
+      restore-group-skipped(group,skipped)
+      Nothing
+    Just(current) ->
+      if current.work-runnable then
+        restore-group-skipped(group,skipped)
+        Just(current)
+      elif current.work-stale then take-group-work-loop(group,skipped)
+      else take-group-work-loop(group,Cons(current,skipped))
+
+fun take-group-work(group : work-group<work<e>>) : maybe<work<e>>
+  pretend-no-div{ take-group-work-loop(group,[]) }
+
+fun restore-group-deferred(group : work-group<work<total>>,
+                           deferred : list<work<total>>) : ()
+  group.append-values(pretend-no-div{ deferred.reverse })
+
+fun run-next-derived-group-loop(plane : plane<total>,
+                                group : work-group<work<total>>,
+                                deferred : list<work<total>>)
+                               : div error<bool>
+  match take-group-work(group)
+    Nothing ->
+      restore-group-deferred(group,deferred)
+      Ok(False)
+    Just(current) ->
+      match run-derive-work(plane,current)
+        Settle-ok ->
+          if current.work-stale then () else group.append(current)
+          restore-group-deferred(group,deferred)
+          Ok(True)
+        Settle-deferred ->
+          run-next-derived-group-loop(plane,group,Cons(current,deferred))
+        Settle-failed(failure) ->
+          if current.work-stale then () else group.append(current)
+          restore-group-deferred(group,deferred)
+          Error(failure)
+
+fun run-next-derived-group(plane : plane<total>,
+                           group : work-group<work<total>>) : error<bool>
+  pretend-no-div{ run-next-derived-group-loop(plane,group,[]) }
+
+fun run-next-effect-group(plane : plane<e>, group : work-group<work<e>>)
+                      : <div|e> error<bool>
+  match take-group-work(group)
+    Nothing -> Ok(False)
+    Just(current) ->
+      // Preserve the concrete ticket across an ambient final-control unwind.
+      group.prepend(current)
+      match run-work-raw(plane,current)
+        Error(failure) -> Error(failure)
+        Ok(_) -> Ok(True)
+
+fun drain-work-transaction-loop(root : root<e>,
+                                transaction : scheduler-transaction<e>)
+                               : <div|e> error<()>
+  match run-next-derived-group(
+          root.root-derive-plane,transaction.transaction-derive-group)
+    Error(failure) -> Error(failure)
+    Ok(True) -> drain-work-transaction-loop(root,transaction)
+    Ok(False) ->
+      match run-next-effect-group(
+              root.root-effect-plane,transaction.transaction-effect-group)
+        Error(failure) -> Error(failure)
+        Ok(True) -> drain-work-transaction-loop(root,transaction)
+        Ok(False) -> Ok(())
+
+pub fun drain-work-transaction(root : root<e>,
+                               transaction : scheduler-transaction<e>)
+                              : <div,exn|e> ()
+  check-active-transaction(root,transaction)
+  val derive-group = transaction.transaction-derive-group
+  if !derive-group.begin-drain
+  then lift-div(fn(){
+    throw("scheduler transaction can only be drained while open")
+  })
+  else
+    val result = lift-exn(fn(){
+      drain-work-transaction-loop(root,transaction)
+    })
+    val transitioned = match result
+      Error(failure) -> derive-group.mark-failed(failure)
+      Ok(_) -> derive-group.mark-ready
+    if !transitioned
+    then throw("scheduler transaction could not enter a terminal drain state")
+    else result.untry
+
+fun detach-matching-group(plane : plane<e>,
+                          expected : work-group<work<e>>) : ()
+  match load(plane.plane-work-group)
+    Nothing -> ()
+    Just(actual) ->
+      if actual.same-transaction(expected)
+      then store(plane.plane-work-group,Nothing)
+      else ()
+
+pub fun commit-work-transaction(root : root<e>,
+                                transaction : scheduler-transaction<e>)
+                               : exn ()
+  check-active-transaction(root,transaction)
+  val derive-group = transaction.transaction-derive-group
+  val effect-group = transaction.transaction-effect-group
+  match derive-group.state
+    Work-ready ->
+      val derive-residual = derive-group.take-all
+      val effect-residual = effect-group.take-all
+      root.root-derive-plane.detach-matching-group(derive-group)
+      root.root-effect-plane.detach-matching-group(effect-group)
+      root.root-derive-plane.plane-queue.append-values(derive-residual)
+      root.root-effect-plane.plane-queue.append-values(effect-residual)
+      if derive-group.mark-committed then ()
+      else throw("scheduler transaction commit lost its ready state")
+    _ -> throw("scheduler transaction must drain successfully before commit")
+
+pub fun abort-work-transaction(root : root<e>,
+                               transaction : scheduler-transaction<e>) : ()
+  if !same-root(root.root-key,transaction.transaction-root-key) then () else
+    val derive-group = transaction.transaction-derive-group
+    val effect-group = transaction.transaction-effect-group
+    root.root-derive-plane.detach-matching-group(derive-group)
+    root.root-effect-plane.detach-matching-group(effect-group)
+    derive-group.clear
+    effect-group.clear
+    val _ = derive-group.mark-aborted
+    ()
 
 pub fun settle-failure(message : string) : settle-result
   match error/try(fn() throw(message))
