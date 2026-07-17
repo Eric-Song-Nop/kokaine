@@ -50,6 +50,34 @@ tail fun prepend-root-publication-rollbacks(
         rest,Cons(Retirement-finalizer(
           fn() lift-div(fn() rollback())),collected))
 
+// Root retirement must claim every transaction capability before invoking any
+// user cleanup. A retained transaction can otherwise re-enter abort while the
+// copied journal and live queue still name the same rollback callbacks.
+fun claim-root-work(root : root<e>) : list<work-publication<e>>
+  val publications = match load(root.root-work-publications)
+    Nothing -> []
+    Just(pending) ->
+      val values = pending.values
+      pending.clear
+      values
+  store(root.root-work-publications,Nothing)
+
+  val derive-group = load(root.root-derive-plane.plane-work-group)
+  val effect-group = load(root.root-effect-plane.plane-work-group)
+  store(root.root-derive-plane.plane-work-group,Nothing)
+  store(root.root-effect-plane.plane-work-group,Nothing)
+  match derive-group
+    Nothing -> ()
+    Just(group) ->
+      val _ = group.mark-aborted
+      group.clear
+  match effect-group
+    Nothing -> ()
+    Just(group) ->
+      val _ = group.mark-aborted
+      group.clear
+  publications
+
 // This is the non-validating half of root disposal. Besides ordinary public
 // disposal, it is used to roll back a root whose construction has not been
 // published yet. In that case a batch may still be open, or an initial flush
@@ -57,10 +85,7 @@ tail fun prepend-root-publication-rollbacks(
 fun retire-root-now(root : root<e>) : <div,exn|e> ()
   store(root.root-disposing,True)
   store(root.root-lifetime.lifetime-token,Scope-dead)
-  val publications = match load(root.root-work-publications)
-    Nothing -> []
-    Just(pending) -> pending.values
-  store(root.root-work-publications,Nothing)
+  val publications = claim-root-work(root)
   finally(
     fn() {
       store(root.root-batch-depth,0)
@@ -69,14 +94,6 @@ fun retire-root-now(root : root<e>) : <div,exn|e> ()
       store(root.root-disposing,False)
       root.root-derive-plane.plane-queue.clear
       root.root-effect-plane.plane-queue.clear
-      match load(root.root-derive-plane.plane-work-group)
-        Nothing -> ()
-        Just(group) ->
-          val _ = group.mark-aborted
-          group.clear
-      match load(root.root-effect-plane.plane-work-group)
-        Nothing -> ()
-        Just(group) -> group.clear
       store(root.root-derive-plane.plane-work-group,Nothing)
       store(root.root-effect-plane.plane-work-group,Nothing)
       store(root.root-derive-plane.plane-current,Nothing)
