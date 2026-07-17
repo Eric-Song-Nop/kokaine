@@ -372,16 +372,21 @@ transaction:
 1. build draft rows and validate keys/equality without publishing the new table
    or any retained-row source updates;
 2. drain only the transaction-local bootstrap FIFO while resumptions remain on
-   the global frontier; nested keyed construction joins the active drain;
-3. move and revalidate complete marker ranges, then publish changed item/index
-   sources and the coherent table; and
-4. commit the outer transaction lease and retire stale rows.
+   the global frontier; nested keyed construction enlists a two-phase
+   prepare/publish participant in the active outer lease;
+3. prepare and revalidate every enlisted DOM change, commit the outer scheduler
+   lease, and only then publish joined and outer keyed tables; and
+4. retire stale rows through an explicit pending-retirement ledger which keeps
+   a failed host cleanup retryable without making unmanaged DOM invisible to
+   the authoritative table.
 
 On bootstrap failure or abortive final control, reconciliation aborts and
 detaches the local work groups before cleanup can re-enter, then disposes every
-rollback-reachable draft. On a move failure, it aborts, restores the previous
-row order, and disposes draft owners before rethrowing. A joined nested lease
-cannot steal commit or abort authority from its outer owner. The range primitive validates
+rollback-reachable draft and rolls back every enlisted publication. On a move
+or participant-prepare failure, it restores the previous row order and disposes
+draft owners before rethrowing. A joined nested lease cannot steal commit or
+abort authority from its outer owner, and cannot publish merely because its own
+adapter call returned. The range primitive validates
 common parentage, endpoint reachability, and an out-of-range insertion target
 before extraction;
 it moves existing nodes rather than cloning them and restores focus/selection
