@@ -226,6 +226,14 @@ def main() -> int:
     for token, label in forbidden_reentry.items():
         if token in browser_adapter_text:
             errors.append(f"browser adapter contains {label}: {token!r}")
+    if "pretend-no-div" in browser_adapter_text:
+        errors.append("browser adapter hides a real public monitor divergence")
+    monitor_contract = re.compile(
+        r"pub fun monitor-window-events\([^)]*\).*?:\s*<[^>]*\bdiv\b[^>]*>",
+        re.S,
+    )
+    if not monitor_contract.search(browser_adapter_text):
+        errors.append("public window monitor must expose its divergent effect")
 
     scheduler_path = REPORT_MODULES / "scheduler.kk"
     scheduler_text = (
