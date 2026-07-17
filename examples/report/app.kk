@@ -1,28 +1,38 @@
 /*--------------------------------------------------------------------------
-  View boundaries for the four independently mounted report islands.
+  The complete report is one Kokaine view and one owned DOM generation.
 --------------------------------------------------------------------------*/
 module examples/report/app
 
 import kokaine/html
 import examples/report/model
-import examples/report/features
-import examples/report/flow
-import examples/report/dynamic
-import examples/report/ownership
+import examples/report/shell
+import examples/report/static
+import examples/report/sections
+import examples/report/scheduler
+import examples/report/batching
+import examples/report/comparison
+import examples/report/code-tabs
 
 
-pub fun report-feature-app(model : report-model)
+pub fun report-page(root, model : report-model)
   view
-    render-features(model)
+    render-topbar(model.report-toc-open)
 
-pub fun report-flow-app(root, model : report-model)
-  view
-    render-flow(root,model)
+    div(attrs=[id("top"),class("page-shell")])
+      render-toc(model.report-toc-open,model.report-active-section)
 
-pub fun report-dynamic-app(model : report-model)
-  view
-    render-dynamic(model)
-
-pub fun report-ownership-app(root, model : report-model)
-  view
-    render-ownership(root,model)
+      main-tag(attrs=[id("report")])
+        render-abstract()
+        render-journey()
+        render-flow-section(root,model)
+        render-features-section(model)
+        render-scheduler(root,model.report-scheduler)
+        render-batching(model.report-batching)
+        render-dynamic-section(model)
+        render-ownership-section(root,model)
+        render-comparison(model.report-comparison)
+        render-code-tabs(model.report-code-tabs)
+        render-wasm()
+        render-demo-section(model.report-demo-revision)
+        render-limits()
+        render-report-footer()

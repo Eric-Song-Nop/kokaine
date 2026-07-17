@@ -25,8 +25,8 @@ fun arm-owner(root, model : report-model)
     )
 
     // This effect is a real child capability, also created by the listener.
-    // The shared flow count is its heartbeat, tying two report islands to the
-    // same root without any global JavaScript bridge.
+    // The shared flow count is its heartbeat, tying two report sections to
+    // the same root without any global JavaScript bridge.
     val child-dispose = create-effect(
       root,
       fn() model.report-flow-count.get,
