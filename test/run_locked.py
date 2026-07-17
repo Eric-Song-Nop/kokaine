@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Regression checks for the cross-platform command lock runner."""
 
+import ast
 import errno
 import importlib.util
 import os
@@ -29,6 +30,25 @@ def load_runner():
     finally:
         sys.dont_write_bytecode = previous
     return module
+
+
+def check_python_38_import_compatibility() -> None:
+    tree = ast.parse(RUNNER.read_text(), filename=str(RUNNER))
+    deferred = any(
+        isinstance(statement, ast.ImportFrom)
+        and statement.module == "__future__"
+        and any(name.name == "annotations" for name in statement.names)
+        for statement in tree.body
+    )
+    eager_builtin_generics = any(
+        isinstance(node, ast.Subscript)
+        and isinstance(node.value, ast.Name)
+        and node.value.id in {"dict", "list", "set", "tuple"}
+        for node in ast.walk(tree)
+    )
+    assert deferred or not eager_builtin_generics, (
+        "run_locked.py eagerly evaluates Python 3.9 generic annotations"
+    )
 
 
 class FakeWindowsLock:
@@ -350,6 +370,7 @@ if __name__ == "__main__":
                 Path(sys.argv[5]),
             )
         )
+    check_python_38_import_compatibility()
     check_windows_backend_without_fcntl()
     check_command_status_passthrough()
     check_process_contention()
