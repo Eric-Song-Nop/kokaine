@@ -27,8 +27,9 @@ fun window-event/name(value : window-event) : string
     Window-hash-change -> "hashchange"
 
 extern window-event-setup-raw(name : string,
-                              complete : () -> ui ()) : ui any
-  js inline "(function(){ var eventName=#1; var state={ complete:#2, listener:null }; var listener=function(){ var callback=state.complete; state.complete=null; state.listener=null; try { window.removeEventListener(eventName,listener); } catch(_) {} if(callback) callback(); }; state.listener=listener; try { window.addEventListener(eventName,listener,{ passive:eventName==='scroll' }); return { ok:true, state:state, name:eventName }; } catch(error) { state.complete=null; state.listener=null; try { window.removeEventListener(eventName,listener); } catch(_) {} return { ok:false, error:error }; } })()"
+                              complete : () -> ui (),
+                              reject : any -> ui ()) : ui any
+  js inline "(function(){ var eventName=#1; var state={ complete:#2, reject:#3, listener:null }; var listener=function(){ var callback=state.complete; var fail=state.reject; state.complete=null; state.reject=null; state.listener=null; try { window.removeEventListener(eventName,listener); } catch(error) { if(fail) fail(error); return; } if(callback) callback(); }; state.listener=listener; try { window.addEventListener(eventName,listener,{ passive:eventName==='scroll' }); return { ok:true, state:state, name:eventName }; } catch(error) { state.complete=null; state.reject=null; state.listener=null; try { window.removeEventListener(eventName,listener); } catch(_) {} return { ok:false, error:error }; } })()"
 
 extern host-result-ok(value : any) : bool
   js inline "!!(#1).ok"
@@ -49,7 +50,7 @@ extern host-error-message(value : any) : string
   js inline "(function(error){ try { var message=error && error.message; return String(message == null ? error : message); } catch(formatError) { try { return String(formatError); } catch(_) { return 'unprintable host error'; } } })(#1)"
 
 extern retire-window-event(value : window-event-subscription) : ui ()
-  js inline "(function(){ var wrapper=#1; if(!wrapper) return; var state=wrapper.state; if(!state) return; var listener=state.listener; state.complete=null; state.listener=null; if(listener){ try { window.removeEventListener(wrapper.name,listener); } catch(_) {} } wrapper.state=null; })()"
+  js inline "(function(){ var wrapper=#1; if(!wrapper) return; var state=wrapper.state; if(!state) return; var listener=state.listener; state.complete=null; state.reject=null; state.listener=null; if(listener){ try { window.removeEventListener(wrapper.name,listener); } catch(_) {} } wrapper.state=null; })()"
 
 extern focus-selector-raw(selector : string) : ui any
   js inline "(function(){ try { var target=document.querySelector(#1); if(!target) throw new Error('DOM selector did not match: '+#1); target.focus(); return { ok:true }; } catch(error) { return { ok:false, error:error }; } })()"
@@ -91,7 +92,12 @@ pub fun await-window-event(value : window-event) : <async,exn> ()
   val name = value.name
   setup/await("window " ++ name,fn(resume)
     val installed = window-event-setup-raw(
-      name,fn() resume(Ok(())))
+      name,
+      fn() resume(Ok(())),
+      fn(reason) resume(Error(Exception(
+        "browser window event completion failed: " ++
+        host-error-message(reason),ExnError)))
+    )
     if !host-result-ok(installed)
     then Error(Exception("browser window event setup failed: " ++
                          host-error-message(host-result-error(installed)),
