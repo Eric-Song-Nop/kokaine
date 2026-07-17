@@ -463,6 +463,28 @@ pub fun open-work-transaction(root : root<e>) : exn scheduler-transaction<e>
     Scheduler-transaction(root.root-key,derive-group,effect-group)
   })
 
+// Structural adapters can be invoked recursively while an outer bootstrap is
+// draining. They must join that exact transaction instead of opening a second
+// pair of local groups or scanning the global frontier. The returned value is
+// only a borrowed capability; ownership remains with the caller which opened
+// the transaction.
+pub fun current-work-transaction(root : root<e>)
+                                 : exn maybe<scheduler-transaction<e>>
+  check-registration(root)
+  match (load(root.root-derive-plane.plane-work-group),
+         load(root.root-effect-plane.plane-work-group))
+    (Nothing,Nothing) -> Nothing
+    (Just(derive-group),Just(effect-group)) ->
+      if !derive-group.same-transaction(effect-group)
+      then throw("reactive planes disagree about the active transaction")
+      else match derive-group.state
+        Work-open -> Just(Scheduler-transaction(
+          root.root-key,derive-group,effect-group))
+        Work-draining -> Just(Scheduler-transaction(
+          root.root-key,derive-group,effect-group))
+        _ -> throw("cannot join a terminal scheduler transaction")
+    _ -> throw("reactive planes have a partially attached transaction")
+
 tail fun restore-group-skipped(group : work-group<work<e>>,
                                skipped : list<work<e>>) : <div> ()
   match skipped
