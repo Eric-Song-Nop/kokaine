@@ -8,7 +8,9 @@ fun check(ok : bool, message : string)
 
 fun test-completion-claims-every-retained-field-once()
   val task : one-shot-task<string,int,string> = new-one-shot-task("payload")
+  check(!task.finish,"a pending task cannot fabricate completion")
   check(task.accept(7),"the first completion becomes ready")
+  check(!task.finish,"a queued result is not running yet")
   check(!task.accept(8),"a duplicate completion loses")
   check(task.install-disposer("dispose") == Nothing,
         "a synchronous completion retains the later setup disposer")
@@ -19,6 +21,8 @@ fun test-completion-claims-every-retained-field-once()
       check(result == Just(7),"the claim owns the winning result")
       check(disposer == Just("dispose"),"the claim owns the disposer")
   check(task.claim-ready.is-nothing,"a ready claim is one-shot")
+  check(task.claim-stop(Task-retired).is-nothing,
+        "a running payload is already stack-owned")
   check(task.finish,"the running owner can finish once")
   check(!task.finish,"terminal completion is idempotent")
   match task.phase
@@ -36,6 +40,15 @@ fun test-cancellation-wins-before-or-after-setup-returns()
   check(early.install-disposer("late") == Just("late"),
         "late setup must dispose immediately after cancellation")
   check(!early.accept(1),"completion cannot revive a canceled task")
+  match early.phase
+    Task-finished(terminal) ->
+      match terminal
+        Task-stopped(reason) ->
+          match reason
+            Task-canceled -> ()
+            _ -> throw("one-shot task: wrong cancellation reason")
+        _ -> throw("one-shot task: cancellation looked completed")
+    _ -> throw("one-shot task: cancellation reason was not retained")
 
   val queued : one-shot-task<string,int,string> = new-one-shot-task("queued")
   check(queued.accept(9),"a queued result becomes ready")
