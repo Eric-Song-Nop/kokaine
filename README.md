@@ -19,10 +19,10 @@ explains the runtime from a UI engineer's perspective. It includes executable
 continuation-trace visualizations, scheduler stepping, batching and ownership
 experiments, a React/Vue/Solid comparison, and the real Koka Continuation Lab.
 Its core data-flow, Koka feature atlas, dynamic-dependency, and ownership
-sections are themselves authored with Kokaine: four DOM islands share one
-Koka root and are compiled from `examples/report/*.kk`. The small host script
-is reserved for document concerns such as scroll position and the explicitly
-labelled scheduler simulations.
+sections—and the document shell, scheduler, batching lab, comparison, code
+tabs, navigation, and embedded-demo lifecycle—are all authored in Koka. One
+Kokaine root mounts one page view from `examples/report/*.kk`; the checked-in
+HTML is only the stylesheet/module entry shell, with no handwritten JavaScript.
 
 ```sh
 make serve-report
@@ -30,7 +30,7 @@ make serve-report
 
 Then open
 `http://127.0.0.1:4173/docs/algebraic-effects-ui-report/`. Run the report's
-static integrity checks with `make test-report`.
+source-architecture and real-browser checks with `make test-report`.
 
 ## Why algebraic effects and continuations
 
@@ -547,7 +547,7 @@ examples/top-layer/                         standalone top-layer page and styles
 examples/keyed.kk                           keyed control-flow specimen bench
 examples/keyed/                             interactive keyed example shell and styles
 examples/report.kk                          self-hosted report entry point
-examples/report/*.kk                        report model and executable islands
+examples/report/*.kk                        complete Kokaine report page and labs
 examples/counter/model.kk                   sources and derived state
 examples/counter/actions.kk                 mutations, batches, child effects
 examples/counter/controls.kk                source controls and live properties
@@ -577,6 +577,7 @@ src/kokaine/async/effects.kk               await, cancellation, and scope algebr
 src/kokaine/async/channel.kk               structured strand resumption queue
 src/kokaine/async/structured.kk            parallel, race, and timeout core
 src/kokaine/async/web.kk                   timer, Promise, and Fetch adapters
+src/kokaine/web/window.kk                  one-shot window awaits and geometry
 src/kokaine/resource.kk                    tracked-source async Resource
 src/kokaine/html.kk                        handled backend-neutral view DSL
 src/kokaine/dom.kk                         jsweb renderer and event boundary
@@ -611,6 +612,8 @@ test/browser_async.py                      real-browser async and Resource check
 test/browser_counter.py                    browser events, churn, rollback, and disposal
 test/dom-top-layer.kk                      dialog/Popover browser command fixture
 test/browser_top_layer.py                  native top-layer behavior and disposal
+test/report_html.py                        single-root report architecture contract
+test/browser_report.py                     complete report behavior in Chromium
 support/wasmweb-proof/                     retained-callback Emscripten ABI proof
 ```
 
