@@ -126,6 +126,7 @@ with serve_project() as origin:
                 }
                 globalThis.__kokaineThrowKeyedBootstrap = true;
                 globalThis.__kokaineInjectKeyedRogue = false;
+                globalThis.__kokaineEscapeKeyedDescendant = false;
                 globalThis.__kokaineKeyedBootstrapOrder = [];
                 globalThis.__kokaineKeyedConnections = [];
                 if (!customElements.get('x-kokaine-keyed-fail')) {
@@ -188,6 +189,33 @@ with serve_project() as origin:
                         }
                     );
                 }
+                if (!customElements.get('x-kokaine-keyed-escape')) {
+                    customElements.define(
+                        'x-kokaine-keyed-escape',
+                        class extends HTMLElement {
+                            disconnectedCallback() {
+                                if (!globalThis.__kokaineEscapeKeyedDescendant) {
+                                    return;
+                                }
+                                globalThis.__kokaineEscapeKeyedDescendant = false;
+                                const parent = document.querySelector(
+                                    '#keyed-main-list'
+                                );
+                                const boundary = Array.from(
+                                    parent.childNodes
+                                ).findLast(
+                                    node => node.nodeType === Node.COMMENT_NODE &&
+                                        node.data === '/kokaine:for'
+                                );
+                                Node.prototype.insertBefore.call(
+                                    parent,
+                                    this,
+                                    boundary
+                                );
+                            }
+                        }
+                    );
+                }
             }"""
         )
         page.evaluate(
@@ -242,7 +270,16 @@ with serve_project() as origin:
         assert order(page, "#keyed-main-list") == [0, 1, 2, 3, 4]
         assert invoke(page, "insertMiddle") is True
         assert order(page, "#keyed-main-list") == [0, 1, 5, 2, 3, 4]
+        page.evaluate(
+            """() => {
+                const probe = document.createElement('x-kokaine-keyed-escape');
+                probe.id = 'keyed-escaped-descendant';
+                document.querySelector('#keyed-row-3').append(probe);
+                globalThis.__kokaineEscapeKeyedDescendant = true;
+            }"""
+        )
         assert invoke(page, "deleteMiddle") is True
+        expect(page.locator("#keyed-escaped-descendant")).to_have_count(0)
         assert order(page, "#keyed-main-list") == [0, 1, 5, 2, 4]
         assert not row_three.evaluate("node => node.isConnected")
         assert invoke(page, "readCleanups") == 2
