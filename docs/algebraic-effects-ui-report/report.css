@@ -130,9 +130,19 @@ strong {
 
 .reading-progress span {
   display: block;
-  width: 0;
+  width: 100%;
   height: 100%;
   background: var(--orange);
+  transform: scaleX(0);
+  transform-origin: left;
+  animation: report-scroll-progress linear both;
+  animation-timeline: scroll(root);
+}
+
+@keyframes report-scroll-progress {
+  to {
+    transform: scaleX(1);
+  }
 }
 
 .topbar {
@@ -1949,7 +1959,7 @@ main {
 }
 
 /* -------------------------------------------------------------------------
-   Self-hosted Kokaine islands
+   Self-hosted Kokaine labs
 
    These components are emitted by examples/report/*.kk. The cold paper and
    carbon instrument surfaces intentionally mirror the runtime's two planes:
