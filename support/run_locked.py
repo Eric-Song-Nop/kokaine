@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Run a command while holding a cross-process file lock."""
 
+from __future__ import annotations
+
 import errno
 import os
 import signal
