@@ -127,6 +127,7 @@ with serve_project() as origin:
                 globalThis.__kokaineThrowKeyedBootstrap = true;
                 globalThis.__kokaineInjectKeyedRogue = false;
                 globalThis.__kokaineKeyedBootstrapOrder = [];
+                globalThis.__kokaineKeyedConnections = [];
                 if (!customElements.get('x-kokaine-keyed-fail')) {
                     customElements.define(
                         'x-kokaine-keyed-fail',
@@ -147,6 +148,12 @@ with serve_project() as origin:
                         'x-kokaine-keyed-move-hook',
                         class extends HTMLElement {
                             connectedCallback() {
+                                const row = this.closest('li[data-key]');
+                                if (row) {
+                                    globalThis.__kokaineKeyedConnections.push(
+                                        `${row.parentElement.id}:${row.dataset.key}`
+                                    );
+                                }
                                 const parent = this.closest('#keyed-move-list');
                                 if (!parent || !globalThis.__kokaineInjectKeyedRogue) {
                                     return;
@@ -299,7 +306,11 @@ with serve_project() as origin:
             "#keyed-duplicate-row-2"
         ).element_handle()
         assert order(page, "#keyed-duplicate-list") == [1, 2]
+        page.evaluate("globalThis.__kokaineKeyedConnections = []")
         assert invoke(page, "duplicate") is False
+        assert page.evaluate("globalThis.__kokaineKeyedConnections") == [], (
+            "a rejected duplicate-key update connected a draft row"
+        )
         assert order(page, "#keyed-duplicate-list") == [1, 2]
         assert_same(duplicate_one, "#keyed-duplicate-row-1")
         assert_same(duplicate_two, "#keyed-duplicate-row-2")

@@ -742,12 +742,24 @@ fun reconcile-keyed<a,k,e::E>(
           val old-cursor = range-first(parent,first,last)
           validate-keyed-order(parent,last,old-cursor,old-order)
 
+          // Reject the complete key set before creating or connecting a draft
+          // row. Lifecycle callbacks are externally observable and cannot be
+          // rolled back after a later duplicate is discovered.
+          val seen-identities = transaction-cell(
+            kokaine/internal/key-index/empty())
+          val keyed-items = transaction-cell([])
           items.foreach fn(item)
             val identity = key(item)
-            match transaction-load(next-index).find(identity,compare)
-              Just(_) -> throw("duplicate key in keyed For")
-              Nothing -> ()
+            match transaction-load(seen-identities).insert(
+                    identity,identity,compare)
+              Duplicate(_) -> throw("duplicate key in keyed For")
+              Inserted(next) ->
+                transaction-store(seen-identities,next)
+                transaction-store(keyed-items,
+                  Cons((item,identity),transaction-load(keyed-items)))
 
+          transaction-load(keyed-items).reverse.foreach fn(keyed-item)
+            val (item,identity) = keyed-item
             val current-index = transaction-load(position)
             val (row,item-changed) =
               match old-index.find(identity,compare)

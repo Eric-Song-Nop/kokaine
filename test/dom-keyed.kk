@@ -422,7 +422,7 @@ pub fun main()
   )
   publish-faults(
     fn() safe-set(duplicate-root,duplicate-source,
-      [item(1,"one"),item(1,"duplicate")]),
+      [item(3,"three"),item(1,"one"),item(1,"duplicate")]),
     fn() safe-set(duplicate-root,duplicate-source,
       [item(1,"one"),item(2,"two")]),
     fn() safe-set(move-root,move-source,
