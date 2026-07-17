@@ -137,7 +137,9 @@ attempts.
   Completion and retirement first revoke the retained continuation and host
   callbacks. Cancellation is final control rather than an ordinary exception,
   so it cannot be caught as a failure and still unwinds the strand's `finally`
-  clauses after the host disposer has been attempted. A Fetch response retains
+  clauses. A cancellation batch unwinds every claimed strand before any host
+  disposer is invoked, so one re-entrant disposer cannot kill a sibling's
+  cleanup context. A Fetch response retains
   the request's controller from header delivery until it is explicitly
   discarded or body consumption takes ownership, so retirement during either
   interval aborts the request. Long browser sleeps are split into signed
@@ -420,7 +422,10 @@ Every resumed suffix uses a fresh base async interpreter. Active tasks in one
 lexical cancellation scope share a registry-backed supervisor and one
 structural cleanup registration. Completion unlinks its task in O(1); cancel or
 retirement first claims every sibling `TaskState`, detaches the supervisor, and
-only then enters a disposer, cancellation continuation, or user `finally`.
+then unwinds every cancellation continuation and user `finally` before invoking
+any host disposer. Scope lookup is direct while a separate intrusive registry
+provides subtree enumeration; neither completion nor sibling-heavy setup scans
+an accumulated task list.
 Host turns re-enter through the explicit application runner supplied by the
 runtime instead of fabricating handlers from an escaped dynamic stack.
 Fetch header delivery installs a generation-owned disposer lease;
@@ -429,7 +434,9 @@ registered, while `response.discard` releases an unconsumed response explicitly.
 `response.require-ok` uses that discard path before raising its HTTP exception.
 Structured groups retain a second, one-shot discard capability for leases
 acquired inside each child, so a sibling failure cannot strand an unreachable
-Response until generation retirement.
+Response until generation retirement. Generation leases and structured discard
+registrations share the same O(1) intrusive registry and detach stale handles
+from sibling payloads.
 
 `kokaine/resource` packages the common tracked-source/load/state pattern:
 
