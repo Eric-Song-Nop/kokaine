@@ -42,6 +42,7 @@ test-native:
 	$(KOKA) $(KOKA_FLAGS) -e test/html.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/key-index.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/control-flow.kk
+	$(PYTHON) test/keyed_transaction_boundary.py
 	$(PYTHON) test/event_effect_boundary.py $(KOKA)
 	$(PYTHON) test/run_locked.py
 	$(PYTHON) test/make_parallel.py
