@@ -15,6 +15,9 @@ test-native:
 	$(KOKA) $(KOKA_FLAGS) -e test/source-capture-registry.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/lifetime-foundation.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/work-transaction.kk
+	$(KOKA) $(KOKA_FLAGS) -e test/application-runner.kk
+	$(KOKA) $(KOKA_FLAGS) -e test/one-shot-task.kk
+	$(KOKA) $(KOKA_FLAGS) -e test/cancellation-supervisor.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/trace-semantics.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/structural-scopes.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/targeted-settle.kk
