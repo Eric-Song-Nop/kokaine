@@ -192,6 +192,19 @@ with serve_project() as origin:
                         }
                     );
                 }
+                if (!customElements.get('x-kokaine-shadow-focus')) {
+                    customElements.define(
+                        'x-kokaine-shadow-focus',
+                        class extends HTMLElement {
+                            constructor() {
+                                super();
+                                const input = document.createElement('input');
+                                input.value = 'shadow-selection';
+                                this.attachShadow({ mode: 'open' }).append(input);
+                            }
+                        }
+                    );
+                }
                 if (!customElements.get('x-kokaine-keyed-bootstrap-order')) {
                     customElements.define(
                         'x-kokaine-keyed-bootstrap-order',
@@ -308,23 +321,68 @@ with serve_project() as origin:
         assert invoke(page, "readRuns") == 2
         assert invoke(page, "readCleanups") == 2
 
-        input_two.evaluate(
-            "node => { node.focus(); node.setSelectionRange(3, 9); }"
+        page.evaluate(
+            """() => {
+                const parent = document.querySelector('#keyed-main-list');
+                Object.defineProperty(parent, 'moveBefore', {
+                    configurable: true,
+                    value: undefined
+                });
+                const host = document.createElement('x-kokaine-shadow-focus');
+                host.id = 'keyed-shadow-focus';
+                document.querySelector('#keyed-row-2').append(host);
+                const input = host.shadowRoot.querySelector('input');
+                input.focus();
+                input.setSelectionRange(1, 5, 'backward');
+            }"""
         )
         assert invoke(page, "reverse") is True
         assert order(page, "#keyed-main-list") == [4, 2, 5, 1, 0]
         assert_indices(page, [4, 2, 5, 1, 0])
-        assert input_two.evaluate("node => document.activeElement === node")
-        assert input_two.evaluate(
-            "node => [node.selectionStart, node.selectionEnd]"
-        ) == [3, 9]
+        assert page.locator("#keyed-shadow-focus").evaluate(
+            """host => {
+                const input = host.shadowRoot.querySelector('input');
+                return host.shadowRoot.activeElement === input &&
+                    input.selectionStart === 1 &&
+                    input.selectionEnd === 5 &&
+                    input.selectionDirection === 'backward';
+            }"""
+        ), "fallback keyed move lost shadow input focus or selection"
+        page.evaluate(
+            """() => {
+                const editor = document.createElement('div');
+                editor.id = 'keyed-contenteditable-focus';
+                editor.contentEditable = 'true';
+                editor.textContent = 'abcdef';
+                document.querySelector('#keyed-row-2').append(editor);
+                editor.focus();
+                const text = editor.firstChild;
+                getSelection().setBaseAndExtent(text, 4, text, 2);
+            }"""
+        )
         assert invoke(page, "permute") is True
         assert order(page, "#keyed-main-list") == [2, 0, 4, 1, 5]
         assert_indices(page, [2, 0, 4, 1, 5])
+        assert page.locator("#keyed-contenteditable-focus").evaluate(
+            """editor => {
+                const selection = getSelection();
+                return document.activeElement === editor &&
+                    selection.anchorNode === editor.firstChild &&
+                    selection.anchorOffset === 4 &&
+                    selection.focusNode === editor.firstChild &&
+                    selection.focusOffset === 2;
+            }"""
+        ), "fallback keyed move lost contenteditable selection"
+        page.evaluate(
+            """() => {
+                delete document.querySelector('#keyed-main-list').moveBefore;
+                document.querySelector('#keyed-shadow-focus').remove();
+                document.querySelector('#keyed-contenteditable-focus').remove();
+            }"""
+        )
         assert_same(row_two, "#keyed-row-2")
         assert_same(input_two, "#keyed-input-2")
         assert input_two.evaluate("node => node.value") == "unfinished draft"
-        assert input_two.evaluate("node => document.activeElement === node")
 
         assert invoke(page, "toggleMode") is True
         expect(page.locator("#keyed-row-2 .keyed-mode")).to_have_text("compact")
