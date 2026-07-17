@@ -12,6 +12,7 @@ import kokaine/html
 import kokaine/internal/event-runtime
 import kokaine/internal/key-index
 import std/core/unsafe
+import std/core/undiv
 
 
 // --------------------------------------------------------------------------
@@ -947,6 +948,8 @@ fun reconcile-keyed<a,k,e::E>(
       val transaction = reactive-structural{
         internal/open-structural-transaction(root)
       }
+      val owns-transaction =
+        internal/structural-transaction-owned(transaction)
       val next-index = transaction-cell(
         kokaine/internal/key-index/empty())
       val updates = transaction-cell([])
@@ -954,9 +957,11 @@ fun reconcile-keyed<a,k,e::E>(
       val position = transaction-cell(0)
       val move-phase = transaction-cell(False)
       val committed = transaction-cell(False)
+      val enlisted = transaction-cell(False)
       finally(
         fn() {
-          if transaction-load(committed) then () else
+          if transaction-load(committed) || transaction-load(enlisted)
+          then () else
             // Claim every transaction-owned bootstrap before user cleanup can
             // re-enter. Draft owners and DOM order are then retired/restored
             // exhaustively even if one cleanup fails.
@@ -1032,59 +1037,92 @@ fun reconcile-keyed<a,k,e::E>(
           val stale = collect-stale-rows(old-order,final-index,compare)
           val final-order = final-updates.map(fn(update) update.update-row)
 
-          // Every draft is now rollback-reachable and all comparator work has
-          // succeeded. Drain only this transaction's bootstrap FIFO; resume
-          // work remains on the root's global frontier.
-          reactive-structural{
-            internal/drain-structural-transaction(transaction)
-          }
+          if owns-transaction then
+            // Every draft is now rollback-reachable and all comparator work has
+            // succeeded. Drain only this transaction's bootstrap FIFO; resume
+            // work remains on the root's global frontier.
+            reactive-structural{
+              internal/drain-structural-transaction(transaction)
+            }
 
-          // Fail closed before the first physical move if a retained custom
-          // element would receive synchronous disconnect/reconnect callbacks.
-          val current-cursor = range-first(parent,first,last)
-          if keyed-order-matches(
-               parent,last,current-cursor,final-order ++ stale)
-          then ()
-          else validate-keyed-move-lifecycles(parent,final-order)
-          transaction-store(move-phase,True)
-          val cursor = range-first(parent,first,last)
-          val _ = place-keyed-updates(parent,cursor,final-updates)
+            // Fail closed before the first physical move if a retained custom
+            // element would receive synchronous disconnect/reconnect callbacks.
+            val current-cursor = range-first(parent,first,last)
+            if keyed-order-matches(
+                 parent,last,current-cursor,final-order ++ stale)
+            then ()
+            else validate-keyed-move-lifecycles(parent,final-order)
+            transaction-store(move-phase,True)
+            val cursor = range-first(parent,first,last)
+            val _ = place-keyed-updates(parent,cursor,final-updates)
 
-          // Moving a row may synchronously reconnect custom elements.  Validate
-          // the complete region after those callbacks and before publishing any
-          // owner, source, or table state.
-          val placed = range-first(parent,first,last)
-          validate-keyed-order(parent,last,placed,final-order ++ stale)
+            // Moving a row may synchronously reconnect custom elements. Validate
+            // the complete region before publishing owner or table state.
+            val placed = range-first(parent,first,last)
+            validate-keyed-order(parent,last,placed,final-order ++ stale)
+            reactive-structural{
+              internal/with-structural-owner(root,owner,fn() ())
+            }
 
-          // A synchronous host callback can retire the parent while a fallback
-          // fragment move is in progress.  Re-entering validates the persistent
-          // frame once more before any source/table publication.
-          reactive-structural{
-            internal/with-structural-owner(root,owner,fn() ())
-          }
+            // Committing the owned lease first prepares and publishes every
+            // nested participant. Only then may the outer adapter publish its
+            // retained source changes and authoritative table.
+            reactive-structural{
+              internal/commit-structural-transaction(transaction)
+            }
+            reactive-write-ui{
+              final-updates.foreach(fn(update) commit-keyed-update(update))
+            }
+            transaction-store(table,Keyed-table(final-index,final-order))
+            transaction-store(committed,True)
 
-          // Commit is the last operation which may reject the transaction
-          // itself. Keep every irreversible source/table publication after it;
-          // a joined lease is a no-op and the outermost lease owns commit.
-          reactive-structural{
-            internal/commit-structural-transaction(transaction)
-          }
-
-          // Reconciliation is itself an effect publication inside the active
-          // scheduler flush, so source notifications queue work but cannot
-          // settle between these non-throwing writes. No nested public batch is
-          // necessary.
-          reactive-write-ui{
-            final-updates.foreach(fn(update) commit-keyed-update(update))
-          }
-          transaction-store(table,Keyed-table(final-index,final-order))
-          transaction-store(committed,True)
-
-          // Removed rows retire only after the new table and all row sources are
-          // coherent.  Cleanup writes merely queue a later collection turn.
-          reactive-ui-exn-open{
-            dispose-keyed-rows(stale)
-          }
+            // Removed rows retire only after the new table and all row sources
+            // are coherent. Cleanup writes queue a later collection turn.
+            reactive-ui-exn-open{
+              dispose-keyed-rows(stale)
+            }
+          else
+            // A nested adapter is constructed while the outer bootstrap FIFO is
+            // draining. Existing rows would require signal writes in the total
+            // publication phase, so joined reconciliation deliberately supports
+            // initial construction only and fails closed otherwise.
+            if !old-order.is-nil || !stale.is-nil
+            then throw("joined keyed reconciliation must be initial construction")
+            else ()
+            reactive-structural{
+              internal/stage-structural-publication(
+                transaction,
+                fn() pretend-no-div{
+                  val current-cursor = range-first(parent,first,last)
+                  if keyed-order-matches(
+                       parent,last,current-cursor,final-order)
+                  then ()
+                  else validate-keyed-move-lifecycles(parent,final-order)
+                  transaction-store(move-phase,True)
+                  val cursor = range-first(parent,first,last)
+                  val _ = place-keyed-updates(parent,cursor,final-updates)
+                  val placed = range-first(parent,first,last)
+                  validate-keyed-order(parent,last,placed,final-order)
+                  internal/with-structural-owner(root,owner,fn() ())
+                },
+                fn(){
+                  transaction-store(
+                    table,Keyed-table(final-index,final-order))
+                  transaction-store(committed,True)
+                },
+                fn()
+                  finally(
+                    fn() {
+                      if transaction-load(move-phase)
+                      then rollback-keyed-order(parent,last,old-order)
+                      else ()
+                    },
+                    fn() dispose-keyed-rows(transaction-load(drafts))
+                  )
+              )
+            }
+            // From this point the outer journal exclusively owns rollback.
+            transaction-store(enlisted,True)
       )
 
 fun mount-keyed-fields<s,a,k,e::E>(
