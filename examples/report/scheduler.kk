@@ -167,7 +167,7 @@ fun next-step(root : root<<ui>>, model : scheduler-model) : callback-effect ()
       else ()
       model.scheduler-step.set(following)
 
-fun scheduler-auto-delay() : ui duration
+fun scheduler-auto-delay() : <ui,exn> duration
   if prefers-reduced-motion() then 90.milli-seconds else 900.milli-seconds
 
 // The DOM callback already runs inside the generation async delimiter. Sleep

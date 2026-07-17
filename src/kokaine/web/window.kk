@@ -11,7 +11,6 @@ module kokaine/web/window
 
 import kokaine/async/effects
 import kokaine/async/structured
-import std/core/undiv
 
 
 pub type window-event
@@ -40,6 +39,12 @@ extern host-result-error(value : any) : any
 extern host-result-state(value : any) : window-event-subscription
   js inline "(#1)"
 
+extern host-attempt-raw(action : () -> ui a) : ui any
+  js inline "(function(){ try { return { ok:true, value:(#1)() }; } catch(error) { return { ok:false, error:error }; } })()"
+
+extern host-result-value(value : any) : a
+  js inline "(#1).value"
+
 extern host-error-message(value : any) : string
   js inline "(function(error){ try { var message=error && error.message; return String(message == null ? error : message); } catch(formatError) { try { return String(formatError); } catch(_) { return 'unprintable host error'; } } })(#1)"
 
@@ -62,7 +67,7 @@ extern viewport-height-raw() : ui int
   js inline "Math.round(window.innerHeight)"
 
 extern location-fragment-raw() : ui string
-  js inline "(function(){ var raw=String(window.location.hash || ''); if(raw.charCodeAt(0)===35) raw=raw.slice(1); try { return decodeURIComponent(raw); } catch(_) { return raw; } })()"
+  js inline "(function(){ var raw=String(window.location.hash || ''); if(raw.charCodeAt(0)===35) raw=raw.slice(1); try { return decodeURIComponent(raw); } catch(error) { if(typeof URIError==='function' && error instanceof URIError) return raw; throw error; } })()"
 
 extern prefers-reduced-motion-raw() : ui bool
   js inline "!!(typeof window.matchMedia==='function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches)"
@@ -73,6 +78,14 @@ fun require-host-result(result : any, operation : string) : exn ()
   then ()
   else throw("browser window " ++ operation ++ " failed: " ++
              host-error-message(host-result-error(result)))
+
+// Native JavaScript throws do not automatically become Koka `exn`. Invoke
+// synchronous host reads behind one result box so Koka catch/finally clauses
+// remain authoritative at every public adapter boundary.
+fun host-attempt(operation : string, action : () -> ui a) : <ui,exn> a
+  val result = host-attempt-raw(action)
+  require-host-result(result,operation)
+  host-result-value(result)
 
 pub fun await-window-event(value : window-event) : <async,exn> ()
   val name = value.name
@@ -88,24 +101,20 @@ pub fun await-window-event(value : window-event) : <async,exn> ()
       Ok(fn() retire-window-event(subscription))
   )
 
-// Each iteration installs a real one-shot host await before application code
-// can run, so hiding the loop's local `div` cannot create a synchronous spin.
 pub fun monitor-window-events(action : window-event -> <async,div,exn|e> ())
-                             : <async,exn|e> ()
-  pretend-no-div(fn()
-    while { True }
-      val changed = race(
-        fn() {
-          await-window-event(Window-scroll)
-          Window-scroll
-        },
-        fn() {
-          await-window-event(Window-hash-change)
-          Window-hash-change
-        }
-      )
-      action(changed)
-  )
+                             : <async,div,exn|e> ()
+  while { True }
+    val changed = race(
+      fn() {
+        await-window-event(Window-scroll)
+        Window-scroll
+      },
+      fn() {
+        await-window-event(Window-hash-change)
+        Window-hash-change
+      }
+    )
+    action(changed)
 
 pub fun focus-selector(selector : string) : <ui,exn> ()
   require-host-result(focus-selector-raw(selector),"focus")
@@ -115,14 +124,14 @@ pub fun viewport-bounds(selector : string) : <ui,exn> (int,int)
   require-host-result(result,"geometry query")
   (viewport-result-top(result),viewport-result-bottom(result))
 
-pub fun viewport-height() : ui int
-  viewport-height-raw()
+pub fun viewport-height() : <ui,exn> int
+  host-attempt("viewport height",fn() viewport-height-raw())
 
-pub fun location-fragment() : ui string
-  location-fragment-raw()
+pub fun location-fragment() : <ui,exn> string
+  host-attempt("location fragment",fn() location-fragment-raw())
 
-pub fun prefers-reduced-motion() : ui bool
-  prefers-reduced-motion-raw()
+pub fun prefers-reduced-motion() : <ui,exn> bool
+  host-attempt("reduced motion query",fn() prefers-reduced-motion-raw())
 
 pub extern log-window-error(message : string) : ui ()
-  js inline "console.error(#1)"
+  js inline "(function(){ try { if(globalThis.console && typeof globalThis.console.error==='function') globalThis.console.error(#1); } catch(_) {} })()"
