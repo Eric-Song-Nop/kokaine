@@ -180,9 +180,13 @@ extern dom-range-next(parent : node, first : node, last : node) : ui node
 // A focused descendant is restored together with its text selection; ordinary
 // DOM object identity, listeners, form values, and owner registrations are
 // retained because no node is cloned.
+extern dom-validate-range-move-lifecycle(parent : node, first : node,
+                                         last : node) : ui ()
+  js inline "(function(rangeParent,rangeFirst,rangeLast){ var canPreserve=typeof rangeParent.moveBefore==='function'; var pending=[]; var n=rangeFirst; while(n){ pending.push(n); if(n===rangeLast) break; n=n.nextSibling; } if(n!==rangeLast) throw new Error('invalid Kokaine DOM move: closing marker is not reachable after opening marker'); var registry=globalThis.customElements; while(pending.length){ var current=pending.pop(); if(current && current.nodeType===1){ var name=current.getAttribute('is') || current.localName; var ctor=registry && registry.get(name); if(ctor){ var prototype=ctor.prototype; var reconnects=typeof prototype.connectedCallback==='function' || typeof prototype.disconnectedCallback==='function'; if(reconnects && !canPreserve) throw new Error('cannot safely move keyed row: this browser cannot preserve custom-element connection state'); if(reconnects && typeof prototype.connectedMoveCallback!=='function') throw new Error('cannot safely move keyed row: custom elements with connection callbacks must define connectedMoveCallback'); } } var children=current && current.childNodes ? Array.prototype.slice.call(current.childNodes) : []; if(current && current.shadowRoot) children=children.concat(Array.prototype.slice.call(current.shadowRoot.childNodes)); for(var i=0;i<children.length;i++) pending.push(children[i]); } })(#1,#2,#3)"
+
 extern dom-move-range-before(parent : node, first : node, last : node,
                              before : node) : ui ()
-  js inline "(function(rangeParent,rangeFirst,rangeLast,target){ if(!rangeParent || !rangeFirst || !rangeLast || !target || rangeFirst===rangeLast || rangeFirst.parentNode!==rangeParent || rangeLast.parentNode!==rangeParent || target.parentNode!==rangeParent){ throw new Error('invalid Kokaine DOM move: range and target must share the expected parent'); } var nodes=[]; var n=rangeFirst; while(n){ nodes.push(n); if(n===rangeLast) break; n=n.nextSibling; } if(n!==rangeLast){ throw new Error('invalid Kokaine DOM move: closing marker is not reachable after opening marker'); } if(nodes.indexOf(target)>=0){ throw new Error('invalid Kokaine DOM move: target lies inside the moved range'); } if(rangeLast.nextSibling===target) return; var originalNext=rangeLast.nextSibling; var active=document.activeElement; var ownsFocus=!!active && nodes.some(function(node){ return node===active || (node.nodeType===1 && node.contains(active)); }); var selection=null; if(ownsFocus && typeof active.selectionStart==='number' && typeof active.selectionEnd==='number'){ selection=[active.selectionStart,active.selectionEnd,active.selectionDirection]; } function restoreFocus(){ if(!ownsFocus || document.activeElement===active || !active.isConnected) return; active.focus({ preventScroll:true }); if(selection && typeof active.setSelectionRange==='function') active.setSelectionRange(selection[0],selection[1],selection[2]); } function gather(values){ var fragment=document.createDocumentFragment(); for(var i=0;i<values.length;i++) Node.prototype.appendChild.call(fragment,values[i]); return fragment; } function detachMoved(){ var passes=Math.max(2,nodes.length+2); while(passes-- > 0){ var attached=false; for(var i=0;i<nodes.length;i++){ var parent=nodes[i].parentNode; if(parent){ attached=true; Node.prototype.removeChild.call(parent,nodes[i]); } } if(!attached) return; } throw new Error('a retired keyed range was synchronously reinserted'); } function verify(anchor){ for(var i=0;i<nodes.length;i++){ if(nodes[i].parentNode!==rangeParent) throw new Error('a moved node escaped its keyed range'); if(i>0 && nodes[i-1].nextSibling!==nodes[i]) throw new Error('the keyed range became non-contiguous'); } if(nodes[nodes.length-1].nextSibling!==anchor) throw new Error('the keyed range was not placed at its requested boundary'); } function rollback(){ if(originalNext && originalNext.parentNode!==rangeParent){ detachMoved(); throw new Error('the original keyed range successor was detached'); } var anchor=originalNext || null; Node.prototype.insertBefore.call(rangeParent,gather(nodes),anchor); restoreFocus(); verify(anchor); } try { rangeParent.insertBefore(gather(nodes),target); restoreFocus(); verify(target); } catch(error) { try { rollback(); } catch(rollbackError) { throw new Error(String(error && error.message != null ? error.message : error) + '; keyed DOM move rollback failed: ' + String(rollbackError && rollbackError.message != null ? rollbackError.message : rollbackError)); } throw error; } })(#1,#2,#3,#4)"
+  js inline "(function(rangeParent,rangeFirst,rangeLast,target){ if(!rangeParent || !rangeFirst || !rangeLast || !target || rangeFirst===rangeLast || rangeFirst.parentNode!==rangeParent || rangeLast.parentNode!==rangeParent || target.parentNode!==rangeParent){ throw new Error('invalid Kokaine DOM move: range and target must share the expected parent'); } var nodes=[]; var n=rangeFirst; while(n){ nodes.push(n); if(n===rangeLast) break; n=n.nextSibling; } if(n!==rangeLast){ throw new Error('invalid Kokaine DOM move: closing marker is not reachable after opening marker'); } if(nodes.indexOf(target)>=0){ throw new Error('invalid Kokaine DOM move: target lies inside the moved range'); } if(rangeLast.nextSibling===target) return; var originalNext=rangeLast.nextSibling; var active=document.activeElement; var ownsFocus=!!active && nodes.some(function(node){ return node===active || (node.nodeType===1 && node.contains(active)); }); var selection=null; if(ownsFocus && typeof active.selectionStart==='number' && typeof active.selectionEnd==='number'){ selection=[active.selectionStart,active.selectionEnd,active.selectionDirection]; } function restoreFocus(){ if(!ownsFocus || document.activeElement===active || !active.isConnected) return; active.focus({ preventScroll:true }); if(selection && typeof active.setSelectionRange==='function') active.setSelectionRange(selection[0],selection[1],selection[2]); } function gather(values){ var fragment=document.createDocumentFragment(); for(var i=0;i<values.length;i++) Node.prototype.appendChild.call(fragment,values[i]); return fragment; } function place(anchor){ if(typeof rangeParent.moveBefore==='function'){ for(var i=0;i<nodes.length;i++) rangeParent.moveBefore(nodes[i],anchor); } else { rangeParent.insertBefore(gather(nodes),anchor); } } function detachMoved(){ var passes=Math.max(2,nodes.length+2); while(passes-- > 0){ var attached=false; for(var i=0;i<nodes.length;i++){ var parent=nodes[i].parentNode; if(parent){ attached=true; Node.prototype.removeChild.call(parent,nodes[i]); } } if(!attached) return; } throw new Error('a retired keyed range was synchronously reinserted'); } function verify(anchor){ for(var i=0;i<nodes.length;i++){ if(nodes[i].parentNode!==rangeParent) throw new Error('a moved node escaped its keyed range'); if(i>0 && nodes[i-1].nextSibling!==nodes[i]) throw new Error('the keyed range became non-contiguous'); } if(nodes[nodes.length-1].nextSibling!==anchor) throw new Error('the keyed range was not placed at its requested boundary'); } function rollback(){ if(originalNext && originalNext.parentNode!==rangeParent){ detachMoved(); throw new Error('the original keyed range successor was detached'); } var anchor=originalNext || null; Node.prototype.insertBefore.call(rangeParent,gather(nodes),anchor); restoreFocus(); verify(anchor); } try { place(target); restoreFocus(); verify(target); } catch(error) { try { rollback(); } catch(rollbackError) { throw new Error(String(error && error.message != null ? error.message : error) + '; keyed DOM move rollback failed: ' + String(rollbackError && rollbackError.message != null ? rollbackError.message : rollbackError)); } throw error; } })(#1,#2,#3,#4)"
 
 extern dom-set-text(value : node, content : string) : ui ()
   js inline "((#1).data = #2)"
@@ -342,7 +346,14 @@ fun range-next(parent : node, first : node, last : node) : <ui,exn> node
 
 fun move-range-before(parent : node, first : node, last : node,
                       before : node) : <ui,exn> ()
+  dom-attempt{ dom-validate-range-move-lifecycle(parent,first,last) }
   dom-attempt{ dom-move-range-before(parent,first,last,before) }
+
+fun validate-range-move-lifecycle(parent : node, first : node, last : node)
+                                  : <ui,exn> ()
+  dom-attempt{
+    dom-validate-range-move-lifecycle(parent,first,last)
+  }
 
 fun retire-owner-registration(value : dom-owner-registration) : <ui,exn> ()
   dom-attempt{ dom-retire-owners(value) }
@@ -583,8 +594,15 @@ fun rollback-keyed-order<a,k,e::E>(parent : node, last : node,
   // Moving each prior row to the closing boundary in its former order
   // reconstructs that complete order regardless of the partial draft order.
   exhaust-keyed-row-actions(rows,fn(row)
-    move-range-before(parent,row.row-first,row.row-last,last)
+    val next = range-next(parent,row.row-first,row.row-last)
+    if dom-same-node(next,last) then ()
+    else move-range-before(parent,row.row-first,row.row-last,last)
   )
+
+fun validate-keyed-move-lifecycles<a,k,e::E>(parent : node,
+                         rows : list<keyed-row<e,a,k>>) : <ui,exn> ()
+  rows.foreach fn(row)
+    validate-range-move-lifecycle(parent,row.row-first,row.row-last)
 
 fun validate-keyed-order<a,k,e::E>(parent : node, last : node, cursor : node,
                          rows : list<keyed-row<e,a,k>>) : <ui,exn> ()
@@ -598,6 +616,16 @@ fun validate-keyed-order<a,k,e::E>(parent : node, last : node, cursor : node,
       else
         val next = range-next(parent,row.row-first,row.row-last)
         validate-keyed-order(parent,last,next,rest)
+
+fun keyed-order-matches<a,k,e::E>(parent : node, last : node, cursor : node,
+                         rows : list<keyed-row<e,a,k>>) : <ui,exn> bool
+  match rows
+    Nil -> dom-same-node(cursor,last)
+    Cons(row,rest) ->
+      if !dom-same-node(cursor,row.row-first) then False
+      else
+        val next = range-next(parent,row.row-first,row.row-last)
+        keyed-order-matches(parent,last,next,rest)
 
 fun place-keyed-updates<a,k,e::E>(parent : node, cursor : node,
                         updates : list<keyed-update<e,a,k>>)
@@ -807,6 +835,13 @@ fun reconcile-keyed<a,k,e::E>(
             internal/bootstrap-structural-owners(draft-owners)
           }
 
+          // Fail closed before the first physical move if a retained custom
+          // element would receive synchronous disconnect/reconnect callbacks.
+          val current-cursor = range-first(parent,first,last)
+          if keyed-order-matches(
+               parent,last,current-cursor,final-order ++ stale)
+          then ()
+          else validate-keyed-move-lifecycles(parent,final-order)
           transaction-store(move-phase,True)
           val cursor = range-first(parent,first,last)
           val _ = place-keyed-updates(parent,cursor,final-updates)

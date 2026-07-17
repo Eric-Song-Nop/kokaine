@@ -125,10 +125,10 @@ with serve_project() as origin:
                     document.body.append(host);
                 }
                 globalThis.__kokaineThrowKeyedBootstrap = true;
-                globalThis.__kokaineInjectKeyedRogue = false;
                 globalThis.__kokaineEscapeKeyedDescendant = false;
-                globalThis.__kokaineRetireKeyedMove = false;
                 globalThis.__kokaineRetireKeyedMoveResult = null;
+                globalThis.__kokaineUnmovableEvents = [];
+                globalThis.__kokaineRecordUnmovableEvents = false;
                 globalThis.__kokaineKeyedBootstrapOrder = [];
                 globalThis.__kokaineKeyedConnections = [];
                 if (!customElements.get('x-kokaine-keyed-fail')) {
@@ -154,27 +154,40 @@ with serve_project() as origin:
                                 const row = this.closest('li[data-key]');
                                 if (row) {
                                     globalThis.__kokaineKeyedConnections.push(
-                                        `${row.parentElement.id}:${row.dataset.key}`
+                                        {
+                                            list: row.parentElement.id,
+                                            key: row.dataset.key,
+                                            text: row.textContent,
+                                            order: Array.from(
+                                                row.parentElement.children
+                                            ).map(node => node.dataset.key)
+                                        }
                                     );
                                 }
-                                const parent = this.closest('#keyed-move-list');
-                                if (parent && globalThis.__kokaineRetireKeyedMove) {
-                                    globalThis.__kokaineRetireKeyedMove = false;
-                                    globalThis.__kokaineRetireKeyedMoveResult =
-                                        globalThis.__kokaineKeyed.retireMove();
-                                    return;
+                            }
+
+                            connectedMoveCallback() {}
+                        }
+                    );
+                }
+                if (!customElements.get('x-kokaine-keyed-unmovable')) {
+                    customElements.define(
+                        'x-kokaine-keyed-unmovable',
+                        class extends HTMLElement {
+                            connectedCallback() {
+                                if (globalThis.__kokaineRecordUnmovableEvents) {
+                                    globalThis.__kokaineUnmovableEvents.push(
+                                        'connect'
+                                    );
                                 }
-                                if (!parent || !globalThis.__kokaineInjectKeyedRogue) {
-                                    return;
+                            }
+
+                            disconnectedCallback() {
+                                if (globalThis.__kokaineRecordUnmovableEvents) {
+                                    globalThis.__kokaineUnmovableEvents.push(
+                                        'disconnect'
+                                    );
                                 }
-                                globalThis.__kokaineInjectKeyedRogue = false;
-                                const rogue = document.createElement('i');
-                                rogue.id = 'keyed-move-rogue';
-                                Node.prototype.insertBefore.call(
-                                    parent,
-                                    rogue,
-                                    parent.firstChild.nextSibling
-                                );
                             }
                         }
                     );
@@ -367,18 +380,22 @@ with serve_project() as origin:
         page.evaluate(
             """() => {
                 const parent = document.querySelector('#keyed-move-list');
-                const nativeInsert = parent.insertBefore;
-                let failed = false;
-                parent.insertBefore = function insertThenThrow(child, before) {
-                    const result = nativeInsert.call(this, child, before);
-                    if (!failed && child.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
-                        failed = true;
-                        throw new Error('forced keyed move commit-then-throw');
+                const nativeMove = parent.moveBefore;
+                Object.defineProperty(parent, 'moveBefore', {
+                    configurable: true,
+                    value(node, before) {
+                        const result = nativeMove.call(this, node, before);
+                        if (++moves === 3) {
+                            throw new Error(
+                                'forced keyed move commit-then-throw'
+                            );
+                        }
+                        return result;
                     }
-                    return result;
-                };
+                });
+                let moves = 0;
                 globalThis.__restoreKeyedInsert = () => {
-                    parent.insertBefore = nativeInsert;
+                    delete parent.moveBefore;
                 };
             }"""
         )
@@ -389,7 +406,13 @@ with serve_project() as origin:
         assert_same(move_two, "#keyed-move-row-2")
         assert_same(move_three, "#keyed-move-row-3")
         assert invoke(page, "moveReset") is True
+        page.evaluate("globalThis.__kokaineKeyedConnections = []")
         assert invoke(page, "move") is True
+        move_connections = page.evaluate("globalThis.__kokaineKeyedConnections")
+        assert move_connections == [], (
+            "a keyed move reconnected rows before their accessors committed: "
+            f"{move_connections!r}"
+        )
         assert order(page, "#keyed-move-list") == [3, 1, 2]
         assert_same(move_one, "#keyed-move-row-1")
         assert_same(move_two, "#keyed-move-row-2")
@@ -397,8 +420,54 @@ with serve_project() as origin:
 
         assert invoke(page, "moveReset") is True
         assert order(page, "#keyed-move-list") == [1, 2, 3]
-        page.evaluate("globalThis.__kokaineInjectKeyedRogue = true")
+        page.evaluate(
+            """() => {
+                const probe = document.createElement(
+                    'x-kokaine-keyed-unmovable'
+                );
+                probe.id = 'keyed-unmovable-probe';
+                document.querySelector('#keyed-move-row-3').append(probe);
+                globalThis.__kokaineUnmovableEvents = [];
+                globalThis.__kokaineRecordUnmovableEvents = true;
+            }"""
+        )
         assert invoke(page, "move") is False
+        assert page.evaluate("globalThis.__kokaineUnmovableEvents") == []
+        assert order(page, "#keyed-move-list") == [1, 2, 3]
+        page.evaluate(
+            """() => {
+                globalThis.__kokaineRecordUnmovableEvents = false;
+                document.querySelector('#keyed-unmovable-probe').remove();
+            }"""
+        )
+        assert invoke(page, "moveReset") is True
+
+        page.evaluate(
+            """() => {
+                const parent = document.querySelector('#keyed-move-list');
+                const nativeMove = parent.moveBefore;
+                let injected = false;
+                Object.defineProperty(parent, 'moveBefore', {
+                    configurable: true,
+                    value(node, before) {
+                        const result = nativeMove.call(this, node, before);
+                        if (!injected) {
+                            injected = true;
+                            const rogue = document.createElement('i');
+                            rogue.id = 'keyed-move-rogue';
+                            Node.prototype.insertBefore.call(
+                                this,
+                                rogue,
+                                this.firstChild.nextSibling
+                            );
+                        }
+                        return result;
+                    }
+                });
+            }"""
+        )
+        assert invoke(page, "move") is False
+        page.evaluate("delete document.querySelector('#keyed-move-list').moveBefore")
         assert page.locator("#keyed-move-rogue").count() == 1
         assert order(page, "#keyed-move-list") == [1, 2, 3]
         assert_same(move_one, "#keyed-move-row-1")
@@ -410,7 +479,25 @@ with serve_project() as origin:
         assert order(page, "#keyed-move-list") == [3, 1, 2]
 
         assert invoke(page, "moveReset") is True
-        page.evaluate("globalThis.__kokaineRetireKeyedMove = true")
+        page.evaluate(
+            """() => {
+                const parent = document.querySelector('#keyed-move-list');
+                const nativeMove = parent.moveBefore;
+                let retired = false;
+                Object.defineProperty(parent, 'moveBefore', {
+                    configurable: true,
+                    value(node, before) {
+                        const result = nativeMove.call(this, node, before);
+                        if (!retired) {
+                            retired = true;
+                            globalThis.__kokaineRetireKeyedMoveResult =
+                                globalThis.__kokaineKeyed.retireMove();
+                        }
+                        return result;
+                    }
+                });
+            }"""
+        )
         assert invoke(page, "move") is False
         assert page.evaluate("globalThis.__kokaineRetireKeyedMoveResult") is True
         assert page.locator("#keyed-move-root").evaluate(
@@ -507,6 +594,10 @@ with serve_project() as origin:
                     '#keyed-rollback-stress-list'
                 );
                 const nativeInsert = parent.insertBefore;
+                Object.defineProperty(parent, 'moveBefore', {
+                    configurable: true,
+                    value: undefined
+                });
                 let moves = 0;
                 parent.insertBefore = function insertThenThrow(child, before) {
                     const result = nativeInsert.call(this, child, before);
@@ -520,6 +611,7 @@ with serve_project() as origin:
                 };
                 globalThis.__restoreKeyedStressInsert = () => {
                     parent.insertBefore = nativeInsert;
+                    delete parent.moveBefore;
                 };
             }"""
         )

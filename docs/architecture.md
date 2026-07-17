@@ -379,6 +379,15 @@ when the host move disturbs it. If host interference makes restoration itself
 impossible, the adapter raises a combined rollback error instead of publishing
 the new table or retained-row sources.
 
+On hosts with `moveBefore`, keyed ranges use its state-preserving move. A custom
+element that defines `connectedCallback` or `disconnectedCallback` must also
+define `connectedMoveCallback`; otherwise the reconciler rejects the reorder
+before touching the DOM, because a synchronous reconnect could observe a new
+physical order before retained item/index sources commit. Hosts without
+state-preserving moves likewise reject such lifecycle-bearing elements, while
+ordinary nodes and custom elements without connection callbacks retain the
+validated fragment fallback.
+
 SSR eliminates the same keyed plan as one snapshot. It performs the native
 sequential walk, checks keys through the balanced index, constructs constant
 item/index accessors for each row, and renders in source order. It does not
