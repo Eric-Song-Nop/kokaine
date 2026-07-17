@@ -237,9 +237,15 @@ pub fun render-wasm()
         inline-code("dispatchEvent")
         text(" 与 ")
         inline-code("preventDefault")
-        text(" 保持浏览器原生时序，callback 内新建的 effect 与 cleanup 也归属于准确 generation。它不会伪造已经返回的任意用户 handler，因此 public callback 关闭为 ")
-        inline-code("<signal-read,signal-write,ui,pure>")
+        text(" 保持浏览器原生时序，callback 内新建的 effect、async lease 与 cleanup 也归属于准确 generation。它不会伪造已经返回的任意用户 handler，因此 public callback 关闭为 ")
+        inline-code("<signal-read,signal-write,ui,async,pure>")
         text("；未在 callback 内处理的额外 effect 会被类型检查拒绝。wasmweb 若使用对象句柄，仍须管理 ABI callback 与 JS 对象句柄的保留和释放。")
+      p
+        text("页面级 scroll/hash 不复制这套 multi-shot event runtime；薄的 window adapter 用 ")
+        inline-code("setup/await")
+        text(" 安装可撤销的 one-shot listener。宿主 callback 只完成 await，导航策略在 generation reentry 后的新 batch 中运行；自动播放同样直接 ")
+        inline-code("sleep")
+        text("，timer 不持有 report action。")
 
 
 fun limits-list(items : list<string>)
@@ -266,14 +272,15 @@ pub fun render-limits()
           "以 pure/effect plane 排序，并用相等判断截断发布",
           "batch 延迟 settling；写值、版本递增与 notify 仍逐次发生",
           "让读、写、UI 能力进入 Koka 的效应类型",
-          "让 Draft、listener 与 DOM range 跟随 continuation frame 清理"
+          "让 Draft、listener、DOM range 与异步 task lease 跟随 generation 清理",
+          "用显式 business key 保持列表行身份，并在 O(log n) 索引中更新"
         ])
       element("article",attrs=[class("limits-grid__not-yet")])
         span("更高层能力仍需单独设计")
         limits-list([
-          "带 key 的列表差分",
-          "服务端 hydration",
-          "异步资源、Suspense 与并发调度",
+          "服务端 hydration 与流式客户端恢复",
+          "面向超大数据集的窗口化与虚拟列表策略",
+          "跨请求的 Suspense 协议与服务端传输格式",
           "跨线程更新",
           "生产级 wasmweb DOM 适配器",
           "恢复 mount 外已经返回的任意用户 handler 栈"
