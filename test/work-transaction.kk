@@ -36,6 +36,11 @@ fun hidden-store(target : ref<global,a>, value : a) : ()
 fun emit(events : ref<global,list<string>>, event : string) : ()
   hidden-store(events,hidden-load(events) ++ [event])
 
+fun abort-quietly(root : root<total>,
+                  transaction : scheduler-transaction<total>) : ()
+  with catch fn(_) ()
+  abort-work-transaction(root,transaction)
+
 tail fun append-range(queue : work-queue<int>, current : int,
                       limit : int) : <div> ()
   if current >= limit then () else
@@ -107,7 +112,7 @@ fun test-scheduler-drains_only_the_local_bootstrap_group()
   match transaction.state
     Work-ready -> ()
     _ -> throw("work transaction: a successful local drain must be ready")
-  commit-work-transaction(root,transaction)
+  pretend-no-div{ commit-work-transaction(root,transaction) }
   match transaction.state
     Work-committed -> ()
     _ -> throw("work transaction: a ready group must commit exactly once")
@@ -262,12 +267,70 @@ fun test-final-control-aborts_and_detaches_the_active_transaction()
   }
   require-transaction fn()
     pretend-no-div{ drain-work-transaction(root,recovery) }
-  commit-work-transaction(root,recovery)
+  require-transaction fn()
+    pretend-no-div{ commit-work-transaction(root,recovery) }
   check(hidden-load(recovery-runs) == 1,
         "a fresh transaction opens and drains after dynamic rollback")
   require-transaction fn()
     recovery-stop()
     root.dispose()
+
+fun test-root-retirement-claims-publications-before-cleanup-reentry()
+  val rollbacks = hidden(0)
+  val (root,transaction) : (root<total>,scheduler-transaction<total>) =
+    create-root fn(root)
+      val transaction = open-work-transaction(root)
+      stage-work-publication(
+        root,transaction,
+        fn() (),fn() (),
+        fn() hidden-store(rollbacks,hidden-load(rollbacks) + 1)
+      )
+      on-cleanup(root,fn() abort-quietly(root,transaction))
+      transaction
+
+  root.dispose()
+  check(hidden-load(rollbacks) == 1,
+        "root cleanup re-entry cannot claim publication rollback twice")
+  check(!transaction.has-pending-publications,
+        "root retirement detaches callbacks from the retained transaction")
+
+fun test-root-retirement-claims-publications-before-rollback-reentry()
+  val rollbacks = hidden(0)
+  val (root,transaction) : (root<total>,scheduler-transaction<total>) =
+    create-root fn(root)
+      val transaction = open-work-transaction(root)
+      stage-work-publication(
+        root,transaction,
+        fn() (),fn() (),
+        fn()
+          hidden-store(rollbacks,hidden-load(rollbacks) + 1)
+          abort-work-transaction(root,transaction)
+      )
+      transaction
+
+  root.dispose()
+  check(hidden-load(rollbacks) == 1,
+        "publication rollback re-entry remains exactly once")
+  check(!transaction.has-pending-publications,
+        "rollback re-entry leaves the retained transaction detached")
+
+fun test-root-retirement-releases-a-retained-publication-journal()
+  val rollbacks = hidden(0)
+  val (root,transaction) : (root<total>,scheduler-transaction<total>) =
+    create-root fn(root)
+      val transaction = open-work-transaction(root)
+      stage-work-publication(
+        root,transaction,
+        fn() (),fn() (),
+        fn() hidden-store(rollbacks,hidden-load(rollbacks) + 1)
+      )
+      transaction
+
+  root.dispose()
+  check(hidden-load(rollbacks) == 1,
+        "root retirement rolls back a publication exactly once")
+  check(!transaction.has-pending-publications,
+        "a terminal retained transaction cannot retain its journal closures")
 
 pub fun main()
   test-deque-routing-is-stack-safe()
@@ -278,4 +341,7 @@ pub fun main()
   test-abort-retires-successfully-drained-scopes()
   test-failed-transaction-abort-retires-successful-prefix()
   test-final-control-aborts_and_detaches_the_active_transaction()
+  test-root-retirement-claims-publications-before-cleanup-reentry()
+  test-root-retirement-claims-publications-before-rollback-reentry()
+  test-root-retirement-releases-a-retained-publication-journal()
   println("work-transaction: all checks passed")

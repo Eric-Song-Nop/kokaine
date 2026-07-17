@@ -258,6 +258,11 @@ with serve_project() as origin:
         assert_bool_result(selectorless_modal["modal"], True)
         assert_ok(selectorless_modal["modalClose"])
 
+        # This retained control crosses the public root/update facade. Exercise
+        # it independently of requestClose support so older engines keep the
+        # scoped-root code-generation boundary covered too.
+        assert_ok(fixture.evaluate(f"{controls}.dialog.setCancelBlocked(false)"))
+
         has_request_close = fixture.evaluate(
             "typeof HTMLDialogElement.prototype.requestClose === 'function'"
         )

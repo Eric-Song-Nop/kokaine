@@ -8,6 +8,18 @@ module kokaine/ssr
 
 import kokaine/reactive
 import kokaine/html
+import kokaine/internal/key-index
+import std/core/unsafe
+
+
+fun render-cell(value : a) : ref<global,a>
+  unsafe-total { ref(value) }
+
+fun render-load(value : ref<global,a>) : a
+  unsafe-total { !value }
+
+fun render-store(target : ref<global,a>, value : a) : ()
+  unsafe-total { target := value }
 
 
 fun escape-text(value : string) : string
@@ -92,6 +104,36 @@ fun is-void-element(name : string) : bool
 fun render-children(children : list<view<e>>) : <signal-read,pure> string
   children.map(render-view).join("")
 
+fun render-keyed-fields<s,a,k,e::E>(
+      read : () -> signal-read s,
+      walk : forall<p::E> (s,(a) -> p ()) -> p (),
+      key : (a) -> k, compare : (k,k) -> order,
+      children : (accessor<a>,accessor<int>)
+                 -> <html<e>,signal-read> ())
+    : <signal-read,pure> string
+  val keys = render-cell(kokaine/internal/key-index/empty())
+  val output = render-cell([])
+  val position = render-cell(0)
+  val snapshot = read()
+  walk(snapshot) fn(item)
+    val identity = key(item)
+    match render-load(keys).insert(identity,(),compare)
+      Duplicate(_) -> throw("duplicate key in keyed For")
+      Inserted(next) -> render-store(keys,next)
+    val current = render-load(position)
+    render-store(position,current + 1)
+    val row = view fn()
+      children(fn() item,fn() current)
+    render-store(output,Cons(render-view(row),render-load(output)))
+  render-load(output).reverse.join("")
+
+fun render-keyed(plan : keyed-plan<e>) : <signal-read,pure> string
+  match plan
+    Keyed-plan(spec) ->
+      match spec
+        Keyed-spec(read,walk,key,compare,_,children) ->
+          render-keyed-fields(read,walk,key,compare,children)
+
 fun render-view(node : view<e>) : <signal-read,pure> string
   match node
     Empty -> ""
@@ -99,6 +141,7 @@ fun render-view(node : view<e>) : <signal-read,pure> string
     Live-text(read) -> read().escape-text
     Fragment(children) -> render-children(children)
     Region(read) -> render-view(read())
+    Keyed-region(plan) -> render-keyed(plan)
     Raw-html(content) -> trusted-content(content)
     Element(name,attributes,children) ->
       val safe-name = checked-element-name(name)

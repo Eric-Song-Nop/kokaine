@@ -35,8 +35,48 @@ fun fresh-root() : root<e>
   val derive-frame = Frame(new-lifetime-owner(Scope-live))
   Root(
     Root-key(cell(True)),fresh-plane(derive-frame),fresh-plane(effect-frame),
-    lifetime,cell(0),cell(False),cell(False),cell(False)
+    cell(Nothing),lifetime,cell(0),cell(False),cell(False),cell(False)
   )
+
+tail fun prepend-root-publication-rollbacks(
+    values : list<work-publication<e>>,
+    collected : list<retirement-work<e>>)
+    : <div> list<retirement-work<e>>
+  match values
+    Nil -> collected
+    Cons(current,rest) ->
+      val rollback = current.publication-rollback
+      prepend-root-publication-rollbacks(
+        rest,Cons(Retirement-finalizer(
+          fn() lift-div(fn() rollback())),collected))
+
+// Root retirement must claim every transaction capability before invoking any
+// user cleanup. A retained transaction can otherwise re-enter abort while the
+// copied journal and live queue still name the same rollback callbacks.
+fun claim-root-work(root : root<e>) : list<work-publication<e>>
+  val publications = match load(root.root-work-publications)
+    Nothing -> []
+    Just(pending) ->
+      val values = pending.values
+      pending.clear
+      values
+  store(root.root-work-publications,Nothing)
+
+  val derive-group = load(root.root-derive-plane.plane-work-group)
+  val effect-group = load(root.root-effect-plane.plane-work-group)
+  store(root.root-derive-plane.plane-work-group,Nothing)
+  store(root.root-effect-plane.plane-work-group,Nothing)
+  match derive-group
+    Nothing -> ()
+    Just(group) ->
+      val _ = group.mark-aborted
+      group.clear
+  match effect-group
+    Nothing -> ()
+    Just(group) ->
+      val _ = group.mark-aborted
+      group.clear
+  publications
 
 // This is the non-validating half of root disposal. Besides ordinary public
 // disposal, it is used to roll back a root whose construction has not been
@@ -45,6 +85,7 @@ fun fresh-root() : root<e>
 fun retire-root-now(root : root<e>) : <div,exn|e> ()
   store(root.root-disposing,True)
   store(root.root-lifetime.lifetime-token,Scope-dead)
+  val publications = claim-root-work(root)
   finally(
     fn() {
       store(root.root-batch-depth,0)
@@ -53,14 +94,6 @@ fun retire-root-now(root : root<e>) : <div,exn|e> ()
       store(root.root-disposing,False)
       root.root-derive-plane.plane-queue.clear
       root.root-effect-plane.plane-queue.clear
-      match load(root.root-derive-plane.plane-work-group)
-        Nothing -> ()
-        Just(group) ->
-          val _ = group.mark-aborted
-          group.clear
-      match load(root.root-effect-plane.plane-work-group)
-        Nothing -> ()
-        Just(group) -> group.clear
       store(root.root-derive-plane.plane-work-group,Nothing)
       store(root.root-effect-plane.plane-work-group,Nothing)
       store(root.root-derive-plane.plane-current,Nothing)
@@ -71,7 +104,12 @@ fun retire-root-now(root : root<e>) : <div,exn|e> ()
       store(root.root-effect-plane.plane-draft,Nothing)
     },
     fn()
-      val finalizers = collect-lifetime(root.root-lifetime)
+      val lifetime-finalizers = collect-lifetime(root.root-lifetime)
+      val publication-rollbacks = prepend-root-publication-rollbacks(
+        publications,[])
+      val finalizers = pretend-no-div{
+        lifetime-finalizers ++ publication-rollbacks
+      }
       run-finalizers(finalizers)
   )
 
@@ -114,7 +152,14 @@ pub noinline fun root/is-disposed(root : root<e>) : bool
 
 pub fun update(root : root<e>, action : () -> <signal-write,pure|e> a)
               : <exn|e> a
-  dispatch(root,fn() mask<signal-read>{ action() })
+  dispatch(root,fn() mask<signal-read>{
+    val result = action()
+    // An earlier failed continuation remains queued even when this action's
+    // write is equal and therefore emits no fresh invalidation. An explicit
+    // update boundary still gives that pending work a recovery turn.
+    request-flush(root.root-key)
+    result
+  })
 
 pub fun sample(root : root<e>, action : () -> <signal-read,pure|e> a)
               : <exn|e> a
