@@ -34,6 +34,9 @@ extern rejected-promise(message : string) : promise<string>
 extern hostile-rejected-promise() : promise<string>
   js inline "Promise.reject(Object.defineProperty({},'message',{ get:function(){ throw new Error('message getter exploded'); } }))"
 
+extern hostile-promise-setup() : promise<string>
+  js inline "(function(){ var value=Promise.resolve('ignored'); Object.defineProperty(value,'then',{ get:function(){ throw Object.defineProperty({},'message',{ get:function(){ throw new Error('promise setup message getter exploded'); } }); } }); return value; })()"
+
 extern publish-controls(dispose-root : () -> ui (),
                         outstanding : () -> ui int) : ui ()
   js inline "(function(){ globalThis.__kokaineAsyncRuntime.disposeRoot=#1; globalThis.__kokaineAsyncRuntime.outstanding=#2; })()"
@@ -161,6 +164,17 @@ pub fun main()
         )
       ])
 
+      button("hostile Promise setup",attrs=[
+        id("async-promise-hostile-setup"),kind("button"),
+        on("click",fn(_)
+          phase.set("promise-hostile-setup-before")
+          with catch fn(problem)
+            phase.set("promise-hostile-setup-failed:" ++ show-error(problem))
+          val _ = hostile-promise-setup().await
+          phase.set("promise-hostile-setup-was-not-raised")
+        )
+      ])
+
       button("synchronous duplicate",attrs=[
         id("async-sync-double"),kind("button"),
         on("click",fn(_)
@@ -207,6 +221,29 @@ pub fun main()
             phase.set("fetch-rejected:" ++ show-error(problem))
           val _ = fetch(get("/async-reject.txt"))
           phase.set("fetch-rejection-was-not-raised")
+        )
+      ])
+
+      button("hostile Fetch rejection",attrs=[
+        id("async-fetch-hostile-reject"),kind("button"),
+        on("click",fn(_)
+          phase.set("fetch-hostile-reject-before")
+          with catch fn(problem)
+            phase.set("fetch-hostile-rejected:" ++ show-error(problem))
+          val _ = fetch(get("/async-hostile-fetch.txt"))
+          phase.set("fetch-hostile-rejection-was-not-raised")
+        )
+      ])
+
+      button("hostile response body rejection",attrs=[
+        id("async-body-hostile-reject"),kind("button"),
+        on("click",fn(_)
+          phase.set("body-hostile-reject-before")
+          with catch fn(problem)
+            phase.set("body-hostile-rejected:" ++ show-error(problem))
+          val response = fetch(get("/async-hostile-body.txt"))
+          val _ = response.text
+          phase.set("body-hostile-rejection-was-not-raised")
         )
       ])
 

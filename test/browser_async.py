@@ -150,6 +150,15 @@ with serve_project() as origin:
                 const nativeSetTimeout = globalThis.setTimeout.bind(globalThis);
                 const nativeClearTimeout = globalThis.clearTimeout.bind(globalThis);
                 const nativePerformanceNow = performance.now.bind(performance);
+                const hostileHostError = label => Object.defineProperty(
+                    {},
+                    'message',
+                    {
+                        get() {
+                            throw new Error(`${label} message getter exploded`);
+                        }
+                    }
+                );
                 const longTimer = {
                     enabled: false,
                     now: 0,
@@ -160,7 +169,12 @@ with serve_project() as origin:
                     setCalls: 0,
                     throwOnCall: null,
                     ignoreClear: false,
-                    enable(throwOnCall = null, ignoreClear = false) {
+                    hostileError: false,
+                    enable(
+                        throwOnCall = null,
+                        ignoreClear = false,
+                        hostileError = false
+                    ) {
                         this.enabled = true;
                         this.now = 0;
                         this.nextId = 1;
@@ -170,6 +184,7 @@ with serve_project() as origin:
                         this.setCalls = 0;
                         this.throwOnCall = throwOnCall;
                         this.ignoreClear = ignoreClear;
+                        this.hostileError = hostileError;
                     },
                     disable() {
                         this.enabled = false;
@@ -197,6 +212,9 @@ with serve_project() as origin:
                     }
                     longTimer.setCalls += 1;
                     if (longTimer.setCalls === longTimer.throwOnCall) {
+                        if (longTimer.hostileError) {
+                            throw hostileHostError('timer');
+                        }
                         throw new Error('forced long timer reschedule failure');
                     }
                     const task = {
@@ -235,6 +253,9 @@ with serve_project() as origin:
                     if (String(input).endsWith('/async-reject.txt')) {
                         return Promise.reject(new Error('forced fetch rejection'));
                     }
+                    if (String(input).endsWith('/async-hostile-fetch.txt')) {
+                        return Promise.reject(hostileHostError('fetch'));
+                    }
                     if (init.signal && !structuredOwned) {
                         init.signal.addEventListener('abort', () => {
                             globalThis.__kokaineFetchAbortCount += 1;
@@ -266,6 +287,29 @@ with serve_project() as origin:
                                 return this;
                             }
                         };
+                    }
+                    if (String(input).endsWith('/async-hostile-body.txt')) {
+                        const body = {
+                            locked: false,
+                            cancel() {
+                                this.locked = true;
+                                return Promise.resolve();
+                            }
+                        };
+                        return Promise.resolve({
+                            status: 200,
+                            ok: true,
+                            url: String(input),
+                            body,
+                            text() {
+                                return Promise.reject(
+                                    hostileHostError('response body')
+                                );
+                            },
+                            json() {
+                                return this.text();
+                            }
+                        });
                     }
                     return nativeFetch(input, init).then(response => {
                         if (String(input).endsWith('/async-header-gap.txt')) {
@@ -389,6 +433,33 @@ with serve_project() as origin:
         )
         assert page.evaluate("__kokaineAsyncRuntime.outstanding()") == 0
 
+        # Host errors may themselves throw while their message is inspected.
+        # Both synchronous timer setup and a later chunk must still settle.
+        page.evaluate("__kokaineLongTimer.enable(1, false, true)")
+        immediate = dispatch_and_read(page, "#async-long-timer-failure")
+        assert immediate["phase"] == "long-timer-failure-before", immediate
+        page.evaluate("__kokaineLongTimer.disable()")
+        expect(page.locator("#async-phase")).to_have_text(
+            "long-timer-failed:browser timer setup failed: "
+            "timer message getter exploded"
+        )
+        assert page.evaluate("__kokaineAsyncRuntime.outstanding()") == 0
+
+        page.evaluate("__kokaineLongTimer.enable(2, false, true)")
+        immediate = dispatch_and_read(page, "#async-long-timer-failure")
+        assert immediate["phase"] == "long-timer-failure-before", immediate
+        page.evaluate(
+            """() => {
+                __kokaineLongTimer.advance(2147483647);
+                __kokaineLongTimer.disable();
+            }"""
+        )
+        expect(page.locator("#async-phase")).to_have_text(
+            "long-timer-failed:browser timer failed: "
+            "timer message getter exploded"
+        )
+        assert page.evaluate("__kokaineAsyncRuntime.outstanding()") == 0
+
         # Already-settled Promise delivery still crosses a later microtask turn.
         immediate = dispatch_and_read(page, "#async-promise")
         assert immediate == {"phase": "promise-before", "outstanding": 1}, immediate
@@ -407,6 +478,14 @@ with serve_project() as origin:
         expect(page.locator("#async-phase")).to_have_text(
             "promise-hostile-rejected:browser Promise rejected: "
             "message getter exploded"
+        )
+        assert page.evaluate("__kokaineAsyncRuntime.outstanding()") == 0
+
+        immediate = dispatch_and_read(page, "#async-promise-hostile-setup")
+        assert immediate["phase"] == "promise-hostile-setup-before"
+        expect(page.locator("#async-phase")).to_have_text(
+            "promise-hostile-setup-failed:browser Promise setup failed: "
+            "promise setup message getter exploded"
         )
         assert page.evaluate("__kokaineAsyncRuntime.outstanding()") == 0
 
@@ -436,6 +515,22 @@ with serve_project() as origin:
         assert immediate["phase"] == "fetch-reject-before"
         expect(page.locator("#async-phase")).to_have_text(
             "fetch-rejected:browser Fetch rejected: forced fetch rejection"
+        )
+        assert page.evaluate("__kokaineAsyncRuntime.outstanding()") == 0
+
+        immediate = dispatch_and_read(page, "#async-fetch-hostile-reject")
+        assert immediate["phase"] == "fetch-hostile-reject-before"
+        expect(page.locator("#async-phase")).to_have_text(
+            "fetch-hostile-rejected:browser Fetch rejected: "
+            "fetch message getter exploded"
+        )
+        assert page.evaluate("__kokaineAsyncRuntime.outstanding()") == 0
+
+        immediate = dispatch_and_read(page, "#async-body-hostile-reject")
+        assert immediate["phase"] == "body-hostile-reject-before"
+        expect(page.locator("#async-phase")).to_have_text(
+            "body-hostile-rejected:browser Response body rejected: "
+            "response body message getter exploded"
         )
         assert page.evaluate("__kokaineAsyncRuntime.outstanding()") == 0
 
