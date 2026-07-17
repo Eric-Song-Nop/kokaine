@@ -10,6 +10,7 @@ import std/core/unsafe
 import std/core/undiv
 import kokaine/reactive/internal/resource
 import kokaine/reactive/internal/registry
+import kokaine/reactive/internal/work-transaction
 
 // --------------------------------------------------------------------------
 // Persistent cells and root identity
@@ -201,7 +202,8 @@ pub type work<e::E>
 // Derivations use `plane<total>` while effects use `plane<e>`.
 pub type plane<e::E>
   Plane(
-    plane-queue         : ref<global,list<work<e>>>,
+    plane-queue         : work-queue<work<e>>,
+    plane-work-group    : ref<global,maybe<work-group<work<e>>>>,
     plane-current       : ref<global,maybe<continuation-gate>>,
     plane-current-entry : ref<global,maybe<trace<e>>>,
     plane-current-frame : ref<global,frame<e>>,
