@@ -623,6 +623,11 @@ with serve_project() as origin:
                         document.createElement('div')
                     );
                     target.popover = 'manual';
+                    const ownerDocumentDescriptor =
+                        Object.getOwnPropertyDescriptor(
+                            Node.prototype,
+                            'ownerDocument'
+                        );
                     const parentView = {{ length: listedInParent ? 1 : 0 }};
                     parentView.parent = parentView;
                     parentView.top = parentView;
@@ -635,9 +640,17 @@ with serve_project() as origin:
                     }};
                     childDocument.defaultView = childView;
                     if (listedInParent) parentView[0] = childView;
-                    Object.defineProperty(target, 'ownerDocument', {{
-                        configurable: true,
-                        value: childDocument
+                    Object.defineProperty(Node.prototype, 'ownerDocument', {{
+                        configurable: ownerDocumentDescriptor.configurable,
+                        enumerable: ownerDocumentDescriptor.enumerable,
+                        get() {{
+                            if (this === target) return childDocument;
+                            return Reflect.apply(
+                                ownerDocumentDescriptor.get,
+                                this,
+                                []
+                            );
+                        }}
                     }});
                     let nativeCalls = 0;
                     target.togglePopover = function() {{
@@ -654,7 +667,11 @@ with serve_project() as origin:
                             nativeCalls
                         }};
                     }} finally {{
-                        delete target.ownerDocument;
+                        Object.defineProperty(
+                            Node.prototype,
+                            'ownerDocument',
+                            ownerDocumentDescriptor
+                        );
                         delete target.togglePopover;
                         target.remove();
                     }}
