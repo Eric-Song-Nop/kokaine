@@ -860,6 +860,14 @@ with serve_project() as origin:
         )
         page.wait_for_function("globalThis.__kokaineAsyncOwner?.done === true")
         owner_result = page.evaluate("__kokaineAsyncOwner")
+        claim_observations = owner_result.pop("claimObservations")
+        owner_result.pop("claimMode")
+        for order in ("retireFirst", "completionFirst"):
+            observation = claim_observations[order]
+            assert observation["count"] >= 4, claim_observations
+            assert not observation["violation"], claim_observations
+            assert observation["maxOutstanding"] == 0, claim_observations
+            assert observation["maxOwned"] == 0, claim_observations
         assert owner_result == {
             "done": True,
             "owned": 0,

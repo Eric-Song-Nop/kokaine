@@ -4,6 +4,7 @@ import kokaine/async/effects
 import kokaine/reactive/internal/model
 import kokaine/reactive/internal/runtime
 import kokaine/reactive/internal/async-runtime
+import kokaine/reactive/internal/registry
 import std/core/undiv
 
 
@@ -22,15 +23,8 @@ extern after-microtasks(action : () -> ui ()) : ui ()
 extern finish-scale(outstanding : int, owned : int) : ui ()
   js inline "Object.assign(globalThis.__kokaineAsyncScale,{ done:true, elapsed:performance.now()-globalThis.__kokaineAsyncScaleStart, outstanding:#1, owned:#2 })"
 
-fun owned-resource-count(values : owned<e>) : <div> int
-  match values
-    Owned-end -> 0
-    Owned-fork(_,_,next) -> owned-resource-count(load(next))
-    Owned-derive-fork(_,_,next) -> owned-resource-count(load(next))
-    Owned-resource(_,_,next) -> 1 + owned-resource-count(load(next))
-
 fun root-owned-resource-count(root : root<e>) : int
-  pretend-no-div{ owned-resource-count(load(root.root-owned)) }
+  root.root-lifetime.lifetime-finalizers.count
 
 fun schedule-many(left : int) : <async,div> ()
   if left <= 0 then () else

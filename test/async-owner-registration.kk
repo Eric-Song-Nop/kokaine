@@ -7,11 +7,21 @@ import kokaine/reactive/effects
 import kokaine/reactive/internal/resource
 import kokaine/reactive/internal/runtime
 import kokaine/reactive/internal/async-runtime
+import kokaine/reactive/internal/registry
 import std/core/undiv
 
 
 extern begin-result() : ui ()
-  js inline "globalThis.__kokaineAsyncOwner={ done:false, owned:-1, outstanding:-1, leasedOwned:-1, leasedOutstanding:-1, leaseDisposals:0, snapshotLeaseDisposals:0, structuredSnapshotLeaseDisposals:0, reentrantDisposals:0, reentrantFinalizers:0, reentrantRootDisposed:false }"
+  js inline "globalThis.__kokaineAsyncOwner={ done:false, owned:-1, outstanding:-1, leasedOwned:-1, leasedOutstanding:-1, leaseDisposals:0, snapshotLeaseDisposals:0, structuredSnapshotLeaseDisposals:0, reentrantDisposals:0, reentrantFinalizers:0, reentrantRootDisposed:false, claimMode:'', claimObservations:{ retireFirst:{ count:0, violation:false, maxOutstanding:0, maxOwned:0 }, completionFirst:{ count:0, violation:false, maxOutstanding:0, maxOwned:0 } } }"
+
+extern select-claim-mode(mode : string) : ui ()
+  js inline "globalThis.__kokaineAsyncOwner.claimMode=#1"
+
+extern record-claim-observation(outstanding : int, owned : int) : ui ()
+  js inline "(function(){ var owner=globalThis.__kokaineAsyncOwner; var sample=owner.claimObservations[owner.claimMode]; sample.count+=1; sample.maxOutstanding=Math.max(sample.maxOutstanding,Number(#1)); sample.maxOwned=Math.max(sample.maxOwned,Number(#2)); if(Number(#1)!==0 || Number(#2)!==0) sample.violation=true; })()"
+
+extern queue-host-action(action : () -> ui ()) : ui ()
+  js inline "queueMicrotask(#1)"
 
 extern record-lease-disposal() : ui ()
   js inline "globalThis.__kokaineAsyncOwner.leaseDisposals += 1"
@@ -35,21 +45,90 @@ extern publish-result(owned : int, outstanding : int,
                       leased-owned : int, leased-outstanding : int) : ui ()
   js inline "Object.assign(globalThis.__kokaineAsyncOwner,{ done:true, owned:#1, outstanding:#2, leasedOwned:#3, leasedOutstanding:#4 })"
 
-fun owned-resource-count(values : owned<e>) : <div> int
-  match values
-    Owned-end -> 0
-    Owned-fork(_,_,next) -> owned-resource-count(load(next))
-    Owned-derive-fork(_,_,next) -> owned-resource-count(load(next))
-    Owned-resource(_,_,next) -> 1 + owned-resource-count(load(next))
-
 fun root-owned-resource-count(root : root<e>) : int
-  pretend-no-div{ owned-resource-count(load(root.root-owned)) }
+  root.root-lifetime.lifetime-finalizers.count
+
+fun observe-supervisor-claim(root : root<<ui>>) : ui ()
+  record-claim-observation(
+    generation-async-outstanding(),root-owned-resource-count(root))
+
+fun install-supervised-no-await(root : root<<ui>>, ready : bool) : <async,ui> ()
+  val setup : await-setup<()> = fn(complete)
+    if ready then complete(Result(()),True) else ()
+    Ok(fn() observe-supervisor-claim(root))
+  no-await(setup,async-scope,"supervisor sibling",fn(result)
+    match result
+      Cancel -> observe-supervisor-claim(root)
+      _ -> ()
+  )
+
+fun park-supervisor-siblings(root : root<<ui>>, ready-first : bool,
+                             retire-later : bool) : <async,ui> ()
+  install-supervised-no-await(root,ready-first)
+  install-supervised-no-await(root,False)
+  if retire-later
+  then queue-host-action(fn() dispose-root-from-host(root))
+  else ()
+  finally(
+    fn() observe-supervisor-claim(root),
+    fn()
+      val park-setup = fn(_complete)
+        fn() observe-supervisor-claim(root)
+      val _ : () = setup/await-noexn(
+        "supervisor parked sibling",park-setup)
+      ()
+  )
+
+// Cover both race orders. In the first, retirement claims a Ready task before
+// its queued completion turn. In the second, that completion unlinks first and
+// a later host microtask retires the remaining siblings. Every disposer,
+// Cancel callback, and lexical finally observes a fully detached supervisor.
+fun exercise-supervisor-claim-order() : <ui,exn> ()
+  select-claim-mode("retireFirst")
+  val (retired-root,()) : (root<<ui>>,()) = create-root fn(_root) ()
+  dispatch(retired-root,fn() {
+    run-generation-async(retired-root,fn() {
+      park-supervisor-siblings(retired-root,True,False)
+    })
+  })
+  retired-root.dispose()
+
+  select-claim-mode("completionFirst")
+  val (completed-root,()) : (root<<ui>>,()) = create-root fn(_root) ()
+  dispatch(completed-root,fn() {
+    run-generation-async(completed-root,fn() {
+      park-supervisor-siblings(completed-root,True,True)
+    })
+  })
+  // `park-supervisor-siblings` already queued root retirement. Start the
+  // unrelated completion/unlink fixture only afterward so global outstanding
+  // observability describes this supervisor and no other family.
+  queue-host-action(fn() start-completed-owner-registration())
 
 fun complete-three() : async ()
   val _ = await1-noexn("owner registration one",fn(complete) complete(1))
   val _ = await1-noexn("owner registration two",fn(complete) complete(2))
   val _ = await1-noexn("owner registration three",fn(complete) complete(3))
   ()
+
+fun exercise-completed-owner-registration() : <ui,exn> ()
+  val (root,()) : (root<<ui>>,()) = create-root fn(_root) ()
+  dispatch(root,fn()
+    run-generation-async(root,fn()
+      complete-three()
+      val release = async-own(fn() record-lease-disposal())
+      val leased-owned = root-owned-resource-count(root)
+      val leased-outstanding = generation-async-outstanding()
+      release()
+      publish-result(
+        root-owned-resource-count(root),generation-async-outstanding(),
+        leased-owned,leased-outstanding)
+    )
+  )
+
+fun start-completed-owner-registration() : ui ()
+  with catch fn(_problem) ()
+  exercise-completed-owner-registration()
 
 // Retirement first claims all owner slots into a detached snapshot. A newer
 // cleanup may then attempt to release an older lease; the snapshot must remain
@@ -128,16 +207,4 @@ pub fun main()
   exercise-snapshot-release-race()
   exercise-structured-snapshot-release-race()
   exercise-reentrant-host-disposal()
-  val (root,()) : (root<<ui>>,()) = create-root fn(_root) ()
-  dispatch(root,fn()
-    run-generation-async(root,fn()
-      complete-three()
-      val release = async-own(fn() record-lease-disposal())
-      val leased-owned = root-owned-resource-count(root)
-      val leased-outstanding = generation-async-outstanding()
-      release()
-      publish-result(
-        root-owned-resource-count(root),generation-async-outstanding(),
-        leased-owned,leased-outstanding)
-    )
-  )
+  exercise-supervisor-claim-order()
