@@ -42,8 +42,11 @@ test-native:
 	$(KOKA) $(KOKA_FLAGS) -e test/html.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/key-index.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/control-flow.kk
+	$(KOKA) $(KOKA_FLAGS) -e test/async-effects.kk
+	$(KOKA) $(KOKA_FLAGS) -e test/structured-async.kk
 	$(PYTHON) test/keyed_transaction_boundary.py
 	$(PYTHON) test/event_effect_boundary.py $(KOKA)
+	$(PYTHON) test/async_effect_boundary.py $(KOKA)
 	$(PYTHON) test/run_locked.py
 	$(PYTHON) test/make_parallel.py
 
@@ -80,6 +83,14 @@ build-browser-fixtures: build-counter build-top-layer build-keyed
 		--buildname=dom-top-layer test/dom-top-layer.kk
 	$(DIST_KOKA) \
 		--buildname=dom-keyed test/dom-keyed.kk
+	$(DIST_KOKA) \
+		--buildname=dom-async-runtime test/dom-async-runtime.kk
+	$(DIST_KOKA) \
+		--buildname=async-resource test/async-resource.kk
+	$(DIST_KOKA) \
+		--buildname=async-owner-registration test/async-owner-registration.kk
+	$(DIST_KOKA) \
+		--buildname=async-runtime-scale test/async-runtime-scale.kk
 
 browser-install:
 	$(UV) run --with playwright python -m playwright install chromium
@@ -88,6 +99,7 @@ test-browser: build-browser-fixtures
 	$(UV) run --with playwright python test/browser_counter.py
 	$(UV) run --with playwright python test/browser_top_layer.py
 	$(UV) run --with playwright python test/browser_keyed.py
+	$(UV) run --with playwright python test/browser_async.py
 
 test-wasm:
 	./support/wasmweb-proof/run.sh test
