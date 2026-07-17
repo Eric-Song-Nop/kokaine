@@ -205,8 +205,7 @@ pub fun queue-work(plane : plane<e>, current : work<e>) : ()
 
 pub fun abandon-draft-frame(current : frame<e>, drafts : list<trace<e>>) : e ()
   store(current.frame-lifetime.lifetime-token,Scope-branch-dead)
-  val _ = try-retire-drafts(drafts)
-  val _ = try-retire-lifetime(current.frame-lifetime)
+  val _ = try-retire-lifetime-drafts(current.frame-lifetime,drafts)
   ()
 
 pub fun resume-node(plane : plane<e>, current : trace<e>,
@@ -553,12 +552,33 @@ pub fun drain-work-transaction(root : root<e>,
     throw("scheduler transaction can only be drained while open")
   })
   else
-    val result = lift-exn(fn(){
-      drain-work-transaction-loop(root,transaction)
-    })
-    val transitioned = match result
-      Error(failure) -> derive-group.mark-failed(failure)
-      Ok(_) -> derive-group.mark-ready
+    val completed = cell(False)
+    val (result,transitioned) = lift-exn(fn()
+      finally(
+        fn() lift-div(fn(){
+          if load(completed) then () else
+            // `error/try` cannot observe an abortive final control operation.
+            // Dynamically abort and detach the local groups before control
+            // returns to the host, just as abandoned continuation drafts roll
+            // back from their surrounding `finally`.
+            val _ = error/try(fn(){
+              abort-work-transaction(root,transaction)
+            })
+            ()
+        }),
+        fn()
+          val result = drain-work-transaction-loop(root,transaction)
+          val transitioned = match result
+            Error(failure) -> derive-group.mark-failed(failure)
+            Ok(_) -> derive-group.mark-ready
+          if transitioned then
+            // Ordinary failure is a completed drain with Work-failed state; only
+            // a non-local exit before this point should trigger dynamic abort.
+            store(completed,True)
+          else ()
+          (result,transitioned)
+      )
+    )
     if !transitioned
     then throw("scheduler transaction could not enter a terminal drain state")
     else result.untry
@@ -590,17 +610,73 @@ pub fun commit-work-transaction(root : root<e>,
       else throw("scheduler transaction commit lost its ready state")
     _ -> throw("scheduler transaction must drain successfully before commit")
 
+tail fun prepend-bootstrap-retirements(
+    values : list<work<e>>, collected : list<retirement-work<e>>)
+    : <div> list<retirement-work<e>>
+  match values
+    Nil -> collected
+    Cons(current,rest) ->
+      match current
+        Bootstrap-work(scope,_) -> prepend-bootstrap-retirements(
+          rest,Cons(scope-retirement-work(scope),collected))
+        // Scheduler routing keeps every resumption on the global frontier.
+        // Ignore a malformed local resume instead of retiring a live trace.
+        Resume-work(_) -> prepend-bootstrap-retirements(rest,collected)
+
+tail fun prepend-pure-bootstrap-retirements(
+    values : list<work<total>>, collected : list<retirement-work<e>>)
+    : <div> list<retirement-work<e>>
+  match values
+    Nil -> collected
+    Cons(current,rest) ->
+      match current
+        Bootstrap-work(scope,_) ->
+          val structural = widen-pure-retirement(
+            scope-retirement-work(scope))
+          prepend-pure-bootstrap-retirements(
+            rest,Cons(structural,collected))
+        Resume-work(_) -> prepend-pure-bootstrap-retirements(rest,collected)
+
+fun retire-transaction-bootstraps(
+    derive-pending : list<work<total>>, effect-pending : list<work<e>>)
+    : <div,exn|e> ()
+  val effect-structural = prepend-bootstrap-retirements(effect-pending,[])
+  val structural = prepend-pure-bootstrap-retirements(
+    derive-pending,effect-structural)
+  // Expand every queued scope first. All bootstrap slots are cleared, scopes
+  // are dead, and owner registrations are unlinked before cleanup can run.
+  val finalizers = collect-retirement-work(structural)
+  run-finalizers(finalizers)
+
 pub fun abort-work-transaction(root : root<e>,
-                               transaction : scheduler-transaction<e>) : ()
-  if !same-root(root.root-key,transaction.transaction-root-key) then () else
-    val derive-group = transaction.transaction-derive-group
-    val effect-group = transaction.transaction-effect-group
-    root.root-derive-plane.detach-matching-group(derive-group)
-    root.root-effect-plane.detach-matching-group(effect-group)
-    derive-group.clear
-    effect-group.clear
-    val _ = derive-group.mark-aborted
-    ()
+                               transaction : scheduler-transaction<e>)
+                              : <exn|e> ()
+  pretend-no-div{
+    if !same-root(root.root-key,transaction.transaction-root-key) then () else
+      val derive-group = transaction.transaction-derive-group
+      val effect-group = transaction.transaction-effect-group
+      match derive-group.state
+        Work-committed -> ()
+        Work-aborted ->
+          // Keep repeated abort idempotent even if the first call was itself
+          // left through final control while running retirement finalizers.
+          root.root-derive-plane.detach-matching-group(derive-group)
+          root.root-effect-plane.detach-matching-group(effect-group)
+          derive-group.clear
+          effect-group.clear
+        _ ->
+          // Claim the concrete tickets before clearing the groups. Queue clearing
+          // alone would leave Starting scopes pullable through `memo.get`.
+          val derive-pending = derive-group.take-all
+          val effect-pending = effect-group.take-all
+          root.root-derive-plane.detach-matching-group(derive-group)
+          root.root-effect-plane.detach-matching-group(effect-group)
+          val claimed = derive-group.mark-aborted
+          effect-group.clear
+          if !claimed
+          then throw("scheduler transaction abort lost its active state")
+          else retire-transaction-bootstraps(derive-pending,effect-pending)
+  }
 
 pub fun settle-failure(message : string) : settle-result
   match error/try(fn() throw(message))
