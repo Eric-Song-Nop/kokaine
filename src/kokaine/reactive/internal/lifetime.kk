@@ -95,12 +95,12 @@ pub fun collect-owned-forks(values : owned<e>)
                        : <div> list<retirement<e>>
   match values
     Owned-end -> []
-    Owned-fork(current,next) ->
-      collect-scope(current) ++ collect-owned-forks(next)
-    Owned-derive-fork(current,next) ->
+    Owned-fork(current,_,next) ->
+      collect-scope(current) ++ collect-owned-forks(load(next))
+    Owned-derive-fork(current,_,next) ->
       collect-scope(current).map(widen-pure-retirement) ++
-      collect-owned-forks(next)
-    Owned-resource(_,next) -> collect-owned-forks(next)
+      collect-owned-forks(load(next))
+    Owned-resource(_,_,next) -> collect-owned-forks(load(next))
 
 // Keep capability capture outside the tail-recursive list builder. In
 // particular, jsweb must not close over the builder's mutable loop cursor.
@@ -111,23 +111,48 @@ pub fun collect-owned-resources(values : owned<e>)
                            : <div> list<retirement<e>>
   match values
     Owned-end -> []
-    Owned-fork(_,next) -> collect-owned-resources(next)
-    Owned-derive-fork(_,next) -> collect-owned-resources(next)
-    Owned-resource(slot,next) ->
+    Owned-fork(_,_,next) -> collect-owned-resources(load(next))
+    Owned-derive-fork(_,_,next) -> collect-owned-resources(load(next))
+    Owned-resource(slot,_,next) ->
       // Retirement and explicit unregistration compete by taking the same
       // slot. Once claimed here, a later unregister cannot discard or skip
       // this cleanup from the already detached retirement snapshot.
       val resource = load(slot)
       store(slot,Nothing)
       match resource
-        Nothing -> collect-owned-resources(next)
+        Nothing -> collect-owned-resources(load(next))
         Just(current) ->
           Cons(resource-retirement(current),
-               collect-owned-resources(next))
+               collect-owned-resources(load(next)))
+
+// Back-links are needed only while a ledger is live. Once every removable
+// slot has been claimed into a detached snapshot, sever both directions so
+// reference-counted backends do not retain the retired chain as cycles.
+fun clear-owned-links(values : owned<e>) : <div> ()
+  match values
+    Owned-end -> ()
+    Owned-fork(_,back,next) ->
+      val rest = load(next)
+      store(back,next)
+      store(next,Owned-end)
+      clear-owned-links(rest)
+    Owned-derive-fork(_,back,next) ->
+      val rest = load(next)
+      store(back,next)
+      store(next,Owned-end)
+      clear-owned-links(rest)
+    Owned-resource(_,back,next) ->
+      val rest = load(next)
+      store(back,next)
+      store(next,Owned-end)
+      clear-owned-links(rest)
 
 pub fun collect-owned(values : owned<e>)
                  : <div> list<retirement<e>>
-  collect-owned-forks(values) ++ collect-owned-resources(values)
+  val forks = collect-owned-forks(values)
+  val resources = collect-owned-resources(values)
+  clear-owned-links(values)
+  forks ++ resources
 
 pub fun run-finalizers(finalizers : list<retirement<e>>)
                   : <div,exn|e> ()

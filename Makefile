@@ -62,6 +62,8 @@ build-browser-fixtures: build-counter
 		--buildname=async-resource test/async-resource.kk
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
 		--buildname=async-owner-registration test/async-owner-registration.kk
+	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist \
+		--buildname=async-runtime-scale test/async-runtime-scale.kk
 
 browser-install:
 	$(UV) run --with playwright python -m playwright install chromium

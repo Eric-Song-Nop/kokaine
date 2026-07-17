@@ -55,7 +55,6 @@ type generation-task<a,e::E>
 
 type task-capability<e::E>
   Task-capability(
-    capability-id     : int,
     capability-scope  : async-scope,
     capability-active : () -> bool,
     capability-stop   : (retired : bool) -> <signal-write,pure,ui|e> ()
@@ -68,7 +67,8 @@ type async-family<e::E>
   Async-family(
     family-tasks    : ref<global,list<task-capability<e>>>,
     family-canceled : ref<global,list<async-scope>>,
-    family-next-id  : ref<global,int>
+    family-active   : ref<global,int>,
+    family-stale    : ref<global,int>
   )
 
 // This wrapper is intentionally allocated for every browser turn. Its handler
@@ -236,18 +236,35 @@ noinline fun runtime/release-canceled(runtime : generation-runtime<e>,
   val canceled = runtime.runtime-family.family-canceled
   store(canceled,load(canceled).filter(fn(current) !(current == scope)))
 
-fun async-family/prune(family : async-family<e>) : ()
+fun async-family/compact(family : async-family<e>) : ()
   val tasks = family.family-tasks
-  store(tasks,load(tasks).filter(fn(capability)
-    match capability
-      Task-capability(_,_,active,_) -> active()
-  ))
+  if load(family.family-active) <= 0 then store(tasks,[]) else
+    store(tasks,load(tasks).filter(fn(capability)
+      match capability
+        Task-capability(_,active,_) -> active()
+    ))
+  store(family.family-stale,0)
 
-fun async-family/fresh-task-id(family : async-family<e>) : int
-  val next-id = family.family-next-id
-  val current = load(next-id)
-  store(next-id,current + 1)
-  current
+// Compact only after stale entries are at least half of the ledger. Repeated
+// waves therefore scan a geometric series while terminal tasks remain O(1)
+// between compactions.
+fun async-family/maybe-compact(family : async-family<e>) : ()
+  val active = load(family.family-active)
+  val stale = load(family.family-stale)
+  if stale > 0 && (active <= 0 || stale >= active)
+  then family.compact
+  else ()
+
+fun async-family/add(family : async-family<e>,
+                     capability : task-capability<e>) : ()
+  store(family.family-tasks,
+        Cons(capability,load(family.family-tasks)))
+  store(family.family-active,load(family.family-active) + 1)
+
+fun async-family/mark-terminal(family : async-family<e>) : ()
+  store(family.family-active,max(0,load(family.family-active) - 1))
+  store(family.family-stale,load(family.family-stale) + 1)
+  family.maybe-compact
 
 fun task/detach-owner(task : generation-task<a,e>) : ()
   store(task.task-owner-stop,Nothing)
@@ -256,15 +273,6 @@ fun task/detach-owner(task : generation-task<a,e>) : ()
   match registration
     Nothing -> ()
     Just(current) -> current.unregister
-
-noinline fun async-family/stop-task(family : async-family<e>, id : int,
-                                    retired : bool)
-                                   : <signal-write,pure,ui|e> ()
-  load(family.family-tasks).foreach fn(capability)
-    match capability
-      Task-capability(task-id,_,active,stop) ->
-        if task-id == id && active() then stop(retired) else ()
-
 
 // --------------------------------------------------------------------------
 // Completion and retirement
@@ -297,7 +305,7 @@ fun run-task-result(task : generation-task<a,e>, family : async-family<e>)
         store(task.task-disposer,Nothing)
         task.detach-owner
         decrement-outstanding()
-        family.prune
+        family.mark-terminal
 
         finally(
           fn() store(task.task-state,Task-completed),
@@ -354,7 +362,7 @@ fun retire-task-now(task : generation-task<a,e>, family : async-family<e>,
   store(task.task-disposer,Nothing)
   task.detach-owner
   decrement-outstanding()
-  family.prune
+  family.mark-terminal
 
   val cancel-strand = fn()
     // Retirement finalizers likewise run without an ambient exception handler.
@@ -408,20 +416,18 @@ fun register-task(
   // into the existing owner ledger before JavaScript can retain its callback.
   val portal = capture-reentry(root)
   val family = runtime.runtime-family
-  val task-id = family.fresh-task-id
   val task = Generation-task(
     cell(Task-pending),cell(Nothing),cell(Just(portal)),
     cell(Just(resume-action)),cell(Nothing),cell(Nothing),cell(Nothing),label
   )
   val capability = Task-capability(
-    task-id,
     scope,
     fn() task.is-active,
     fn(retired) retire-task(task,family,retired)
   )
 
   val owner-stop = task.task-owner-stop
-  store(owner-stop,Just(fn() family.stop-task(task-id,True)))
+  store(owner-stop,Just(fn() retire-task(task,family,True)))
   val registration = register-cleanup(root,fn()
     // Consume before stopping: retirement recursively detaches this task, and
     // the owner action must remain one-shot under aliased cleanup paths.
@@ -436,8 +442,7 @@ fun register-task(
   // Publish the operation only after its owner link is durable. If structural
   // registration rejects a dead frame, no runtime ledger or debug counter can
   // retain the uninstalled task.
-  store(family.family-tasks,
-        Cons(capability,load(family.family-tasks)))
+  family.add(capability)
   increment-outstanding()
 
   if runtime.is-canceled(scope) then
@@ -462,8 +467,9 @@ noinline fun cancel-runtime-scope(runtime : generation-runtime<e>,
   runtime.record-canceled(scope)
   load(runtime.runtime-family.family-tasks).foreach fn(capability)
     match capability
-      Task-capability(_,task-scope,active,stop) ->
+      Task-capability(task-scope,active,stop) ->
         if active() && task-scope <= scope then stop(False) else ()
+  runtime.runtime-family.compact
 
 noinline fun release-runtime-scope(runtime : generation-runtime<e>,
                                    scope : async-scope) : ()
@@ -671,5 +677,5 @@ pub fun run-generation-async(
     action : () -> <async,signal-read,signal-write,pure,ui> ())
     : <signal-read,signal-write,pure,ui> ()
   run-generation-async-with-family(
-    root,Async-family(cell([]),cell([]),cell(1)),action
+    root,Async-family(cell([]),cell([]),cell(0),cell(0)),action
   )

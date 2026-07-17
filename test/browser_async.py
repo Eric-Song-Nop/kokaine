@@ -874,6 +874,23 @@ with serve_project() as origin:
             "reentrantRootDisposed": True,
         }, owner_result
 
+        # Completing a wave of same-generation scheduled tasks must remain
+        # linear and must not monopolize a browser checkpoint for seconds.
+        page.evaluate(
+            """async () => {
+                await import('/dist/test_async_dash_runtime_dash_scale__main.mjs');
+            }"""
+        )
+        page.wait_for_function(
+            "globalThis.__kokaineAsyncScale?.done === true",
+            timeout=15_000,
+        )
+        scale_result = page.evaluate("__kokaineAsyncScale")
+        assert scale_result["count"] == 12_000, scale_result
+        assert scale_result["outstanding"] == 0, scale_result
+        assert scale_result["owned"] == 0, scale_result
+        assert scale_result["elapsed"] < 5_000, scale_result
+
         browser.close()
         assert not page_errors, "browser page errors:\n" + "\n".join(page_errors)
         assert not console_errors, "browser console errors:\n" + "\n".join(

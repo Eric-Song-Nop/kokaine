@@ -25,9 +25,9 @@ fun check(ok : bool, label : string) : exn ()
 fun owned-resource-count(values : owned<e>) : <div> int
   match values
     Owned-end -> 0
-    Owned-fork(_,next) -> owned-resource-count(next)
-    Owned-derive-fork(_,next) -> owned-resource-count(next)
-    Owned-resource(_,next) -> 1 + owned-resource-count(next)
+    Owned-fork(_,_,next) -> owned-resource-count(load(next))
+    Owned-derive-fork(_,_,next) -> owned-resource-count(load(next))
+    Owned-resource(_,_,next) -> 1 + owned-resource-count(load(next))
 
 fun root-owned-resource-count(root : root<e>) : int
   pretend-no-div{ owned-resource-count(load(root.root-owned)) }

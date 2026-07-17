@@ -151,15 +151,32 @@ pub type scope-state
 
 pub type owned<e::E>
   Owned-end
-  Owned-fork(owned-scope : continuation-scope<e>, owned-next : owned<e>)
+  Owned-fork(
+    owned-scope : continuation-scope<e>,
+    fork-back   : ref<global,ref<global,owned<e>>>,
+    fork-next   : ref<global,owned<e>>
+  )
   Owned-derive-fork(
     owned-derive-scope : continuation-scope<total>,
-    owned-next         : owned<e>
+    derive-back        : ref<global,ref<global,owned<e>>>,
+    derive-next        : ref<global,owned<e>>
   )
   Owned-resource(
     owned-resource-slot : ref<global,maybe<resource-k<e>>>,
-    resource-next       : owned<e>
+    resource-back       : ref<global,ref<global,owned<e>>>,
+    resource-next       : ref<global,owned<e>>
   )
+
+// Every live node knows the cell which currently points at it. This preserves
+// the exact mixed LIFO order while allowing removable cleanup registrations to
+// unlink themselves without rebuilding the entire owner ledger.
+pub fun owned/set-back(value : owned<e>,
+                       pointer : ref<global,owned<e>>) : ()
+  match value
+    Owned-end -> ()
+    Owned-fork(_,back,_) -> store(back,pointer)
+    Owned-derive-fork(_,back,_) -> store(back,pointer)
+    Owned-resource(_,back,_) -> store(back,pointer)
 
 pub fun same-resource-slot(
     left : ref<global,maybe<resource-k<e>>>,

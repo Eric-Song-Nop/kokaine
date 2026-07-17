@@ -179,6 +179,18 @@ pub fun untrack(action : () -> <signal-read,pure|e> a)
 // Continuation-backed effects and derivations
 // --------------------------------------------------------------------------
 
+fun prepend-owned-fork(owner : ref<global,owned<e>>,
+                       scope : continuation-scope<e>) : ()
+  val next = cell(load(owner))
+  load(next).set-back(next)
+  store(owner,Owned-fork(scope,cell(owner),next))
+
+fun prepend-owned-derive-fork(owner : ref<global,owned<e>>,
+                              scope : continuation-scope<total>) : ()
+  val next = cell(load(owner))
+  load(next).set-back(next)
+  store(owner,Owned-derive-fork(scope,cell(owner),next))
+
 fun create-effect-inner(root : root<e>,
                         track : () -> <signal-read,pure> a,
                         apply : (value : a) -> <signal-write,pure|e> ())
@@ -192,8 +204,7 @@ fun create-effect-inner(root : root<e>,
     root,plane,owner-slot,load(plane.plane-current),track,
     fn(value) interpret-write(root,fn() apply(value))
   )
-  store(owner.frame-owned,
-        Owned-fork(current,load(owner.frame-owned)))
+  prepend-owned-fork(owner.frame-owned,current)
   queue-work(plane,bootstrap)
   request-flush(root.root-key)
   dispose
@@ -224,8 +235,7 @@ fun derive-by-inner(root : root<e>, initial : a,
   )
   val producer = Derive-producer(derive-plane,current,cell(False))
   store(owner-slot,Just(producer))
-  store(owner.frame-owned,
-        Owned-derive-fork(current,load(owner.frame-owned)))
+  prepend-owned-derive-fork(owner.frame-owned,current)
   queue-work(derive-plane,bootstrap)
   request-flush(root.root-key)
   Memo(source,producer)
@@ -267,8 +277,7 @@ fun memo-by-inner(root : root<e>, initial : a,
   )
   val producer = Derive-producer(derive-plane,current,cell(False))
   store(owner-slot,Just(producer))
-  store(owner.frame-owned,
-        Owned-derive-fork(current,load(owner.frame-owned)))
+  prepend-owned-derive-fork(owner.frame-owned,current)
   queue-work(derive-plane,bootstrap)
   request-flush(root.root-key)
   Memo(source,producer)
@@ -298,32 +307,24 @@ pub fun create-effect(root : root<e>,
                      : <signal-write,pure> disposer<e>
   create-effect-inner(root,track,apply)
 
-fun remove-resource-slot(
-    values : owned<e>,
-    target : ref<global,maybe<resource-k<e>>>) : <div> owned<e>
-  match values
-    Owned-end -> Owned-end
-    Owned-fork(scope,next) ->
-      Owned-fork(scope,remove-resource-slot(next,target))
-    Owned-derive-fork(scope,next) ->
-      Owned-derive-fork(scope,remove-resource-slot(next,target))
-    Owned-resource(slot,next) ->
-      if same-resource-slot(slot,target) then next
-      else Owned-resource(slot,remove-resource-slot(next,target))
-
 noinline fun unregister-cleanup-slot(
-    owner : ref<global,owned<e>>,
-    slot : ref<global,maybe<resource-k<e>>>) : bool
+    slot : ref<global,maybe<resource-k<e>>>,
+    back : ref<global,ref<global,owned<e>>>,
+    next : ref<global,owned<e>>) : bool
   val resource = load(slot)
   store(slot,Nothing)
-  val claimed = match resource
+  match resource
     Nothing -> False
     Just(current) ->
       discard-resource(current)
+      val predecessor = load(back)
+      val successor = load(next)
+      store(predecessor,successor)
+      successor.set-back(predecessor)
+      // Break the removed registration's links after the live chain is fixed.
+      store(back,next)
+      store(next,Owned-end)
       True
-  val values = load(owner)
-  store(owner,pretend-no-div{ remove-resource-slot(values,slot) })
-  claimed
 
 pub fun register-cleanup(
     root : root<e>,
@@ -340,9 +341,11 @@ pub fun register-cleanup(
   )
   val slot = cell(Just(resource))
   val owner = current.frame-owned
-  store(current.frame-owned,
-        Owned-resource(slot,load(current.frame-owned)))
-  Cleanup-registration(fn() unregister-cleanup-slot(owner,slot))
+  val next = cell(load(owner))
+  load(next).set-back(next)
+  val back = cell(owner)
+  store(owner,Owned-resource(slot,back,next))
+  Cleanup-registration(fn() unregister-cleanup-slot(slot,back,next))
 
 pub fun on-cleanup(root : root<e>,
                    cleanup : () -> <signal-write,pure|e> ()) : exn ()
