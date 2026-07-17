@@ -511,6 +511,70 @@ with serve_project() as origin:
         assert forged_popover_property["nativeError"] == "NotSupportedError"
         assert_error(forged_popover_property["adapter"], "popover")
 
+        # Custom-element fields can shadow inherited DOM accessors without
+        # changing the node's native connectivity. The force=false adapter
+        # must inspect the platform state instead of toggling this open.
+        shadowed_connectivity = fixture.evaluate(
+            f"""() => {{
+                const target = document.body.appendChild(
+                    document.createElement('x-popover-connectivity-probe')
+                );
+                target.popover = 'manual';
+                Object.defineProperty(target, 'isConnected', {{
+                    configurable: true,
+                    value: false
+                }});
+                Object.defineProperty(target, 'ownerDocument', {{
+                    configurable: true,
+                    value: null
+                }});
+                Object.defineProperty(target, 'matches', {{
+                    configurable: true,
+                    value(selector) {{
+                        return selector === ':modal';
+                    }}
+                }});
+                const nativeGetter = Object.getOwnPropertyDescriptor(
+                    Node.prototype,
+                    'isConnected'
+                ).get;
+                const nativeMatches = Element.prototype.matches;
+                try {{
+                    return {{
+                        adapter:
+                            {controls}.popover.setClosedTarget(target),
+                        nativeConnected:
+                            Reflect.apply(nativeGetter, target, []),
+                        instanceConnected: target.isConnected,
+                        open: Reflect.apply(
+                            nativeMatches,
+                            target,
+                            [':popover-open']
+                        )
+                    }};
+                }} finally {{
+                    delete target.isConnected;
+                    delete target.ownerDocument;
+                    delete target.matches;
+                    if (Reflect.apply(
+                        nativeMatches,
+                        target,
+                        [':popover-open']
+                    )) {{
+                        target.hidePopover();
+                    }}
+                    target.remove();
+                }}
+            }}"""
+        )
+        assert_ok(shadowed_connectivity["adapter"])
+        assert shadowed_connectivity["nativeConnected"]
+        assert not shadowed_connectivity["instanceConnected"]
+        assert not shadowed_connectivity["open"], (
+            "set-open(false) opened a connected popover whose instance "
+            "shadowed isConnected"
+        )
+
         # WebKit retargets :fullscreen across a shadow boundary, so a host can
         # match even though only its shadow descendant has the fullscreen flag.
         # Popover validity checks must use the target's own modal state.
