@@ -635,6 +635,57 @@ with serve_project() as origin:
             "shadowed isConnected"
         )
 
+        # A connected child Document can likewise have a component field that
+        # shadows its inherited defaultView getter. The platform browsing
+        # context remains active and must not be mistaken for a stale one.
+        shadowed_default_view = fixture.evaluate(
+            f"""() => {{
+                const frame = document.body.appendChild(
+                    document.createElement('iframe')
+                );
+                const childDocument = frame.contentDocument;
+                const target = childDocument.body.appendChild(
+                    childDocument.createElement('div')
+                );
+                target.popover = 'manual';
+                Object.defineProperty(childDocument, 'defaultView', {{
+                    configurable: true,
+                    value: null
+                }});
+                const nativeMatches = Element.prototype.matches;
+                try {{
+                    return {{
+                        adapter:
+                            {controls}.popover.setClosedTarget(target),
+                        open: Reflect.apply(
+                            nativeMatches,
+                            target,
+                            [':popover-open']
+                        ),
+                        instanceView: childDocument.defaultView,
+                        nativeView: frame.contentWindow
+                    }};
+                }} finally {{
+                    delete childDocument.defaultView;
+                    if (Reflect.apply(
+                        nativeMatches,
+                        target,
+                        [':popover-open']
+                    )) {{
+                        target.hidePopover();
+                    }}
+                    frame.remove();
+                }}
+            }}"""
+        )
+        assert_ok(shadowed_default_view["adapter"])
+        assert shadowed_default_view["instanceView"] is None
+        assert shadowed_default_view["nativeView"] is not None
+        assert not shadowed_default_view["open"], (
+            "set-open(false) opened a popover whose Document shadowed "
+            "defaultView"
+        )
+
         # WebKit retargets :fullscreen across a shadow boundary, so a host can
         # match even though only its shadow descendant has the fullscreen flag.
         # Popover validity checks must use the target's own modal state.
