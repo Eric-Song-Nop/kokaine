@@ -127,8 +127,8 @@ tail fun detach-loop(values : registry-link<a>,
       val rest = load(next)
       val value = load(slot)
       store(slot,Nothing)
-      // Sever the pointer-to-pointer cycle while walking the already-owned
-      // snapshot. The registry head becomes Registry-end after the last node.
+      // Sever each stale handle's pointer-to-pointer cycle while walking the
+      // snapshot already detached from the registry head.
       store(back,next)
       store(next,Registry-end)
       match value
@@ -141,5 +141,6 @@ pub fun registry/seal-detach(target : registry<a>) : maybe<list<a>>
       if load(sealed) then Nothing else
         store(sealed,True)
         val values = load(head)
+        store(head,Registry-end)
         store(count,0)
         Just(pretend-no-div{ detach-loop(values,[]) })
