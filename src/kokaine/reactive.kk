@@ -83,7 +83,11 @@ pub fun root/is-disposed(root : root<e>) : bool
 
 pub fun update(root : root<e>, action : () -> <signal-write,pure|e> a)
               : <exn|e> a
-  runtime-update(root.unwrap-root,action)
+  // Koka 3.2.3 can mis-lower this effect-polymorphic facade beneath a handler
+  // when the unwrap remains in the call argument, leaving its synthetic root
+  // binder free in generated JavaScript.
+  val inner = root.unwrap-root
+  runtime-update(inner,action)
 
 pub fun sample(root : root<e>, action : () -> <signal-read,pure|e> a)
               : <exn|e> a
