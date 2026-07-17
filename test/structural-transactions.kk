@@ -46,39 +46,38 @@ fun test-stable-owner-uses-independent-lifetime()
   check(hidden-load(runs) == 2,"retired owner no longer observes sources")
   root.dispose()
 
-fun test-nested-transaction-joins-the_active_drain()
+fun test-nested-transaction-borrows_the_outer_fifo()
   val events = hidden([])
-  val (root,outer) = create-root fn(root)
+  val (root,(outer,joined)) = create-root fn(root)
     val outer = internal/open-structural-transaction(root)
+    val joined = internal/open-structural-transaction(root)
     val first = create-effect(root,fn() (),fn(_)
       emit(events,"outer")
-      val joined = internal/open-structural-transaction(root)
-      val second = create-effect(root,fn() (),fn(_)
-        emit(events,"inner")
-      )
-      pretend-no-div{ internal/drain-structural-transaction(joined) }
-      internal/commit-structural-transaction(joined)
-      ()
     )
-    outer
+    val second = create-effect(root,fn() (),fn(_)
+      emit(events,"inner")
+    )
+    (outer,joined)
 
   check(hidden-load(events).is-nil,
         "an open transaction isolates bootstrap work")
+  pretend-no-div{ internal/drain-structural-transaction(joined) }
+  internal/commit-structural-transaction(joined)
   pretend-no-div{ internal/drain-structural-transaction(outer) }
   check(hidden-load(events) == ["outer","inner"],
-        "a nested lease appends work to the active FIFO drain")
+        "a nested lease leaves work in the outer FIFO drain")
   internal/commit-structural-transaction(outer)
   root.dispose()
 
 fun test_joined_abort_does_not_steal_the_outer_lease()
   val events = hidden([])
-  val (root,outer) = create-root fn(root)
+  val (root,(outer,joined)) = create-root fn(root)
     val outer = internal/open-structural-transaction(root)
     val joined = internal/open-structural-transaction(root)
-    internal/abort-structural-transaction(joined)
     val stop = create-effect(root,fn() (),fn(_) emit(events,"committed"))
-    outer
+    (outer,joined)
 
+  internal/abort-structural-transaction(joined)
   pretend-no-div{ internal/drain-structural-transaction(outer) }
   internal/commit-structural-transaction(outer)
   check(hidden-load(events) == ["committed"],
@@ -87,6 +86,6 @@ fun test_joined_abort_does_not_steal_the_outer_lease()
 
 pub fun main()
   test-stable-owner-uses-independent-lifetime()
-  test-nested-transaction-joins-the_active_drain()
+  test-nested-transaction-borrows_the_outer_fifo()
   test_joined_abort_does_not_steal_the_outer_lease()
   println("structural transactions: lifetime and joined-drain contracts passed")

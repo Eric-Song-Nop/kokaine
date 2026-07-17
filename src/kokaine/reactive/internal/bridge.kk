@@ -7,6 +7,7 @@ import kokaine/reactive/internal/model
 import kokaine/reactive/effects
 import kokaine/reactive/internal/runtime
 import kokaine/reactive/internal/reentry
+import kokaine/reactive/internal/structural
 
 pub fun runtime-dispatch(root : root<e>,
                          action : () -> <signal-read,signal-write,pure|e> a)
@@ -88,3 +89,33 @@ pub fun runtime-run-reentry(value : reentry<e>,
                             action : () -> <signal-read,signal-write,pure|e> a)
                            : <exn|e> a
   kokaine/reactive/internal/reentry/run-reentry(value,action)
+
+pub fun runtime-open-structural-owner(root : root<e>)
+                                     : exn structural-owner<e>
+  open-structural-owner(root)
+
+pub fun runtime-with-structural-owner(root : root<r>,
+                                     owner : structural-owner<r>,
+                                     action : () -> <div,exn|e> a)
+                                    : <div,exn|e> a
+  with-structural-owner(root,owner,action)
+
+pub fun runtime-dispose-structural-owner(owner : structural-owner<e>)
+                                        : <exn|e> ()
+  dispose-structural-owner(owner)
+
+pub fun runtime-open-structural-transaction(root : root<e>)
+                                           : exn structural-transaction<e>
+  open-structural-transaction(root)
+
+pub fun runtime-drain-structural-transaction(
+    transaction : structural-transaction<e>) : <div,exn|e> ()
+  drain-structural-transaction(transaction)
+
+pub fun runtime-commit-structural-transaction(
+    transaction : structural-transaction<e>) : exn ()
+  commit-structural-transaction(transaction)
+
+pub fun runtime-abort-structural-transaction(
+    transaction : structural-transaction<e>) : <exn|e> ()
+  abort-structural-transaction(transaction)
