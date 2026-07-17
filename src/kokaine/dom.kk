@@ -1134,20 +1134,27 @@ fun reconcile-keyed<a,k,e::E>(
             }
 
             // Fail closed before the first physical move if a retained custom
-            // element would receive synchronous disconnect/reconnect callbacks.
+            // or stale element would receive synchronous disconnect/reconnect
+            // callbacks during forward placement or rollback. A matching order
+            // never enters the move phase: later preparation/retirement failure
+            // then has no physical order to restore.
+            val physical-order = final-order ++ stale
             val current-cursor = range-first(parent,first,last)
-            if keyed-order-matches(
-                 parent,last,current-cursor,final-order ++ stale)
-            then ()
-            else validate-keyed-move-lifecycles(parent,final-order)
-            transaction-store(move-phase,True)
-            val cursor = range-first(parent,first,last)
-            val _ = place-keyed-updates(parent,cursor,final-updates)
+            val order-changed = !keyed-order-matches(
+              parent,last,current-cursor,physical-order)
+            if order-changed then
+              validate-keyed-move-lifecycles(
+                parent,physical-order)
+              transaction-store(move-phase,True)
+              val cursor = range-first(parent,first,last)
+              val _ = place-keyed-updates(parent,cursor,final-updates)
+              ()
+            else ()
 
             // Moving a row may synchronously reconnect custom elements. Validate
             // the complete region before publishing owner or table state.
             val placed = range-first(parent,first,last)
-            validate-keyed-order(parent,last,placed,final-order ++ stale)
+            validate-keyed-order(parent,last,placed,physical-order)
             reactive-structural{
               internal/with-structural-owner(root,owner,fn() ())
             }
@@ -1189,13 +1196,15 @@ fun reconcile-keyed<a,k,e::E>(
                 transaction,
                 fn() pretend-no-div{
                   val current-cursor = range-first(parent,first,last)
-                  if keyed-order-matches(
-                       parent,last,current-cursor,final-order)
-                  then ()
-                  else validate-keyed-move-lifecycles(parent,final-order)
-                  transaction-store(move-phase,True)
-                  val cursor = range-first(parent,first,last)
-                  val _ = place-keyed-updates(parent,cursor,final-updates)
+                  val order-changed = !keyed-order-matches(
+                    parent,last,current-cursor,final-order)
+                  if order-changed then
+                    validate-keyed-move-lifecycles(parent,final-order)
+                    transaction-store(move-phase,True)
+                    val cursor = range-first(parent,first,last)
+                    val _ = place-keyed-updates(parent,cursor,final-updates)
+                    ()
+                  else ()
                   val placed = range-first(parent,first,last)
                   validate-keyed-order(parent,last,placed,final-order)
                   internal/with-structural-owner(root,owner,fn() ())

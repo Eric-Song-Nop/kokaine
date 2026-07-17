@@ -453,22 +453,6 @@ with serve_project() as origin:
         assert order(page, "#keyed-main-list") == [0, 1, 5, 2, 4]
         assert not row_three.evaluate("node => node.isConnected")
         assert invoke(page, "readCleanups") == 2
-
-        # Recreate row 3 so the independent escaped-descendant cleanup contract
-        # remains covered after the recovery case above.
-        assert invoke(page, "insertMiddle") is True
-        assert order(page, "#keyed-main-list") == [0, 1, 5, 2, 3, 4]
-        page.evaluate(
-            """() => {
-                const probe = document.createElement('x-kokaine-keyed-escape');
-                probe.id = 'keyed-escaped-descendant';
-                document.querySelector('#keyed-row-3').append(probe);
-                globalThis.__kokaineEscapeKeyedDescendant = true;
-            }"""
-        )
-        assert invoke(page, "deleteMiddle") is True
-        expect(page.locator("#keyed-escaped-descendant")).to_have_count(0)
-        assert order(page, "#keyed-main-list") == [0, 1, 5, 2, 4]
         assert invoke(page, "readCleanups") == 2
         assert invoke(page, "pulse") is True
         assert invoke(page, "readRuns") == 2
@@ -1324,6 +1308,49 @@ with serve_project() as origin:
         )
         assert invoke(page, "disposeStressReset") is True
 
+        # Keep escaped-descendant cleanup covered on a no-reorder retirement.
+        # The custom callback moves itself outside its row while the staged
+        # snapshot is detaching that row; the snapshot must still remove it.
+        page.evaluate(
+            """() => {
+                if (!customElements.get('x-kokaine-keyed-stress-escape')) {
+                    customElements.define(
+                        'x-kokaine-keyed-stress-escape',
+                        class extends HTMLElement {
+                            disconnectedCallback() {
+                                if (this.__kokaineEscaped) {
+                                    return;
+                                }
+                                this.__kokaineEscaped = true;
+                                const parent = document.querySelector(
+                                    '#keyed-dispose-stress-list'
+                                );
+                                const boundary = Array.from(
+                                    parent.childNodes
+                                ).findLast(
+                                    node =>
+                                        node.nodeType === Node.COMMENT_NODE &&
+                                        node.data === '/kokaine:for'
+                                );
+                                Node.prototype.insertBefore.call(
+                                    parent,
+                                    this,
+                                    boundary
+                                );
+                            }
+                        }
+                    );
+                }
+                const probe = document.createElement(
+                    'x-kokaine-keyed-stress-escape'
+                );
+                probe.id = 'keyed-escaped-descendant';
+                document.querySelector(
+                    '#keyed-dispose-stress-row-2048'
+                ).append(probe);
+            }"""
+        )
+
         disposal = page.evaluate(
             """() => {
                 try {
@@ -1343,6 +1370,7 @@ with serve_project() as origin:
             "value": True,
             "error": None,
         }, f"bulk keyed disposal was not stack-safe: {disposal!r}"
+        expect(page.locator("#keyed-escaped-descendant")).to_have_count(0)
         expect(page.locator("#keyed-dispose-stress-list > li")).to_have_count(0)
 
         rollback_list = "#keyed-rollback-stress-list"
