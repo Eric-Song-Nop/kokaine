@@ -63,3 +63,33 @@ pub fun run-application-reentry(
     action : () -> <signal-read,signal-write,pure|e> a)
     : <|h> a
   runner.run(fn() run-reentry(value,action))
+
+// Retirement marks the captured frame dead before finalizers run. A parked
+// async strand still has to be discontinued so its lexical `finally` clauses
+// unwind, but it must not gain a fresh registration or host batch. Keep this
+// path private to runtime-owned cancellation and restore only the already
+// captured reactive handlers/context.
+fun run-retirement-reentry(
+    value : reentry<e>,
+    action : () -> <signal-read,signal-write,pure|e> a)
+    : <exn|e> a
+  check-not-pure-plane("reactive retirement re-entry")
+  match value
+    Reentry(root,checkpoint,current) ->
+      val plane = root.root-effect-plane
+      pretend-no-div{
+        with-entry(plane,Nothing,fn()
+          with-context(plane,checkpoint,current,
+            fn() lift-div(fn() dispatch-handled(root,action)))
+        )
+      }
+
+// The application runner surrounds the complete cancellation turn. It is the
+// explicit capability which reinstalls application handlers after the host
+// callback that initiated retirement has outlived their dynamic extent.
+pub fun run-application-retirement-reentry(
+    runner : app-runner<<exn|e>,h>,
+    value : reentry<e>,
+    action : () -> <signal-read,signal-write,pure|e> a)
+    : <|h> a
+  runner.run(fn() run-retirement-reentry(value,action))
