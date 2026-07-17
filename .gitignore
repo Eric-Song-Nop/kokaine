@@ -3,3 +3,6 @@
 .wrangler/
 dist/
 node_modules/
+.kokaine/
+coverage/
+packages/create-kokaine/template/package-lock.json

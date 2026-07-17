@@ -1,0 +1,21 @@
+{
+  "name": "create-kokaine",
+  "version": "0.1.0",
+  "description": "Create a Kokaine application backed by npm and Vite",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "create-kokaine": "bin/create-kokaine.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "template"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20.19"
+  }
+}

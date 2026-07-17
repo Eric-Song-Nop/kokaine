@@ -1,0 +1,32 @@
+{
+  "name": "@kokaine/core",
+  "version": "0.1.0",
+  "description": "A fine-grained Web UI runtime for Koka",
+  "license": "Apache-2.0",
+  "type": "module",
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "koka": {
+    "schemaVersion": 1,
+    "sources": [
+      "src"
+    ],
+    "compiler": ">=3.2.3 <3.3.0",
+    "targets": [
+      "jsweb"
+    ]
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "test:cli": "npm test --workspace @kokaine/cli && npm test --workspace create-kokaine",
+    "test": "npm run test:cli"
+  },
+  "engines": {
+    "node": ">=20.19"
+  }
+}

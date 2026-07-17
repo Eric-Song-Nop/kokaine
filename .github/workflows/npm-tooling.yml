@@ -1,0 +1,45 @@
+name: npm tooling
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  unit:
+    name: ${{ matrix.os }} / ${{ matrix.client }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        client: [npm, pnpm]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - if: matrix.client == 'pnpm'
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - if: matrix.client == 'npm'
+        run: npm ci --ignore-scripts
+      - if: matrix.client == 'pnpm'
+        run: pnpm install --no-frozen-lockfile --ignore-scripts
+      - run: npm test
+
+  integration:
+    name: managed compiler and production build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: node packages/create-kokaine/bin/create-kokaine.js integration-app
+      - run: npm pkg set 'dependencies.@kokaine/core=file:..' 'devDependencies.@kokaine/cli=file:../packages/cli' --prefix integration-app
+      - run: npm install --ignore-scripts --prefix integration-app
+      - run: npm run doctor --prefix integration-app -- --json
+      - run: npm run build --prefix integration-app

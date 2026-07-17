@@ -163,7 +163,40 @@ attempts.
   walks the same backend-neutral plan as one deterministic snapshot. Duplicate
   keys fail before publication in both backends.
 
-## Quick start
+## npm application quick start
+
+Kokaine applications use npm package resolution and the project's existing
+`package.json` and lockfile for both Koka source libraries and JavaScript
+packages. No separate Kokaine registry, solver, or lockfile is involved.
+
+```sh
+pnpm create kokaine
+cd kokaine-app
+pnpm install
+pnpm dev
+```
+
+The generated project pins Koka 3.2.3 in its `kokaine` manifest. The
+`@kokaine/cli` downloads the matching official compiler into a checksummed,
+platform-specific user cache, or validates an explicit `--koka`/`KOKA_BIN`
+override. `kokaine doctor --json` reports the resolved npm dependency paths,
+canonical Koka source roots, module index, compiler origin, graph fingerprint,
+and exact compiler command.
+
+The CLI exposes four project scripts:
+
+- `kokaine check` compiles the application without invoking Vite;
+- `kokaine build` compiles Koka into `.kokaine/` and creates a Vite production
+  bundle;
+- `kokaine dev` watches only the discovered Koka source roots, serializes
+  rebuilds, and performs a full reload after a successful compile;
+- `kokaine doctor` validates and explains the complete installed build graph.
+
+See [npm packages and workspaces](docs/npm-packages.md) for the manifest
+contract, peer-dependency convention, module namespace rules, and workspace
+behavior.
+
+## Repository development
 
 Prerequisites are Koka 3.2.3, Python 3, and `make`. Set `PYTHON=/path/to/python`
 when the Python 3 executable is not named `python3`. The browser checks
@@ -171,6 +204,7 @@ additionally use [`uv`](https://docs.astral.sh/uv/) to run Playwright without
 adding project dependencies.
 
 ```sh
+make test-tooling
 make test
 make browser-install
 make test-browser
