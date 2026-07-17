@@ -102,7 +102,7 @@ and target, discovery and command construction are deterministic. Once the
 compiler exists in the cache, `doctor`, `check`, `build`, and `dev` do not need
 network access.
 
-## Neovim project configuration
+## Editor project configuration
 
 The generated application includes a `koka.json` understood by
 [`koka.nvim`](https://github.com/syaiful6/koka.nvim#project-configuration):
@@ -116,7 +116,25 @@ The generated application includes a `koka.json` understood by
 }
 ```
 
-This gives the language server and editor build commands the same application
-and core source roots as a minimal CLI project. Add direct editor-only source
-roots when introducing more Koka packages; `kokaine doctor --json` remains the
-authoritative source for the full canonical transitive graph used by builds.
+The official VS Code Koka extension does not read `koka.json`, so the generated
+application also includes `.vscode/settings.json` with the equivalent compiler
+arguments:
+
+```json
+{
+  "koka.languageServer.compilerArguments": [
+    "--target=jsweb",
+    "--include=src",
+    "--include=node_modules/@kokaine/core/src",
+    "-j1"
+  ]
+}
+```
+
+These files give both editors the same application and core source roots as a
+minimal CLI project. The VS Code extension still selects its compiler through
+the `koka.languageServer.compiler` machine setting or its compiler commands;
+an absolute, machine-specific compiler path is intentionally not generated.
+Add direct editor-only source roots when introducing more Koka packages;
+`kokaine doctor --json` remains the authoritative source for the full canonical
+transitive graph used by builds.

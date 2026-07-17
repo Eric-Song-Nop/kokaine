@@ -1,0 +1,7 @@
+{
+  "koka.languageServer.compilerArguments": [
+    "--target=jsweb",
+    "--include=src",
+    "-j1"
+  ]
+}

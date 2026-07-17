@@ -18,6 +18,13 @@ test("creates a complete npm-compatible Kokaine project", async (t) => {
   const editorConfig = JSON.parse(await readFile(path.join(target, "koka.json"), "utf8"));
   assert.equal(editorConfig.target, "jsweb");
   assert.deepEqual(editorConfig.include_dirs, ["src", "node_modules/@kokaine/core/src"]);
+  const vscodeConfig = JSON.parse(await readFile(path.join(target, ".vscode", "settings.json"), "utf8"));
+  assert.deepEqual(vscodeConfig["koka.languageServer.compilerArguments"], [
+    "--target=jsweb",
+    "--include=src",
+    "--include=node_modules/@kokaine/core/src",
+    "-j1"
+  ]);
   const gitignore = await readFile(path.join(target, ".gitignore"), "utf8");
   assert.match(gitignore, /\.koka\//);
   assert.match(gitignore, /\.kokaine\//);
