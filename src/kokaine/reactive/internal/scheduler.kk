@@ -457,7 +457,14 @@ pub fun settle-failure(message : string) : settle-result
     Error(failure) -> Settle-failed(failure)
     Ok(_) -> Settle-ok
 
-pub fun validate-owner-gate-current(gate : continuation-gate) : <div> settle-result
+fun scope-has-active-target-mark(scope : continuation-scope<e>) : bool
+  match load(scope.scope-target-mark)
+    Nothing -> False
+    Just(mark) -> load(mark)
+
+pub fun validate-owner-gate-current(gate : continuation-gate,
+                                    permit-inflight : bool)
+                                   : <div> settle-result
   match load(gate.gate-state)
     Capture-live ->
       match gate.gate-input-producer
@@ -470,20 +477,28 @@ pub fun validate-owner-gate-current(gate : continuation-gate) : <div> settle-res
               match load(gate.gate-state)
                 Capture-live -> Settle-ok
                 Capture-pending -> Settle-deferred
-                Capture-running -> Settle-deferred
+                Capture-running ->
+                  if permit-inflight then Settle-ok else Settle-deferred
+                Capture-draft ->
+                  if permit-inflight then Settle-ok else settle-failure(
+                    "derived owner continuation is draft")
                 _ -> settle-failure(
                   "derived owner changed while validating its input")
     Capture-pending -> Settle-deferred
-    Capture-running -> Settle-deferred
-    Capture-draft -> settle-failure("derived owner continuation is draft")
+    Capture-running ->
+      if permit-inflight then Settle-ok else Settle-deferred
+    Capture-draft ->
+      if permit-inflight then Settle-ok
+      else settle-failure("derived owner continuation is draft")
     Capture-dead -> settle-failure("derived owner continuation was retired")
 
-pub fun validate-owner-gate(parent : maybe<continuation-gate>) : <div> settle-result
+pub fun validate-owner-gate(parent : maybe<continuation-gate>,
+                            permit-inflight : bool) : <div> settle-result
   match parent
     Nothing -> Settle-ok
     Just(gate) ->
-      match validate-owner-gate(gate.gate-parent)
-        Settle-ok -> validate-owner-gate-current(gate)
+      match validate-owner-gate(gate.gate-parent,permit-inflight)
+        Settle-ok -> validate-owner-gate-current(gate,permit-inflight)
         Settle-deferred -> Settle-deferred
         Settle-failed(failure) -> Settle-failed(failure)
 
@@ -607,7 +622,10 @@ pub fun settle-producer-body(producer : derive-producer) : <div> settle-result
       "derived value belongs to a retired branch")
     Scope-dead -> settle-failure("derived value belongs to a retired scope")
     _ ->
-      match validate-owner-gate(producer.producer-scope.scope-parent)
+      val permit-inflight =
+        scope-has-active-target-mark(producer.producer-scope)
+      match validate-owner-gate(
+              producer.producer-scope.scope-parent,permit-inflight)
         Settle-deferred -> Settle-deferred
         Settle-failed(failure) -> Settle-failed(failure)
         Settle-ok ->

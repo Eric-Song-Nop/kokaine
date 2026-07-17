@@ -111,10 +111,14 @@ fun mark-structural-scopes(
             Owned-end -> mark-structural-scopes(rest,mark)
             Owned-resource(_,next) -> mark-structural-scopes(
               Cons(Bootstrap-owned-task(next),rest),mark)
-            // Pure derivations use a separate plane and cannot register
-            // structural descendants while their calculation is running.
-            Owned-derive-fork(_,next) -> mark-structural-scopes(
-              Cons(Bootstrap-owned-task(next),rest),mark)
+            // Pure derivations use a separate queue, so targeted structural
+            // bootstrap never drains them here. Mark the exact producer scope
+            // instead; a synchronous memo read may then settle only that
+            // producer through the running effect owner which created it.
+            Owned-derive-fork(scope,next) ->
+              store(scope.scope-target-mark,Just(mark))
+              mark-structural-scopes(
+                Cons(Bootstrap-owned-task(next),rest),mark)
             Owned-fork(scope,next) -> mark-structural-scopes(
               Cons(Bootstrap-scope-task(scope),
                 Cons(Bootstrap-owned-task(next),rest)),mark)

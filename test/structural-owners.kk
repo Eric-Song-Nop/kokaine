@@ -310,6 +310,43 @@ fun test-recursive-targeted-bootstrap-preserves-fifo()
   targeted.assert-events(scheduled,
     "recursive targeted bootstrap does not overtake queued owners")
 
+fun run-targeted-derived-parent-case(self-invalidates : bool)
+                                    : exn list<string>
+  val events = cell([])
+  val (root,trigger) = create-root fn(root)
+    val trigger = signal(root,0)
+    val stop = create-effect(root,fn() trigger.get,fn(value)
+      emit(events,"parent:" ++ value.show)
+      if value == 1 then
+        val owner = internal/open-structural-owner(root)
+        internal/with-structural-owner(root,owner,fn()
+          val derived = derive(root,0,fn()
+            emit(events,"derive")
+            42
+          )
+          val child = create-effect(root,fn() derived.get,fn(result)
+            emit(events,"child:" ++ result.show)
+          )
+          ()
+        )
+        if self-invalidates then trigger.set(2) else ()
+        bootstrap-total(owner).untry
+      else ()
+    )
+    trigger
+  update(root){ trigger.set(1) }
+  val result = load(events)
+  root.dispose()
+  result
+
+fun test-targeted-bootstrap-settles-owned-derives()
+  run-targeted-derived-parent-case(False).assert-events(
+    ["parent:0","parent:1","derive","child:42"],
+    "targeted child settles a derive owned by its running parent")
+  run-targeted-derived-parent-case(True).assert-events(
+    ["parent:0","parent:1","parent:2"],
+    "pending parent still defers its targeted derived child")
+
 pub fun main()
   val row-runs = cell(0)
   val row-owner-cleanups = cell(0)
@@ -396,5 +433,6 @@ pub fun main()
   test-targeted-bootstrap-rejects-pure-plane()
   test-targeted-bootstrap-respects-invalidated-parent()
   test-recursive-targeted-bootstrap-preserves-fifo()
+  test-targeted-bootstrap-settles-owned-derives()
 
   println("structural-owners: persistence, recursion, staleness, and purity passed")
