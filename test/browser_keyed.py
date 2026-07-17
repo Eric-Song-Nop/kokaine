@@ -1171,7 +1171,7 @@ with serve_project() as origin:
         assert compaction == {
             "value": True,
             "error": None,
-        }, f"structural ledger compaction was not stack-safe: {compaction!r}"
+        }, f"structural registry unlink was not stack-safe: {compaction!r}"
 
         assert invoke(page, "bulkRetirement") is True
 

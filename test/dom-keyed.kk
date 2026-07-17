@@ -186,8 +186,8 @@ fun safe-unmount(dispose : disposer<<ui>>) : ui bool
   unmount(dispose)
   True
 
-fun compact-ledger-stress(root : root<<ui>>,
-                          owner : structural-owner<<ui>>) : ui bool
+fun registry-unlink-stress(root : root<<ui>>,
+                           owner : structural-owner<<ui>>) : ui bool
   with catch fn(_)
     False
   val children = pretend-no-div{
@@ -196,10 +196,8 @@ fun compact-ledger-stress(root : root<<ui>>,
         Cons(internal/open-structural-owner(root),values)
     )
   }
-  internal/compact-structural-owner(owner)
   children.foreach fn(child)
     internal/dispose-structural-owner(child)
-  internal/compact-structural-owner(owner)
   True
 
 fun bulk-retirement-stress(root : root<<ui>>,
@@ -224,7 +222,6 @@ fun bulk-retirement-stress(root : root<<ui>>,
     )
   }
   internal/dispose-structural-owner(parent)
-  internal/compact-structural-owner(owner)
   probe-load(finalized) == 4000
 
 fun main-row(root : root<<ui>>, pulse : signal<int>, clicks : signal<int>,
@@ -458,7 +455,7 @@ pub fun main()
       [item(1,"one"),item(2,"two"),item(3,"three")]),
     fn() safe-set(bootstrap-root,bootstrap-source,[item(7,"seven")]),
     fn() safe-set(bootstrap-root,bootstrap-source,[]),
-    fn() compact-ledger-stress(compact-root,compact-owner),
+    fn() registry-unlink-stress(compact-root,compact-owner),
     fn() bulk-retirement-stress(compact-root,compact-owner),
     fn() safe-unmount(move-dispose)
   )

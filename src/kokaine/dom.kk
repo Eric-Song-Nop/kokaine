@@ -10,6 +10,7 @@ module kokaine/dom
 import kokaine/reactive
 import kokaine/html
 import kokaine/internal/event-runtime
+import kokaine/internal/key-index
 import std/core/unsafe
 
 
@@ -40,6 +41,38 @@ type owner-match<e::E>
 pub type toggle-state
   Toggle-open
   Toggle-closed
+
+// A keyed row has a lifetime which is deliberately independent from the
+// collection observer generation.  `current-item` and `current-index` are the
+// last committed values; their always-publishing sources are written only
+// after the reconciler has already performed every fallible comparison and DOM
+// move in the draft transaction.
+type keyed-row<e::E,a,k>
+  Keyed-row(
+    row-key           : k,
+    row-current-item  : ref<global,a>,
+    row-current-index : ref<global,int>,
+    row-item-source   : signal<a>,
+    row-index-source  : signal<int>,
+    row-owner         : structural-owner<<ui|e>>,
+    row-first         : node,
+    row-last          : node
+  )
+
+type keyed-update<e::E,a,k>
+  Keyed-update(
+    update-row           : keyed-row<e,a,k>,
+    update-item          : a,
+    update-index         : int,
+    update-item-changed  : bool,
+    update-index-changed : bool
+  )
+
+type keyed-table<e::E,a,k>
+  Keyed-table(
+    table-index : key-index<k,keyed-row<e,a,k>>,
+    table-order : list<keyed-row<e,a,k>>
+  )
 
 // Transaction state must survive abortive control while mount bootstraps are
 // flushing. Keep this adapter-local and inaccessible to user code.
@@ -84,8 +117,18 @@ extern dom-attempt-value(result : any) : a
 extern dom-attempt-message(result : any) : string
   js inline "String((#1).message)"
 
-extern dom-create-element(name : string) : ui element
-  js inline "document.createElement(#1)"
+// Closed shadow roots are intentionally opaque, so a keyed move cannot inspect
+// them for custom-element callbacks after the fact. Install one wrapper per DOM
+// realm before mount construction and remember both observed closed hosts and
+// elements whose provenance proves that they had no pre-existing closed root.
+// If another host shim replaces the wrapper, later moves fail closed. As with
+// the rest of the DOM adapter, direct calls through deliberately retained or
+// foreign native primitives are outside the cooperative host contract.
+extern dom-install-shadow-tracker(parent : node) : ui ()
+  js inline "(function(parent){ var doc=parent && (parent.nodeType===9 ? parent : parent.ownerDocument); var view=doc && doc.defaultView; if(!view || !view.Element) throw new Error('cannot install Kokaine shadow-root tracking outside a DOM realm'); var key=Symbol.for('kokaine.dom.shadow-roots'); var tracker=globalThis[key]; if(!tracker){ tracker={ version:1, known:new WeakSet(), closed:new WeakSet(), realms:new WeakMap() }; tracker.remember=function(root){ var pending=root && root.childNodes ? Array.prototype.slice.call(root.childNodes) : []; while(pending.length){ var current=pending.pop(); if(current && current.nodeType===1){ tracker.known.add(current); if(current.localName==='template' && current.content){ var mode=current.getAttribute('shadowrootmode'); if(mode && mode.toLowerCase()==='closed' && current.parentNode && current.parentNode.nodeType===1) tracker.closed.add(current.parentNode); var templateChildren=Array.prototype.slice.call(current.content.childNodes); for(var j=0;j<templateChildren.length;j++) pending.push(templateChildren[j]); } } var children=current && current.childNodes ? Array.prototype.slice.call(current.childNodes) : []; for(var i=0;i<children.length;i++) pending.push(children[i]); } }; globalThis[key]=tracker; } if(tracker.version!==1 || !tracker.known || !tracker.closed || !tracker.realms || typeof tracker.remember!=='function') throw new Error('invalid Kokaine shadow-root tracker'); var prototype=view.Element.prototype; var state=tracker.realms.get(view); if(state){ var intact=state.wrapper ? prototype.attachShadow===state.wrapper : typeof prototype.attachShadow!=='function'; if(state.prototype!==prototype || !intact) throw new Error('Kokaine shadow-root tracking was replaced'); return; } var descriptor=Object.getOwnPropertyDescriptor(prototype,'attachShadow'); if(!descriptor || typeof descriptor.value!=='function'){ if(typeof prototype.attachShadow==='function') throw new Error('cannot safely wrap this DOM realm attachShadow implementation'); tracker.realms.set(view,{ prototype:prototype, wrapper:null }); return; } var original=descriptor.value; var wrapper=function attachShadow(){ var root=original.apply(this,arguments); tracker.known.add(this); try { var mode=root && root.mode; if(mode!=='open') tracker.closed.add(this); } catch(error) { tracker.closed.add(this); throw error; } return root; }; Object.defineProperty(prototype,'attachShadow',{ configurable:descriptor.configurable, enumerable:descriptor.enumerable, writable:descriptor.writable, value:wrapper }); tracker.realms.set(view,{ prototype:prototype, wrapper:wrapper }); })(#1)"
+
+extern dom-create-element(parent : node, name : string) : ui element
+  js inline "(function(parent,name){ var doc=parent && (parent.nodeType===9 ? parent : parent.ownerDocument); if(!doc) throw new Error('cannot create a Kokaine element without an owner document'); var value=doc.createElement(name); var tracker=globalThis[Symbol.for('kokaine.dom.shadow-roots')]; if(tracker && tracker.known) tracker.known.add(value); return value; })(#1,#2)"
 
 extern dom-create-text(value : string) : ui node
   js inline "document.createTextNode(#1)"
@@ -132,6 +175,43 @@ extern dom-insert-marker-pair-before(parent : node, first : node, last : node,
                                      before : node) : ui ()
   js inline "(function(){ var rangeFirst=#2; var rangeLast=#3; var fragment=document.createDocumentFragment(); fragment.appendChild(rangeFirst); fragment.appendChild(rangeLast); try { (#1).insertBefore(fragment,#4); } catch(error) { try { if(rangeFirst.parentNode) Node.prototype.removeChild.call(rangeFirst.parentNode,rangeFirst); } catch(_) {} try { if(rangeLast.parentNode) Node.prototype.removeChild.call(rangeLast.parentNode,rangeLast); } catch(_) {} throw error; } })()"
 
+extern dom-same-node(left : node, right : node) : bool
+  js inline "(#1 === #2)"
+
+// Validate a complete managed range before exposing either cursor.  The DOM
+// can be mutated by application JavaScript, custom-element callbacks, or test
+// fault injection, so reconciliation never trusts retained marker handles.
+extern dom-range-first(parent : node, first : node, last : node) : ui node
+  js inline "(function(rangeParent,rangeFirst,rangeLast){ if(!rangeParent || !rangeFirst || !rangeLast || rangeFirst===rangeLast || rangeFirst.parentNode!==rangeParent || rangeLast.parentNode!==rangeParent){ throw new Error('invalid Kokaine DOM range: endpoints do not share the expected parent'); } var n=rangeFirst; while(n && n!==rangeLast) n=n.nextSibling; if(n!==rangeLast){ throw new Error('invalid Kokaine DOM range: closing marker is not reachable after opening marker'); } return rangeFirst.nextSibling; })(#1,#2,#3)"
+
+extern dom-range-next(parent : node, first : node, last : node) : ui node
+  js inline "(function(rangeParent,rangeFirst,rangeLast){ if(!rangeParent || !rangeFirst || !rangeLast || rangeFirst===rangeLast || rangeFirst.parentNode!==rangeParent || rangeLast.parentNode!==rangeParent){ throw new Error('invalid Kokaine DOM range: endpoints do not share the expected parent'); } var n=rangeFirst; while(n && n!==rangeLast) n=n.nextSibling; if(n!==rangeLast){ throw new Error('invalid Kokaine DOM range: closing marker is not reachable after opening marker'); } var next=rangeLast.nextSibling; if(!next){ throw new Error('invalid Kokaine keyed DOM range: row has no following boundary'); } return next; })(#1,#2,#3)"
+
+// Move one inclusive row range with verified host operations.  Validation is
+// deliberately complete before extraction.  Custom-element-shaped nodes,
+// opaque shadow hosts, and opaque focused subtrees fail before movement because
+// their synchronous or hidden state cannot be published atomically.  If
+// extraction, insertion,
+// focus restoration, or a commit-then-throw host primitive fails, every
+// snapshotted node is pulled back before the original successor through the
+// same-realm parent prototype.  No node is cloned, so ordinary object identity,
+// listeners, form values, and owner registrations are retained.
+extern dom-validate-range-move-lifecycle(parent : node, first : node,
+                                         last : node) : ui ()
+  js inline "(function(rangeParent,rangeFirst,rangeLast){ var doc=rangeParent && (rangeParent.nodeType===9 ? rangeParent : rangeParent.ownerDocument); var view=doc && doc.defaultView; var tracker=globalThis[Symbol.for('kokaine.dom.shadow-roots')]; var state=view && tracker && tracker.realms && tracker.realms.get(view); var prototype=view && view.Element && view.Element.prototype; var intact=state && state.prototype===prototype && (state.wrapper ? prototype.attachShadow===state.wrapper : typeof prototype.attachShadow!=='function'); if(!tracker || tracker.version!==1 || !tracker.known || !tracker.closed || !state || !intact) throw new Error('cannot safely move keyed row: shadow-root tracking is unavailable'); var documentPrototype=view.Document && view.Document.prototype; var createElement=documentPrototype && documentPrototype.createElement; var createElementNS=documentPrototype && documentPrototype.createElementNS; var outerHTMLDescriptor=prototype && Object.getOwnPropertyDescriptor(prototype,'outerHTML'); var serializeOuterHTML=outerHTMLDescriptor && outerHTMLDescriptor.get; if(typeof createElement!=='function' || typeof createElementNS!=='function' || typeof serializeOuterHTML!=='function') throw new Error('cannot safely move keyed row: native element inspection is unavailable'); function canHostShadow(element){ var name=element.localName || ''; return name.indexOf('-')>=0 || ['article','aside','blockquote','body','div','footer','h1','h2','h3','h4','h5','h6','header','main','nav','p','section','span'].indexOf(name)>=0; } function hasCustomPrototype(element){ var name=element.localName || ''; if(name.indexOf('-')>=0) return true; var namespace=element.namespaceURI; var baseline=namespace ? createElementNS.call(doc,namespace,name) : createElement.call(doc,name); return Object.getPrototypeOf(element)!==Object.getPrototypeOf(baseline); } function hasSerializedIsValue(element){ var serialized=serializeOuterHTML.call(element); var end=serialized.indexOf('>'); return end>=0 && serialized.slice(0,end).indexOf(' is=\"')>=0; } var pending=[]; var n=rangeFirst; while(n){ pending.push(n); if(n===rangeLast) break; n=n.nextSibling; } if(n!==rangeLast) throw new Error('invalid Kokaine DOM move: closing marker is not reachable after opening marker'); while(pending.length){ var current=pending.pop(); if(current && current.nodeType===1){ if(!(current instanceof view.Element)) throw new Error('cannot safely move keyed row: foreign-realm element lifecycle state is opaque'); var customized=current.getAttribute('is'); if(customized || hasCustomPrototype(current) || hasSerializedIsValue(current)) throw new Error('cannot safely move keyed row: custom-element move callbacks are synchronous and cannot be atomically published'); if(tracker.closed.has(current)) throw new Error('cannot safely move keyed row: closed shadow roots are opaque'); if(state.wrapper && !current.shadowRoot && canHostShadow(current) && !tracker.known.has(current)) throw new Error('cannot safely move keyed row: an external shadow host may contain an untracked closed root'); } var children=current && current.childNodes ? Array.prototype.slice.call(current.childNodes) : []; if(current && current.shadowRoot) children=children.concat(Array.prototype.slice.call(current.shadowRoot.childNodes)); for(var i=0;i<children.length;i++) pending.push(children[i]); } })(#1,#2,#3)"
+
+extern dom-validate-range-move-focus(parent : node, first : node,
+                                     last : node) : ui ()
+  js inline "(function(rangeParent,rangeFirst,rangeLast){ var rangeDocument=rangeParent && (rangeParent.nodeType===9 ? rangeParent : rangeParent.ownerDocument); var rangeView=rangeDocument && rangeDocument.defaultView; if(!rangeDocument || !rangeView) throw new Error('cannot inspect keyed-row focus outside a DOM realm'); function movePrimitive(parent){ if(rangeView.Document && parent instanceof rangeView.Document && typeof rangeView.Document.prototype.moveBefore==='function') return rangeView.Document.prototype.moveBefore; if(rangeView.DocumentFragment && parent instanceof rangeView.DocumentFragment && typeof rangeView.DocumentFragment.prototype.moveBefore==='function') return rangeView.DocumentFragment.prototype.moveBefore; if(rangeView.Element && parent instanceof rangeView.Element && typeof rangeView.Element.prototype.moveBefore==='function') return rangeView.Element.prototype.moveBefore; return null; } var primitive=movePrimitive(rangeParent); if(primitive && rangeParent.moveBefore===primitive) return; var pending=[]; var all=[]; var n=rangeFirst; while(n){ pending.push(n); if(n===rangeLast) break; n=n.nextSibling; } if(n!==rangeLast) throw new Error('invalid Kokaine DOM move: closing marker is not reachable after opening marker'); while(pending.length){ var current=pending.pop(); all.push(current); var children=current && current.childNodes ? Array.prototype.slice.call(current.childNodes) : []; if(current && current.shadowRoot) children=children.concat(Array.prototype.slice.call(current.shadowRoot.childNodes)); for(var i=0;i<children.length;i++) pending.push(children[i]); } var active=rangeDocument.activeElement; while(active && active.shadowRoot && active.shadowRoot.activeElement) active=active.shadowRoot.activeElement; if(!active || all.indexOf(active)<0) return; if(active.localName==='iframe') throw new Error('cannot safely move keyed row: fallback DOM moves cannot inspect the focused subtree'); if(typeof active.selectionStart==='number' && typeof active.selectionEnd==='number') return; var selectionRoot=active.getRootNode ? active.getRootNode() : rangeDocument; if(selectionRoot && selectionRoot.host && typeof selectionRoot.getSelection!=='function') throw new Error('cannot safely move keyed row: this browser cannot inspect shadow-root selections'); var selection=selectionRoot && typeof selectionRoot.getSelection==='function' ? selectionRoot.getSelection() : rangeDocument.getSelection(); if(selection && selection.rangeCount>0 && typeof selection.setBaseAndExtent!=='function') throw new Error('cannot safely move keyed row: this browser cannot restore directional DOM selections'); })(#1,#2,#3)"
+
+extern dom-capture-range-focus(parent : node, first : node,
+                               last : node) : ui any
+  js inline "(function(rangeParent,rangeFirst,rangeLast){ var rangeDocument=rangeParent && (rangeParent.nodeType===9 ? rangeParent : rangeParent.ownerDocument); if(!rangeDocument) throw new Error('cannot capture keyed-row focus without an owner document'); var nodes=[]; var n=rangeFirst; while(n){ nodes.push(n); if(n===rangeLast) break; n=n.nextSibling; } if(n!==rangeLast) throw new Error('invalid Kokaine DOM move: closing marker is not reachable after opening marker'); function deepActive(){ var active=rangeDocument.activeElement; while(active && active.shadowRoot && active.shadowRoot.activeElement) active=active.shadowRoot.activeElement; return active; } function composedParent(node){ if(!node) return null; if(node.parentNode) return node.parentNode; var tree=node.getRootNode ? node.getRootNode() : null; return tree && tree.host ? tree.host : null; } function belongs(node){ var current=node; while(current){ if(nodes.indexOf(current)>=0) return true; current=composedParent(current); } return false; } function sameControlSelection(active,selection){ return active.selectionStart===selection[0] && active.selectionEnd===selection[1] && active.selectionDirection===selection[2]; } function sameDomSelection(selection,snapshot){ return selection.anchorNode===snapshot[0] && selection.anchorOffset===snapshot[1] && selection.focusNode===snapshot[2] && selection.focusOffset===snapshot[3]; } var active=deepActive(); var ownsFocus=!!active && belongs(active); var controlSelection=null; var domSelection=null; if(ownsFocus && typeof active.selectionStart==='number' && typeof active.selectionEnd==='number'){ controlSelection=[active.selectionStart,active.selectionEnd,active.selectionDirection]; } else if(ownsFocus){ var selectionRoot=active.getRootNode ? active.getRootNode() : rangeDocument; var selection=selectionRoot && typeof selectionRoot.getSelection==='function' ? selectionRoot.getSelection() : rangeDocument.getSelection(); if(selection && selection.rangeCount>0 && belongs(selection.anchorNode) && belongs(selection.focusNode)){ domSelection=[selection.anchorNode,selection.anchorOffset,selection.focusNode,selection.focusOffset]; } } return { restore:function(){ if(!ownsFocus) return; if(!active.isConnected) throw new Error('cannot restore keyed-row focus: the focused node was detached'); if(deepActive()!==active){ if(typeof active.focus!=='function') throw new Error('cannot restore keyed-row focus: the focused node is not focusable'); try { active.focus({ preventScroll:true }); } catch(_) { active.focus(); } if(deepActive()!==active) throw new Error('cannot restore keyed-row focus: focus restoration did not take effect'); } if(controlSelection){ if(typeof active.setSelectionRange!=='function') throw new Error('cannot restore keyed-row selection: the focused control has no selection API'); if(!sameControlSelection(active,controlSelection)) active.setSelectionRange(controlSelection[0],controlSelection[1],controlSelection[2]); if(!sameControlSelection(active,controlSelection)) throw new Error('cannot restore keyed-row selection: control selection restoration did not take effect'); } else if(domSelection){ if(!domSelection[0].isConnected || !domSelection[2].isConnected) throw new Error('cannot restore keyed-row selection: a selection endpoint was detached'); var selectionRoot=active.getRootNode ? active.getRootNode() : rangeDocument; var selection=selectionRoot && typeof selectionRoot.getSelection==='function' ? selectionRoot.getSelection() : rangeDocument.getSelection(); if(!selection || typeof selection.setBaseAndExtent!=='function') throw new Error('cannot restore keyed-row selection: the directional selection API is unavailable'); if(!sameDomSelection(selection,domSelection)) selection.setBaseAndExtent(domSelection[0],domSelection[1],domSelection[2],domSelection[3]); if(!sameDomSelection(selection,domSelection)) throw new Error('cannot restore keyed-row selection: DOM selection restoration did not take effect'); } } }; })(#1,#2,#3)"
+
+extern dom-move-range-before(parent : node, first : node, last : node,
+                             before : node, focus : any) : ui ()
+  js inline "(function(rangeParent,rangeFirst,rangeLast,target,focusState){ if(!rangeParent || !rangeFirst || !rangeLast || !target || rangeFirst===rangeLast || rangeFirst.parentNode!==rangeParent || rangeLast.parentNode!==rangeParent || target.parentNode!==rangeParent){ throw new Error('invalid Kokaine DOM move: range and target must share the expected parent'); } var rangeDocument=rangeParent.nodeType===9 ? rangeParent : rangeParent.ownerDocument; var rangeView=rangeDocument && rangeDocument.defaultView; if(!rangeDocument || !rangeView || !rangeView.Node) throw new Error('cannot move a keyed row outside a DOM realm'); var nodePrototype=rangeView.Node.prototype; function movePrimitive(parent){ if(rangeView.Document && parent instanceof rangeView.Document && typeof rangeView.Document.prototype.moveBefore==='function') return rangeView.Document.prototype.moveBefore; if(rangeView.DocumentFragment && parent instanceof rangeView.DocumentFragment && typeof rangeView.DocumentFragment.prototype.moveBefore==='function') return rangeView.DocumentFragment.prototype.moveBefore; if(rangeView.Element && parent instanceof rangeView.Element && typeof rangeView.Element.prototype.moveBefore==='function') return rangeView.Element.prototype.moveBefore; return null; } var nodes=[]; var n=rangeFirst; while(n){ nodes.push(n); if(n===rangeLast) break; n=n.nextSibling; } if(n!==rangeLast){ throw new Error('invalid Kokaine DOM move: closing marker is not reachable after opening marker'); } if(nodes.indexOf(target)>=0){ throw new Error('invalid Kokaine DOM move: target lies inside the moved range'); } if(rangeLast.nextSibling===target) return; var originalNext=rangeLast.nextSibling; var nativeMove=movePrimitive(rangeParent); var preserveMoves=!!nativeMove && rangeParent.moveBefore===nativeMove; function restoreFocus(){ if(focusState && typeof focusState.restore==='function') focusState.restore(); } function gather(values){ var fragment=rangeDocument.createDocumentFragment(); for(var i=0;i<values.length;i++) nodePrototype.appendChild.call(fragment,values[i]); return fragment; } function place(anchor){ if(preserveMoves){ for(var i=0;i<nodes.length;i++) nativeMove.call(rangeParent,nodes[i],anchor); } else { rangeParent.insertBefore(gather(nodes),anchor); } } function detachMoved(){ var passes=Math.max(2,nodes.length+2); while(passes-- > 0){ var attached=false; for(var i=0;i<nodes.length;i++){ var parent=nodes[i].parentNode; if(parent){ attached=true; nodePrototype.removeChild.call(parent,nodes[i]); } } if(!attached) return; } throw new Error('a retired keyed range was synchronously reinserted'); } function verify(anchor){ for(var i=0;i<nodes.length;i++){ if(nodes[i].parentNode!==rangeParent) throw new Error('a moved node escaped its keyed range'); if(i>0 && nodes[i-1].nextSibling!==nodes[i]) throw new Error('the keyed range became non-contiguous'); } if(nodes[nodes.length-1].nextSibling!==anchor) throw new Error('the keyed range was not placed at its requested boundary'); } function rollback(){ if(originalNext && originalNext.parentNode!==rangeParent){ detachMoved(); throw new Error('the original keyed range successor was detached'); } var anchor=originalNext || null; if(preserveMoves){ for(var i=0;i<nodes.length;i++) nativeMove.call(rangeParent,nodes[i],anchor); } else { nodePrototype.insertBefore.call(rangeParent,gather(nodes),anchor); } restoreFocus(); verify(anchor); } try { place(target); restoreFocus(); verify(target); } catch(error) { try { rollback(); } catch(rollbackError) { throw new Error(String(error && error.message != null ? error.message : error) + '; keyed DOM move rollback failed: ' + String(rollbackError && rollbackError.message != null ? rollbackError.message : rollbackError)); } throw error; } })(#1,#2,#3,#4,#5)"
+
 extern dom-set-text(value : node, content : string) : ui ()
   js inline "((#1).data = #2)"
 
@@ -154,22 +234,25 @@ extern dom-set-int-property(value : element, name : string,
                             content : string) : ui ()
   js inline "((#1)[#2] = Number(#3))"
 
-extern dom-clear-between(first : node, last : node) : ui ()
-  js inline "(function(){ var rangeFirst=#1; var rangeLast=#2; var firstParent=rangeFirst && rangeFirst.parentNode; var lastParent=rangeLast && rangeLast.parentNode; if(!firstParent && !lastParent) return; if(!firstParent || firstParent!==lastParent || rangeFirst===rangeLast){ throw new Error('invalid Kokaine DOM range: endpoints do not share a parent'); } var nodes=[]; var n=rangeFirst.nextSibling; while(n && n!==rangeLast){ nodes.push(n); n=n.nextSibling; } if(n!==rangeLast){ throw new Error('invalid Kokaine DOM range: closing marker is not reachable after opening marker'); } var passes=Math.max(2,nodes.length+2); while(passes-- > 0){ var attached=false; for(var i=0;i<nodes.length;i++){ var parent=nodes[i].parentNode; if(parent){ attached=true; Node.prototype.removeChild.call(parent,nodes[i]); } } if(!attached) return; } for(var j=0;j<nodes.length;j++){ if(nodes[j].parentNode){ throw new Error('invalid Kokaine DOM cleanup: a removed node was synchronously reinserted'); } } })()"
+extern dom-clean-range(first : node, last : node, inclusive : bool) : ui ()
+  js inline "(function(){ var rangeFirst=#1; var rangeLast=#2; var includeEndpoints=#3; var firstParent=rangeFirst && rangeFirst.parentNode; var lastParent=rangeLast && rangeLast.parentNode; if(!firstParent && !lastParent) return; if(!firstParent || firstParent!==lastParent || rangeFirst===rangeLast){ throw new Error('invalid Kokaine DOM range: endpoints do not share a parent'); } var roots=[]; var n=includeEndpoints ? rangeFirst : rangeFirst.nextSibling; while(n && n!==rangeLast){ roots.push(n); n=n.nextSibling; } if(n!==rangeLast){ throw new Error('invalid Kokaine DOM range: closing marker is not reachable after opening marker'); } if(includeEndpoints) roots.push(rangeLast); var descendants=[]; var pending=roots.slice(); while(pending.length){ var current=pending.pop(); var children=current && current.childNodes ? Array.prototype.slice.call(current.childNodes) : []; if(current && current.shadowRoot) children=children.concat(Array.prototype.slice.call(current.shadowRoot.childNodes)); for(var i=0;i<children.length;i++){ descendants.push(children[i]); pending.push(children[i]); } } function retained(node){ var current=node; while(current){ for(var i=0;i<roots.length;i++){ if(roots[i]===current || Node.prototype.contains.call(roots[i],current)) return true; } var tree=current.getRootNode ? current.getRootNode() : null; current=tree && tree.host ? tree.host : null; } return false; } var passes=Math.max(2,roots.length+descendants.length+2); while(passes-- > 0){ var attached=false; for(var i=0;i<roots.length;i++){ var parent=roots[i].parentNode; if(parent){ attached=true; Node.prototype.removeChild.call(parent,roots[i]); } } for(var j=0;j<descendants.length;j++){ var childParent=descendants[j].parentNode; if(childParent && !retained(descendants[j])){ attached=true; Node.prototype.removeChild.call(childParent,descendants[j]); } } if(!attached) return; } for(var i=0;i<roots.length;i++){ if(roots[i].parentNode){ throw new Error('invalid Kokaine DOM cleanup: a removed node was synchronously reinserted'); } } for(var j=0;j<descendants.length;j++){ if(descendants[j].parentNode && !retained(descendants[j])){ throw new Error('invalid Kokaine DOM cleanup: a removed descendant escaped its range'); } } })()"
 
-extern dom-remove-range(first : node, last : node) : ui ()
-  js inline "(function(){ var rangeFirst=#1; var rangeLast=#2; var firstParent=rangeFirst && rangeFirst.parentNode; var lastParent=rangeLast && rangeLast.parentNode; if(!firstParent && !lastParent) return; if(!firstParent || firstParent!==lastParent || rangeFirst===rangeLast){ throw new Error('invalid Kokaine DOM range: endpoints do not share a parent'); } var nodes=[]; var n=rangeFirst; while(n && n!==rangeLast){ nodes.push(n); n=n.nextSibling; } if(n!==rangeLast){ throw new Error('invalid Kokaine DOM range: closing marker is not reachable after opening marker'); } nodes.push(rangeLast); var passes=Math.max(2,nodes.length+2); while(passes-- > 0){ var attached=false; for(var i=0;i<nodes.length;i++){ var parent=nodes[i].parentNode; if(parent){ attached=true; Node.prototype.removeChild.call(parent,nodes[i]); } } if(!attached) return; } for(var j=0;j<nodes.length;j++){ if(nodes[j].parentNode){ throw new Error('invalid Kokaine DOM cleanup: a removed node was synchronously reinserted'); } } })()"
+fun dom-clear-between(first : node, last : node) : ui ()
+  dom-clean-range(first,last,False)
+
+fun dom-remove-range(first : node, last : node) : ui ()
+  dom-clean-range(first,last,True)
 
 extern dom-append-html(parent : node, content : string,
                        root : root<e>, portal : reentry<e>)
                       : ui dom-owner-registration
-  js inline "(function(){ var template=document.createElement('template'); template.innerHTML=#2; var key=Symbol.for('kokaine.dom.owners'); var registry=globalThis[key]; if(!registry || !registry.owners || !registry.roots){ registry={ owners:new WeakMap(), roots:new WeakMap(), nextId:1 }; globalThis[key]=registry; } var ownerId=registry.roots.get(#3); if(ownerId==null){ ownerId=registry.nextId++; registry.roots.set(#3,ownerId); } var handles=[]; Array.from(template.content.childNodes).forEach(function(child){ var entry={ ownerId:ownerId, portal:#4, retired:false }; registry.owners.set(child,entry); handles.push({ node:child, ownerId:ownerId, entry:entry }); }); try { (#1).appendChild(template.content); return handles; } catch(error) { handles.forEach(function(handle){ var entry=handle.entry; if(entry){ entry.portal=null; entry.retired=true; } if(registry.owners.get(handle.node)===entry) registry.owners.set(handle.node,entry); handle.node=null; handle.entry=null; }); throw error; } })()"
+  js inline "(function(parent){ var doc=parent && (parent.nodeType===9 ? parent : parent.ownerDocument); if(!doc) throw new Error('cannot create Kokaine trusted HTML without an owner document'); var template=doc.createElement('template'); template.innerHTML=#2; var tracker=globalThis[Symbol.for('kokaine.dom.shadow-roots')]; if(!tracker || typeof tracker.remember!=='function') throw new Error('cannot register Kokaine trusted HTML without shadow-root tracking'); tracker.remember(template.content); var key=Symbol.for('kokaine.dom.owners'); var registry=globalThis[key]; if(!registry || !registry.owners || !registry.roots){ registry={ owners:new WeakMap(), roots:new WeakMap(), nextId:1 }; globalThis[key]=registry; } var ownerId=registry.roots.get(#3); if(ownerId==null){ ownerId=registry.nextId++; registry.roots.set(#3,ownerId); } var handles=[]; Array.from(template.content.childNodes).forEach(function(child){ var entry={ ownerId:ownerId, portal:#4, retired:false }; registry.owners.set(child,entry); handles.push({ node:child, ownerId:ownerId, entry:entry }); }); try { parent.appendChild(template.content); return handles; } catch(error) { handles.forEach(function(handle){ var entry=handle.entry; if(entry){ entry.portal=null; entry.retired=true; } if(registry.owners.get(handle.node)===entry) registry.owners.set(handle.node,entry); handle.node=null; handle.entry=null; }); throw error; } })(#1)"
 
 extern dom-insert-html-before(parent : node, before : node,
                               content : string, root : root<e>,
                               portal : reentry<e>)
                              : ui dom-owner-registration
-  js inline "(function(){ var template=document.createElement('template'); template.innerHTML=#3; var key=Symbol.for('kokaine.dom.owners'); var registry=globalThis[key]; if(!registry || !registry.owners || !registry.roots){ registry={ owners:new WeakMap(), roots:new WeakMap(), nextId:1 }; globalThis[key]=registry; } var ownerId=registry.roots.get(#4); if(ownerId==null){ ownerId=registry.nextId++; registry.roots.set(#4,ownerId); } var handles=[]; Array.from(template.content.childNodes).forEach(function(child){ var entry={ ownerId:ownerId, portal:#5, retired:false }; registry.owners.set(child,entry); handles.push({ node:child, ownerId:ownerId, entry:entry }); }); try { (#1).insertBefore(template.content,#2); return handles; } catch(error) { handles.forEach(function(handle){ var entry=handle.entry; if(entry){ entry.portal=null; entry.retired=true; } if(registry.owners.get(handle.node)===entry) registry.owners.set(handle.node,entry); handle.node=null; handle.entry=null; }); throw error; } })()"
+  js inline "(function(parent,before){ var doc=parent && (parent.nodeType===9 ? parent : parent.ownerDocument); if(!doc) throw new Error('cannot create Kokaine trusted HTML without an owner document'); var template=doc.createElement('template'); template.innerHTML=#3; var tracker=globalThis[Symbol.for('kokaine.dom.shadow-roots')]; if(!tracker || typeof tracker.remember!=='function') throw new Error('cannot register Kokaine trusted HTML without shadow-root tracking'); tracker.remember(template.content); var key=Symbol.for('kokaine.dom.owners'); var registry=globalThis[key]; if(!registry || !registry.owners || !registry.roots){ registry={ owners:new WeakMap(), roots:new WeakMap(), nextId:1 }; globalThis[key]=registry; } var ownerId=registry.roots.get(#4); if(ownerId==null){ ownerId=registry.nextId++; registry.roots.set(#4,ownerId); } var handles=[]; Array.from(template.content.childNodes).forEach(function(child){ var entry={ ownerId:ownerId, portal:#5, retired:false }; registry.owners.set(child,entry); handles.push({ node:child, ownerId:ownerId, entry:entry }); }); try { parent.insertBefore(template.content,before); return handles; } catch(error) { handles.forEach(function(handle){ var entry=handle.entry; if(entry){ entry.portal=null; entry.retired=true; } if(registry.owners.get(handle.node)===entry) registry.owners.set(handle.node,entry); handle.node=null; handle.entry=null; }); throw error; } })(#1,#2)"
 
 extern dom-listen(value : element, name : string,
                   action : raw-event -> <ui|e> ()) : ui dom-listener
@@ -424,6 +507,22 @@ fun reactive-ui-exn-open(action : () -> <ui,exn|e> a)
                          : <signal-write,pure,ui|e> a
   mask<signal-write>{ mask<div>{ action() } }
 
+// Row renderers are sampled once while their live closures retain the item and
+// index accessors.  Widen the handled sample back to the DOM apply row so Koka
+// does not prematurely close a surrounding structural-owner action at `<ui>`.
+fun reactive-sample(root : root<<ui|e>>,
+                    action : () -> <signal-read,pure> a)
+                   : <signal-write,pure,ui|e> a
+  mask<signal-write>{ mask<div>{ sample(root,action) } }
+
+fun reactive-write-ui(action : () -> signal-write a)
+                     : <signal-write,pure,ui|e> a
+  mask<ui>{ mask<exn>{ mask<div>{ action() } } }
+
+fun reactive-structural(action : () -> <div,exn,ui|e> a)
+                       : <signal-write,pure,ui|e> a
+  mask<signal-write>{ action() }
+
 fun insert(parent : node, before : maybe<node>, child : node) : <ui,exn> ()
   match before
     Nothing -> dom-attempt{ dom-append(parent,child) }
@@ -435,6 +534,27 @@ fun insert-marker-pair(parent : node, before : maybe<node>,
     Nothing -> dom-attempt{ dom-append-marker-pair(parent,first,last) }
     Just(anchor) ->
       dom-attempt{ dom-insert-marker-pair-before(parent,first,last,anchor) }
+
+fun range-first(parent : node, first : node, last : node) : <ui,exn> node
+  dom-attempt{ dom-range-first(parent,first,last) }
+
+fun range-next(parent : node, first : node, last : node) : <ui,exn> node
+  dom-attempt{ dom-range-next(parent,first,last) }
+
+fun move-range-before(parent : node, first : node, last : node,
+                      before : node) : <ui,exn> ()
+  validate-range-move-lifecycle(parent,first,last)
+  val focus = dom-attempt{ dom-capture-range-focus(parent,first,last) }
+  dom-attempt{ dom-move-range-before(parent,first,last,before,focus) }
+
+fun validate-range-move-lifecycle(parent : node, first : node, last : node)
+                                  : <ui,exn> ()
+  dom-attempt{
+    dom-validate-range-move-lifecycle(parent,first,last)
+  }
+  dom-attempt{
+    dom-validate-range-move-focus(parent,first,last)
+  }
 
 fun retire-owner-registration(value : dom-owner-registration) : <ui,exn> ()
   dom-attempt{ dom-retire-owners(value) }
@@ -614,6 +734,432 @@ fun mount-attribute(root : root<<ui|e>>, target : element,
         install-event-listener(root,target,name,action)
       }
 
+// --------------------------------------------------------------------------
+// Incremental keyed regions
+// --------------------------------------------------------------------------
+
+fun throw-keyed-row-failure(
+      failure : ref<global,error<()>>) : exn ()
+  transaction-load(failure).untry
+
+fun run-keyed-row-actions<a,k,rowe::E,p::E>(
+      rows : list<keyed-row<rowe,a,k>>,
+      action : (keyed-row<rowe,a,k>) -> <exn|p> (),
+      failure : ref<global,error<()>>)
+    : <exn|p> ()
+  match rows
+    Nil -> ()
+    Cons(row,rest) ->
+      val completed = transaction-cell(False)
+      finally(
+        fn() {
+          if transaction-load(completed) then () else
+            // A final control operation never returns through `error/try`.
+            // Finish the remaining actions in its dynamic cleanup, and let a
+            // later modeled exception override that control just as nested
+            // `finally` did before this loop became stack-safe.
+            run-keyed-row-actions(rest,action,failure)
+            throw-keyed-row-failure(failure)
+        },
+        fn() mask<exn>{
+          // Preserve only the latest modeled failure. Clearing the earlier
+          // one first is essential when this action performs final control:
+          // an older exception must not spuriously replace that control.
+          val previous = transaction-load(failure)
+          transaction-store(failure,Ok(()))
+          match error/try(fn() action(row))
+            Error(problem) -> transaction-store(failure,Error(problem))
+            Ok(_) -> transaction-store(failure,previous)
+          transaction-store(completed,True)
+        }
+      )
+      run-keyed-row-actions(rest,action,failure)
+
+fun exhaust-keyed-row-actions<a,k,rowe::E,p::E>(
+      rows : list<keyed-row<rowe,a,k>>,
+      action : (keyed-row<rowe,a,k>) -> <exn|p> ())
+    : <exn|p> ()
+  val failure : ref<global,error<()>> = transaction-cell(Ok(()))
+  run-keyed-row-actions(rows,action,failure)
+  throw-keyed-row-failure(failure)
+
+fun dispose-keyed-rows<a,k,e::E>(rows : list<keyed-row<e,a,k>>)
+                                  : <ui,exn|e> ()
+  // A throwing cleanup cannot prevent later draft/stale rows from retiring.
+  exhaust-keyed-row-actions(rows,fn(row)
+    internal/dispose-structural-owner(row.row-owner)
+  )
+
+fun rollback-keyed-order<a,k,e::E>(parent : node, last : node,
+                         rows : list<keyed-row<e,a,k>>) : <ui,exn> ()
+  // Moving each prior row to the closing boundary in its former order
+  // reconstructs that complete order regardless of the partial draft order.
+  exhaust-keyed-row-actions(rows,fn(row)
+    val next = range-next(parent,row.row-first,row.row-last)
+    if dom-same-node(next,last) then ()
+    else move-range-before(parent,row.row-first,row.row-last,last)
+  )
+
+fun validate-keyed-move-lifecycles<a,k,e::E>(parent : node,
+                         rows : list<keyed-row<e,a,k>>) : <ui,exn> ()
+  rows.foreach fn(row)
+    validate-range-move-lifecycle(parent,row.row-first,row.row-last)
+
+fun validate-keyed-order<a,k,e::E>(parent : node, last : node, cursor : node,
+                         rows : list<keyed-row<e,a,k>>) : <ui,exn> ()
+  match rows
+    Nil ->
+      if dom-same-node(cursor,last) then ()
+      else throw("invalid Kokaine keyed DOM: unmanaged nodes remain in the region")
+    Cons(row,rest) ->
+      if !dom-same-node(cursor,row.row-first)
+      then throw("invalid Kokaine keyed DOM: retained row ranges are out of order")
+      else
+        val next = range-next(parent,row.row-first,row.row-last)
+        validate-keyed-order(parent,last,next,rest)
+
+fun keyed-order-matches<a,k,e::E>(parent : node, last : node, cursor : node,
+                         rows : list<keyed-row<e,a,k>>) : <ui,exn> bool
+  match rows
+    Nil -> dom-same-node(cursor,last)
+    Cons(row,rest) ->
+      if !dom-same-node(cursor,row.row-first) then False
+      else
+        val next = range-next(parent,row.row-first,row.row-last)
+        keyed-order-matches(parent,last,next,rest)
+
+fun place-keyed-updates<a,k,e::E>(parent : node, cursor : node,
+                        updates : list<keyed-update<e,a,k>>)
+                       : <ui,exn> node
+  match updates
+    Nil -> cursor
+    Cons(update,rest) ->
+      val row = update.update-row
+      val next = range-next(parent,row.row-first,row.row-last)
+      if dom-same-node(cursor,row.row-first)
+      then place-keyed-updates(parent,next,rest)
+      else
+        move-range-before(parent,row.row-first,row.row-last,cursor)
+        place-keyed-updates(parent,cursor,rest)
+
+fun collect-stale-rows<a,k,e::E>(rows : list<keyed-row<e,a,k>>,
+                       next : key-index<k,keyed-row<e,a,k>>,
+                       compare : (k,k) -> order)
+                      : list<keyed-row<e,a,k>>
+  match rows
+    Nil -> []
+    Cons(row,rest) ->
+      match next.find(row.row-key,compare)
+        Just(_) -> collect-stale-rows(rest,next,compare)
+        Nothing -> Cons(row,collect-stale-rows(rest,next,compare))
+
+fun commit-keyed-update<a,k,e::E>(update : keyed-update<e,a,k>)
+                                  : signal-write ()
+  val row = update.update-row
+  if update.update-item-changed then
+    row.row-item-source.set(update.update-item)
+    transaction-store(row.row-current-item,update.update-item)
+  else ()
+  if update.update-index-changed then
+    row.row-index-source.set(update.update-index)
+    transaction-store(row.row-current-index,update.update-index)
+  else ()
+
+fun create-keyed-row<a,k,e::E>(
+      root : root<<ui|e>>, parent : node, last : node,
+      identity : k, item : a, index : int,
+      children : (item : accessor<a>, index : accessor<int>)
+                 -> <html<e>,signal-read> ())
+    : <signal-write,ui,pure|e> keyed-row<e,a,k>
+  val owner = internal/open-structural-owner(root)
+  val committed = transaction-cell(False)
+  val installed = transaction-cell(False)
+  val range-owned = transaction-cell(False)
+  finally(
+    fn() {
+      if transaction-load(committed) then ()
+      else reactive-ui-exn-open{
+        internal/dispose-structural-owner(owner)
+      }
+    },
+    fn()
+      internal/with-structural-owner(root,owner,fn()
+        val first = dom-attempt{ dom-create-comment("kokaine:for-row") }
+        val row-last = dom-attempt{ dom-create-comment("/kokaine:for-row") }
+        finally(
+          fn() {
+            // Cover the tiny interval between publishing the pair and parking
+            // its owner cleanup.  The pair insertion primitive compensates a
+            // commit-then-throw before `installed` can become true.
+            if transaction-load(installed) &&
+               !transaction-load(range-owned)
+            then reactive-ui-exn{
+              dom-attempt{ dom-remove-range(first,row-last) }
+            }
+            else ()
+          },
+          fn()
+            insert-marker-pair(parent,Just(last),first,row-last)
+            transaction-store(installed,True)
+            on-cleanup(root,fn()
+              reactive-ui-exn{
+                dom-attempt{ dom-remove-range(first,row-last) }
+              }
+            )
+            transaction-store(range-owned,True)
+
+            // The reconciler performs item equality before committing.  These
+            // sources therefore use a total always-publish equality and are
+            // written only for values already known to have changed.
+            val item-source = signal-always(root,item)
+            val index-source = signal-always(root,index)
+            val tree = reactive-sample(root,fn()
+              view fn()
+                children(fn() item-source.get,fn() index-source.get)
+            )
+            mount-view(root,parent,Just(row-last),tree)
+            // Keep descendant bootstrap capabilities queued until every draft
+            // row is reachable from the reconciler's rollback ledger.  The
+            // reconciler settles all draft owners as one targeted set.
+            val row = Keyed-row(
+              identity,transaction-cell(item),transaction-cell(index),
+              item-source,index-source,owner,first,row-last)
+            transaction-store(committed,True)
+            row
+        )
+      )
+  )
+
+fun reconcile-keyed<a,k,e::E>(
+      root : root<<ui|e>>, parent : node, first : node, last : node,
+      owner : structural-owner<<ui|e>>,
+      table : ref<global,keyed-table<e,a,k>>, items : list<a>,
+      key : (a) -> k,
+      compare : (k,k) -> order, item-equals : (a,a) -> bool,
+      children : (item : accessor<a>, index : accessor<int>)
+                 -> <html<e>,signal-read> ())
+    : <signal-write,ui,pure|e> ()
+  match transaction-load(table)
+    Keyed-table(old-index,old-order) ->
+      // The outermost reconciler owns a local bootstrap transaction. A keyed
+      // adapter reached recursively during that drain borrows the same groups;
+      // only the outer lease can commit or abort them.
+      val transaction = reactive-structural{
+        internal/open-structural-transaction(root)
+      }
+      val next-index = transaction-cell(
+        kokaine/internal/key-index/empty())
+      val updates = transaction-cell([])
+      val drafts = transaction-cell([])
+      val position = transaction-cell(0)
+      val move-phase = transaction-cell(False)
+      val committed = transaction-cell(False)
+      finally(
+        fn() {
+          if transaction-load(committed) then () else
+            // Claim every transaction-owned bootstrap before user cleanup can
+            // re-enter. Draft owners and DOM order are then retired/restored
+            // exhaustively even if one cleanup fails.
+            reactive-ui-exn-open{
+              finally(
+                fn() {
+                  if transaction-load(move-phase)
+                  then rollback-keyed-order(parent,last,old-order)
+                  else ()
+                },
+                fn()
+                  finally(
+                    fn() dispose-keyed-rows(transaction-load(drafts)),
+                    fn() internal/abort-structural-transaction(transaction)
+                  )
+              )
+            }
+        },
+          fn()
+          val old-cursor = range-first(parent,first,last)
+          validate-keyed-order(parent,last,old-cursor,old-order)
+
+          // Reject the complete key set before creating or connecting a draft
+          // row. Lifecycle callbacks are externally observable and cannot be
+          // rolled back after a later duplicate is discovered.
+          val seen-identities = transaction-cell(
+            kokaine/internal/key-index/empty())
+          val keyed-items = transaction-cell([])
+          items.foreach fn(item)
+            val identity = key(item)
+            match transaction-load(seen-identities).insert(
+                    identity,identity,compare)
+              Duplicate(_) -> throw("duplicate key in keyed For")
+              Inserted(next) ->
+                transaction-store(seen-identities,next)
+                transaction-store(keyed-items,
+                  Cons((item,identity),transaction-load(keyed-items)))
+
+          transaction-load(keyed-items).reverse.foreach fn(keyed-item)
+            val (item,identity) = keyed-item
+            val current-index = transaction-load(position)
+            val (row,item-changed) =
+              match old-index.find(identity,compare)
+                Just(existing) ->
+                  (existing,
+                   !item-equals(transaction-load(existing.row-current-item),
+                                item))
+                Nothing ->
+                  val draft = create-keyed-row(
+                    root,parent,last,identity,item,current-index,children)
+                  // Publish the draft handle before another fallible comparison
+                  // so final-control and comparator failure can always reach it.
+                  transaction-store(drafts,
+                    Cons(draft,transaction-load(drafts)))
+                  (draft,False)
+
+            match transaction-load(next-index).insert(
+                    identity,row,compare)
+              Duplicate(_) -> throw("duplicate key in keyed For")
+              Inserted(next) -> transaction-store(next-index,next)
+
+            val update = Keyed-update(
+              row,item,current-index,item-changed,
+              transaction-load(row.row-current-index) != current-index)
+            transaction-store(updates,
+              Cons(update,transaction-load(updates)))
+            transaction-store(position,current-index + 1)
+
+          val final-updates = transaction-load(updates).reverse
+          val final-index = transaction-load(next-index)
+          // Comparator failures while finding stale rows still happen before
+          // the first move, so the old DOM and sources remain untouched.
+          val stale = collect-stale-rows(old-order,final-index,compare)
+          val final-order = final-updates.map(fn(update) update.update-row)
+
+          // Every draft is now rollback-reachable and all comparator work has
+          // succeeded. Drain only this transaction's bootstrap FIFO; resume
+          // work remains on the root's global frontier.
+          reactive-structural{
+            internal/drain-structural-transaction(transaction)
+          }
+
+          // Fail closed before the first physical move if a retained custom
+          // element would receive synchronous disconnect/reconnect callbacks.
+          val current-cursor = range-first(parent,first,last)
+          if keyed-order-matches(
+               parent,last,current-cursor,final-order ++ stale)
+          then ()
+          else validate-keyed-move-lifecycles(parent,final-order)
+          transaction-store(move-phase,True)
+          val cursor = range-first(parent,first,last)
+          val _ = place-keyed-updates(parent,cursor,final-updates)
+
+          // Moving a row may synchronously reconnect custom elements.  Validate
+          // the complete region after those callbacks and before publishing any
+          // owner, source, or table state.
+          val placed = range-first(parent,first,last)
+          validate-keyed-order(parent,last,placed,final-order ++ stale)
+
+          // A synchronous host callback can retire the parent while a fallback
+          // fragment move is in progress.  Re-entering validates the persistent
+          // frame once more before any source/table publication.
+          reactive-structural{
+            internal/with-structural-owner(root,owner,fn() ())
+          }
+
+          // Reconciliation is itself an effect publication inside the active
+          // scheduler flush, so source notifications queue work but cannot
+          // settle between these writes.  No nested public batch is necessary.
+          reactive-write-ui{
+            final-updates.foreach(fn(update) commit-keyed-update(update))
+          }
+          transaction-store(table,Keyed-table(final-index,final-order))
+          // Publishing the coherent table is the last fallible adapter step.
+          // A joined lease is a no-op here; the outermost lease owns commit.
+          reactive-structural{
+            internal/commit-structural-transaction(transaction)
+          }
+          transaction-store(committed,True)
+
+          // Removed rows retire only after the new table and all row sources are
+          // coherent.  Cleanup writes merely queue a later collection turn.
+          reactive-ui-exn-open{
+            dispose-keyed-rows(stale)
+          }
+      )
+
+fun mount-keyed-fields<s,a,k,e::E>(
+      root : root<<ui|e>>, parent : node, before : maybe<node>,
+      read : () -> signal-read s,
+      walk : forall<p::E> (s,(a) -> p ()) -> p (), key : (a) -> k,
+      compare : (k,k) -> order, item-equals : (a,a) -> bool,
+      children : (item : accessor<a>, index : accessor<int>)
+                 -> <html<e>,signal-read> ())
+    : <signal-write,ui,pure|e> ()
+  val owner = internal/open-structural-owner(root)
+  val committed = transaction-cell(False)
+  val installed = transaction-cell(False)
+  val range-owned = transaction-cell(False)
+  finally(
+    fn() {
+      if transaction-load(committed) then ()
+      else reactive-ui-exn-open{
+        internal/dispose-structural-owner(owner)
+      }
+    },
+    fn()
+      internal/with-structural-owner(root,owner,fn()
+        val first = dom-attempt{ dom-create-comment("kokaine:for") }
+        val last = dom-attempt{ dom-create-comment("/kokaine:for") }
+        finally(
+          fn() {
+            if transaction-load(installed) &&
+               !transaction-load(range-owned)
+            then reactive-ui-exn{
+              dom-attempt{ dom-remove-range(first,last) }
+            }
+            else ()
+          },
+          fn()
+            insert-marker-pair(parent,before,first,last)
+            transaction-store(installed,True)
+            on-cleanup(root,fn()
+              reactive-ui-exn{
+                dom-attempt{ dom-remove-range(first,last) }
+              }
+            )
+            transaction-store(range-owned,True)
+            val table = transaction-cell(Keyed-table(
+              kokaine/internal/key-index/empty(),[]))
+            val dispose = create-effect(
+              root,fn() tracked(read),fn(snapshot)
+                internal/with-structural-owner(root,owner,fn()
+                  // Keep the higher-ranked source walker local to the packed
+                  // collection closure.  Koka 3.2.3 mis-specializes it if it
+                  // crosses another generic function boundary.  This still
+                  // walks the tracked snapshot exactly once.
+                  val items = transaction-cell([])
+                  walk(snapshot) fn(item)
+                    transaction-store(items,
+                      Cons(item,transaction-load(items)))
+                  reconcile-keyed(
+                    root,parent,first,last,owner,table,
+                    transaction-load(items).reverse,
+                    key,compare,item-equals,children)
+                )
+            )
+            transaction-store(committed,True)
+            ()
+        )
+      )
+  )
+
+fun mount-keyed-plan<e::E>(root : root<<ui|e>>, parent : node,
+                     before : maybe<node>, plan : keyed-plan<e>)
+                    : <signal-write,ui,pure|e> ()
+  match plan
+    Keyed-plan(spec) ->
+      match spec
+        Keyed-spec(read,walk,key,compare,item-equals,children) ->
+          mount-keyed-fields(
+            root,parent,before,read,walk,key,compare,item-equals,children)
+
 fun mount-view(root : root<<ui|e>>, parent : node,
                before : maybe<node>, tree : view<e>)
               : <signal-write,ui,pure|e> ()
@@ -633,7 +1179,7 @@ fun mount-view(root : root<<ui|e>>, parent : node,
       if !name.is-valid-element-name
       then throw("invalid HTML element name: " ++ name)
       else
-        val target = dom-attempt{ dom-create-element(name) }
+        val target = dom-attempt{ dom-create-element(parent,name) }
         record-owner(root,element-node(target))
         attributes.foreach fn(attribute)
           mount-attribute(root,target,attribute)
@@ -655,6 +1201,7 @@ fun mount-view(root : root<<ui|e>>, parent : node,
         mount-view(root,parent,Just(last),next)
       )
       ()
+    Keyed-region(plan) -> mount-keyed-plan(root,parent,before,plan)
     Raw-html(content) ->
       insert-html(root,parent,before,trusted-content(content))
 
@@ -675,6 +1222,7 @@ fun mount-effect(root : root<<ui|e>>, parent : node, tree : view<e>)
 fun mount-transaction(root : root<<ui|e>>, parent : node, tree : view<e>,
                       inherit-owner : bool)
                      : <ui,exn|e> disposer<<ui|e>>
+  dom-attempt{ dom-install-shadow-tracker(parent) }
   val pending = transaction-cell(Nothing)
   val committed = transaction-cell(False)
   finally(
