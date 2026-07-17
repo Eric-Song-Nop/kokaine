@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Regression checks for the cross-platform command lock runner."""
 
+from __future__ import annotations
+
 import ast
 import errno
 import importlib.util

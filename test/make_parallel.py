@@ -1,5 +1,7 @@
 """Regression checks for serialized builds that share the dist directory."""
 
+from __future__ import annotations
+
 import os
 import shlex
 import shutil
