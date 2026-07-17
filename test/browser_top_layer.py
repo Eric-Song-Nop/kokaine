@@ -739,6 +739,11 @@ with serve_project() as origin:
                             Node.prototype,
                             'ownerDocument'
                         );
+                    const defaultViewDescriptor =
+                        Object.getOwnPropertyDescriptor(
+                            Document.prototype,
+                            'defaultView'
+                        );
                     const parentView = {{ length: listedInParent ? 1 : 0 }};
                     parentView.parent = parentView;
                     parentView.top = parentView;
@@ -763,6 +768,18 @@ with serve_project() as origin:
                             );
                         }}
                     }});
+                    Object.defineProperty(Document.prototype, 'defaultView', {{
+                        configurable: defaultViewDescriptor.configurable,
+                        enumerable: defaultViewDescriptor.enumerable,
+                        get() {{
+                            if (this === childDocument) return childView;
+                            return Reflect.apply(
+                                defaultViewDescriptor.get,
+                                this,
+                                []
+                            );
+                        }}
+                    }});
                     let nativeCalls = 0;
                     target.togglePopover = function() {{
                         nativeCalls += 1;
@@ -782,6 +799,11 @@ with serve_project() as origin:
                             Node.prototype,
                             'ownerDocument',
                             ownerDocumentDescriptor
+                        );
+                        Object.defineProperty(
+                            Document.prototype,
+                            'defaultView',
+                            defaultViewDescriptor
                         );
                         delete target.togglePopover;
                         target.remove();
