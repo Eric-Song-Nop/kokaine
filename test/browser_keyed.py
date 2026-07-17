@@ -363,6 +363,47 @@ with serve_project() as origin:
         assert order(page, "#keyed-main-list") == [0, 1, 2, 3, 4]
         assert invoke(page, "insertMiddle") is True
         assert order(page, "#keyed-main-list") == [0, 1, 5, 2, 3, 4]
+
+        # A stale row is no longer part of the committed key table, but its
+        # physical retirement can still meet an unreliable host primitive.
+        # Once that primitive recovers, an exact-K retry must finish retirement
+        # instead of leaving an unmanaged row which poisons every later flush.
+        page.evaluate(
+            """() => {
+                const row = document.querySelector('#keyed-row-3');
+                globalThis.__kokaineStaleCleanupTarget = row.previousSibling;
+                globalThis.__kokaineNativeRemoveChild =
+                    Node.prototype.removeChild;
+                Node.prototype.removeChild = function removeChild(child) {
+                    if (child === globalThis.__kokaineStaleCleanupTarget) {
+                        throw new Error('forced stale keyed cleanup failure');
+                    }
+                    return globalThis.__kokaineNativeRemoveChild.call(
+                        this,
+                        child
+                    );
+                };
+            }"""
+        )
+        cleanup_failure = invoke(page, "deleteMiddle")
+        cleanup_failure_order = order(page, "#keyed-main-list")
+        page.evaluate(
+            """() => {
+                Node.prototype.removeChild =
+                    globalThis.__kokaineNativeRemoveChild;
+            }"""
+        )
+        assert cleanup_failure is False
+        assert cleanup_failure_order == [0, 1, 5, 2, 4, 3]
+        assert invoke(page, "deleteMiddle") is True
+        assert order(page, "#keyed-main-list") == [0, 1, 5, 2, 4]
+        assert not row_three.evaluate("node => node.isConnected")
+        assert invoke(page, "readCleanups") == 2
+
+        # Recreate row 3 so the independent escaped-descendant cleanup contract
+        # remains covered after the recovery case above.
+        assert invoke(page, "insertMiddle") is True
+        assert order(page, "#keyed-main-list") == [0, 1, 5, 2, 3, 4]
         page.evaluate(
             """() => {
                 const probe = document.createElement('x-kokaine-keyed-escape');
@@ -374,7 +415,6 @@ with serve_project() as origin:
         assert invoke(page, "deleteMiddle") is True
         expect(page.locator("#keyed-escaped-descendant")).to_have_count(0)
         assert order(page, "#keyed-main-list") == [0, 1, 5, 2, 4]
-        assert not row_three.evaluate("node => node.isConnected")
         assert invoke(page, "readCleanups") == 2
         assert invoke(page, "pulse") is True
         assert invoke(page, "readRuns") == 2
