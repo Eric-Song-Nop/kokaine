@@ -50,7 +50,8 @@ pub fun reify-trace(root : root<r>, plane : plane<e>,
               val gate = Continuation-gate(
                 state,load(plane.plane-current),Nothing)
               val child = cell(Trace-end)
-              val current-frame = Frame(new-lifetime-owner(Scope-starting))
+              val current-frame = Frame(new-lifetime-owner(
+                Scope-starting,plane.plane-retirement))
               val current-frame-slot = cell(current-frame)
               val self = cell(Trace-end)
               val current = Trace-entry(
@@ -83,7 +84,8 @@ pub fun reify-trace(root : root<r>, plane : plane<e>,
               val gate = Continuation-gate(
                 state,load(plane.plane-current),producer)
               val child = cell(Trace-end)
-              val current-frame = Frame(new-lifetime-owner(Scope-starting))
+              val current-frame = Frame(new-lifetime-owner(
+                Scope-starting,plane.plane-retirement))
               val current-frame-slot = cell(current-frame)
               val registration : ref<global,maybe<registry-registration<packed-capture>>> = cell(Nothing)
               val unlink = fn()
@@ -138,7 +140,8 @@ pub fun prepare-trace(root : root<r>, plane : plane<e>,
                   track : () -> <signal-read,pure> a,
                   publish : (value : a) -> <div,exn|e> ())
                  : (continuation-scope<e>,work<e>,disposer<e>)
-  val lifetime = new-lifetime-owner(Scope-starting)
+  val lifetime = new-lifetime-owner(
+    Scope-starting,plane.plane-retirement)
   val state = lifetime.lifetime-token
   val body = cell(Trace-end)
   val bootstrap-slot : ref<global,maybe<() -> <div|e> error<()>>> = cell(Nothing)
