@@ -9,7 +9,7 @@ KOKA_FLAGS := -j1 -i./src
 DIST_KOKA = $(PYTHON) "$(RUN_LOCKED)" dist/.koka-build.lock \
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist
 
-.PHONY: test test-native test-all test-wasm test-report build-counter build-top-layer build-keyed build-report build-browser-fixtures browser-install test-browser serve serve-top-layer serve-keyed serve-report
+.PHONY: test test-native test-all test-wasm test-report build-counter build-top-layer build-keyed build-report build-window-fixture build-browser-fixtures browser-install test-browser serve serve-top-layer serve-keyed serve-report
 
 test: test-native
 
@@ -67,6 +67,10 @@ build-report:
 	$(DIST_KOKA) \
 		--buildname=report examples/report.kk
 
+build-window-fixture:
+	$(DIST_KOKA) \
+		--buildname=window-event-lifecycle test/window-event-lifecycle.kk
+
 build-browser-fixtures: build-counter build-top-layer build-keyed
 	$(DIST_KOKA) \
 		--buildname=dom-errors test/dom-errors.kk
@@ -105,8 +109,9 @@ test-browser: build-browser-fixtures
 test-wasm:
 	./support/wasmweb-proof/run.sh test
 
-test-report: build-report build-counter
+test-report: build-report build-counter build-window-fixture
 	$(PYTHON) test/report_html.py
+	$(UV) run --with playwright python test/browser_window.py
 	$(UV) run --with playwright python test/browser_report.py
 
 test-all: test-native test-browser test-wasm test-report
