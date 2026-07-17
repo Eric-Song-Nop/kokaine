@@ -30,11 +30,18 @@ memos, and re-entry capabilities. Its implementation is split by responsibility:
 | `internal/scheduler.kk` | invalidation, queueing, resumption, and targeted settle |
 | `internal/handlers.kk` | write interpretation, sampled reads, and dispatch |
 | `internal/reentry.kk` | continuation-derived host re-entry |
+| `internal/application-runner.kk` | explicit rank-2 application-handler reinstallation |
+| `internal/registry.kk` | O(1) intrusive registration, claim, and unlink |
+| `internal/one-shot-task.kk` | atomic host-task state and winning claims |
+| `internal/cancellation-supervisor.kk` | claim-first lexical scope cancellation |
+| `internal/async-runtime.kk` | generation-bound Web awaits and task leases |
 | `kokaine/internal/event-runtime.kk` | guarded multi-shot browser-event continuation |
 | `kokaine/internal/key-index.kk` | persistent balanced key lookup shared by renderers |
 | `kokaine/control.kk` | memo branches and list/vector keyed control flow |
 | `internal/runtime.kk` | roots and high-level signal, memo, and effect operations |
 | `internal/bridge.kk` | unambiguous calls from the opaque facade |
+| `kokaine/async/{effects,structured,web}.kk` | async algebra, groups, and host adapters |
+| `kokaine/resource.kk` | tracked-source async Resource |
 
 Koka has no package-private visibility. Concrete internal types are therefore
 public inside their modules so sibling modules can share them; the facade wraps
@@ -42,7 +49,7 @@ them in abstract public values so application code cannot inspect the runtime.
 
 ## Semantic division of labor
 
-`signal-read`, `signal-write`, and `html<e>` are algebraic effect interfaces.
+`signal-read`, `signal-write`, `html<e>`, and `async` are algebraic effect interfaces.
 They let callers express requirements in effect rows and let scopes override
 interpretation: `untrack` changes tracked reads to samples, `batch` changes when
 writes settle, and nested HTML handlers collect only their own emitted children.
@@ -472,7 +479,7 @@ retain row state, but it applies the same duplicate-key rule as the browser.
 
 ## Host callbacks, event continuations, and re-entry
 
-Listener installation captures both an opaque `reentry<e>` and an opaque
+Listener installation captures both an opaque `reentry<<ui>>` and an opaque
 `event-continuation`. The latter is a real raw continuation parked at the
 handled `await-browser-event` operation; its suffix contains the user action.
 The retained JavaScript function is only the transport/ABI trampoline. When the
@@ -505,18 +512,62 @@ This boundary is intentionally precise. Browser delivery begins with an ABI
 callback, then performs structural re-entry and an actual event-continuation
 resume. It still cannot reconstruct arbitrary user-defined handlers whose
 lexical extent around `mount` has already returned. Accordingly, `callback` has
-the closed
-`<signal-read,signal-write,ui,pure>` capability row. An unsupported application
-effect must be handled inside the callback and is otherwise rejected during
-type checking; it cannot silently become a delayed missing-handler failure. A
-future fresh application runner installed at the host boundary could expose a
-wider row explicitly.
+the closed `<signal-read,signal-write,ui,async,pure>` capability row. An
+unsupported application effect must be handled inside the callback and is
+otherwise rejected during type checking; it cannot silently become a delayed
+missing-handler failure. The internal rank-2 `AppRunner` surrounds each whole
+host re-entry, including batch exit and cleanup. The current public Web surface
+uses its closed `ui` runner; a wider future surface must supply an explicit
+runner which really reinstalls its application handlers.
 
 Koka's `pure` row includes modeled `exn`/`div`; such exceptions are reported by
 the event boundary and unwind the batch normally. A native JavaScript throw from
 an extern declared only as `ui` is instead an FFI contract violation: it bypasses
 Koka handlers and `finally`. Adapter externs must catch native failures at their
 innermost boundary and translate them to Koka `exn`, as the DOM adapter does.
+
+## Browser async task leases
+
+`run-async(root, action)` is the explicit boundary for direct-style Web async.
+An await parks only its suffix and returns from the initiating reactive turn.
+Even a synchronously reported setup result is queued as a microtask, so every
+continuation after an await enters a fresh reactive batch through the captured
+generation and its application runner.
+
+Each host operation is a task lease backed by `one-shot-task`'s single state
+cell. Its only winning transitions are Pending to Ready, Ready to Running, and
+Pending or Ready to Terminal. Payload, result, and disposer are removed from
+the cell by the winning claim before any host callback, parked continuation, or
+user finalizer runs. A disposer returned after another transition has already
+won is returned to setup code and invoked immediately.
+
+Tasks in one active lexical `async-scope` share a registry-backed cancellation
+supervisor and one structural cleanup registration. Normal completion claims
+Ready, unlinks its cancellation registration in O(1), and detaches the empty
+supervisor before re-entry. Cancellation or structural retirement instead:
+
+1. seals and detaches the supervisor registry;
+2. claims every sibling task state;
+3. unlinks the aggregate structural and family registrations; and only then
+4. enters any cancel continuation, host disposer, or lexical `finally`.
+
+Subtree cancellation applies the same two phases across every matching scope
+supervisor. A hostile disposer can therefore re-enter only after all affected
+tasks are terminal and every registry count is zero. The family indexes active
+scope supervisors, not individual tasks, so steady-state completion does not
+scan or compact a stale task list.
+
+Ordinary host completion uses validated `run-application-reentry`. Retirement
+has a narrower internal re-entry which restores the already captured reactive
+context solely to discontinue the parked strand after its frame is dead. The
+`AppRunner` still surrounds that complete cancellation turn, while any attempt
+by a canceling `finally` to register fresh work is rejected by the dead frame.
+
+Promise, timer, Fetch, structured concurrency, and `Resource` adapters all use
+this protocol. Host values which intentionally outlive one await use a separate
+one-shot disposer lease; Fetch transfers that lease from header delivery to
+body consumption or explicit discard instead of leaving it in the completed
+task.
 
 ## Verification map
 
@@ -545,6 +596,15 @@ innermost boundary and translate them to Koka `exn`, as the DOM adapter does.
   non-destructive marker failure in native and real-browser paths.
 - `event_effect_boundary.py` checks that a lexical-only application effect
   cannot enter a retained callback.
+- `async-effects.kk` and `structured-async.kk` check await, final
+  cancellation, ordered groups, loser draining, and cleanup failure rules.
+- `async-owner-registration.kk` checks both completion-first and
+  retirement-first races and requires every disposer/finally to observe all
+  same-scope task and owner registrations already detached.
+- `async-runtime-scale.kk` checks 12,000 same-generation completions without a
+  stale family task scan; `browser_async.py` exercises the full host protocol.
+- `async-resource.kk` checks refresh, cancellation, stale results, and host
+  value lease promotion/replacement.
 
 The browser renderer still replaces all content between an ordinary region's
 persistent markers. `Keyed-region` adds explicit business-key reconciliation;
