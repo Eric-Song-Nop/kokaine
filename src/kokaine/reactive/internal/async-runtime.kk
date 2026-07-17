@@ -96,18 +96,11 @@ val outstanding-operations : ref<global,int> = cell(0)
 // Resource loaders need a lifetime which can outlive the create-effect
 // generation that observed their source. A lease group owns only raw host
 // disposers; the Resource keeps the active and latest groups in its own
-// one-shot state machine.
-type async-lease-entry
-  Async-lease-entry(
-    lease-entry-id       : int,
-    lease-entry-disposer : ref<global,maybe<dispose-fn>>
-  )
-
+// one-shot state machine. The intrusive registry makes an individual transfer
+// constant-time and severs the stale release handle's links to every sibling.
 abstract type async-lease-group
   Async-lease-group(
-    lease-group-live    : ref<global,bool>,
-    lease-group-entries : ref<global,list<async-lease-entry>>,
-    lease-group-next-id : ref<global,int>
+    lease-group-entries : registry<dispose-fn>
   )
 
 extern report-async-error(message : string) : ui ()
@@ -135,60 +128,50 @@ fun decrement-outstanding() : ()
   store(outstanding-operations,if current <= 0 then 0 else current - 1)
 
 pub fun new-async-lease-group() : async-lease-group
-  Async-lease-group(cell(True),cell([]),cell(1))
+  Async-lease-group(new-registry())
 
-fun release-async-lease(group : async-lease-group,
-                        id : int,
-                        disposer-slot : ref<global,maybe<dispose-fn>>) : ui bool
+pub fun async-lease-group/count(group : async-lease-group) : int
   match group
-    Async-lease-group(_,entries,_) ->
-      val current = load(disposer-slot)
-      store(disposer-slot,Nothing)
-      // Physically unlink released entries so a long-lived Resource cannot
-      // accumulate empty slots after explicit ownership transfers.
-      store(entries,load(entries).filter(fn(entry) entry.lease-entry-id != id))
-      match current
-        Nothing -> False
-        Just(_) ->
-          decrement-outstanding()
-          True
+    Async-lease-group(entries) -> entries.count
 
-fun async-lease-release(group : async-lease-group,
-                        id : int,
-                        disposer-slot : ref<global,maybe<dispose-fn>>)
-                       : ownership-release-fn
-  fn() release-async-lease(group,id,disposer-slot)
+pub noinline fun async-lease-group/has-linked-entries(
+    group : async-lease-group) : bool
+  match group
+    Async-lease-group(entries) -> entries.has-linked-nodes
+
+fun async-lease-release(
+    registration : registry-registration<dispose-fn>)
+    : ownership-release-fn
+  fn()
+    match registration.take
+      Nothing -> False
+      Just(_) ->
+        decrement-outstanding()
+        True
 
 pub fun async-lease-group/own(group : async-lease-group,
                               dispose : dispose-fn) : ui ownership-release-fn
   match group
-    Async-lease-group(live,entries,next-id) ->
-      if !load(live) then
-        // A re-entrant acquisition after retirement cannot become reachable.
-        dispose()
-        fn() False
-      else
-        val id = load(next-id)
-        val disposer-slot = cell(Just(dispose))
-        store(next-id,id + 1)
-        store(entries,
-          Cons(Async-lease-entry(id,disposer-slot),load(entries)))
-        increment-outstanding()
-        async-lease-release(group,id,disposer-slot)
+    Async-lease-group(entries) ->
+      match entries.try-insert(dispose)
+        Nothing ->
+          // A re-entrant acquisition after retirement cannot become reachable.
+          dispose()
+          fn() False
+        Just(registration) ->
+          increment-outstanding()
+          async-lease-release(registration)
 
-fun claim-async-lease-disposers(entries : list<async-lease-entry>)
-                                : list<dispose-fn>
-  match entries
-    Nil -> []
-    Cons(entry,rest) ->
-      val disposer-slot = entry.lease-entry-disposer
-      val disposer = load(disposer-slot)
-      store(disposer-slot,Nothing)
-      match disposer
-        Nothing -> claim-async-lease-disposers(rest)
-        Just(current-dispose) ->
+fun account-async-lease-disposers(disposers : list<dispose-fn>) : ()
+  pretend-no-div{
+    var pending := disposers
+    while { !pending.is-nil }
+      match pending
+        Nil -> ()
+        Cons(_,rest) ->
+          pending := rest
           decrement-outstanding()
-          Cons(current-dispose,claim-async-lease-disposers(rest))
+  }
 
 fun run-async-lease-disposers(disposers : list<dispose-fn>) : ui ()
   pretend-no-div{
@@ -203,18 +186,16 @@ fun run-async-lease-disposers(disposers : list<dispose-fn>) : ui ()
 
 pub fun async-lease-group/dispose(group : async-lease-group) : ui ()
   match group
-    Async-lease-group(live,entries,_) ->
-      if !load(live) then () else
-        // Close and detach the complete ledger before invoking untrusted host
-        // disposers. Re-entry and aliased cleanup therefore see a terminal
-        // group and cannot claim any entry twice.
-        store(live,False)
-        val current = load(entries)
-        store(entries,[])
-        // Claim and account for every slot before invoking the first disposer.
-        // Even if host code aborts control flow, no detached entry remains
-        // counted or available to a competing release path.
-        run-async-lease-disposers(claim-async-lease-disposers(current))
+    Async-lease-group(entries) ->
+      match entries.seal-detach
+        Nothing -> ()
+        Just(disposers) ->
+          // Close and detach the complete ledger before invoking untrusted host
+          // disposers. Re-entry and aliased cleanup therefore see a terminal
+          // group and cannot claim any entry twice. Account for every slot
+          // before invoking the first disposer.
+          account-async-lease-disposers(disposers)
+          run-async-lease-disposers(disposers)
 
 // Keep row-polymorphic family internals out of generated Koka 3.2 `.kki`
 // inline bodies; its interface printer otherwise emits an unparseable cache.
