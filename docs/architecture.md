@@ -30,7 +30,7 @@ memos, and re-entry capabilities. Its implementation is split by responsibility:
 | `internal/handlers.kk` | write interpretation, sampled reads, and dispatch |
 | `internal/reentry.kk` | continuation-derived host re-entry |
 | `internal/application-runner.kk` | explicit rank-2 application-handler reinstallation |
-| `internal/registry.kk` | O(1) intrusive registration, claim, and unlink |
+| `kokaine/internal/registry.kk` | shared O(1) intrusive registration, claim, and unlink |
 | `internal/one-shot-task.kk` | atomic host-task state and winning claims |
 | `internal/cancellation-supervisor.kk` | claim-first lexical scope cancellation |
 | `internal/async-runtime.kk` | generation-bound Web awaits and task leases |
@@ -547,14 +547,24 @@ supervisor before re-entry. Cancellation or structural retirement instead:
 
 1. seals and detaches the supervisor registry;
 2. claims every sibling task state;
-3. unlinks the aggregate structural and family registrations; and only then
-4. enters any cancel continuation, host disposer, or lexical `finally`.
+3. unlinks the aggregate structural, family, and direct-index registrations;
+4. unwinds every cancel continuation and lexical `finally`; and only then
+5. invokes the detached host disposers.
 
-Subtree cancellation applies the same two phases across every matching scope
-supervisor. A hostile disposer can therefore re-enter only after all affected
-tasks are terminal and every registry count is zero. The family indexes active
-scope supervisors, not individual tasks, so steady-state completion does not
-scan or compact a stale task list.
+Subtree cancellation applies the same claim/unwind/dispose phases across every
+matching scope supervisor. A hostile disposer can therefore re-enter only after
+all affected tasks are terminal and every registry count is zero. The family
+indexes active scope supervisors directly by opaque scope identity and keeps a
+separate intrusive registry for subtree enumeration. Steady-state completion and
+sibling-heavy setup therefore do not scan or compact a stale task list.
+
+Every lifetime in one root execution plane shares a retirement coordinator.
+If a detached cleanup snapshot requests `root.dispose()`, the root immediately
+enters `disposing` (rejecting new ownership and suppressing flush) but remains
+readable/writable to already-claimed cleanup. The request is coalesced until the
+outermost snapshot drains, then the private root retirement runs exactly once.
+Coordinators are per root, so nested cleanup may retire another root without
+consuming or blocking the first root's deferred request.
 
 Ordinary host completion uses validated `run-application-reentry`. Retirement
 has a narrower internal re-entry which restores the already captured reactive
@@ -566,7 +576,9 @@ Promise, timer, Fetch, structured concurrency, and `Resource` adapters all use
 this protocol. Host values which intentionally outlive one await use a separate
 one-shot disposer lease; Fetch transfers that lease from header delivery to
 body consumption or explicit discard instead of leaving it in the completed
-task.
+task. Both generation lease groups and structured child discard ledgers use the
+shared intrusive registry: explicit transfer is O(1), seal-detach claims the
+complete rollback snapshot, and stale handles no longer retain sibling values.
 
 ## Verification map
 
@@ -599,9 +611,13 @@ task.
   cancellation, ordered groups, loser draining, and cleanup failure rules.
 - `async-owner-registration.kk` checks both completion-first and
   retirement-first races and requires every disposer/finally to observe all
-  same-scope task and owner registrations already detached.
-- `async-runtime-scale.kk` checks 12,000 same-generation completions without a
-  stale family task scan; `browser_async.py` exercises the full host protocol.
+  same-scope task and owner registrations already detached. It also covers
+  hostile sibling/family disposers, deferred root retirement, retained lease
+  cleanup, and nested disposal of two independent roots.
+- `async-runtime-scale.kk` checks 12,000 completions, pending cancellations,
+  distinct-scope claims, explicit lease unlinks, and lease retirement without
+  recursive cleanup or stale task scans; `browser_async.py` exercises the full
+  host protocol.
 - `async-resource.kk` checks refresh, cancellation, stale results, and host
   value lease promotion/replacement.
 
