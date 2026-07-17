@@ -134,6 +134,8 @@ def hold_after_signal(
         signal_seen.touch()
 
     signal.signal(signal.SIGTERM, mark_signal)
+    if hasattr(signal, "SIGQUIT"):
+        signal.signal(signal.SIGQUIT, mark_signal)
     pid_path.write_text(str(os.getpid()))
     entered.touch()
     deadline = time.monotonic() + WAIT_SECONDS
@@ -142,6 +144,56 @@ def hold_after_signal(
             return 0
         time.sleep(0.01)
     print("timed out waiting to release the signaled command", file=sys.stderr)
+    return 87
+
+
+def hold_descendant(
+    signal_seen: Path,
+    release: Path,
+    pid_path: Path,
+) -> int:
+    def mark_signal(_number, _frame) -> None:
+        signal_seen.touch()
+
+    signal.signal(signal.SIGTERM, mark_signal)
+    pid_path.write_text(str(os.getpid()))
+    deadline = time.monotonic() + WAIT_SECONDS
+    while time.monotonic() < deadline:
+        if release.exists():
+            return 0
+        time.sleep(0.01)
+    print("timed out waiting to release the descendant", file=sys.stderr)
+    return 87
+
+
+def spawn_descendant_then_exit(
+    entered: Path,
+    signal_seen: Path,
+    release: Path,
+    pid_path: Path,
+) -> int:
+    def exit_on_signal(_number, _frame) -> None:
+        raise SystemExit(0)
+
+    signal.signal(signal.SIGTERM, exit_on_signal)
+    descendant = subprocess.Popen(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--hold-descendant",
+            str(signal_seen),
+            str(release),
+            str(pid_path),
+        ]
+    )
+    wait_for_path(pid_path)
+    entered.touch()
+    deadline = time.monotonic() + WAIT_SECONDS
+    while time.monotonic() < deadline:
+        if release.exists():
+            return descendant.wait(timeout=WAIT_SECONDS)
+        time.sleep(0.01)
+    print("timed out waiting to signal the descendant parent", file=sys.stderr)
     return 87
 
 
@@ -269,12 +321,10 @@ def check_process_contention() -> None:
                     process.wait(timeout=WAIT_SECONDS)
 
 
-def check_termination_keeps_lock_until_command_exits() -> None:
-    if os.name == "nt":
-        return
-
+def check_forwarded_signal_keeps_lock_until_command_exits(number: int) -> None:
+    signal_name = signal.Signals(number).name.lower()
     with tempfile.TemporaryDirectory(
-        prefix="kokaine-lock-termination-"
+        prefix=f"kokaine-lock-{signal_name}-"
     ) as directory:
         control = Path(directory)
         lock_path = control / "dist.lock"
@@ -305,7 +355,7 @@ def check_termination_keeps_lock_until_command_exits() -> None:
         try:
             wait_for_entry(first_entered, first)
             child_pid = int(child_pid_path.read_text())
-            first.terminate()
+            first.send_signal(number)
 
             second = subprocess.Popen(
                 [
@@ -335,7 +385,7 @@ def check_termination_keeps_lock_until_command_exits() -> None:
 
             release_first.touch()
             first_output = first.communicate(timeout=WAIT_SECONDS)[0]
-            assert first.returncode == -signal.SIGTERM, first_output
+            assert first.returncode == -number, first_output
             second_output = second.communicate(timeout=WAIT_SECONDS)[0]
             assert second.returncode == 0, second_output
             assert second_entered.exists()
@@ -358,6 +408,170 @@ def check_termination_keeps_lock_until_command_exits() -> None:
                     os.kill(child_pid, signal.SIGKILL)
 
 
+def check_termination_keeps_lock_until_command_exits() -> None:
+    if os.name == "nt":
+        return
+
+    check_forwarded_signal_keeps_lock_until_command_exits(signal.SIGTERM)
+    if hasattr(signal, "SIGQUIT"):
+        check_forwarded_signal_keeps_lock_until_command_exits(signal.SIGQUIT)
+
+
+def check_termination_keeps_lock_until_process_group_exits() -> None:
+    if os.name == "nt":
+        return
+
+    with tempfile.TemporaryDirectory(
+        prefix="kokaine-lock-process-group-"
+    ) as directory:
+        control = Path(directory)
+        lock_path = control / "dist.lock"
+        first_entered = control / "first-entered"
+        signal_seen = control / "descendant-signal-seen"
+        release_first = control / "release-first"
+        descendant_pid_path = control / "descendant-pid"
+        second_entered = control / "second-entered"
+        first = subprocess.Popen(
+            [
+                sys.executable,
+                str(RUNNER),
+                str(lock_path),
+                sys.executable,
+                str(SCRIPT),
+                "--spawn-descendant",
+                str(first_entered),
+                str(signal_seen),
+                str(release_first),
+                str(descendant_pid_path),
+            ],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        second = None
+        descendant_pid = None
+        try:
+            wait_for_entry(first_entered, first)
+            descendant_pid = int(descendant_pid_path.read_text())
+            first.send_signal(signal.SIGTERM)
+
+            second = subprocess.Popen(
+                [
+                    sys.executable,
+                    str(RUNNER),
+                    str(lock_path),
+                    sys.executable,
+                    "-c",
+                    "from pathlib import Path; import sys; "
+                    "Path(sys.argv[1]).touch()",
+                    str(second_entered),
+                ],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
+
+            wait_for_path(signal_seen)
+            time.sleep(0.2)
+            assert first.poll() is None, (
+                "the lock wrapper exited while a command descendant remained"
+            )
+            assert second.poll() is None, (
+                "the next command acquired the lock before the process group "
+                "exited"
+            )
+            assert not second_entered.exists()
+
+            release_first.touch()
+            first_output = first.communicate(timeout=WAIT_SECONDS)[0]
+            assert first.returncode == -signal.SIGTERM, first_output
+            second_output = second.communicate(timeout=WAIT_SECONDS)[0]
+            assert second.returncode == 0, second_output
+            assert second_entered.exists()
+        finally:
+            release_first.touch()
+            for process in (first, second):
+                if process is not None and process.poll() is None:
+                    process.terminate()
+                    try:
+                        process.wait(timeout=WAIT_SECONDS)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        process.wait(timeout=WAIT_SECONDS)
+            if descendant_pid is not None:
+                try:
+                    os.kill(descendant_pid, 0)
+                except ProcessLookupError:
+                    pass
+                else:
+                    os.kill(descendant_pid, signal.SIGKILL)
+
+
+def check_child_signal_status_passthrough() -> None:
+    if os.name == "nt":
+        return
+
+    with tempfile.TemporaryDirectory(
+        prefix="kokaine-lock-child-signal-"
+    ) as directory:
+        control = Path(directory)
+        lock_path = control / "dist.lock"
+        entered = control / "entered"
+        signal_seen = control / "signal-seen"
+        release = control / "release"
+        child_pid_path = control / "child-pid"
+        wrapper = subprocess.Popen(
+            [
+                sys.executable,
+                str(RUNNER),
+                str(lock_path),
+                sys.executable,
+                str(SCRIPT),
+                "--hold-after-signal",
+                str(entered),
+                str(signal_seen),
+                str(release),
+                str(child_pid_path),
+            ],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        try:
+            wait_for_entry(entered, wrapper)
+            child_pid = int(child_pid_path.read_text())
+            os.kill(child_pid, signal.SIGKILL)
+            output = wrapper.communicate(timeout=WAIT_SECONDS)[0]
+            assert wrapper.returncode == -signal.SIGKILL, output
+        finally:
+            release.touch()
+            if wrapper.poll() is None:
+                wrapper.kill()
+                wrapper.wait(timeout=WAIT_SECONDS)
+
+
+def check_windows_command_path_preserves_console() -> None:
+    runner = load_runner()
+    calls = []
+    original_run = runner.subprocess.run
+
+    class Result:
+        returncode = 19
+
+    def fake_run(command, check):
+        calls.append((command, check))
+        return Result()
+
+    runner.subprocess.run = fake_run
+    try:
+        result = runner._run_command(["fake-compiler"], platform="nt")
+    finally:
+        runner.subprocess.run = original_run
+
+    assert result == (19, None)
+    assert calls == [(["fake-compiler"], False)]
+
+
 if __name__ == "__main__":
     if len(sys.argv) == 4 and sys.argv[1] == "--hold-lock":
         raise SystemExit(
@@ -372,11 +586,31 @@ if __name__ == "__main__":
                 Path(sys.argv[5]),
             )
         )
+    if len(sys.argv) == 5 and sys.argv[1] == "--hold-descendant":
+        raise SystemExit(
+            hold_descendant(
+                Path(sys.argv[2]),
+                Path(sys.argv[3]),
+                Path(sys.argv[4]),
+            )
+        )
+    if len(sys.argv) == 6 and sys.argv[1] == "--spawn-descendant":
+        raise SystemExit(
+            spawn_descendant_then_exit(
+                Path(sys.argv[2]),
+                Path(sys.argv[3]),
+                Path(sys.argv[4]),
+                Path(sys.argv[5]),
+            )
+        )
     check_python_38_import_compatibility()
     check_windows_backend_without_fcntl()
     check_command_status_passthrough()
     check_process_contention()
     check_termination_keeps_lock_until_command_exits()
+    check_termination_keeps_lock_until_process_group_exits()
+    check_child_signal_status_passthrough()
+    check_windows_command_path_preserves_console()
     print(
         "run-locked: portable backend, contention, and status passthrough passed"
     )
