@@ -23,7 +23,6 @@ memos, and re-entry capabilities. Its implementation is split by responsibility:
 | `reactive/effects.kk` | `signal-read` and `signal-write` operations |
 | `internal/model.kk` | sources, traces, planes, scopes, frames, and work tickets |
 | `internal/capture.kk` | raw-handler reification of synchronous read suffixes |
-| `internal/registry.kk` | removable O(1) lifetime registrations |
 | `internal/lifetime.kk` | detached, iterative two-phase retirement |
 | `internal/work-transaction.kk` | deque frontiers and local bootstrap groups |
 | `internal/structural.kk` | retained keyed lifetimes and transaction leases |

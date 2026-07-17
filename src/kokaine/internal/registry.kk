@@ -5,7 +5,7 @@
   node. This pointer-to-pointer back link lets head, middle, and tail nodes use
   the same O(1) unlink operation without rebuilding an immutable list.
 --------------------------------------------------------------------------*/
-module kokaine/reactive/internal/registry
+module kokaine/internal/registry
 
 import std/core/unsafe
 import std/core/undiv

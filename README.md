@@ -551,7 +551,7 @@ src/kokaine/reactive.kk                    opaque public facade
 src/kokaine/reactive/effects.kk            signal read/write effect operations
 src/kokaine/reactive/internal/model.kk     traces, planes, scopes, and capabilities
 src/kokaine/reactive/internal/capture.kk   exact read-suffix reification
-src/kokaine/reactive/internal/registry.kk  removable O(1) lifetime registrations
+src/kokaine/internal/registry.kk           removable O(1) lifetime registrations
 src/kokaine/reactive/internal/lifetime.kk  detached two-phase retirement
 src/kokaine/reactive/internal/resource.kk  opaque parked resource continuations
 src/kokaine/reactive/internal/work-transaction.kk deque and local work groups

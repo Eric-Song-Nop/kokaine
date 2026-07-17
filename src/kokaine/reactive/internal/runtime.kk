@@ -10,7 +10,7 @@ import kokaine/reactive/internal/scheduler
 import kokaine/reactive/internal/handlers
 import kokaine/reactive/internal/capture
 import kokaine/reactive/internal/resource
-import kokaine/reactive/internal/registry
+import kokaine/internal/registry
 import kokaine/reactive/internal/work-transaction
 import std/core/undiv
 

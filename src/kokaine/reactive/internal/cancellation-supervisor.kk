@@ -8,7 +8,7 @@
 --------------------------------------------------------------------------*/
 module kokaine/reactive/internal/cancellation-supervisor
 
-import kokaine/reactive/internal/registry
+import kokaine/internal/registry
 import std/core/undiv
 
 
