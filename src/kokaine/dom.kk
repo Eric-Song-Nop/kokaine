@@ -34,6 +34,11 @@ abstract type dom-listener
 abstract type dom-owner-registration
   Dom-owner-registration(value : any)
 
+// A staged retirement snapshots a complete row range once. Later retries use
+// that snapshot instead of requiring the marker endpoints to remain attached.
+abstract type dom-retirement
+  Dom-retirement(value : any)
+
 type owner-match<e::E>
   Owner-none
   Owner-live(owner-portal : reentry<e>)
@@ -69,10 +74,17 @@ type keyed-update<e::E,a,k>
     update-index-changed : bool
   )
 
+type keyed-retirement<e::E,a,k>
+  Keyed-retirement(
+    retirement-row    : keyed-row<e,a,k>,
+    retirement-handle : dom-retirement
+  )
+
 type keyed-table<e::E,a,k>
   Keyed-table(
     table-index : key-index<k,keyed-row<e,a,k>>,
-    table-order : list<keyed-row<e,a,k>>
+    table-order : list<keyed-row<e,a,k>>,
+    table-retirements : list<keyed-retirement<e,a,k>>
   )
 
 // Transaction state must survive abortive control while mount bootstraps are
@@ -243,6 +255,19 @@ fun dom-clear-between(first : node, last : node) : ui ()
 
 fun dom-remove-range(first : node, last : node) : ui ()
   dom-clean-range(first,last,True)
+
+// Validate and snapshot an inclusive row range without changing the DOM.
+extern dom-stage-retirement(first : node, last : node) : ui dom-retirement
+  js inline "(function(){ var rangeFirst=#1; var rangeLast=#2; var parent=rangeFirst && rangeFirst.parentNode; if(!parent) throw new Error('invalid Kokaine keyed retirement range: opening marker is detached'); if(parent!==rangeLast.parentNode) throw new Error('invalid Kokaine keyed retirement range: endpoints have different parents'); if(rangeFirst===rangeLast) throw new Error('invalid Kokaine keyed retirement range: endpoints are identical'); var roots=[]; var node=rangeFirst; while(node){ roots.push(node); if(node===rangeLast) break; node=node.nextSibling; } if(node!==rangeLast) throw new Error('invalid Kokaine keyed retirement range: closing marker is unreachable'); var descendants=[]; var pending=roots.slice(); while(pending.length){ var current=pending.pop(); var children=current && current.childNodes ? Array.prototype.slice.call(current.childNodes) : []; if(current && current.shadowRoot) children=children.concat(Array.prototype.slice.call(current.shadowRoot.childNodes)); for(var i=0;i<children.length;i++){ descendants.push(children[i]); pending.push(children[i]); } } var doc=rangeFirst.ownerDocument; var view=doc && doc.defaultView; var proto=view && view.Node && view.Node.prototype; if(!proto || typeof proto.removeChild!=='function' || typeof proto.contains!=='function') throw new Error('cannot stage Kokaine keyed retirement without its DOM realm'); return { roots:roots, descendants:descendants, proto:proto }; })()"
+
+// Detach a staged snapshot. If a host primitive throws before detaching its
+// target, stop immediately so the complete remaining row stays retryable. A
+// commit-then-throw is recognized by inspecting the target after the throw.
+extern dom-run-retirement(value : dom-retirement) : ui ()
+  js inline "(function(handle){ if(!handle || !handle.roots) return; var roots=handle.roots; var descendants=handle.descendants; var proto=handle.proto; var removeChild=proto && proto.removeChild; var contains=proto && proto.contains; if(typeof removeChild!=='function' || typeof contains!=='function') throw new Error('cannot run Kokaine keyed retirement without its DOM realm'); function retained(node){ var current=node; while(current){ for(var i=0;i<roots.length;i++){ if(roots[i]===current || contains.call(roots[i],current)) return true; } var tree=current.getRootNode ? current.getRootNode() : null; current=tree && tree.host ? tree.host : null; } return false; } function detach(node,escaped){ var parent=node && node.parentNode; if(!parent || (escaped && retained(node))) return; try { removeChild.call(parent,node); } catch(error) { if(node.parentNode && (!escaped || !retained(node))) throw error; } } var passes=Math.max(2,roots.length+descendants.length+2); while(passes-- > 0){ for(var i=0;i<roots.length;i++) detach(roots[i],false); for(var j=0;j<descendants.length;j++) detach(descendants[j],true); var pending=false; for(var r=0;r<roots.length;r++){ if(roots[r].parentNode){ pending=true; break; } } if(!pending){ for(var d=0;d<descendants.length;d++){ if(descendants[d].parentNode && !retained(descendants[d])){ pending=true; break; } } } if(!pending) return; } throw new Error('invalid Kokaine DOM cleanup: staged keyed nodes were synchronously reinserted'); })(#1)"
+
+extern dom-release-retirement(value : dom-retirement) : ui ()
+  js inline "(function(handle){ if(!handle) return; handle.roots=null; handle.descendants=null; handle.proto=null; })(#1)"
 
 extern dom-append-html(parent : node, content : string,
                        root : root<e>, portal : reentry<e>)
@@ -854,6 +879,60 @@ fun collect-stale-rows<a,k,e::E>(rows : list<keyed-row<e,a,k>>,
         Just(_) -> collect-stale-rows(rest,next,compare)
         Nothing -> Cons(row,collect-stale-rows(rest,next,compare))
 
+tail fun stage-keyed-retirements-loop<a,k,e::E>(
+      rows : list<keyed-row<e,a,k>>,
+      collected : list<keyed-retirement<e,a,k>>)
+    : <ui,exn> list<keyed-retirement<e,a,k>>
+  match rows
+    Nil -> pretend-no-div{ collected.reverse }
+    Cons(row,rest) ->
+      val staged = dom-attempt{
+        dom-stage-retirement(row.row-first,row.row-last)
+      }
+      stage-keyed-retirements-loop(
+        rest,Cons(Keyed-retirement(row,staged),collected))
+
+fun stage-keyed-retirements<a,k,e::E>(
+      rows : list<keyed-row<e,a,k>>)
+    : <ui,exn> list<keyed-retirement<e,a,k>>
+  stage-keyed-retirements-loop(rows,[])
+
+tail fun release-keyed-retirements<a,k,e::E>(
+      values : list<keyed-retirement<e,a,k>>) : ui ()
+  match values
+    Nil -> ()
+    Cons(current,rest) ->
+      dom-release-retirement(current.retirement-handle)
+      release-keyed-retirements(rest)
+
+tail fun detach-keyed-retirements-loop<a,k,e::E>(
+      table : ref<global,keyed-table<e,a,k>>,
+      detached : ref<global,list<keyed-row<e,a,k>>>) : <div,ui,exn> ()
+  match transaction-load(table)
+    Keyed-table(_,_,[]) -> ()
+    Keyed-table(index,order,Cons(current,rest)) ->
+      dom-attempt{ dom-run-retirement(current.retirement-handle) }
+      // Physical removal makes this entry non-authoritative. Pop it before
+      // lifecycle disposal so a throwing cleanup cannot poison future retries.
+      transaction-store(table,Keyed-table(index,order,rest))
+      dom-release-retirement(current.retirement-handle)
+      transaction-store(detached,
+        Cons(current.retirement-row,transaction-load(detached)))
+      detach-keyed-retirements-loop(table,detached)
+
+fun drain-keyed-retirements<a,k,e::E>(
+      table : ref<global,keyed-table<e,a,k>>) : <ui,exn|e> ()
+  val detached = transaction-cell([])
+  finally(
+    fn(){
+      val rows = pretend-no-div{ transaction-load(detached).reverse }
+      dispose-keyed-rows(rows)
+    },
+    fn() pretend-no-div{
+      detach-keyed-retirements-loop(table,detached)
+    }
+  )
+
 fun commit-keyed-update<a,k,e::E>(update : keyed-update<e,a,k>)
                                   : signal-write ()
   val row = update.update-row
@@ -940,8 +1019,12 @@ fun reconcile-keyed<a,k,e::E>(
       children : (item : accessor<a>, index : accessor<int>)
                  -> <html<e>,signal-read> ())
     : <signal-write,ui,pure|e> ()
+  // A failed post-commit host cleanup leaves explicit pending retirements in
+  // the table. Resolve those first so no later reconciliation treats their DOM
+  // as unmanaged or loses the only retry capability.
+  reactive-ui-exn-open{ drain-keyed-retirements(table) }
   match transaction-load(table)
-    Keyed-table(old-index,old-order) ->
+    Keyed-table(old-index,old-order,_) ->
       // The outermost reconciler owns a local bootstrap transaction. A keyed
       // adapter reached recursively during that drain borrows the same groups;
       // only the outer lease can commit or abort them.
@@ -958,6 +1041,7 @@ fun reconcile-keyed<a,k,e::E>(
       val move-phase = transaction-cell(False)
       val committed = transaction-cell(False)
       val enlisted = transaction-cell(False)
+      val staged-retirements = transaction-cell([])
       finally(
         fn() {
           if transaction-load(committed) || transaction-load(enlisted)
@@ -974,7 +1058,11 @@ fun reconcile-keyed<a,k,e::E>(
                 },
                 fn()
                   finally(
-                    fn() dispose-keyed-rows(transaction-load(drafts)),
+                    fn() {
+                      release-keyed-retirements(
+                        transaction-load(staged-retirements))
+                      dispose-keyed-rows(transaction-load(drafts))
+                    },
                     fn() internal/abort-structural-transaction(transaction)
                   )
               )
@@ -1064,6 +1152,11 @@ fun reconcile-keyed<a,k,e::E>(
               internal/with-structural-owner(root,owner,fn() ())
             }
 
+            // Snapshot every stale range while its markers are still connected.
+            // The committed table receives these retry handles atomically.
+            val retirements = stage-keyed-retirements(stale)
+            transaction-store(staged-retirements,retirements)
+
             // Committing the owned lease first prepares and publishes every
             // nested participant. Only then may the outer adapter publish its
             // retained source changes and authoritative table.
@@ -1073,13 +1166,15 @@ fun reconcile-keyed<a,k,e::E>(
             reactive-write-ui{
               final-updates.foreach(fn(update) commit-keyed-update(update))
             }
-            transaction-store(table,Keyed-table(final-index,final-order))
+            transaction-store(
+              table,Keyed-table(final-index,final-order,retirements))
+            transaction-store(staged-retirements,[])
             transaction-store(committed,True)
 
-            // Removed rows retire only after the new table and all row sources
-            // are coherent. Cleanup writes queue a later collection turn.
+            // Removed rows retire after the new table and sources are coherent.
+            // A host failure leaves the unconsumed suffix in that table.
             reactive-ui-exn-open{
-              dispose-keyed-rows(stale)
+              drain-keyed-retirements(table)
             }
           else
             // A nested adapter is constructed while the outer bootstrap FIFO is
@@ -1107,7 +1202,7 @@ fun reconcile-keyed<a,k,e::E>(
                 },
                 fn(){
                   transaction-store(
-                    table,Keyed-table(final-index,final-order))
+                    table,Keyed-table(final-index,final-order,[]))
                   transaction-store(committed,True)
                 },
                 fn()
@@ -1167,7 +1262,7 @@ fun mount-keyed-fields<s,a,k,e::E>(
             )
             transaction-store(range-owned,True)
             val table = transaction-cell(Keyed-table(
-              kokaine/internal/key-index/empty(),[]))
+              kokaine/internal/key-index/empty(),[],[]))
             val dispose = create-effect(
               root,fn() tracked(read),fn(snapshot)
                 internal/with-structural-owner(root,owner,fn()
