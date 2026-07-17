@@ -8,6 +8,7 @@ import kokaine/reactive/effects
 import kokaine/reactive/internal/lifetime
 import kokaine/reactive/internal/scheduler
 import kokaine/reactive/internal/handlers
+import kokaine/reactive/internal/application-runner
 import std/core/undiv
 
 // Capture is non-resumptive: it records the structural capability already
@@ -52,3 +53,13 @@ pub fun run-reentry(value : reentry<e>,
           )
         )
       }
+
+// The application runner deliberately surrounds the complete reactive
+// re-entry, not merely the user's action. Batch exit may flush replacements,
+// run cleanup, and publish newly bootstrapped work after `action` returns.
+pub fun run-application-reentry(
+    runner : app-runner<<exn|e>,h>,
+    value : reentry<e>,
+    action : () -> <signal-read,signal-write,pure|e> a)
+    : <|h> a
+  runner.run(fn() run-reentry(value,action))

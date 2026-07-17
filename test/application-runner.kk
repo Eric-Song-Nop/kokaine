@@ -33,7 +33,7 @@ fun require-reentry(slot : ref<global,maybe<reentry<<application-value>>>>)
     Just(value) -> value
 
 fun test-runner_wraps_batch_exit_and_cleanup()
-  val runner : app-runner<<application-value,exn>,exn> =
+  val runner : app-runner<<application-value,exn>,<exn>> =
     App-runner(with-application)
   val portal-slot : ref<global,maybe<reentry<<application-value>>>> =
     hidden(Nothing)
