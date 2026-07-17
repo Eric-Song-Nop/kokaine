@@ -31,6 +31,22 @@ fun test-direct-resource-capability()
   check(load(events) == ["direct"],
         "an aliased resource continuation finalized more than once")
 
+fun test-discard-releases-shared-finalizer-closure()
+  val events = hidden([])
+  val resource : resource-k<total> =
+    capture-resource(fn() emit(events,"discarded"))
+  val resource-copy = resource
+
+  check(resource-retains-finalizer(resource),
+        "a freshly parked resource lost its finalizer closure")
+  check(discard-resource(resource),"discard did not claim a live resource")
+  check(!resource-retains-finalizer(resource),
+        "discard retained the finalizer closure in its shared state")
+  check(!resource-retains-finalizer(resource-copy),
+        "an aliased handle did not observe the released closure")
+  finalize-resource(resource-copy)
+  check(load(events) == [],"a discarded resource remained finalizable")
+
 fun test-owned-resources-park-and-retire-lifo()
   val events = hidden([])
   val (root,()) : (root<total>,()) = create-root fn(root)
@@ -67,6 +83,7 @@ fun test-failing-resource-cannot-skip-siblings()
 
 pub fun main()
   test-direct-resource-capability()
+  test-discard-releases-shared-finalizer-closure()
   test-owned-resources-park-and-retire-lifo()
   test-failing-resource-cannot-skip-siblings()
   println("resource-finalization: all checks passed")
