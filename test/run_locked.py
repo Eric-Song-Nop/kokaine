@@ -572,6 +572,31 @@ def check_windows_command_path_preserves_console() -> None:
     assert calls == [(["fake-compiler"], False)]
 
 
+def check_permission_limited_process_group_probes() -> None:
+    runner = load_runner()
+    original_killpg = runner.os.killpg
+    original_run = runner.subprocess.run
+
+    class Process:
+        pid = 31415
+
+    def deny_group_access(_group, _number):
+        raise PermissionError(errno.EPERM, "process group is not signalable")
+
+    def unavailable_process_snapshot(*_arguments, **_options):
+        raise OSError(errno.ENOENT, "ps is unavailable")
+
+    runner.os.killpg = deny_group_access
+    try:
+        runner._forward_signal(Process(), signal.SIGTERM)
+
+        runner.subprocess.run = unavailable_process_snapshot
+        assert runner._process_group_has_live_members(Process.pid)
+    finally:
+        runner.subprocess.run = original_run
+        runner.os.killpg = original_killpg
+
+
 if __name__ == "__main__":
     if len(sys.argv) == 4 and sys.argv[1] == "--hold-lock":
         raise SystemExit(
@@ -611,6 +636,7 @@ if __name__ == "__main__":
     check_termination_keeps_lock_until_process_group_exits()
     check_child_signal_status_passthrough()
     check_windows_command_path_preserves_console()
+    check_permission_limited_process_group_probes()
     print(
         "run-locked: portable backend, contention, and status passthrough passed"
     )
