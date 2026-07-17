@@ -3,6 +3,7 @@ module structured-async
 import kokaine/async/effects
 import kokaine/async/structured
 import std/core/unsafe
+import std/core/undiv
 
 
 fun hidden(value : a) : ref<global,a>
@@ -348,6 +349,35 @@ fun test-parallel-unlinks-explicitly-released-ownership()
   check(load(disposals) == 0,
         "explicit ownership release transfers rather than disposes")
 
+tail fun acquire-many-owned(left : int, releases : list<dispose-fn>)
+                       : <async,div> list<dispose-fn>
+  if left <= 0 then releases else
+    val release = async-own(fn() ())
+    acquire-many-owned(left - 1,Cons(release,releases))
+
+tail fun release-many-owned(releases : list<dispose-fn>) : <async,div> ()
+  match releases
+    Nil -> ()
+    Cons(release,rest) ->
+      async-host(release)
+      release-many-owned(rest)
+
+fun test-structured-ownership-unlinks-at-scale()
+  val result = run-async(fn()
+    parallel(
+      fn() {
+        val releases = pretend-no-div{ acquire-many-owned(12000,[]) }
+        pretend-no-div{ release-many-owned(releases) }
+        1
+      },
+      fn() immediate(2)
+    )
+  )
+  check(result == Just((1,2)),
+        "structured ownership scale preserves both results")
+  check(load(ownership-release-calls) == 12000,
+        "structured ownership unlinks every retained registration once")
+
 fun test-race-propagates-loser-cleanup-error()
   val disposed = hidden(False)
   val failed = error/try(fn()
@@ -431,6 +461,7 @@ pub fun main()
   test-parallel-error-cancels-queued-result()
   test-parallel-disposes-synchronously-completed-loser()
   test-parallel-unlinks-explicitly-released-ownership()
+  test-structured-ownership-unlinks-at-scale()
   test-race-propagates-loser-cleanup-error()
   test-parallel-prefers-cleanup-error()
   test-race-resumes-awaits-in-loser-cleanup()
