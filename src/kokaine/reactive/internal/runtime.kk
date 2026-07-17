@@ -135,7 +135,14 @@ pub noinline fun root/is-disposed(root : root<e>) : bool
 
 pub fun update(root : root<e>, action : () -> <signal-write,pure|e> a)
               : <exn|e> a
-  dispatch(root,fn() mask<signal-read>{ action() })
+  dispatch(root,fn() mask<signal-read>{
+    val result = action()
+    // An earlier failed continuation remains queued even when this action's
+    // write is equal and therefore emits no fresh invalidation. An explicit
+    // update boundary still gives that pending work a recovery turn.
+    request-flush(root.root-key)
+    result
+  })
 
 pub fun sample(root : root<e>, action : () -> <signal-read,pure|e> a)
               : <exn|e> a

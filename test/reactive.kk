@@ -460,6 +460,28 @@ fun test-exception-restoration()
   (!seen).check-ints([2,0],"handler state is restored after exception")
   root.dispose()
 
+fun test-exact-value-update-retries-pending-work()
+  val should-fail : ref<global,bool> = ref(True)
+  val seen : ref<global,list<int>> = ref([])
+  val (root,value) = create-root fn(root)
+    val value = signal(root,0)
+    val dispose = create-effect(root,fn() value.get,fn(current)
+      if current == 1 && !should-fail
+      then throw("intentional exact-value retry failure")
+      else seen.push(current)
+    )
+    value
+
+  val failed : error<()> = mask<exn>{
+    error/try fn() update(root){ value.set(1) }
+  }
+  check(failed.is-error,"the first effect attempt fails")
+  should-fail := False
+  update(root){ value.set(1) }
+  (!seen).check-ints([1,0],
+    "an explicit equal update retries already-pending work")
+  root.dispose()
+
 
 // --------------------------------------------------------------------------
 // Regression cases from independent scheduler and capability review
@@ -742,6 +764,7 @@ pub fun main()
   test-final-control-recovery()
   test-non-reentrant-write()
   test-exception-restoration()
+  test-exact-value-update-retries-pending-work()
   test-transitive-batch-freshness()
   test-dynamic-depth-atomicity()
   test-targeted-producer-pull()
