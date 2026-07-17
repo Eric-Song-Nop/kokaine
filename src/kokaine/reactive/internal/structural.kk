@@ -23,11 +23,15 @@ pub type structural-owner<e::E>
     structural-registration : registry-registration<retirement-work<e>>
   )
 
+pub type structural-authority
+  Structural-owned
+  Structural-joined
+
 pub type structural-transaction<e::E>
   Structural-transaction(
     structural-transaction-root  : root<e>,
     structural-scheduler         : scheduler-transaction<e>,
-    structural-owns-transaction  : bool
+    structural-authority         : structural-authority
   )
 
 pub fun open-structural-owner(root : root<e>) : exn structural-owner<e>
@@ -77,26 +81,41 @@ pub fun open-structural-transaction(root : root<e>)
                                       : exn structural-transaction<e>
   check-not-pure-plane("structural transaction creation")
   match current-work-transaction(root)
-    Nothing -> Structural-transaction(root,open-work-transaction(root),True)
-    Just(active) -> Structural-transaction(root,active,False)
+    Nothing -> Structural-transaction(
+      root,open-work-transaction(root),Structural-owned)
+    Just(active) -> Structural-transaction(root,active,Structural-joined)
 
 pub fun drain-structural-transaction(
     transaction : structural-transaction<e>) : <div,exn|e> ()
   match transaction
-    Structural-transaction(root,current,True) ->
+    Structural-transaction(root,current,Structural-owned) ->
       drain-work-transaction(root,current)
-    Structural-transaction(_,_,False) -> ()
+    Structural-transaction(_,_,Structural-joined) -> ()
+
+pub fun structural-transaction/owns-publication(
+    transaction : structural-transaction<e>) : bool
+  match transaction
+    Structural-transaction(_,_,Structural-owned) -> True
+    Structural-transaction(_,_,Structural-joined) -> False
+
+pub fun stage-structural-publication(
+    transaction : structural-transaction<e>,
+    prepare : () -> <exn|e> (), publish : () -> (),
+    rollback : () -> <exn|e> ()) : exn ()
+  match transaction
+    Structural-transaction(root,current,_) ->
+      stage-work-publication(root,current,prepare,publish,rollback)
 
 pub fun commit-structural-transaction(
-    transaction : structural-transaction<e>) : exn ()
+    transaction : structural-transaction<e>) : <div,exn|e> ()
   match transaction
-    Structural-transaction(root,current,True) ->
+    Structural-transaction(root,current,Structural-owned) ->
       commit-work-transaction(root,current)
-    Structural-transaction(_,_,False) -> ()
+    Structural-transaction(_,_,Structural-joined) -> ()
 
 pub fun abort-structural-transaction(
     transaction : structural-transaction<e>) : <exn|e> ()
   match transaction
-    Structural-transaction(root,current,True) ->
+    Structural-transaction(root,current,Structural-owned) ->
       abort-work-transaction(root,current)
-    Structural-transaction(_,_,False) -> ()
+    Structural-transaction(_,_,Structural-joined) -> ()

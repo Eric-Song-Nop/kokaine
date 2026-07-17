@@ -203,8 +203,21 @@ pub fun internal/drain-structural-transaction(
   runtime-drain-structural-transaction(
     transaction.unwrap-structural-transaction)
 
+pub fun internal/structural-transaction-owned(
+    transaction : structural-transaction<e>) : bool
+  runtime-structural-transaction-owned(
+    transaction.unwrap-structural-transaction)
+
+pub fun internal/stage-structural-publication(
+    transaction : structural-transaction<e>,
+    prepare : () -> <exn|e> (), publish : () -> (),
+    rollback : () -> <exn|e> ()) : exn ()
+  runtime-stage-structural-publication(
+    transaction.unwrap-structural-transaction,
+    prepare,publish,rollback)
+
 pub fun internal/commit-structural-transaction(
-    transaction : structural-transaction<e>) : exn ()
+    transaction : structural-transaction<e>) : <div,exn|e> ()
   runtime-commit-structural-transaction(
     transaction.unwrap-structural-transaction)
 
