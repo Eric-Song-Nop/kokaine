@@ -9,6 +9,7 @@ module kokaine/reactive/internal/model
 import std/core/unsafe
 import std/core/undiv
 import kokaine/reactive/internal/resource
+import kokaine/reactive/internal/registry
 
 // --------------------------------------------------------------------------
 // Persistent cells and root identity
@@ -73,7 +74,7 @@ pub type source<a>
     source-cell     : ref<global,a>,
     source-equals   : (a,a) -> bool,
     source-version  : ref<global,int>,
-    source-captures : ref<global,list<packed-capture>>
+    source-captures : registry<packed-capture>
   )
 
 

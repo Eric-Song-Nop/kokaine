@@ -5,6 +5,7 @@ module kokaine/reactive/internal/scheduler
 
 import kokaine/reactive/internal/model
 import kokaine/reactive/internal/lifetime
+import kokaine/reactive/internal/registry
 import std/core/undiv
 
 // --------------------------------------------------------------------------
@@ -25,9 +26,6 @@ pub fun packed-active(packed : packed-capture) : bool
             Capture-dead -> False
             _ -> True
     )
-
-pub fun compact-captures(values : list<packed-capture>) : list<packed-capture>
-  values.filter(packed-active)
 
 pub fun cut-capture(packed : packed-capture) : ()
   match packed
@@ -92,9 +90,7 @@ pub fun enqueue-trace(plane : plane<e>, current : trace<e>) : ()
         _ -> ()
 
 pub fun notify-source(source : source<a>) : ()
-  val active = compact-captures(load(source.source-captures))
-  store(source.source-captures,active)
-  active.foreach(cut-capture)
+  source.source-captures.snapshot.foreach(cut-capture)
 
 
 pub fun activate-trace-loop(plane : plane<e>, current : trace<e>) : <div> ()
@@ -636,4 +632,4 @@ pub fun check-frame-registration(root : root<e>, current : frame<e>) : exn ()
     _ -> throw("reactive value created under a retired continuation branch")
 
 pub fun new-source(root : root<e>, value : a, equals : (a,a) -> bool) : source<a>
-  Source(root.root-key,cell(value),equals,cell(0),cell([]))
+  Source(root.root-key,cell(value),equals,cell(0),new-registry())

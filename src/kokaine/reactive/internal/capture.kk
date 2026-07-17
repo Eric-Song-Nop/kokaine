@@ -7,6 +7,7 @@ import kokaine/reactive/internal/model
 import kokaine/reactive/effects
 import kokaine/reactive/internal/lifetime
 import kokaine/reactive/internal/scheduler
+import kokaine/reactive/internal/registry
 import std/core/undiv
 
 // --------------------------------------------------------------------------
@@ -88,9 +89,14 @@ pub fun reify-trace(root : root<r>, plane : plane<e>,
               val owned = cell(Owned-end)
               val current-frame = Frame(token,owned)
               val current-frame-slot = cell(current-frame)
+              val registration : ref<global,maybe<registry-registration<packed-capture>>> = cell(Nothing)
               val unlink = fn()
-                store(source.source-captures,
-                      compact-captures(load(source.source-captures)))
+                match load(registration)
+                  Nothing -> ()
+                  Just(current-registration) ->
+                    store(registration,Nothing)
+                    val _ = current-registration.take
+                    ()
               val current = Trace-read(
                 gate,
                 owner-slot,
@@ -113,9 +119,9 @@ pub fun reify-trace(root : root<r>, plane : plane<e>,
               val target = match entry
                 Nothing -> current
                 Just(entry-target) -> entry-target
-              store(source.source-captures,
-                    Cons(pack-capture(plane,target,current),
-                         load(source.source-captures)))
+              val registered = source.source-captures.insert(
+                pack-capture(plane,target,current))
+              store(registration,Just(registered))
               val nested = with-entry(plane,entry,fn()
                 with-current(plane,current,current-frame,
                   fn() rcontext.resume(load(source.source-cell)))
