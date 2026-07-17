@@ -3,6 +3,7 @@
 
 import errno
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -66,6 +67,70 @@ def exclusive_lock(
                 fcntl.flock(handle, fcntl.LOCK_UN)
 
 
+def _forward_signal(process: subprocess.Popen, number: int) -> None:
+    try:
+        if os.name == "nt":
+            if number == signal.SIGINT:
+                process.send_signal(signal.CTRL_C_EVENT)
+            elif number == getattr(signal, "SIGBREAK", None):
+                process.send_signal(signal.CTRL_BREAK_EVENT)
+            else:
+                process.terminate()
+        else:
+            os.killpg(process.pid, number)
+    except ProcessLookupError:
+        pass
+
+
+def _run_command(command):
+    received_signals = []
+    forwarded_count = 0
+    process = None
+
+    def forward_pending() -> None:
+        nonlocal forwarded_count
+        while process is not None and forwarded_count < len(received_signals):
+            _forward_signal(process, received_signals[forwarded_count])
+            forwarded_count += 1
+
+    def handle_signal(number, _frame) -> None:
+        received_signals.append(number)
+        forward_pending()
+
+    handled_signals = []
+    for name in ("SIGHUP", "SIGINT", "SIGTERM", "SIGBREAK"):
+        number = getattr(signal, name, None)
+        if number is not None and number not in handled_signals:
+            handled_signals.append(number)
+
+    previous_handlers = {}
+    for number in handled_signals:
+        previous_handlers[number] = signal.getsignal(number)
+        signal.signal(number, handle_signal)
+
+    try:
+        options = {}
+        if os.name == "nt":
+            options["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+        else:
+            options["start_new_session"] = True
+        process = subprocess.Popen(command, **options)
+        forward_pending()
+        returncode = process.wait()
+    finally:
+        for number, handler in previous_handlers.items():
+            signal.signal(number, handler)
+
+    received = received_signals[0] if received_signals else None
+    return returncode, received
+
+
+def _exit_with_signal(number: int) -> int:
+    signal.signal(number, signal.SIG_DFL)
+    os.kill(os.getpid(), number)
+    return 128 + number
+
+
 def main(arguments: list[str]) -> int:
     if len(arguments) < 2:
         print(
@@ -77,7 +142,13 @@ def main(arguments: list[str]) -> int:
     lock_path = Path(arguments[0])
     command = arguments[1:]
     with exclusive_lock(lock_path):
-        return subprocess.run(command, check=False).returncode
+        returncode, received_signal = _run_command(command)
+
+    if received_signal is not None:
+        return _exit_with_signal(received_signal)
+    if returncode < 0:
+        return _exit_with_signal(-returncode)
+    return returncode
 
 
 if __name__ == "__main__":
