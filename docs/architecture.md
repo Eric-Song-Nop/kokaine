@@ -23,11 +23,16 @@ memos, and re-entry capabilities. Its implementation is split by responsibility:
 | `reactive/effects.kk` | `signal-read` and `signal-write` operations |
 | `internal/model.kk` | sources, traces, planes, scopes, frames, and work tickets |
 | `internal/capture.kk` | raw-handler reification of synchronous read suffixes |
-| `internal/lifetime.kk` | draft transactions, ownership, and finalization |
+| `internal/registry.kk` | removable O(1) lifetime registrations |
+| `internal/lifetime.kk` | detached, iterative two-phase retirement |
+| `internal/work-transaction.kk` | deque frontiers and local bootstrap groups |
+| `internal/structural.kk` | retained keyed lifetimes and transaction leases |
 | `internal/scheduler.kk` | invalidation, queueing, resumption, and targeted settle |
 | `internal/handlers.kk` | write interpretation, sampled reads, and dispatch |
 | `internal/reentry.kk` | continuation-derived host re-entry |
 | `kokaine/internal/event-runtime.kk` | guarded multi-shot browser-event continuation |
+| `kokaine/internal/key-index.kk` | persistent balanced key lookup shared by renderers |
+| `kokaine/control.kk` | memo branches and list/vector keyed control flow |
 | `internal/runtime.kk` | roots and high-level signal, memo, and effect operations |
 | `internal/bridge.kk` | unambiguous calls from the opaque facade |
 
@@ -169,10 +174,16 @@ truth. A `Resume-work(trace)` ticket is runnable only while that trace is
 the current continuation frontier. It ensures that an earlier invalidated read
 rebuilds its suffix before a nested read from the obsolete generation can run.
 
+The queue is a mutable deque represented as a logical
+`front ++ reverse(back)`. Invalidated resume tickets enter at the front; newly
+registered bootstrap tickets enter at the back in amortized constant time.
+Normalizing an exhausted back list is amortized across all preceding appends,
+so wide registration does not repeatedly copy earlier capabilities.
+
 Tickets blocked by an ancestor are deferred. Tickets whose trace became live,
-draft, or dead are stale and are skipped by `take-work` while scanning the
-queue. Source compaction is separate: it removes dead packed entries from a
-source's capture index, not scheduler tickets. On the effect plane, the active
+draft, or dead are stale and are skipped while scanning the queue. Source
+captures unlink themselves from their intrusive registry when retired, so no
+later source compaction pass is required. On the effect plane, the active
 ticket also remains queued while it runs so a non-local final control operation
 cannot lose the exact queued resumption ticket. These rules replace the
 conventional combination of observer rank, dirty bit, and a queue entry
@@ -246,22 +257,33 @@ rollback path even though it does not return an `Error` value.
 
 Every resumed suffix runs in a fresh draft frame. Work created during that
 dynamic extent—child effect scopes, pure derivation scopes, and opaque resource
-continuations for DOM listeners or region contents—is recorded in the frame's
-ownership ledger. A resource's cleanup action is inside the parked K's
-`finally`; the ledger stores only its abstract one-shot finalization capability.
-On successful publication the draft frame becomes the live structural extent
-of that trace node.
+continuations for DOM listeners or region contents—is inserted into removable
+child or finalizer registries on the frame's lifetime owner. Each registration
+has an O(1), idempotent unlink handle. A resource's cleanup action remains
+inside the parked K's `finally`; the registry retains only its abstract
+one-shot finalization capability. On successful publication the draft frame
+becomes the live structural extent of that trace node.
 
 Replacing a generation first marks the old frame and its complete subtree dead,
 then runs finalizers. This prevents cleanup code from attaching new reactive
 work to a half-retired branch. A stale frame rejects registration, and root
 disposal applies the same retirement transitively and idempotently.
 
-This ownership ledger is explicit, but it is not part of dependency
-propagation. Retirement first detaches the capability from its owner and then
-calls `rcontext.finalize`, which enters the parked resource K's `finally` to
-remove DOM listeners and ranges exactly once. No `Owned-cleanup` action closure
-is retained as an alternate destruction path.
+Lifetime ownership is explicit, but it is not part of dependency propagation.
+Retirement seals and detaches the complete structural subtree, marks every
+scope dead, and only then runs collected finalizers iteratively. Cleanup calls
+`rcontext.finalize`, which enters the parked resource K's `finally` to remove
+DOM listeners and ranges exactly once. Explicit unregistration consumes the
+resource capability as well as its registry handle.
+
+Keyed rows require a lifetime that outlasts any one collection-trace
+generation. An explicit structural owner is only a lifetime, frame, captured
+continuation gate, and removable registration under the current frame. It owns
+no queue, target marks, or secondary ledger. Each keyed region owns one
+persistent reconciliation owner; every business key owns a child row owner.
+Reordering retains that child owner, deletion unlinks and retires it exactly
+once, and retiring the enclosing conditional region or root reaches the same
+row subtree transitively.
 
 ## Batching
 
@@ -296,15 +318,18 @@ Consequently, updates resume the precise continuation of an affected live
 binding, not a retained component-render closure and not the earlier HTML
 builder. Replacing a region retires its old generation and owned reactive
 children, clears the contents between its persistent marker pair, and then
-mounts the new view. It is whole-range replacement, not keyed or virtual-DOM
-reconciliation.
+mounts the new view. An ordinary `Region` is whole-range replacement; keyed
+reconciliation is represented separately by `Keyed-region`.
 
 Mount construction is a commit boundary. The outer mount disposer is retained
 before its bootstrap batch may flush; if any descendant bootstrap fails or
 control abandons the call, that disposer retires the complete partially
 published mount before the error escapes. Root construction applies the same
 principle at a wider boundary and retires the unpublished root on action or
-initial-drain failure.
+initial-drain failure. Before constructing the first view, `mount` also installs
+an idempotent `attachShadow` observer on the parent's DOM realm. Kokaine-created
+elements and trusted-HTML parse results are recorded at their creation boundary;
+imperative and declarative closed-shadow hosts are recorded separately.
 
 Managed element and trusted-HTML roots carry an internal same-root re-entry
 capability in a `WeakMap`. A later `mount` into such a node restores that exact
@@ -319,6 +344,98 @@ therefore fails closed instead of scanning into foreign siblings. Cleanup
 snapshots the validated nodes and then detaches each from its current parent, so
 a custom element's synchronous `disconnectedCallback` cannot create a
 half-removed range merely by moving a later node elsewhere.
+
+## Native control flow and keyed reconciliation
+
+`kokaine/control` builds two kinds of backend-neutral structure. `branch`
+accepts a memo and emits an ordinary dynamic region; `when` is its boolean
+specialization with an optional empty fallback. `for` has list and vector
+overloads. Each packages a tracked collection reader, native sequential walker,
+business-key function, comparator, item equality, and row builder into an
+existential `keyed-plan`. The plan deliberately exposes no indexing operation,
+so the list path never detours through a vector.
+
+The row builder receives read-only item and index accessors. DOM interpretation
+backs those accessors with row-owned sources. A retained key therefore keeps
+its marker range, actual DOM objects, listeners, continuation frame, local form
+state, and nested reactive/resource ownership; only unequal item values and
+changed indexes publish. A deleted key retires the row owner after a successful
+commit.
+
+Reconciliation uses a persistent AVL key index. One sequential source walk
+constructs the desired table and update list with `O(log n)` lookup/insertion,
+so table construction is `O(n log n)`. Draft bootstrap uses the scheduler's
+deque-backed local work transaction rather than scanning the global frontier.
+Inserting a duplicate key fails the draft. DOM ordering is then a four-part
+transaction:
+
+1. build draft rows and validate keys/equality without publishing the new table
+   or any retained-row source updates;
+2. drain only the transaction-local bootstrap FIFO while resumptions remain on
+   the global frontier; nested keyed construction joins the active drain;
+3. move and revalidate complete marker ranges, then publish changed item/index
+   sources and the coherent table; and
+4. commit the outer transaction lease and retire stale rows.
+
+On bootstrap failure or abortive final control, reconciliation aborts and
+detaches the local work groups before cleanup can re-enter, then disposes every
+rollback-reachable draft. On a move failure, it aborts, restores the previous
+row order, and disposes draft owners before rethrowing. A joined nested lease
+cannot steal commit or abort authority from its outer owner. The range primitive validates
+common parentage, endpoint reachability, and an out-of-range insertion target
+before extraction;
+it moves existing nodes rather than cloning them and restores focus/selection
+when the host move disturbs it. The snapshot follows open shadow roots and
+retains input selection direction or DOM Selection anchor/focus direction. It
+starts from the keyed parent's own document rather than the module's global
+document, so same-origin iframe mounts use that document's active element,
+Selection, fragment, and native Node operations. It replays state only when it
+changed, so a native state-preserving move does not redundantly invoke focus or
+selection restoration. A fragment fallback fails before the first move when
+focus is retargeted through an opaque shadow host or the host cannot inspect and
+restore a shadow-root selection. Every restoration is verified; a detached
+endpoint, ineffective `focus()`, or missing Selection API becomes a move
+failure. If host interference makes restoration itself impossible, the adapter
+raises a combined rollback error instead of publishing the new table or
+retained-row sources.
+
+The adapter resolves `moveBefore` from the keyed parent's same-realm prototype
+(`Element`, `DocumentFragment`, or `Document`) and uses it only when the parent
+exposes that exact primitive. Forward movement and rollback therefore share the
+same state-preserving operation and cannot be split by an instance polyfill.
+
+Every custom-element-shaped node reachable through light DOM or an open shadow
+root in a keyed region whose physical order changes makes the update fail before
+touching the DOM. This includes autonomous names and customized built-ins—even
+when `getAttribute("is")` does not reflect their internal `is` value, their
+prototype metadata is altered, or their definition lives in a scoped or foreign
+registry. Custom-element lifecycle callbacks are captured when the definition
+is registered, are not introspectable later, and run synchronously during a
+move; even a
+`connectedMoveCallback` could observe a partial physical order before retained
+item/index sources commit.
+
+Closed roots need a provenance check because the platform does not expose their
+contents. The per-realm observer records every closed root created through the
+current `attachShadow` primitive. A tracked closed host is rejected; a
+pre-mount external element that could host an untracked closed root is rejected
+conservatively; foreign-realm elements and a replaced observer also fail
+closed. Framework-created elements and trusted HTML remain eligible for the
+validated native or fragment paths, including ordinary `div`/`span` content.
+Initial mounts, data-only updates, and keyed updates whose physical order
+already matches remain unaffected.
+
+This provenance guarantee assumes cooperative DOM code. JavaScript can retain
+or borrow an unwrapped native `attachShadow` function and thereby create a
+closed root that no standards API can enumerate afterward. Direct calls through
+such saved or foreign primitives, masking native DOM accessors, and mutation of
+Kokaine's internal registries are outside the adapter contract; detectable
+prototype replacement still fails closed.
+
+SSR eliminates the same keyed plan as one snapshot. It performs the native
+sequential walk, checks keys through the balanced index, constructs constant
+item/index accessors for each row, and renders in source order. It does not
+retain row state, but it applies the same duplicate-key rule as the browser.
 
 ## Host callbacks, event continuations, and re-entry
 
@@ -376,10 +493,16 @@ innermost boundary and translate them to Koka `exn`, as the DOM adapter does.
 - `stateful-entry-gates.kk`, `entry-targeted-settle.kk`, and
   `entry-structural.kk` check state-entry routing and ownership.
 - `structural-scopes.kk` checks replacement cleanup and stale-frame rejection.
+- `structural-transactions.kk` checks persistent row ownership, parent/root
+  retirement, stale-owner rejection, and outer-versus-joined leases.
+- `control-flow.kk` checks conditional/list/vector snapshots and duplicate-key
+  parity; `key-index.kk` checks balanced lookup under adversarial insertion.
 - `final-control-rollback.kk` checks abandoned drafts and exact-K retry.
 - `continuation-reentry.kk` checks callback-created ownership and stale re-entry.
 - `dom-lifecycle.kk` plus `browser_counter.py` check listener, region, and mount
   retirement in a real browser.
+- `dom-keyed.kk` exercises retained node identity, item/index publication,
+  reorder/insert/delete, focus, event re-entry, cleanup, and rollback.
 - `dom-event-continuation.kk` checks repeated multi-shot delivery, synchronous
   nested dispatch and `preventDefault`, plus rejection after retirement.
 - `root-construction.kk`, `dom-mount-rollback.kk`, `dom-ownership.kk`, and
@@ -388,6 +511,7 @@ innermost boundary and translate them to Koka `exn`, as the DOM adapter does.
 - `event_effect_boundary.py` checks that a lexical-only application effect
   cannot enter a retained callback.
 
-The browser renderer currently replaces all content between a region's
-persistent markers and does not provide keyed reconciliation, hydration,
-suspense, or preservation of arbitrary outer handler stacks.
+The browser renderer still replaces all content between an ordinary region's
+persistent markers. `Keyed-region` adds explicit business-key reconciliation;
+hydration, suspense, and preservation of arbitrary outer handler stacks remain
+outside the current scope.
