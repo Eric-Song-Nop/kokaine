@@ -773,6 +773,7 @@ with serve_project() as origin:
             "leasedOutstanding": 1,
             "leaseDisposals": 0,
             "snapshotLeaseDisposals": 1,
+            "structuredSnapshotLeaseDisposals": 1,
         }, owner_result
 
         browser.close()

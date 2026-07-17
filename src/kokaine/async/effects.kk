@@ -28,6 +28,11 @@ pub type await-result<a>
 // or `AbortController.abort`.
 pub alias dispose-fn = () -> ui ()
 
+// Internal ownership handlers need to distinguish a successful transfer from
+// a release which lost to an already-detached retirement snapshot. Public
+// callers continue to receive an ordinary one-shot `dispose-fn` below.
+pub alias ownership-release-fn = () -> ui bool
+
 // Setup installs a callback and returns either a disposer or a setup failure.
 // The completion flag is reserved for protocol compatibility. Primitive
 // Kokaine awaits are one-shot, accept only the first callback, and pass `True`.
@@ -73,7 +78,7 @@ pub effect async-ownership
   // completed. The base ledger follows the reactive generation; structured
   // combinators and Resource loaders can refine that lifetime. The returned
   // release action transfers ownership without running the disposer.
-  fun async-own-disposer(dispose : dispose-fn) : dispose-fn
+  fun async-own-disposer(dispose : dispose-fn) : ownership-release-fn
 
 
 // --------------------------------------------------------------------------
@@ -155,7 +160,10 @@ pub fun async-schedule(action : () -> ui ()) : async ()
 // generation rather than a structured cancellation scope; a nearer structured
 // or Resource ledger may further constrain or promote that lifetime.
 pub fun async-own(dispose : dispose-fn) : async dispose-fn
-  async-own-disposer(dispose)
+  val release = async-own-disposer(dispose)
+  fn()
+    val _ = release()
+    ()
 
 
 // --------------------------------------------------------------------------

@@ -135,7 +135,7 @@ pub fun new-async-lease-group() : async-lease-group
 
 fun release-async-lease(group : async-lease-group,
                         id : int,
-                        disposer-slot : ref<global,maybe<dispose-fn>>) : ui ()
+                        disposer-slot : ref<global,maybe<dispose-fn>>) : ui bool
   match group
     Async-lease-group(_,entries,_) ->
       val current = load(disposer-slot)
@@ -144,23 +144,25 @@ fun release-async-lease(group : async-lease-group,
       // accumulate empty slots after explicit ownership transfers.
       store(entries,load(entries).filter(fn(entry) entry.lease-entry-id != id))
       match current
-        Nothing -> ()
-        Just(_) -> decrement-outstanding()
+        Nothing -> False
+        Just(_) ->
+          decrement-outstanding()
+          True
 
 fun async-lease-release(group : async-lease-group,
                         id : int,
                         disposer-slot : ref<global,maybe<dispose-fn>>)
-                       : dispose-fn
+                       : ownership-release-fn
   fn() release-async-lease(group,id,disposer-slot)
 
 pub fun async-lease-group/own(group : async-lease-group,
-                              dispose : dispose-fn) : ui dispose-fn
+                              dispose : dispose-fn) : ui ownership-release-fn
   match group
     Async-lease-group(live,entries,next-id) ->
       if !load(live) then
         // A re-entrant acquisition after retirement cannot become reachable.
         dispose()
-        fn() ()
+        fn() False
       else
         val id = load(next-id)
         val disposer-slot = cell(Just(dispose))
@@ -473,7 +475,7 @@ noinline fun release-runtime-scope(runtime : generation-runtime<e>,
 // slot before unlinking or invoking host code, so re-entry cannot double-run
 // either transition.
 fun register-owned-disposer(root : root<<ui|e>>, dispose : dispose-fn)
-                           : <signal-write,pure,ui|e> dispose-fn
+                           : <signal-write,pure,ui|e> ownership-release-fn
   val disposer-slot : ref<global,maybe<dispose-fn>> = cell(Just(dispose))
   val committed = cell(False)
   val rollback = fn()
@@ -496,12 +498,14 @@ fun register-owned-disposer(root : root<<ui|e>>, dispose : dispose-fn)
         // Retirement may already have claimed the registered cleanup into a
         // detached snapshot. Only a successful unlink may consume this slot;
         // otherwise the snapshot remains responsible for disposal/counting.
-        if !registration.try-unregister then () else
+        if !registration.try-unregister then False else
           val current = load(disposer-slot)
           store(disposer-slot,Nothing)
           match current
-            Nothing -> ()
-            Just(_) -> decrement-outstanding()
+            Nothing -> False
+            Just(_) ->
+              decrement-outstanding()
+              True
   )
 
 // Scheduled host actions are ordinary generation-owned tasks. Keep their

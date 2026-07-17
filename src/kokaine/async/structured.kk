@@ -70,23 +70,25 @@ fun ownership-guard/accept(guard : ownership-guard) : ()
 fun ownership-guard/as-disposer(guard : ownership-guard) : dispose-fn
   fn() guard.retire
 
-fun release-ownership(release : dispose-fn,
-                      guard : ownership-guard) : ui ()
-  release()
-  guard.accept
+fun release-ownership(release : ownership-release-fn,
+                      guard : ownership-guard) : ui bool
+  if release() then
+    guard.accept
+    True
+  else False
 
-fun ownership-release-capability(release : dispose-fn,
-                                 guard : ownership-guard) : dispose-fn
+fun ownership-release-capability(release : ownership-release-fn,
+                                 guard : ownership-guard)
+                                : ownership-release-fn
   fn() release-ownership(release,guard)
 
-fun discard-ownership(release : dispose-fn,
+fun discard-ownership(release : ownership-release-fn,
                       guard : ownership-guard) : ui ()
   // Unlink the generation registration first. If a retirement snapshot has
   // already won, its guarded disposer and this path still share one raw slot.
-  release()
-  guard.retire
+  if release() then guard.retire else ()
 
-fun ownership-discard-capability(release : dispose-fn,
+fun ownership-discard-capability(release : ownership-release-fn,
                                  guard : ownership-guard) : dispose-fn
   fn() discard-ownership(release,guard)
 

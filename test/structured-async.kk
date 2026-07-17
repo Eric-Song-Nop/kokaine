@@ -88,7 +88,7 @@ fun run-async(action : () -> <async,exn> a) : <ui,exn> maybe<a>
     fun async-ioc(host-action) host-action()
     fun async-schedule-ioc(_scope,host-action) host-action()
   with handler<async-ownership>
-    fun async-own-disposer(_dispose) fn() ()
+    fun async-own-disposer(_dispose) fn() True
   with handler<async-cancel>
     val async-scope = root-scope
     fun cancel-scope(scope) cancel-pending(scope)

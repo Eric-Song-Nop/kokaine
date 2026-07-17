@@ -1,6 +1,7 @@
 module async-owner-registration
 
 import kokaine/async/effects
+import kokaine/async/structured
 import kokaine/reactive/internal/model
 import kokaine/reactive/internal/resource
 import kokaine/reactive/internal/runtime
@@ -9,13 +10,16 @@ import std/core/undiv
 
 
 extern begin-result() : ui ()
-  js inline "globalThis.__kokaineAsyncOwner={ done:false, owned:-1, outstanding:-1, leasedOwned:-1, leasedOutstanding:-1, leaseDisposals:0, snapshotLeaseDisposals:0 }"
+  js inline "globalThis.__kokaineAsyncOwner={ done:false, owned:-1, outstanding:-1, leasedOwned:-1, leasedOutstanding:-1, leaseDisposals:0, snapshotLeaseDisposals:0, structuredSnapshotLeaseDisposals:0 }"
 
 extern record-lease-disposal() : ui ()
   js inline "globalThis.__kokaineAsyncOwner.leaseDisposals += 1"
 
 extern record-snapshot-lease-disposal() : ui ()
   js inline "globalThis.__kokaineAsyncOwner.snapshotLeaseDisposals += 1"
+
+extern record-structured-snapshot-lease-disposal() : ui ()
+  js inline "globalThis.__kokaineAsyncOwner.structuredSnapshotLeaseDisposals += 1"
 
 extern publish-result(owned : int, outstanding : int,
                       leased-owned : int, leased-outstanding : int) : ui ()
@@ -50,9 +54,31 @@ fun exercise-snapshot-release-race() : <ui,exn> ()
   )
   root.dispose()
 
+// A structured child wraps the generation lease in its own ownership guard.
+// Losing the generation unlink race must not let that nearer release clear the
+// raw disposer which the detached retirement snapshot is still responsible for.
+fun exercise-structured-snapshot-release-race() : <ui,exn> ()
+  val (root,()) : (root<<ui>>,()) = create-root fn(_root) ()
+  dispatch(root,fn()
+    run-generation-async(root,fn()
+      val _ = parallel(
+        fn() {
+          val release = async-own(
+            fn() record-structured-snapshot-lease-disposal())
+          on-cleanup(root,fn() release())
+          1
+        },
+        fn() 2
+      )
+      ()
+    )
+  )
+  root.dispose()
+
 pub fun main()
   begin-result()
   exercise-snapshot-release-race()
+  exercise-structured-snapshot-release-race()
   val (root,()) : (root<<ui>>,()) = create-root fn(_root) ()
   dispatch(root,fn()
     run-generation-async(root,fn()
