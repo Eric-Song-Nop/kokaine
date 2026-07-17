@@ -127,6 +127,8 @@ with serve_project() as origin:
                 globalThis.__kokaineThrowKeyedBootstrap = true;
                 globalThis.__kokaineInjectKeyedRogue = false;
                 globalThis.__kokaineEscapeKeyedDescendant = false;
+                globalThis.__kokaineRetireKeyedMove = false;
+                globalThis.__kokaineRetireKeyedMoveResult = null;
                 globalThis.__kokaineKeyedBootstrapOrder = [];
                 globalThis.__kokaineKeyedConnections = [];
                 if (!customElements.get('x-kokaine-keyed-fail')) {
@@ -156,6 +158,12 @@ with serve_project() as origin:
                                     );
                                 }
                                 const parent = this.closest('#keyed-move-list');
+                                if (parent && globalThis.__kokaineRetireKeyedMove) {
+                                    globalThis.__kokaineRetireKeyedMove = false;
+                                    globalThis.__kokaineRetireKeyedMoveResult =
+                                        globalThis.__kokaineKeyed.retireMove();
+                                    return;
+                                }
                                 if (!parent || !globalThis.__kokaineInjectKeyedRogue) {
                                     return;
                                 }
@@ -400,6 +408,18 @@ with serve_project() as origin:
         assert invoke(page, "moveReset") is True
         assert invoke(page, "move") is True
         assert order(page, "#keyed-move-list") == [3, 1, 2]
+
+        assert invoke(page, "moveReset") is True
+        page.evaluate("globalThis.__kokaineRetireKeyedMove = true")
+        assert invoke(page, "move") is False
+        assert page.evaluate("globalThis.__kokaineRetireKeyedMoveResult") is True
+        assert page.locator("#keyed-move-root").evaluate(
+            "node => node.childNodes.length"
+        ) == 0
+        for handle in (move_one, move_two, move_three):
+            assert handle.evaluate("node => node.parentNode === null"), (
+                "a retired keyed row was resurrected by move rollback"
+            )
 
         assert invoke(page, "bootstrap") is False
         assert page.locator("#keyed-bootstrap-target").count() == 0

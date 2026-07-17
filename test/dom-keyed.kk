@@ -125,8 +125,9 @@ extern publish-faults(
   bootstrap : () -> ui bool,
   bootstrap-reset : () -> ui bool,
   compact-ledger : () -> ui bool,
-  bulk-retirement : () -> ui bool) : ui ()
-  js inline "Object.assign(globalThis.__kokaineKeyed, { duplicate:#1, duplicateReset:#2, move:#3, moveReset:#4, bootstrap:#5, bootstrapReset:#6, compactLedger:#7, bulkRetirement:#8 })"
+  bulk-retirement : () -> ui bool,
+  retire-move : () -> ui bool) : ui ()
+  js inline "Object.assign(globalThis.__kokaineKeyed, { duplicate:#1, duplicateReset:#2, move:#3, moveReset:#4, bootstrap:#5, bootstrapReset:#6, compactLedger:#7, bulkRetirement:#8, retireMove:#9 })"
 
 extern publish-stress(
   dispose-stress : () -> ui bool,
@@ -170,6 +171,12 @@ fun safe-read(root : root<<ui>>, source : signal<int>) : ui int
 fun safe-dispose(root : root<<ui>>) : ui ()
   with catch fn(_) ()
   root.dispose()
+
+fun safe-unmount(dispose : disposer<<ui>>) : ui bool
+  with catch fn(_)
+    False
+  unmount(dispose)
+  True
 
 fun compact-ledger-stress(root : root<<ui>>,
                           owner : structural-owner<<ui>>) : ui bool
@@ -432,7 +439,8 @@ pub fun main()
     fn() safe-set(bootstrap-root,bootstrap-source,[item(7,"seven")]),
     fn() safe-set(bootstrap-root,bootstrap-source,[]),
     fn() compact-ledger-stress(compact-root,compact-owner),
-    fn() bulk-retirement-stress(compact-root,compact-owner)
+    fn() bulk-retirement-stress(compact-root,compact-owner),
+    fn() safe-unmount(move-dispose)
   )
   publish-stress(
     fn() safe-set(dispose-stress-root,dispose-stress-source,[]),
