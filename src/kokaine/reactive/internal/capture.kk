@@ -152,10 +152,10 @@ pub fun prepare-trace(root : root<r>, plane : plane<e>,
         finally(
           fn() lift-div(fn(){
             if load(completed) then () else
-              // `run-bootstrap` retires the scope on a non-local exit; these
-              // raw captures are not attached to scope.body yet and therefore
-              // need their own dynamic rollback.
-              val _ = try-retire-drafts(load(drafts))
+              // A final control operation cannot return through `error/try`.
+              // Claim both the unpublished scope and every raw capture before
+              // the first draft-owned cleanup is allowed to re-enter user code.
+              val _ = try-retire-scope-drafts(current,load(drafts))
               ()
           }),
           fn() lift-div(fn()
@@ -169,16 +169,14 @@ pub fun prepare-trace(root : root<r>, plane : plane<e>,
             }
             val result = match attempt
               Error(failure) ->
-                val _ = pretend-no-div{ error/try(fn() retire-scope(current)) }
-                val _ = try-retire-drafts(load(drafts))
+                val _ = try-retire-scope-drafts(current,load(drafts))
                 Error(failure)
               Ok(built) ->
                 val publish-built = built.built-publish
                 val publication = pretend-no-div{ publish-built() }
                 match publication
                   Error(failure) ->
-                    val _ = pretend-no-div{ error/try(fn() retire-scope(current)) }
-                    val _ = try-retire-drafts(load(drafts))
+                    val _ = try-retire-scope-drafts(current,load(drafts))
                     Error(failure)
                   Ok(_) ->
                     match load(state)
@@ -188,7 +186,7 @@ pub fun prepare-trace(root : root<r>, plane : plane<e>,
                         store(state,Scope-live)
                         Ok(())
                       _ ->
-                        val _ = try-retire-drafts(load(drafts))
+                        val _ = try-retire-scope-drafts(current,load(drafts))
                         Ok(())
             store(completed,True)
             result

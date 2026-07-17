@@ -239,6 +239,30 @@ tail fun draft-work-list(values : list<trace<e>>,
     Cons(current,rest) ->
       draft-work-list(rest,Cons(trace-retirement-work(current),collected))
 
+pub fun collect-scope-drafts(current : continuation-scope<e>,
+                             values : list<trace<e>>)
+                            : <div> list<retirement<e>>
+  val work = draft-work-list(values,[scope-retirement-work(current)])
+  collect-retirement-work(work)
+
+pub fun collect-lifetime-drafts(owner : lifetime-owner<e>,
+                                values : list<trace<e>>)
+                               : <div> list<retirement<e>>
+  val work = draft-work-list(values,[lifetime-retirement-work(owner)])
+  collect-retirement-work(work)
+
+pub fun retire-scope-drafts(current : continuation-scope<e>,
+                            values : list<trace<e>>)
+                           : <div,exn|e> ()
+  val finalizers = pretend-no-div{ collect-scope-drafts(current,values) }
+  run-finalizers(finalizers)
+
+pub fun retire-lifetime-drafts(owner : lifetime-owner<e>,
+                               values : list<trace<e>>)
+                              : <div,exn|e> ()
+  val finalizers = pretend-no-div{ collect-lifetime-drafts(owner,values) }
+  run-finalizers(finalizers)
+
 pub fun retire-drafts(values : list<trace<e>>) : <div,exn|e> ()
   val work = draft-work-list(values,[])
   val finalizers = pretend-no-div{ collect-retirement-work(work) }
@@ -253,6 +277,14 @@ pub fun try-retire-lifetime(owner : lifetime-owner<e>) : e error<()>
 pub fun try-retire-drafts(values : list<trace<e>>) : e error<()>
   error/try(fn() retire-drafts-now(values))
 
+pub fun try-retire-scope-drafts(current : continuation-scope<e>,
+                                values : list<trace<e>>) : e error<()>
+  error/try(fn() pretend-no-div{ retire-scope-drafts(current,values) })
+
+pub fun try-retire-lifetime-drafts(owner : lifetime-owner<e>,
+                                   values : list<trace<e>>) : e error<()>
+  error/try(fn() pretend-no-div{ retire-lifetime-drafts(owner,values) })
+
 pub fun record-draft(plane : plane<e>, current : trace<e>) : exn ()
   match load(plane.plane-draft)
     Nothing -> throw("continuation node created outside a draft transaction")
@@ -263,24 +295,12 @@ pub fun attempt-build(plane : plane<e>,
                   action : () -> <div,exn|e> built-trace<e>)
                  : <div|e> error<built-trace<e>>
   val previous = load(plane.plane-draft)
-  val completed = cell(False)
-  val result = finally(
-    fn() lift-div(fn(){
-      store(plane.plane-draft,previous)
-      // A final control operation does not return an `Error` to the caller.
-      // Retire every raw continuation captured by the abandoned transaction
-      // while this dynamic extent still owns the concrete draft list.
-      if load(completed) then () else
-        val _ = try-retire-drafts(load(drafts))
-        ()
-    }),
+  finally(
+    fn() store(plane.plane-draft,previous),
     fn()
       store(plane.plane-draft,Just(drafts))
-      val attempt = error/try(action)
-      store(completed,True)
-      attempt
+      error/try(action)
   )
-  result
 
 pub fun with-frame(plane : plane<e>, current : frame<e>,
                action : () -> <div,exn|e> a) : <div,exn|e> a
