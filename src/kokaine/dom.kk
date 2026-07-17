@@ -236,7 +236,7 @@ extern dom-dialog-is-open(target : node) : ui bool
   js inline "!!(#1).open"
 
 extern dom-dialog-is-modal(target : node) : ui bool
-  js inline "(function(target){ if(typeof target.matches !== 'function') throw new Error('Element.matches() is not supported by this browser'); return target.matches(':modal'); })(#1)"
+  js inline "(function(target){ if(typeof Element !== 'function' || typeof Element.prototype.matches !== 'function') throw new Error('Element.matches() is not supported by this browser'); try { return Reflect.apply(Element.prototype.matches,target,[':modal']); } catch(error) { if(!error || error.name!=='SyntaxError') throw error; } if(typeof HTMLDialogElement !== 'function') throw new Error('HTMLDialogElement is not supported by this browser'); var openDescriptor=Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype,'open'); var showModal=HTMLDialogElement.prototype.showModal; if(!openDescriptor || typeof openDescriptor.get!=='function') throw new Error('HTMLDialogElement.open is not supported by this browser'); if(typeof showModal!=='function') throw new Error('HTMLDialogElement.showModal() is not supported by this browser'); if(!Reflect.apply(openDescriptor.get,target,[])) return false; try { Reflect.apply(showModal,target,[]); return true; } catch(error) { if(error && error.name==='InvalidStateError') return false; throw error; } })(#1)"
 
 extern dom-dialog-return-value(target : node) : ui string
   js inline "String((#1).returnValue)"
