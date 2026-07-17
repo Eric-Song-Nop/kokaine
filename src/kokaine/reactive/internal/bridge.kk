@@ -110,3 +110,7 @@ pub fun runtime-compact-structural-owner(owner : structural-owner<e>) : ()
 pub fun runtime-bootstrap-structural-owner(owner : structural-owner<e>)
                                           : <div,exn|e> ()
   bootstrap-structural-owner(owner)
+
+pub fun runtime-bootstrap-structural-owners(
+          owners : list<structural-owner<e>>) : <div,exn|e> ()
+  bootstrap-structural-owners(owners)

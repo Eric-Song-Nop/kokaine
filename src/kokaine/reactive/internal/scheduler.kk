@@ -8,6 +8,34 @@ import kokaine/reactive/internal/lifetime
 import std/core/undiv
 
 // --------------------------------------------------------------------------
+// Persistent two-ended work queue
+// --------------------------------------------------------------------------
+
+pub fun empty-work-queue() : work-queue<e>
+  Work-queue([],[])
+
+pub fun work-queue-values(current : work-queue<e>) : list<work<e>>
+  match current
+    Work-queue(front,back) ->
+      match (front,back)
+        (Nil,_) -> back.reverse
+        (_,Nil) -> front
+        _ -> front ++ back.reverse
+
+fun prepend-work(current : work-queue<e>, value : work<e>) : work-queue<e>
+  match current
+    Work-queue(front,back) -> Work-queue(Cons(value,front),back)
+
+fun append-work(current : work-queue<e>, value : work<e>) : work-queue<e>
+  match current
+    Work-queue(front,back) -> Work-queue(front,Cons(value,back))
+
+fun append-reversed-work(current : work-queue<e>,
+                         reversed : list<work<e>>) : work-queue<e>
+  match current
+    Work-queue(front,back) -> Work-queue(front,reversed ++ back)
+
+// --------------------------------------------------------------------------
 // Source-local continuation indexing and invalidation
 // --------------------------------------------------------------------------
 
@@ -90,7 +118,7 @@ pub fun enqueue-trace(plane : plane<e>, current : trace<e>) : ()
         Capture-live ->
           store(state,Capture-pending)
           store(plane.plane-queue,
-                Cons(Resume-work(current),load(plane.plane-queue)))
+                prepend-work(load(plane.plane-queue),Resume-work(current)))
         Capture-running ->
           // The scheduler owns the current ticket while this turn executes.
           // A self-write only changes the capability state; success/failure or
@@ -103,7 +131,7 @@ pub fun enqueue-trace(plane : plane<e>, current : trace<e>) : ()
         Capture-live ->
           store(state,Capture-pending)
           store(plane.plane-queue,
-                Cons(Resume-work(current),load(plane.plane-queue)))
+                prepend-work(load(plane.plane-queue),Resume-work(current)))
         Capture-running ->
           // A write from the currently resumed suffix schedules a later turn;
           // the active queue ticket remains in place until this turn settles.
@@ -183,26 +211,32 @@ pub fun work-stale(current : work<e>) : bool
         Capture-live -> True
         _ -> False
 
-pub fun take-work-loop(values : list<work<e>>, skipped : list<work<e>>)
-                  : <div> (maybe<work<e>>,list<work<e>>)
-  match values
-    Nil -> (Nothing,skipped.reverse)
+fun take-queued-work-loop(front : list<work<e>>, back : list<work<e>>,
+                          skipped : list<work<e>>)
+                         : <div> (maybe<work<e>>,work-queue<e>)
+  match front
+    Nil ->
+      match back
+        Nil -> (Nothing,Work-queue(skipped.reverse,[]))
+        _ -> take-queued-work-loop(back.reverse,[],skipped)
     Cons(current,rest) ->
       if current.work-runnable
-      then (Just(current),skipped.reverse ++ rest)
+      then (Just(current),Work-queue(skipped.reverse ++ rest,back))
       elif current.work-stale
-      then take-work-loop(rest,skipped)
-      else take-work-loop(rest,Cons(current,skipped))
+      then take-queued-work-loop(rest,back,skipped)
+      else take-queued-work-loop(rest,back,Cons(current,skipped))
 
-pub fun take-work(values : list<work<e>>)
-             : (maybe<work<e>>,list<work<e>>)
-  pretend-no-div{ take-work-loop(values,[]) }
+fun take-queued-work(current : work-queue<e>)
+                    : (maybe<work<e>>,work-queue<e>)
+  match current
+    Work-queue(front,back) ->
+      pretend-no-div{ take-queued-work-loop(front,back,[]) }
 
 pub fun queue-work(plane : plane<e>, current : work<e>) : ()
   val values = load(plane.plane-queue)
   val queued = match current
-    Bootstrap-work(_,_) -> values ++ [current]
-    Resume-work(_) -> Cons(current,values)
+    Bootstrap-work(_,_) -> append-work(values,current)
+    Resume-work(_) -> prepend-work(values,current)
   store(plane.plane-queue,queued)
 
 pub fun abandon-draft-frame(current : frame<e>, drafts : list<trace<e>>) : e ()
@@ -371,11 +405,11 @@ pub fun run-derive-work(plane : plane<total>, current : work<total>)
 
 pub fun restore-deferred(plane : plane<total>, deferred : list<work<total>>) : ()
   store(plane.plane-queue,
-        load(plane.plane-queue) ++ deferred.reverse)
+        append-reversed-work(load(plane.plane-queue),deferred))
 
 pub fun run-next-derived-loop(plane : plane<total>,
                           deferred : list<work<total>>) : div error<bool>
-  val (next,rest) = take-work(load(plane.plane-queue))
+  val (next,rest) = take-queued-work(load(plane.plane-queue))
   store(plane.plane-queue,rest)
   match next
     Nothing ->
@@ -401,7 +435,7 @@ pub fun run-next-derived(plane : plane<total>) : div error<bool>
   run-next-derived-loop(plane,[])
 
 pub fun run-next-effect(plane : plane<e>) : <div|e> error<bool>
-  val (next,rest) = take-work(load(plane.plane-queue))
+  val (next,rest) = take-queued-work(load(plane.plane-queue))
   match next
     Nothing ->
       store(plane.plane-queue,rest)
@@ -410,7 +444,7 @@ pub fun run-next-effect(plane : plane<e>) : <div|e> error<bool>
       // Effect work can be abandoned by an ambient final control operation,
       // so its actual ticket stays queued across invocation. A normal success
       // makes it stale; abort/failure leaves the Pending capability recoverable.
-      store(plane.plane-queue,Cons(current,rest))
+      store(plane.plane-queue,prepend-work(rest,current))
       match run-work-raw(plane,current)
         Error(failure) -> Error(failure)
         Ok(_) -> Ok(True)

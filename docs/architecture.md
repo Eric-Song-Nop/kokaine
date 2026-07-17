@@ -172,9 +172,15 @@ truth. A `Resume-work(trace)` ticket is runnable only while that trace is
 the current continuation frontier. It ensures that an earlier invalidated read
 rebuilds its suffix before a nested read from the obsolete generation can run.
 
+The persistent queue is represented as a logical `front ++ reverse(back)`.
+Invalidated resume tickets enter at the front; newly registered bootstrap
+tickets enter at the back in constant time. Scanning normalizes the back at
+most once while retaining blocked-ticket order, so wide structural
+registration does not repeatedly copy every earlier bootstrap capability.
+
 Tickets blocked by an ancestor are deferred. Tickets whose trace became live,
-draft, or dead are stale and are skipped by `take-work` while scanning the
-queue. Source compaction is separate: it removes dead packed entries from a
+draft, or dead are stale and are skipped while scanning the queue. Source
+compaction is separate: it removes dead packed entries from a
 source's capture index, not scheduler tickets. On the effect plane, the active
 ticket also remains queued while it runs so a non-local final control operation
 cannot lose the exact queued resumption ticket. These rules replace the

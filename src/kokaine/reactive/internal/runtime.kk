@@ -24,7 +24,9 @@ pub fun dispatch(root : root<e>,
 // --------------------------------------------------------------------------
 
 fun fresh-plane(current-frame : frame<e>) : plane<e>
-  Plane(cell([]),cell(Nothing),cell(Nothing),cell(current-frame),cell(Nothing))
+  Plane(
+    cell(empty-work-queue()),cell(Nothing),cell(Nothing),
+    cell(current-frame),cell(Nothing))
 
 fun fresh-root() : root<e>
   val token = cell(Scope-live)
@@ -49,8 +51,8 @@ fun retire-root-now(root : root<e>) : <div,exn|e> ()
       store(root.root-flushing,False)
       store(root.root-disposed,True)
       store(root.root-disposing,False)
-      store(root.root-derive-plane.plane-queue,[])
-      store(root.root-effect-plane.plane-queue,[])
+      store(root.root-derive-plane.plane-queue,empty-work-queue())
+      store(root.root-effect-plane.plane-queue,empty-work-queue())
       store(root.root-derive-plane.plane-current,Nothing)
       store(root.root-effect-plane.plane-current,Nothing)
       store(root.root-derive-plane.plane-current-entry,Nothing)

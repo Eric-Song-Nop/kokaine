@@ -191,3 +191,8 @@ pub fun internal/compact-structural-owner(owner : structural-owner<e>) : ()
 pub fun internal/bootstrap-structural-owner(owner : structural-owner<e>)
                                            : <div,exn|e> ()
   runtime-bootstrap-structural-owner(owner.unwrap-structural-owner)
+
+pub fun internal/bootstrap-structural-owners(
+          owners : list<structural-owner<e>>) : <div,exn|e> ()
+  runtime-bootstrap-structural-owners(
+    owners.map(fn(owner) owner.unwrap-structural-owner))

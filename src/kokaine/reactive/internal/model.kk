@@ -160,7 +160,7 @@ pub type structural-owner<e::E>
     structural-root       : root-key,
     structural-checkpoint : maybe<continuation-gate>,
     structural-frame      : frame<e>,
-    structural-queue      : ref<global,list<work<e>>>
+    structural-queue      : ref<global,work-queue<e>>
   )
 
 pub type owned<e::E>
@@ -202,10 +202,19 @@ pub type work<e::E>
     bootstrap-owner : ref<global,maybe<derive-producer>>
   )
 
+// The logical order is `front ++ back.reverse`. Resume tickets enter at the
+// front while bootstrap tickets enter at the back, preserving the scheduler's
+// two existing admission classes without copying the whole queue on enqueue.
+pub type work-queue<e::E>
+  Work-queue(
+    queue-front : list<work<e>>,
+    queue-back  : list<work<e>>
+  )
+
 // Derivations use `plane<total>` while effects use `plane<e>`.
 pub type plane<e::E>
   Plane(
-    plane-queue         : ref<global,list<work<e>>>,
+    plane-queue         : ref<global,work-queue<e>>,
     plane-current       : ref<global,maybe<continuation-gate>>,
     plane-current-entry : ref<global,maybe<trace<e>>>,
     plane-current-frame : ref<global,frame<e>>,

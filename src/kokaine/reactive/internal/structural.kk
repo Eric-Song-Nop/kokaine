@@ -167,22 +167,46 @@ fun bootstrap-structural-queue(mark : ref<global,bool>,
               Ok(_) -> bootstrap-structural-queue(mark,rest,True)
           else bootstrap-structural-queue(mark,rest,progressed)
 
-fun bootstrap-structural-loop(owner : structural-owner<e>)
-                             : <div|e> error<()>
-  val frame = owner.structural-frame
-  match load(frame.frame-token)
-    Scope-dead -> Ok(())
-    _ ->
-      val mark = cell(False)
-      mark-structural-scopes([Bootstrap-frame-task(frame)],mark)
-      match bootstrap-structural-queue(
-              mark,load(owner.structural-queue),False)
-        Error(problem) -> Error(problem)
-        Ok(True) -> bootstrap-structural-loop(owner)
-        Ok(False) -> Ok(())
+fun validate-structural-owner-roots(
+      expected : root-key, owners : list<structural-owner<e>>) : exn ()
+  match owners
+    Nil -> ()
+    Cons(owner,rest) ->
+      if same-root(expected,owner.structural-root)
+      then validate-structural-owner-roots(expected,rest)
+      else throw("structural owners belong to different reactive roots")
+
+fun mark-structural-owners(owners : list<structural-owner<e>>,
+                           mark : ref<global,bool>) : <div> ()
+  match owners
+    Nil -> ()
+    Cons(owner,rest) ->
+      mark-structural-scopes(
+        [Bootstrap-frame-task(owner.structural-frame)],mark)
+      mark-structural-owners(rest,mark)
+
+fun bootstrap-structural-owners-loop(
+      queue : ref<global,work-queue<e>>,
+      owners : list<structural-owner<e>>) : <div|e> error<()>
+  val mark = cell(False)
+  mark-structural-owners(owners,mark)
+  match bootstrap-structural-queue(
+          mark,work-queue-values(load(queue)),False)
+    Error(problem) -> Error(problem)
+    Ok(True) -> bootstrap-structural-owners-loop(queue,owners)
+    Ok(False) -> Ok(())
+
+pub fun bootstrap-structural-owners(owners : list<structural-owner<e>>)
+                               : <div,exn|e> ()
+  check-not-pure-plane("structural owner bootstrap")
+  match owners
+    Nil -> ()
+    Cons(first,rest) ->
+      validate-structural-owner-roots(first.structural-root,rest)
+      val result = lift-exn(fn() bootstrap-structural-owners-loop(
+        first.structural-queue,owners))
+      result.untry
 
 pub fun bootstrap-structural-owner(owner : structural-owner<e>)
                               : <div,exn|e> ()
-  check-not-pure-plane("structural owner bootstrap")
-  val result = lift-exn(fn() bootstrap-structural-loop(owner))
-  result.untry
+  bootstrap-structural-owners([owner])
