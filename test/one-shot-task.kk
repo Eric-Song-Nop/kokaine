@@ -6,7 +6,7 @@ import kokaine/reactive/internal/one-shot-task
 fun check(ok : bool, message : string)
   if ok then () else throw("one-shot task: " ++ message)
 
-fun test_completion_claims_every_retained_field_once()
+fun test-completion-claims-every-retained-field-once()
   val task : one-shot-task<string,int,string> = new-one-shot-task("payload")
   check(task.accept(7),"the first completion becomes ready")
   check(!task.accept(8),"a duplicate completion loses")
@@ -25,7 +25,7 @@ fun test_completion_claims_every_retained_field_once()
     Task-finished(Task-completed) -> ()
     _ -> throw("one-shot task: completion did not become terminal")
 
-fun test_cancellation_wins_before_or_after_setup_returns()
+fun test-cancellation-wins-before-or-after-setup-returns()
   val early : one-shot-task<string,int,string> = new-one-shot-task("early")
   match early.claim-stop(Task-canceled)
     Nothing -> throw("one-shot task: pending cancellation did not win")
