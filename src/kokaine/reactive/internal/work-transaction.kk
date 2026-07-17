@@ -95,8 +95,9 @@ pub type work-transaction-state
 
 pub type work-group<a>
   Work-group(
-    group-state : ref<global,work-transaction-state>,
-    group-queue : work-queue<a>
+    group-state    : ref<global,work-transaction-state>,
+    group-queue    : work-queue<a>,
+    group-rollback : work-queue<a>
   )
 
 pub fun new-work-transaction-state()
@@ -105,7 +106,7 @@ pub fun new-work-transaction-state()
 
 pub fun new-work-group(state : ref<global,work-transaction-state>)
                       : work-group<a>
-  Work-group(state,new-work-queue())
+  Work-group(state,new-work-queue(),new-work-queue())
 
 pub noinline fun work-group/state(group : work-group<a>)
                                   : work-transaction-state
@@ -116,6 +117,13 @@ pub fun work-group/same-transaction(left : work-group<a>,
   unsafe-ptr-eq(left.group-state,right.group-state)
 
 pub fun work-group/append(group : work-group<a>, value : a) : ()
+  group.group-queue.append(value)
+
+// A bootstrap enters the runnable queue once but remains in the rollback
+// ledger until the complete transaction commits or aborts. Drain-time requeues
+// use `append`/`prepend` and therefore cannot duplicate transaction ownership.
+pub fun work-group/track(group : work-group<a>, value : a) : ()
+  group.group-rollback.append(value)
   group.group-queue.append(value)
 
 pub fun work-group/prepend(group : work-group<a>, value : a) : ()
@@ -132,11 +140,20 @@ pub fun work-group/take-all(group : work-group<a>) : list<a>
   group.group-queue.clear
   values
 
+pub fun work-group/take-rollback(group : work-group<a>) : list<a>
+  val values = group.group-rollback.values
+  group.group-rollback.clear
+  values
+
+pub fun work-group/release-rollback(group : work-group<a>) : ()
+  group.group-rollback.clear
+
 pub fun work-group/append-values(group : work-group<a>, values : list<a>) : ()
   group.group-queue.append-values(values)
 
 pub fun work-group/clear(group : work-group<a>) : ()
   group.group-queue.clear
+  group.group-rollback.clear
 
 pub fun work-group/begin-drain(group : work-group<a>) : bool
   match group.state
@@ -187,7 +204,7 @@ pub fun route-bootstrap(global : work-queue<a>,
   match active
     Just(group) ->
       match group.state
-        Work-open -> group.append(value)
-        Work-draining -> group.append(value)
+        Work-open -> group.track(value)
+        Work-draining -> group.track(value)
         _ -> global.append(value)
     Nothing -> global.append(value)

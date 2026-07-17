@@ -606,7 +606,11 @@ pub fun commit-work-transaction(root : root<e>,
       root.root-effect-plane.detach-matching-group(effect-group)
       root.root-derive-plane.plane-queue.append-values(derive-residual)
       root.root-effect-plane.plane-queue.append-values(effect-residual)
-      if derive-group.mark-committed then ()
+      if derive-group.mark-committed then
+        // Structural owners retain committed scopes; the transaction no longer
+        // needs its rollback-only references after the state becomes terminal.
+        derive-group.release-rollback
+        effect-group.release-rollback
       else throw("scheduler transaction commit lost its ready state")
     _ -> throw("scheduler transaction must drain successfully before commit")
 
@@ -638,13 +642,14 @@ tail fun prepend-pure-bootstrap-retirements(
         Resume-work(_) -> prepend-pure-bootstrap-retirements(rest,collected)
 
 fun retire-transaction-bootstraps(
-    derive-pending : list<work<total>>, effect-pending : list<work<e>>)
+    derive-owned : list<work<total>>, effect-owned : list<work<e>>)
     : <div,exn|e> ()
-  val effect-structural = prepend-bootstrap-retirements(effect-pending,[])
+  val effect-structural = prepend-bootstrap-retirements(effect-owned,[])
   val structural = prepend-pure-bootstrap-retirements(
-    derive-pending,effect-structural)
-  // Expand every queued scope first. All bootstrap slots are cleared, scopes
-  // are dead, and owner registrations are unlinked before cleanup can run.
+    derive-owned,effect-structural)
+  // Expand every transaction-owned scope first. All bootstrap slots are
+  // cleared, scopes are dead, and owner registrations are unlinked before
+  // cleanup can run, including scopes which already drained successfully.
   val finalizers = collect-retirement-work(structural)
   run-finalizers(finalizers)
 
@@ -665,17 +670,18 @@ pub fun abort-work-transaction(root : root<e>,
           derive-group.clear
           effect-group.clear
         _ ->
-          // Claim the concrete tickets before clearing the groups. Queue clearing
-          // alone would leave Starting scopes pullable through `memo.get`.
-          val derive-pending = derive-group.take-all
-          val effect-pending = effect-group.take-all
+          // Claim the complete rollback ledgers before clearing runnable queues.
+          // A successful drain has already discarded its stale queue ticket but
+          // remains transaction-owned until this claim or an explicit commit.
+          val derive-owned = derive-group.take-rollback
+          val effect-owned = effect-group.take-rollback
           root.root-derive-plane.detach-matching-group(derive-group)
           root.root-effect-plane.detach-matching-group(effect-group)
           val claimed = derive-group.mark-aborted
           effect-group.clear
           if !claimed
           then throw("scheduler transaction abort lost its active state")
-          else retire-transaction-bootstraps(derive-pending,effect-pending)
+          else retire-transaction-bootstraps(derive-owned,effect-owned)
   }
 
 pub fun settle-failure(message : string) : settle-result
