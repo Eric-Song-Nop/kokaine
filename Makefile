@@ -17,6 +17,7 @@ test-native:
 	$(KOKA) $(KOKA_FLAGS) -e test/root-construction.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/resource-finalization.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/internal-registry.kk
+	$(KOKA) $(KOKA_FLAGS) -e test/internal-int-index.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/source-capture-registry.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/lifetime-foundation.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/work-transaction.kk

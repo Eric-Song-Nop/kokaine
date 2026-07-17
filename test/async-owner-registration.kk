@@ -12,7 +12,7 @@ import std/core/undiv
 
 
 extern begin-result() : ui ()
-  js inline "globalThis.__kokaineAsyncOwner={ done:false, owned:-1, outstanding:-1, leasedOwned:-1, leasedOutstanding:-1, leaseDisposals:0, snapshotLeaseDisposals:0, structuredSnapshotLeaseDisposals:0, reentrantDisposals:0, reentrantFinalizers:0, reentrantRootDisposed:false, siblingCancellations:0, siblingDisposals:0, siblingRootDisposed:false, familyFinalizers:0, familyDisposals:0, familyRootDisposed:false, deferredCleanupCompletions:0, deferredLeaseDisposals:0, deferredRootDisposed:false, crossRootACleanups:0, crossRootBCleanups:0, crossRootADisposed:false, crossRootBDisposed:false, claimMode:'', claimObservations:{ retireFirst:{ count:0, violation:false, maxOutstanding:0, maxOwned:0 }, completionFirst:{ count:0, violation:false, maxOutstanding:0, maxOwned:0 } } }"
+  js inline "globalThis.__kokaineAsyncOwner={ done:false, owned:-1, outstanding:-1, leasedOwned:-1, leasedOutstanding:-1, leaseDisposals:0, snapshotLeaseDisposals:0, structuredSnapshotLeaseDisposals:0, reentrantDisposals:0, reentrantFinalizers:0, reentrantRootDisposed:false, siblingCancellations:0, siblingDisposals:0, siblingRootDisposed:false, familyFinalizers:0, familyDisposals:0, familyRootDisposed:false, namespaceNativeCancellations:0, namespaceForeignCancellations:0, namespaceNativeAtForeignCancel:-1, deferredCleanupCompletions:0, deferredLeaseDisposals:0, deferredRootDisposed:false, crossRootACleanups:0, crossRootBCleanups:0, crossRootADisposed:false, crossRootBDisposed:false, claimMode:'', claimObservations:{ retireFirst:{ count:0, violation:false, maxOutstanding:0, maxOwned:0 }, completionFirst:{ count:0, violation:false, maxOutstanding:0, maxOwned:0 } } }"
 
 extern select-claim-mode(mode : string) : ui ()
   js inline "globalThis.__kokaineAsyncOwner.claimMode=#1"
@@ -58,6 +58,12 @@ extern record-family-disposal() : ui ()
 
 extern record-family-root-disposed(disposed : bool) : ui ()
   js inline "globalThis.__kokaineAsyncOwner.familyRootDisposed=#1"
+
+extern record-namespace-cancellation(foreign : bool) : ui ()
+  js inline "globalThis.__kokaineAsyncOwner[Number(#1) ? 'namespaceForeignCancellations' : 'namespaceNativeCancellations'] += 1"
+
+extern record-native-at-foreign-cancel() : ui ()
+  js inline "globalThis.__kokaineAsyncOwner.namespaceNativeAtForeignCancel=globalThis.__kokaineAsyncOwner.namespaceNativeCancellations"
 
 extern record-deferred-cleanup-completion() : ui ()
   js inline "globalThis.__kokaineAsyncOwner.deferredCleanupCompletions += 1"
@@ -299,6 +305,34 @@ fun exercise-detached-family-disposal() : <ui,exn> ()
   stop()
   record-family-root-disposed(root.is-disposed)
 
+fun install-namespace-sibling(scope : async-scope,
+                              foreign : bool) : <async,ui> ()
+  val setup : await-setup<()> = fn(_complete)
+    Ok(fn() ())
+  no-await(setup,scope,"namespace cancellation sibling",fn(result)
+    match result
+      Cancel -> record-namespace-cancellation(foreign)
+      _ -> ()
+  )
+
+// A routed foreign scope may share a runtime family, but its lexical root is
+// not the family's root. Targeting it must not cancel the native supervisor;
+// targeting the actual family root must still claim every family-owned task.
+fun exercise-namespace-isolation() : <ui,exn> ()
+  val (root,()) : (root<<ui>>,()) = create-root fn(_root) ()
+  dispatch(root,fn()
+    run-generation-async(root,fn() {
+      val foreign-root = new-runtime-scope-root()
+      install-namespace-sibling(async-scope,False)
+      install-namespace-sibling(new-child-scope(foreign-root),True)
+      cancel-scope(foreign-root)
+      record-native-at-foreign-cancel()
+      release-canceled-scope(foreign-root)
+      cancel-outstanding()
+    })
+  )
+  root.dispose()
+
 fun park-root-disposing-host(root : root<<ui>>) : <async,ui> ()
   val _ : () = setup/await-noexn(
     "root-disposing host",fn(_complete)
@@ -385,6 +419,7 @@ pub fun main()
   exercise-reentrant-host-disposal()
   exercise-hostile-sibling-disposal()
   exercise-detached-family-disposal()
+  exercise-namespace-isolation()
   exercise-deferred-root-disposal()
   exercise-cross-root-retirement()
   exercise-supervisor-claim-order()
