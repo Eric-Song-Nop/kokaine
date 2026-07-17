@@ -29,6 +29,7 @@ fun test-removable-registrations-scale-linearly()
   val handles = pretend-no-div{ insert-many(target,0,size,[]) }
 
   check(target.count == size,"insert count is exact")
+  check(target.has-linked-nodes,"a non-empty registry owns linked nodes")
   check(target.snapshot.take(4) == [size - 1,size - 2,size - 3,size - 4],
         "snapshot preserves newest-first registration order")
 
@@ -37,6 +38,8 @@ fun test-removable-registrations-scale-linearly()
   check(sum == expected,"every registration was claimed exactly once")
   check(target.count == 0,"claims physically unlink every node")
   check(target.snapshot == [],"claimed nodes leave no tombstones")
+  check(!target.has-linked-nodes,
+        "individual claims release the registry's ownership edge")
   check(pretend-no-div{ take-all(handles,0) } == 0,"claim is idempotent")
 
 fun test-seal-detaches-one-owned-snapshot()
@@ -44,6 +47,7 @@ fun test-seal-detaches-one-owned-snapshot()
   val first = target.insert(1)
   val second = target.insert(2)
   val third = target.insert(3)
+  check(target.has-linked-nodes,"the seal fixture starts physically linked")
 
   match target.seal-detach
     Nothing -> throw("internal registry: first seal lost its snapshot")
@@ -52,6 +56,8 @@ fun test-seal-detaches-one-owned-snapshot()
 
   check(target.sealed,"seal closes the registry before returning")
   check(target.count == 0,"seal clears the live count")
+  check(!target.has-linked-nodes,
+        "seal releases the registry's physical ownership edge")
   check(first.take.is-nothing && second.take.is-nothing && third.take.is-nothing,
         "snapshot wins every race with stale registration handles")
   check(target.seal-detach.is-nothing,"seal is idempotent")
