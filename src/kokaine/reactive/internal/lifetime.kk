@@ -5,7 +5,7 @@ module kokaine/reactive/internal/lifetime
 
 import kokaine/reactive/internal/model
 import kokaine/reactive/internal/resource
-import kokaine/reactive/internal/registry
+import kokaine/internal/registry
 import std/core/undiv
 
 // --------------------------------------------------------------------------
@@ -35,8 +35,24 @@ pub fun trace-parent-of(current : trace<e>) : maybe<continuation-gate>
 
 pub alias retirement<e> = retirement-work<e>
 
-pub fun new-lifetime-owner(state : scope-state) : lifetime-owner<e>
-  Lifetime-owner(cell(state),new-registry(),new-registry())
+pub fun new-retirement-coordinator() : retirement-coordinator<e>
+  Retirement-coordinator(cell(0),cell(False),cell(Nothing))
+
+pub fun retirement-coordinator/install-root-disposal(
+    coordinator : retirement-coordinator<e>,
+    dispose : () -> <div,exn|e> ()) : ()
+  store(coordinator.retirement-dispose-root,Just(dispose))
+
+pub fun retirement-coordinator/request-root-disposal(
+    coordinator : retirement-coordinator<e>) : bool
+  if load(coordinator.retirement-depth) <= 0 then False else
+    store(coordinator.retirement-disposal-requested,True)
+    True
+
+pub fun new-lifetime-owner(state : scope-state,
+                           coordinator : retirement-coordinator<e>)
+                          : lifetime-owner<e>
+  Lifetime-owner(cell(state),new-registry(),new-registry(),coordinator)
 
 pub fun lifetime-owner/register-child(owner : lifetime-owner<e>,
                                       work : retirement-work<e>)
@@ -185,7 +201,8 @@ pub fun collect-lifetime(owner : lifetime-owner<e>)
                     : <div> list<retirement<e>>
   collect-retirement-work([lifetime-retirement-work(owner)])
 
-fun run-finalizers-loop(finalizers : list<retirement<e>>,
+fun run-finalizers-loop(coordinator : retirement-coordinator<e>,
+                        finalizers : list<retirement<e>>,
                         latest : maybe<exception>)
                        : <div,exn|e> ()
   match finalizers
@@ -197,13 +214,15 @@ fun run-finalizers-loop(finalizers : list<retirement<e>>,
       match current
         Retirement-step(_) ->
           run-finalizers-loop(
+            coordinator,
             pretend-no-div{ collect-retirement-work(Cons(current,rest)) },
             latest)
         Retirement-finalizer(finalize) ->
           val completed = cell(False)
           val attempted = finally(
             fn() {
-              if load(completed) then () else run-finalizers(rest)
+              if load(completed) then ()
+              else run-finalizers-loop(coordinator,rest,Nothing)
             },
             fn() lift-exn(fn()
               val result = error/try(finalize)
@@ -212,24 +231,64 @@ fun run-finalizers-loop(finalizers : list<retirement<e>>,
             )
           )
           match attempted
-            Ok(_) -> run-finalizers-loop(rest,latest)
-            Error(problem) -> run-finalizers-loop(rest,Just(problem))
+            Ok(_) -> run-finalizers-loop(coordinator,rest,latest)
+            Error(problem) ->
+              run-finalizers-loop(coordinator,rest,Just(problem))
 
-pub fun run-finalizers(finalizers : list<retirement<e>>)
+fun retirement-coordinator/leave(coordinator : retirement-coordinator<e>)
+                            : <div,exn|e> ()
+  val next = max(0,load(coordinator.retirement-depth) - 1)
+  store(coordinator.retirement-depth,next)
+  if next > 0 || !load(coordinator.retirement-disposal-requested)
+  then ()
+  else
+    store(coordinator.retirement-disposal-requested,False)
+    match load(coordinator.retirement-dispose-root)
+      Nothing -> ()
+      Just(dispose) -> dispose()
+
+pub fun run-finalizers(coordinator : retirement-coordinator<e>,
+                       finalizers : list<retirement<e>>)
                   : <div,exn|e> ()
-  run-finalizers-loop(finalizers,Nothing)
+  store(coordinator.retirement-depth,
+        load(coordinator.retirement-depth) + 1)
+  finally(
+    fn() coordinator.leave,
+    fn() run-finalizers-loop(coordinator,finalizers,Nothing)
+  )
+
+fun trace-retirement-coordinator(current : trace<e>)
+                            : maybe<retirement-coordinator<e>>
+  match current
+    Trace-end -> Nothing
+    Trace-read(_,_,_,_,frame,_,_,_,_) ->
+      Just(load(frame).frame-lifetime.lifetime-retirement)
+    Trace-entry(_,_,_,frame,_,_) ->
+      Just(load(frame).frame-lifetime.lifetime-retirement)
+
+tail fun traces-retirement-coordinator(values : list<trace<e>>)
+                                  : maybe<retirement-coordinator<e>>
+  match values
+    Nil -> Nothing
+    Cons(current,rest) ->
+      match trace-retirement-coordinator(current)
+        Nothing -> traces-retirement-coordinator(rest)
+        found -> found
 
 pub fun retire-trace(current : trace<e>) : <div,exn|e> ()
-  val finalizers = pretend-no-div{ collect-retirement(current) }
-  run-finalizers(finalizers)
+  match trace-retirement-coordinator(current)
+    Nothing -> ()
+    Just(coordinator) ->
+      val finalizers = pretend-no-div{ collect-retirement(current) }
+      run-finalizers(coordinator,finalizers)
 
 pub fun retire-lifetime(owner : lifetime-owner<e>) : <div,exn|e> ()
   val finalizers = pretend-no-div{ collect-lifetime(owner) }
-  run-finalizers(finalizers)
+  run-finalizers(owner.lifetime-retirement,finalizers)
 
 pub fun retire-scope(current : continuation-scope<e>) : <div,exn|e> ()
   val finalizers = pretend-no-div{ collect-scope(current) }
-  run-finalizers(finalizers)
+  run-finalizers(current.scope-lifetime.lifetime-retirement,finalizers)
 
 tail fun draft-work-list(values : list<trace<e>>,
                          collected : list<retirement-work<e>>)
@@ -255,18 +314,21 @@ pub fun retire-scope-drafts(current : continuation-scope<e>,
                             values : list<trace<e>>)
                            : <div,exn|e> ()
   val finalizers = pretend-no-div{ collect-scope-drafts(current,values) }
-  run-finalizers(finalizers)
+  run-finalizers(current.scope-lifetime.lifetime-retirement,finalizers)
 
 pub fun retire-lifetime-drafts(owner : lifetime-owner<e>,
                                values : list<trace<e>>)
                               : <div,exn|e> ()
   val finalizers = pretend-no-div{ collect-lifetime-drafts(owner,values) }
-  run-finalizers(finalizers)
+  run-finalizers(owner.lifetime-retirement,finalizers)
 
 pub fun retire-drafts(values : list<trace<e>>) : <div,exn|e> ()
-  val work = draft-work-list(values,[])
-  val finalizers = pretend-no-div{ collect-retirement-work(work) }
-  run-finalizers(finalizers)
+  match traces-retirement-coordinator(values)
+    Nothing -> ()
+    Just(coordinator) ->
+      val work = draft-work-list(values,[])
+      val finalizers = pretend-no-div{ collect-retirement-work(work) }
+      run-finalizers(coordinator,finalizers)
 
 pub fun retire-drafts-now(values : list<trace<e>>) : <exn|e> ()
   pretend-no-div{ retire-drafts(values) }

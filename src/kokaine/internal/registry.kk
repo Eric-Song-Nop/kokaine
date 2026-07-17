@@ -5,7 +5,7 @@
   node. This pointer-to-pointer back link lets head, middle, and tail nodes use
   the same O(1) unlink operation without rebuilding an immutable list.
 --------------------------------------------------------------------------*/
-module kokaine/reactive/internal/registry
+module kokaine/internal/registry
 
 import std/core/unsafe
 import std/core/undiv
@@ -71,12 +71,11 @@ pub noinline fun registry/has-linked-nodes(target : registry<a>) : bool
         Registry-end -> False
         Registry-link(_,_,_) -> True
 
-pub fun registry/insert(target : registry<a>, value : a)
-                       : exn registry-registration<a>
+pub fun registry/try-insert(target : registry<a>, value : a)
+                       : maybe<registry-registration<a>>
   match target
     Registry(sealed,head,count) ->
-      if load(sealed) then
-        throw("cannot register with a sealed lifetime registry")
+      if load(sealed) then Nothing
       else
         val slot = cell(Just(value))
         val next = cell(load(head))
@@ -84,7 +83,13 @@ pub fun registry/insert(target : registry<a>, value : a)
         val back = cell(head)
         store(head,Registry-link(slot,back,next))
         store(count,load(count) + 1)
-        Registry-registration(slot,back,next,count)
+        Just(Registry-registration(slot,back,next,count))
+
+pub fun registry/insert(target : registry<a>, value : a)
+                       : exn registry-registration<a>
+  match target.try-insert(value)
+    Nothing -> throw("cannot register with a sealed lifetime registry")
+    Just(registration) -> registration
 
 pub fun registry-registration/take(
     registration : registry-registration<a>) : maybe<a>

@@ -4,6 +4,7 @@ import kokaine/reactive
 import kokaine/html
 import kokaine/dom
 import kokaine/internal/event-runtime
+import std/core/unsafe
 
 
 extern append-log(value : string) : ui ()
@@ -33,6 +34,15 @@ extern publish-controls(dispose : () -> ui (), read : () -> ui int,
                         raw-read : () -> ui int) : ui ()
   js inline "(globalThis.__kokaineEventContinuation = { log:[], depth:0, dispose:#1, read:#2, rawResume:#3, rawClose:#4, rawRead:#5 })"
 
+fun hidden(value : a) : ref<global,a>
+  unsafe-total { ref(value) }
+
+fun hidden-load(value : ref<global,a>) : a
+  unsafe-total { !value }
+
+fun hidden-store(target : ref<global,a>, value : a) : ()
+  unsafe-total { target := value }
+
 fun safe-dispose(dispose : disposer<<ui>>) : ui ()
   with catch fn(problem)
     report-error("event-continuation dispose failed: " ++ problem.show)
@@ -48,9 +58,14 @@ fun safe-raw-resume(root : root<<ui>>, value : event-continuation) : ui bool
   with catch fn(problem)
     report-error("raw event-continuation resume failed: " ++ problem.show)
     False
+  val accepted = hidden(False)
   dispatch(root){
-    value.resume(Event("raw",False,"",fake-original()))
+    run-async(root,fn()
+      hidden-store(accepted,
+        value.resume(Event("raw",False,"",fake-original())))
+    )
   }
+  hidden-load(accepted)
 
 pub fun main()
   val (root,(count,raw-runs)) = create-root fn(root)
@@ -58,11 +73,17 @@ pub fun main()
 
   // A direct capability canary isolates Event-live/Event-retired from DOM
   // listener removal and structural frame rejection.
-  val raw-capability = dispatch(root,fn()
-    capture-event(fn(_)
-      raw-runs.modify(fn(current) current + 1)
+  val captured-raw = hidden(Nothing)
+  dispatch(root,fn()
+    run-async(root,fn()
+      hidden-store(captured-raw,Just(capture-event(fn(_)
+        raw-runs.modify(fn(current) current + 1)
+      )))
     )
   )
+  val raw-capability = match hidden-load(captured-raw)
+    Just(capability) -> capability
+    Nothing -> throw("raw event continuation capture did not complete")
 
   val page = view
     div(attrs=[id("event-continuation-fixture")])
