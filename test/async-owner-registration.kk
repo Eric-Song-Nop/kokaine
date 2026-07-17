@@ -3,6 +3,7 @@ module async-owner-registration
 import kokaine/async/effects
 import kokaine/async/structured
 import kokaine/reactive/internal/model
+import kokaine/reactive/effects
 import kokaine/reactive/internal/resource
 import kokaine/reactive/internal/runtime
 import kokaine/reactive/internal/async-runtime
@@ -10,7 +11,7 @@ import std/core/undiv
 
 
 extern begin-result() : ui ()
-  js inline "globalThis.__kokaineAsyncOwner={ done:false, owned:-1, outstanding:-1, leasedOwned:-1, leasedOutstanding:-1, leaseDisposals:0, snapshotLeaseDisposals:0, structuredSnapshotLeaseDisposals:0 }"
+  js inline "globalThis.__kokaineAsyncOwner={ done:false, owned:-1, outstanding:-1, leasedOwned:-1, leasedOutstanding:-1, leaseDisposals:0, snapshotLeaseDisposals:0, structuredSnapshotLeaseDisposals:0, reentrantDisposals:0, reentrantFinalizers:0, reentrantRootDisposed:false }"
 
 extern record-lease-disposal() : ui ()
   js inline "globalThis.__kokaineAsyncOwner.leaseDisposals += 1"
@@ -20,6 +21,15 @@ extern record-snapshot-lease-disposal() : ui ()
 
 extern record-structured-snapshot-lease-disposal() : ui ()
   js inline "globalThis.__kokaineAsyncOwner.structuredSnapshotLeaseDisposals += 1"
+
+extern record-reentrant-disposal() : ui ()
+  js inline "globalThis.__kokaineAsyncOwner.reentrantDisposals += 1"
+
+extern record-reentrant-finalizer() : ui ()
+  js inline "globalThis.__kokaineAsyncOwner.reentrantFinalizers += 1"
+
+extern record-reentrant-root-disposed(disposed : bool) : ui ()
+  js inline "globalThis.__kokaineAsyncOwner.reentrantRootDisposed=#1"
 
 extern publish-result(owned : int, outstanding : int,
                       leased-owned : int, leased-outstanding : int) : ui ()
@@ -75,10 +85,49 @@ fun exercise-structured-snapshot-release-race() : <ui,exn> ()
   )
   root.dispose()
 
+fun dispose-root-from-host(root : root<<ui>>) : ui ()
+  with catch fn(_problem) ()
+  root.dispose()
+
+fun park-reentrant-host(root : root<<ui>>) : <async,ui> ()
+  finally(
+    fn() record-reentrant-finalizer(),
+    fn()
+      val _ : () = setup/await-noexn(
+        "reentrant host disposal",fn(_complete)
+          fn() {
+            record-reentrant-disposal()
+            dispose-root-from-host(root)
+          }
+      )
+      ()
+  )
+
+fun start-reentrant-host(root : root<<ui>>) : <signal-write,pure,ui> ()
+  mask<div>{
+    mask<signal-write>{
+      dispatch(root,fn()
+        run-generation-async(root,fn() park-reentrant-host(root))
+      )
+    }
+  }
+
+// Retiring an effect scope revokes its pending host operation. That untrusted
+// disposer may synchronously dispose the whole root, so the parked strand must
+// receive Cancel and unwind its `finally` before host re-entry can kill it.
+fun exercise-reentrant-host-disposal() : <ui,exn> ()
+  val (root,stop) = create-root fn(root)
+    create-effect(root,fn() 0,fn(_)
+      start-reentrant-host(root)
+    )
+  stop()
+  record-reentrant-root-disposed(root.is-disposed)
+
 pub fun main()
   begin-result()
   exercise-snapshot-release-race()
   exercise-structured-snapshot-release-race()
+  exercise-reentrant-host-disposal()
   val (root,()) : (root<<ui>>,()) = create-root fn(_root) ()
   dispatch(root,fn()
     run-generation-async(root,fn()

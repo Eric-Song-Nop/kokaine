@@ -774,6 +774,9 @@ with serve_project() as origin:
             "leaseDisposals": 0,
             "snapshotLeaseDisposals": 1,
             "structuredSnapshotLeaseDisposals": 1,
+            "reentrantDisposals": 1,
+            "reentrantFinalizers": 1,
+            "reentrantRootDisposed": True,
         }, owner_result
 
         browser.close()

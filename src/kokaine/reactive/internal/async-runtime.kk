@@ -358,8 +358,8 @@ fun retire-task-now(task : generation-task<a,e>, family : async-family<e>,
 
   val cancel-strand = fn()
     // Retirement finalizers likewise run without an ambient exception handler.
-    // Cancellation is best-effort, but a failed user `finally` must still be
-    // reported after the host disposer has been attempted.
+    // Cancellation is best-effort, but a failed user `finally` is reported
+    // while the outer `finally` still guarantees host disposal afterward.
     with catch fn(problem)
       report-async-error("uncaught Kokaine async cancellation exception (" ++
                          task.task-label ++ "): " ++ problem.show)
@@ -385,7 +385,7 @@ fun retire-task-now(task : generation-task<a,e>, family : async-family<e>,
   // Preserve the structural cleanup capability row even though both branches
   // have handled their own exception/divergence paths and now infer as `ui`.
   mask<signal-write>{
-    lift-exn(fn() lift-div(fn() finally(cancel-strand,dispose-host)))
+    lift-exn(fn() lift-div(fn() finally(dispose-host,cancel-strand)))
   }
 
 
