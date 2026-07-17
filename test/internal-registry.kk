@@ -1,6 +1,7 @@
 module internal-registry
 
 import kokaine/reactive/internal/registry
+import std/core/undiv
 
 
 fun check(ok : bool, message : string)
@@ -8,35 +9,35 @@ fun check(ok : bool, message : string)
 
 tail fun insert-many(target : registry<int>, next : int, remaining : int,
                      handles : list<registry-registration<int>>)
-                    : exn list<registry-registration<int>>
+                    : <div,exn> list<registry-registration<int>>
   if remaining <= 0 then handles else
-    val handle = target.insert(next)
-    insert-many(target,next + 1,remaining - 1,Cons(handle,handles))
+    val registration = target.insert(next)
+    insert-many(target,next + 1,remaining - 1,Cons(registration,handles))
 
 tail fun take-all(handles : list<registry-registration<int>>, total : int)
-                  : int
+                  : <div> int
   match handles
     Nil -> total
-    Cons(handle,rest) ->
-      match handle.take
+    Cons(registration,rest) ->
+      match registration.take
         Nothing -> take-all(rest,total)
         Just(value) -> take-all(rest,total + value)
 
 fun test-removable-registrations-scale-linearly()
   val target = new-registry()
   val size = 50000
-  val handles = insert-many(target,0,size,[])
+  val handles = pretend-no-div{ insert-many(target,0,size,[]) }
 
   check(target.count == size,"insert count is exact")
   check(target.snapshot.take(4) == [size - 1,size - 2,size - 3,size - 4],
         "snapshot preserves newest-first registration order")
 
-  val sum = take-all(handles,0)
+  val sum = pretend-no-div{ take-all(handles,0) }
   val expected = pretend-no-div{ ((size - 1) * size) / 2 }
   check(sum == expected,"every registration was claimed exactly once")
   check(target.count == 0,"claims physically unlink every node")
   check(target.snapshot == [],"claimed nodes leave no tombstones")
-  check(take-all(handles,0) == 0,"claim is idempotent")
+  check(pretend-no-div{ take-all(handles,0) } == 0,"claim is idempotent")
 
 fun test-seal-detaches-one-owned-snapshot()
   val target = new-registry()
