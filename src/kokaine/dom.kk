@@ -686,13 +686,9 @@ fun create-keyed-row<a,k,e::E>(
                 children(fn() item-source.get,fn() index-source.get)
             )
             mount-view(root,parent,Just(row-last),tree)
-            // Live descendants created during an already-running collection
-            // turn would otherwise wait for a later scheduler pass.  Bootstrap
-            // them inside the draft so a failing initial property/listener
-            // installation aborts the entire row transaction.
-            reactive-structural{
-              internal/bootstrap-structural-owner(owner)
-            }
+            // Keep descendant bootstrap capabilities queued until every draft
+            // row is reachable from the reconciler's rollback ledger.  The
+            // reconciler settles all draft owners as one targeted set.
             val row = Keyed-row(
               identity,transaction-cell(item),transaction-cell(index),
               item-source,index-source,owner,first,row-last)
@@ -786,6 +782,16 @@ fun reconcile-keyed<a,k,e::E>(
           // the first move, so the old DOM and sources remain untouched.
           val stale = collect-stale-rows(old-order,final-index,compare)
           val final-order = final-updates.map(fn(update) update.update-row)
+
+          // Every draft is now rollback-reachable and all comparator work has
+          // succeeded.  Mark the draft owners together, but let the canonical
+          // continuation queue retain FIFO bootstrap order across their rows.
+          val draft-owners =
+            transaction-load(drafts).map(fn(row) row.row-owner)
+          reactive-structural{
+            internal/bootstrap-structural-owners(draft-owners)
+          }
+
           transaction-store(move-phase,True)
           val cursor = range-first(parent,first,last)
           val _ = place-keyed-updates(parent,cursor,final-updates)

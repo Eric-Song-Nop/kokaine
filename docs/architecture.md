@@ -357,17 +357,23 @@ commit.
 
 Reconciliation uses a persistent AVL key index. One sequential source walk
 constructs the desired table and update list with `O(log n)` lookup/insertion,
-for `O(n log n)` reconciliation plus DOM moves. Inserting a duplicate key fails
-the draft. DOM ordering is then a three-part transaction:
+so table construction is `O(n log n)`. Reconciliation additionally performs
+targeted canonical-queue scans for draft bootstrap and the required DOM moves.
+Inserting a duplicate key fails the draft. DOM ordering is then a four-part
+transaction:
 
 1. build draft rows and validate keys/equality without publishing the new table
    or any retained-row source updates;
-2. move complete validated marker ranges into desired order; and
-3. publish changed item/index sources and the new table, then retire stale rows.
+2. mark all draft-row owners together and bootstrap their existing continuation
+   tickets in canonical queue order;
+3. move complete validated marker ranges into desired order; and
+4. publish changed item/index sources and the new table, then retire stale rows.
 
-On a move failure, reconciliation restores the previous row order and disposes
-draft owners before rethrowing. The range primitive validates common parentage,
-endpoint reachability, and an out-of-range insertion target before extraction;
+On bootstrap failure, reconciliation disposes every rollback-reachable draft
+without moving an old row. On a move failure, it restores the previous row
+order and disposes draft owners before rethrowing. The range primitive validates
+common parentage, endpoint reachability, and an out-of-range insertion target
+before extraction;
 it moves existing nodes rather than cloning them and restores focus/selection
 when the host move disturbs it. If host interference makes restoration itself
 impossible, the adapter raises a combined rollback error instead of publishing
