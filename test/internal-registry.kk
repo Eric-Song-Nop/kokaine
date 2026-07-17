@@ -65,6 +65,8 @@ fun test-seal-detaches-one-owned-snapshot()
   val rejected : error<registry-registration<int>> =
     error/try(fn() target.insert(4))
   check(rejected.is-error,"a sealed registry rejects late registration")
+  check(target.try-insert(5).is-nothing,
+        "non-throwing insertion reports a sealed registry atomically")
 
 pub fun main()
   test-removable-registrations-scale-linearly()
