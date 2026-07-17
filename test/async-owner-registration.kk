@@ -12,7 +12,7 @@ import std/core/undiv
 
 
 extern begin-result() : ui ()
-  js inline "globalThis.__kokaineAsyncOwner={ done:false, owned:-1, outstanding:-1, leasedOwned:-1, leasedOutstanding:-1, leaseDisposals:0, snapshotLeaseDisposals:0, structuredSnapshotLeaseDisposals:0, reentrantDisposals:0, reentrantFinalizers:0, reentrantRootDisposed:false, claimMode:'', claimObservations:{ retireFirst:{ count:0, violation:false, maxOutstanding:0, maxOwned:0 }, completionFirst:{ count:0, violation:false, maxOutstanding:0, maxOwned:0 } } }"
+  js inline "globalThis.__kokaineAsyncOwner={ done:false, owned:-1, outstanding:-1, leasedOwned:-1, leasedOutstanding:-1, leaseDisposals:0, snapshotLeaseDisposals:0, structuredSnapshotLeaseDisposals:0, reentrantDisposals:0, reentrantFinalizers:0, reentrantRootDisposed:false, siblingCancellations:0, siblingDisposals:0, siblingRootDisposed:false, familyFinalizers:0, familyDisposals:0, familyRootDisposed:false, claimMode:'', claimObservations:{ retireFirst:{ count:0, violation:false, maxOutstanding:0, maxOwned:0 }, completionFirst:{ count:0, violation:false, maxOutstanding:0, maxOwned:0 } } }"
 
 extern select-claim-mode(mode : string) : ui ()
   js inline "globalThis.__kokaineAsyncOwner.claimMode=#1"
@@ -40,6 +40,24 @@ extern record-reentrant-finalizer() : ui ()
 
 extern record-reentrant-root-disposed(disposed : bool) : ui ()
   js inline "globalThis.__kokaineAsyncOwner.reentrantRootDisposed=#1"
+
+extern record-sibling-cancellation() : ui ()
+  js inline "globalThis.__kokaineAsyncOwner.siblingCancellations += 1"
+
+extern record-sibling-disposal() : ui ()
+  js inline "globalThis.__kokaineAsyncOwner.siblingDisposals += 1"
+
+extern record-sibling-root-disposed(disposed : bool) : ui ()
+  js inline "globalThis.__kokaineAsyncOwner.siblingRootDisposed=#1"
+
+extern record-family-finalizer() : ui ()
+  js inline "globalThis.__kokaineAsyncOwner.familyFinalizers += 1"
+
+extern record-family-disposal() : ui ()
+  js inline "globalThis.__kokaineAsyncOwner.familyDisposals += 1"
+
+extern record-family-root-disposed(disposed : bool) : ui ()
+  js inline "globalThis.__kokaineAsyncOwner.familyRootDisposed=#1"
 
 extern publish-result(owned : int, outstanding : int,
                       leased-owned : int, leased-outstanding : int) : ui ()
@@ -202,9 +220,71 @@ fun exercise-reentrant-host-disposal() : <ui,exn> ()
   stop()
   record-reentrant-root-disposed(root.is-disposed)
 
+fun install-sibling(root : root<<ui>>, hostile : bool) : <async,ui> ()
+  val setup : await-setup<()> = fn(_complete)
+    Ok(fn() {
+      record-sibling-disposal()
+      if hostile then dispose-root-from-host(root) else ()
+    })
+  no-await(setup,async-scope,"hostile cancellation sibling",fn(result)
+    match result
+      Cancel -> record-sibling-cancellation()
+      _ -> ()
+  )
+
+// Claiming a supervisor is a three-phase protocol: every task is terminal,
+// every parked strand unwinds, and only then may an untrusted host disposer
+// invalidate the root needed by a sibling cancellation turn.
+fun exercise-hostile-sibling-disposal() : <ui,exn> ()
+  val (root,()) : (root<<ui>>,()) = create-root fn(_root) ()
+  dispatch(root,fn()
+    run-generation-async(root,fn() {
+      install-sibling(root,False)
+      install-sibling(root,True)
+      cancel-outstanding()
+    })
+  )
+  record-sibling-root-disposed(root.is-disposed)
+
+fun park-family(root : root<<ui>>, hostile : bool) : <async,ui> ()
+  finally(
+    fn() record-family-finalizer(),
+    fn()
+      val _ : () = setup/await-noexn(
+        "detached family sibling",fn(_complete)
+          fn() {
+            record-family-disposal()
+            if hostile then dispose-root-from-host(root) else ()
+          }
+      )
+      ()
+  )
+
+fun start-detached-families(root : root<<ui>>)
+                           : <signal-write,pure,ui> ()
+  mask<div>{
+    mask<signal-write>{
+      dispatch(root,fn() {
+        // The hostile family is newer, hence first in the frame's detached
+        // LIFO retirement snapshot. The older family must still unwind after
+        // that disposer synchronously completes whole-root retirement.
+        run-generation-async(root,fn() park-family(root,False))
+        run-generation-async(root,fn() park-family(root,True))
+      })
+    }
+  }
+
+fun exercise-detached-family-disposal() : <ui,exn> ()
+  val (root,stop) = create-root fn(root)
+    create-effect(root,fn() 0,fn(_) start-detached-families(root))
+  stop()
+  record-family-root-disposed(root.is-disposed)
+
 pub fun main()
   begin-result()
   exercise-snapshot-release-race()
   exercise-structured-snapshot-release-race()
   exercise-reentrant-host-disposal()
+  exercise-hostile-sibling-disposal()
+  exercise-detached-family-disposal()
   exercise-supervisor-claim-order()

@@ -880,6 +880,12 @@ with serve_project() as origin:
             "reentrantDisposals": 1,
             "reentrantFinalizers": 1,
             "reentrantRootDisposed": True,
+            "siblingCancellations": 2,
+            "siblingDisposals": 2,
+            "siblingRootDisposed": True,
+            "familyFinalizers": 2,
+            "familyDisposals": 2,
+            "familyRootDisposed": True,
         }, owner_result
 
         # Completing a wave of same-generation scheduled tasks must remain
@@ -895,6 +901,10 @@ with serve_project() as origin:
         )
         scale_result = page.evaluate("__kokaineAsyncScale")
         assert scale_result["count"] == 12_000, scale_result
+        assert scale_result["canceled"] == 12_000, scale_result
+        assert scale_result["disposed"] == 12_000, scale_result
+        assert scale_result["scopedCanceled"] == 12_000, scale_result
+        assert scale_result["scopedDisposed"] == 12_000, scale_result
         assert scale_result["outstanding"] == 0, scale_result
         assert scale_result["owned"] == 0, scale_result
         assert scale_result["elapsed"] < 5_000, scale_result
