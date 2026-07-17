@@ -1063,18 +1063,21 @@ fun reconcile-keyed<a,k,e::E>(
             internal/with-structural-owner(root,owner,fn() ())
           }
 
+          // Commit is the last operation which may reject the transaction
+          // itself. Keep every irreversible source/table publication after it;
+          // a joined lease is a no-op and the outermost lease owns commit.
+          reactive-structural{
+            internal/commit-structural-transaction(transaction)
+          }
+
           // Reconciliation is itself an effect publication inside the active
           // scheduler flush, so source notifications queue work but cannot
-          // settle between these writes.  No nested public batch is necessary.
+          // settle between these non-throwing writes. No nested public batch is
+          // necessary.
           reactive-write-ui{
             final-updates.foreach(fn(update) commit-keyed-update(update))
           }
           transaction-store(table,Keyed-table(final-index,final-order))
-          // Publishing the coherent table is the last fallible adapter step.
-          // A joined lease is a no-op here; the outermost lease owns commit.
-          reactive-structural{
-            internal/commit-structural-transaction(transaction)
-          }
           transaction-store(committed,True)
 
           // Removed rows retire only after the new table and all row sources are

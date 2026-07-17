@@ -84,8 +84,24 @@ fun test_joined_abort_does_not_steal_the_outer_lease()
         "only the outer lease owns commit or abort")
   root.dispose()
 
+fun test-failed-outer-commit-cannot-reach-publication()
+  val published = hidden(False)
+  val (root,transaction) = create-root fn(root)
+    internal/open-structural-transaction(root)
+
+  internal/abort-structural-transaction(transaction)
+  val attempted : error<()> = error/try fn()
+    internal/commit-structural-transaction(transaction)
+    hidden-store(published,True)
+
+  check(attempted.is-error,"a terminal transaction rejects commit")
+  check(!hidden-load(published),
+        "failed commit cannot enter the irreversible publication suffix")
+  root.dispose()
+
 pub fun main()
   test-stable-owner-uses-independent-lifetime()
   test-nested-transaction-borrows_the_outer_fifo()
   test_joined_abort_does_not_steal_the_outer_lease()
+  test-failed-outer-commit-cannot-reach-publication()
   println("structural transactions: lifetime and joined-drain contracts passed")
