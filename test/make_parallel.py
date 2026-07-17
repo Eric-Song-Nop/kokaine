@@ -38,6 +38,32 @@ MAKE = shutil.which("make")
 assert MAKE is not None, "make is required for this regression check"
 
 
+def shell_command(arguments: list[str], platform: str = os.name) -> str:
+    return shlex.join(arguments)
+
+
+def check_shell_command_encoding() -> None:
+    windows_arguments = [
+        r"C:\Program Files\Python 3.8\python.exe",
+        r"C:\work tree\test\make_parallel.py",
+        "--fake-koka",
+    ]
+    assert shell_command(
+        windows_arguments,
+        platform="nt",
+    ) == subprocess.list2cmdline(windows_arguments)
+
+    posix_arguments = [
+        "/opt/Python 3.8/bin/python3",
+        "/work tree/test/make_parallel.py",
+        "--fake-koka",
+    ]
+    assert shell_command(
+        posix_arguments,
+        platform="posix",
+    ) == shlex.join(posix_arguments)
+
+
 def handshake_path(control: Path, stage: str, entry: str) -> Path:
     token = entry.replace("/", "--")
     return control / f"{stage}-{token}"
@@ -174,7 +200,7 @@ def check_configurable_python() -> None:
             + os.pathsep
             + environment.get("PATH", "")
         )
-        fake_koka = shlex.join([sys.executable, "-c", ""])
+        fake_koka = shell_command([sys.executable, "-c", ""])
         result = subprocess.run(
             [
                 MAKE,
@@ -236,7 +262,7 @@ def check_parallel_build() -> None:
         environment.pop("MFLAGS", None)
         environment["KOKAINE_FAKE_KOKA_LOCK"] = str(temporary / "koka-lock")
 
-        fake_command = shlex.join(
+        fake_command = shell_command(
             [sys.executable, str(SCRIPT), "--fake-koka"]
         )
         release_makefile = temporary / "release.mk"
@@ -314,6 +340,7 @@ def check_parallel_build() -> None:
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--fake-koka":
         raise SystemExit(fake_koka(sys.argv[2:]))
+    check_shell_command_encoding()
     check_configurable_python()
     check_dist_recipe_wiring()
     check_parallel_build()
