@@ -40,6 +40,24 @@ pub type property-value
   Bool-property(value : bool)
   Int-property(value : int)
 
+// Native top-layer attributes use closed vocabularies so ordinary call sites
+// cannot accidentally emit unsupported modes or actions. The low-level `attr`
+// escape hatch remains available for future platform additions.
+pub type popover-mode
+  Popover-auto
+  Popover-manual
+  Popover-hint
+
+pub type popover-target-action
+  Popover-toggle
+  Popover-show
+  Popover-hide
+
+pub type dialog-close-policy
+  Dialog-close-any
+  Dialog-close-request
+  Dialog-close-explicit
+
 pub type attribute<e::E>
   Attribute(name : string, value : string)
   Boolean-attribute(name : string, enabled : bool)
@@ -285,6 +303,37 @@ pub fun disabled(value : bool) : attribute<e>
 pub fun live/disabled(read : () -> signal-read bool) : attribute<e>
   Live-attribute("disabled",fn() if read() then Just("") else Nothing)
 
+pub fun popover(mode : popover-mode = Popover-auto) : attribute<e>
+  val value = match mode
+    Popover-auto -> "auto"
+    Popover-manual -> "manual"
+    Popover-hint -> "hint"
+  attr("popover",value)
+
+pub fun popover-target(id : string) : attribute<e>
+  attr("popovertarget",id)
+
+pub fun popover-target-action(action : popover-target-action) : attribute<e>
+  val value = match action
+    Popover-toggle -> "toggle"
+    Popover-show -> "show"
+    Popover-hide -> "hide"
+  attr("popovertargetaction",value)
+
+// A form with this method closes its containing dialog without navigation.
+pub fun dialog-form-method() : attribute<e>
+  attr("method","dialog")
+
+pub fun autofocus() : attribute<e>
+  attr-if("autofocus",True)
+
+pub fun dialog-closed-by(policy : dialog-close-policy) : attribute<e>
+  val value = match policy
+    Dialog-close-any -> "any"
+    Dialog-close-request -> "closerequest"
+    Dialog-close-explicit -> "none"
+  attr("closedby",value)
+
 pub fun on-click(action : (event) -> signal-write ()) : attribute<e>
   on-write("click",action)
 
@@ -405,6 +454,13 @@ pub fun block/button(children : () -> <html<e>|p> (),
 pub fun string/button(content : string,
                       attrs : list<attribute<e>> = []) : html<e> ()
   text-tag("button",content,attrs)
+
+pub fun block/dialog(children : () -> <html<e>|p> (),
+                     attrs : list<attribute<e>> = []) : <html<e>|p> ()
+  container-tag("dialog",attrs,children)
+pub fun string/dialog(content : string,
+                      attrs : list<attribute<e>> = []) : html<e> ()
+  text-tag("dialog",content,attrs)
 
 pub fun block/label(children : () -> <html<e>|p> (),
                     attrs : list<attribute<e>> = []) : <html<e>|p> ()

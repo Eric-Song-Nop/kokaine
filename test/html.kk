@@ -89,5 +89,41 @@ pub fun main()
   assert(srcdoc-error.is-error,"srcdoc requires an explicit trusted integration")
   assert(!is-valid-element-name("1div"),"element names start with a letter")
 
+  val top-layer = view
+    fragment
+      dialog(attrs=[id("settings<&\""),dialog-closed-by(Dialog-close-any),
+                    on("close",fn(_) ())])
+        h2("Settings <safe>")
+        element("form",attrs=[dialog-form-method()])
+          button("Save",attrs=[kind("submit"),value("save"),autofocus()])
+      dialog("Request",attrs=[dialog-closed-by(Dialog-close-request)])
+      dialog("Explicit",attrs=[dialog-closed-by(Dialog-close-explicit)])
+      div(attrs=[popover(),on("beforetoggle",fn(_) ()),
+                 on("toggle",fn(_) ())])
+        text("Auto & light dismiss")
+      div("Manual",attrs=[popover(Popover-manual)])
+      div("Hint",attrs=[popover(Popover-hint)])
+      button("Toggle",attrs=[popover-target("menu<&\""),
+                             popover-target-action(Popover-toggle)])
+      button("Show",attrs=[popover-target-action(Popover-show)])
+      button("Hide",attrs=[popover-target-action(Popover-hide)])
+
+  render(root,top-layer).assert-string(
+    "<dialog id=\"settings&lt;&amp;&quot;\" closedby=\"any\">" ++
+    "<h2>Settings &lt;safe&gt;</h2>" ++
+    "<form method=\"dialog\"><button type=\"submit\" value=\"save\" autofocus>" ++
+    "Save</button></form></dialog>" ++
+    "<dialog closedby=\"closerequest\">Request</dialog>" ++
+    "<dialog closedby=\"none\">Explicit</dialog>" ++
+    "<div popover=\"auto\">Auto &amp; light dismiss</div>" ++
+    "<div popover=\"manual\">Manual</div>" ++
+    "<div popover=\"hint\">Hint</div>" ++
+    "<button popovertarget=\"menu&lt;&amp;&quot;\" popovertargetaction=\"toggle\">" ++
+    "Toggle</button>" ++
+    "<button popovertargetaction=\"show\">Show</button>" ++
+    "<button popovertargetaction=\"hide\">Hide</button>",
+    "dialog and popover SSR vocabulary"
+  )
+
   root.dispose()
-  println("html: builder, reactivity, escaping, and validation passed")
+  println("html: builder, reactivity, escaping, validation, and top-layer markup passed")
