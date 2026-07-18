@@ -1,0 +1,209 @@
+/*--------------------------------------------------------------------------
+  Copyright (c) 2026 Kokaine contributors. SPDX-License-Identifier: MIT
+
+  Reactive async resources for the browser runtime.
+
+  Dependency discovery is confined to the synchronous `source` calculation.
+  Each loader receives its immutable source snapshot under Kokaine's closed
+  Web async row. Its task is owned by the create-effect generation which
+  started it; successful host-value leases are promoted to the Resource.
+--------------------------------------------------------------------------*/
+module interface kokaine/resource
+ 
+//------------------------------
+//#kki: import declarations
+ 
+import std/core/types = std/core/types pub = "";
+import std/core/hnd = std/core/hnd pub = "";
+import std/core/exn = std/core/exn pub = "";
+import std/core/bool = std/core/bool pub = "";
+import std/core/order = std/core/order pub = "";
+import std/core/char = std/core/char pub = "";
+import std/core/int = std/core/int pub = "";
+import std/core/vector = std/core/vector pub = "";
+import std/core/string = std/core/string pub = "";
+import std/core/sslice = std/core/sslice pub = "";
+import std/core/list = std/core/list pub = "";
+import std/core/maybe = std/core/maybe pub = "";
+import std/core/maybe2 = std/core/maybe2 pub = "";
+import std/core/either = std/core/either pub = "";
+import std/core/result = std/core/result pub = "";
+import std/core/tuple = std/core/tuple pub = "";
+import std/core/lazy = std/core/lazy pub = "";
+import std/core/show = std/core/show pub = "";
+import std/core/debug = std/core/debug pub = "";
+import std/core/delayed = std/core/delayed pub = "";
+import std/core/console = std/core/console pub = "";
+import kokaine/reactive/effects = kokaine/reactive/effects pub = "";
+import std/core = std/core = "";
+import kokaine/reactive = kokaine/reactive = "";
+import kokaine/async/effects = kokaine/async/effects = "";
+import kokaine/internal/compat = kokaine/internal/compat = "";
+import kokaine/reactive/internal/async-runtime = kokaine/reactive/internal/async-runtime = "";
+import std/core/unsafe = std/core/unsafe = "";
+import kokaine/reactive/internal/model = kokaine/reactive/internal/model inline = "";
+import kokaine/reactive/internal/runtime = kokaine/reactive/internal/runtime inline = "";
+import kokaine/internal/registry = kokaine/internal/registry inline = "";
+import kokaine/reactive/internal/handlers = kokaine/reactive/internal/handlers inline = "";
+ 
+//------------------------------
+//#kki: external imports
+ 
+ 
+//------------------------------
+//#kki: fixity declarations
+ 
+ 
+//------------------------------
+//#kki: local imported aliases
+ 
+local alias kokaine/async/effects/async[177,1,178,31] :: E = <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>> = 1;
+local alias kokaine/reactive/internal/model/disposer[93,1,93,40]<(e :: E)> :: E -> V = () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> () = 1;
+// An `:error<a>` type represents a first-class exception result as a `:result<a,exception>`.
+local alias std/core/exn/error[65,1,65,40]<a> :: V -> V = (std/core/types/result :: (V, V) -> V)<a,std/core/exn/exception> = 1;
+// Index into an evidence vector
+local alias std/core/hnd/ev-index[138,1,138,28] = std/core/types/ssize_t = 1;
+// An alias for pure effects: a pure function always returns the same result
+// when called with the same arguments but may not terminate or raise an exception.
+local alias std/core/pure[55,1,55,26] :: E = <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/div :: X)> = 1;
+ 
+//------------------------------
+//#kki: type declarations
+ 
+type request-terminal[37,1,40,18] <a> :: V -> V {
+  con Request-succeeded[38,3,38,19](value: a){0,1,8} : forall<a> (value : a) -> (request-terminal :: V -> V)<a> = 1;
+  con Request-failed[39,3,39,16](error: std/core/exn/exception){0,2,8} : forall<a> (error : std/core/exn/exception) -> (request-terminal :: V -> V)<a> = 2;
+  con Request-canceled[40,3,40,18]{0,0,0} : forall<a> (request-terminal :: V -> V)<a> = 3;
+};
+type resource-command[30,1,32,32] {
+  con Refresh-command[31,3,31,17](revision: std/core/types/int){0,1,8} : (revision : std/core/types/int) -> resource-command = 1;
+  con Cancel-command[32,3,32,16](revision: std/core/types/int){0,1,8} : (revision : std/core/types/int) -> resource-command = 2;
+};
+pub type resource-state[24,1,28,48] <a> :: V -> V {
+  pub con Unresolved[25,3,25,12]{0,0,0} : forall<a> (resource-state :: V -> V)<a> = 1;
+  pub con Pending[26,3,26,9](previous: (std/core/types/maybe :: V -> V)<a>){0,2,8} : forall<a> (previous : (std/core/types/maybe :: V -> V)<a>) -> (resource-state :: V -> V)<a> = 2;
+  pub con Ready[27,3,27,7](value: a){0,1,8} : forall<a> (value : a) -> (resource-state :: V -> V)<a> = 3;
+  pub con Failed[28,3,28,8](error: std/core/exn/exception, previous: (std/core/types/maybe :: V -> V)<a>){0,4,8} : forall<a> (error : std/core/exn/exception, previous : (std/core/types/maybe :: V -> V)<a>) -> (resource-state :: V -> V)<a> = 4;
+};
+// The constructor is private: callers observe the one atomic state signal and
+// can only invalidate the private control signal through `refresh` or `cancel`.
+pub value{0,2,8} type resource[44,1,48,3] <a,b> :: (V, V) -> V {
+  con Resource[45,3,45,10](resource-state-source: (kokaine/reactive/signal :: V -> V)<(resource-state :: V -> V)<b>>, resource-control-source: (kokaine/reactive/signal :: V -> V)<resource-command>){0,2,8} : forall<a,b> (resource-state-source : (kokaine/reactive/signal :: V -> V)<(resource-state :: V -> V)<b>>, resource-control-source : (kokaine/reactive/signal :: V -> V)<resource-command>) -> (resource :: (V, V) -> V)<a,b> = 1;
+};
+type resource-input[34,1,35,63] <a> :: V -> V {
+  con Resource-input[35,3,35,16](source: (std/core/types/maybe :: V -> V)<a>, command: resource-command){0,3,8} : forall<a> (source : (std/core/types/maybe :: V -> V)<a>, command : resource-command) -> (resource-input :: V -> V)<a> = 1;
+};
+ 
+//------------------------------
+//#kki: declarations
+ 
+// Automatically generated. Tests for the `Unresolved` constructor of the `:resource-state` type.
+pub fip fun is-unresolved[25,3,25,12] : forall<a> (^ resource-state : (resource-state :: V -> V)<a>) -> std/core/types/bool;
+// Automatically generated. Tests for the `Pending` constructor of the `:resource-state` type.
+pub fip fun is-pending[26,3,26,9] : forall<a> (^ resource-state : (resource-state :: V -> V)<a>) -> std/core/types/bool;
+// Automatically generated. Tests for the `Ready` constructor of the `:resource-state` type.
+pub fip fun is-ready[27,3,27,7] : forall<a> (^ resource-state : (resource-state :: V -> V)<a>) -> std/core/types/bool;
+// Automatically generated. Tests for the `Failed` constructor of the `:resource-state` type.
+pub fip fun is-failed[28,3,28,8] : forall<a> (^ resource-state : (resource-state :: V -> V)<a>) -> std/core/types/bool;
+// Automatically generated. Retrieves the `revision` constructor field of the `:resource-command` type.
+fun resource-command/revision[31,19,31,26] : (^ @this : resource-command) -> std/core/types/int;
+// Automatically generated. Tests for the `Refresh-command` constructor of the `:resource-command` type.
+fip fun is-refresh-command[31,3,31,17] : (^ resource-command : resource-command) -> std/core/types/bool;
+// Automatically generated. Tests for the `Cancel-command` constructor of the `:resource-command` type.
+fip fun is-cancel-command[32,3,32,16] : (^ resource-command : resource-command) -> std/core/types/bool;
+// Automatically generated. Retrieves the `command` constructor field of the `:resource-input` type.
+fun resource-input/command[35,37,35,43] : forall<a> (^ @this : (resource-input :: V -> V)<a>) -> resource-command;
+// Automatically generated. Retrieves the `source` constructor field of the `:resource-input` type.
+fun resource-input/source[35,18,35,23] : forall<a> (^ @this : (resource-input :: V -> V)<a>) -> (std/core/types/maybe :: V -> V)<a>;
+fun resource-input/@copy[35,3,35,16] : forall<a> (@this : (resource-input :: V -> V)<a>, source : (std/core/types/@optional :: V -> V)<(std/core/types/maybe :: V -> V)<a>>, command : (std/core/types/@optional :: V -> V)<resource-command>) -> (resource-input :: V -> V)<a>;
+// Automatically generated. Tests for the `Request-succeeded` constructor of the `:request-terminal` type.
+fip fun is-request-succeeded[38,3,38,19] : forall<a> (^ request-terminal : (request-terminal :: V -> V)<a>) -> std/core/types/bool;
+// Automatically generated. Tests for the `Request-failed` constructor of the `:request-terminal` type.
+fip fun is-request-failed[39,3,39,16] : forall<a> (^ request-terminal : (request-terminal :: V -> V)<a>) -> std/core/types/bool;
+// Automatically generated. Tests for the `Request-canceled` constructor of the `:request-terminal` type.
+fip fun is-request-canceled[40,3,40,18] : forall<a> (^ request-terminal : (request-terminal :: V -> V)<a>) -> std/core/types/bool;
+// Automatically generated. Retrieves the `resource-state-source` constructor field of the `:resource` type.
+fun resource/resource-state-source[46,5,46,25] : forall<a,b> (^ resource : (resource :: (V, V) -> V)<a,b>) -> (kokaine/reactive/signal :: V -> V)<(resource-state :: V -> V)<b>>;
+// Automatically generated. Retrieves the `resource-control-source` constructor field of the `:resource` type.
+fun resource/resource-control-source[47,5,47,27] : forall<a,b> (^ resource : (resource :: (V, V) -> V)<a,b>) -> (kokaine/reactive/signal :: V -> V)<resource-command>;
+pub fun resource/@copy[45,3,45,10] : forall<a,b> (@this : (resource :: (V, V) -> V)<a,b>, resource-state-source : (std/core/types/@optional :: V -> V)<(kokaine/reactive/signal :: V -> V)<(resource-state :: V -> V)<b>>>, resource-control-source : (std/core/types/@optional :: V -> V)<(kokaine/reactive/signal :: V -> V)<resource-command>>) -> (resource :: (V, V) -> V)<a,b>;
+fun cell[55,5,55,8] : forall<a> (value : a) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>;
+fun cell/read[58,5,58,13] : forall<a> (value : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>) -> a;
+fun cell/write[61,5,61,14] : forall<a> (target : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>, value : a) -> ();
+fun resource-command/is-refresh[64,5,64,31] : (command : resource-command) -> std/core/types/bool;
+fun same-source[69,5,69,15] : forall<a> (left : (std/core/types/maybe :: V -> V)<a>, right : (std/core/types/maybe :: V -> V)<a>, equals : (a, a) -> std/core/types/bool) -> std/core/types/bool;
+fun source-changed[76,5,76,18] : forall<a> (previous : (std/core/types/maybe :: V -> V)<(std/core/types/maybe :: V -> V)<a>>, current : (std/core/types/maybe :: V -> V)<a>, equals : (a, a) -> std/core/types/bool) -> std/core/types/bool;
+fun canceled-state[82,5,82,18] : forall<a> (previous : (std/core/types/maybe :: V -> V)<a>) -> (resource-state :: V -> V)<a>;
+fun take-lease-group[87,5,87,20] : (slot : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<kokaine/reactive/internal/async-runtime/async-lease-group>>) -> (std/core/types/maybe :: V -> V)<kokaine/reactive/internal/async-runtime/async-lease-group>;
+fun dispose-lease-group[93,5,93,23] : (current : (std/core/types/maybe :: V -> V)<kokaine/reactive/internal/async-runtime/async-lease-group>) -> <(std/core/ui :: X)> ();
+// monadic lift
+fun @mlift-in-resource-ownership@10365[1,0,1,0] : forall<a> (action : () -> <(kokaine/async/effects/async :: E),(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> a, @y-x10083 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> a;
+// Keep loader-acquired host values under the Resource rather than the
+// create-effect generation which happened to observe this request. The
+// Resource can then retain a successful previous value across refresh while
+// still retiring failed, canceled, replaced, or unreachable values exactly
+// once.
+fun in-resource-ownership[103,5,103,25] : forall<a> (group : kokaine/reactive/internal/async-runtime/async-lease-group, action : () -> <(kokaine/async/effects/async :: E),(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> a) -> <(kokaine/async/effects/async :: E),(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> a;
+// monadic lift
+fun @mlift-settle-active-request@10366[1,0,1,0] : (previous-ownership : (std/core/types/maybe :: V -> V)<kokaine/reactive/internal/async-runtime/async-lease-group>, wild_@2 : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>> ();
+// monadic lift
+fun @mlift-settle-active-request@10367[1,0,1,0] : (current-ownership : (std/core/types/maybe :: V -> V)<kokaine/reactive/internal/async-runtime/async-lease-group>, wild_@3 : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>> ();
+// monadic lift
+fun @mlift-settle-active-request@10368[1,0,1,0] : (current-ownership : (std/core/types/maybe :: V -> V)<kokaine/reactive/internal/async-runtime/async-lease-group>, wild_@4 : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>> ();
+fun settle-active-request[111,5,111,25] : forall<a> (state-source : (kokaine/reactive/signal :: V -> V)<(resource-state :: V -> V)<a>>, request-active : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>, latest-success : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<a>>, active-ownership : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<kokaine/reactive/internal/async-runtime/async-lease-group>>, latest-ownership : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<kokaine/reactive/internal/async-runtime/async-lease-group>>, terminal : (request-terminal :: V -> V)<a>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/ui :: X)> ();
+fun settle-request[137,5,137,18] : forall<a> (state-source : (kokaine/reactive/signal :: V -> V)<(resource-state :: V -> V)<a>>, request-generation : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>, request-active : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>, latest-success : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<a>>, active-ownership : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<kokaine/reactive/internal/async-runtime/async-lease-group>>, latest-ownership : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<kokaine/reactive/internal/async-runtime/async-lease-group>>, ownership : kokaine/reactive/internal/async-runtime/async-lease-group, generation : std/core/types/int, terminal : (request-terminal :: V -> V)<a>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/ui :: X)> ();
+// monadic lift
+fun @mlift-clear-resource@10369[1,0,1,0] : (active : (std/core/types/maybe :: V -> V)<kokaine/reactive/internal/async-runtime/async-lease-group>, latest : (std/core/types/maybe :: V -> V)<kokaine/reactive/internal/async-runtime/async-lease-group>, wild_@1 : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>> ();
+fun clear-resource[157,5,157,18] : forall<a> (state-source : (kokaine/reactive/signal :: V -> V)<(resource-state :: V -> V)<a>>, request-active : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>, latest-success : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<a>>, active-ownership : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<kokaine/reactive/internal/async-runtime/async-lease-group>>, latest-ownership : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<kokaine/reactive/internal/async-runtime/async-lease-group>>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/ui :: X)> ();
+// monadic lift
+fun @mlift-start-request@10370[1,0,1,0] : forall<a> (action@4 : () -> <(kokaine/async/effects/async :: E),(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (std/core/exn/error :: V -> V)<a>, @y-x10099 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (std/core/exn/error :: V -> V)<a>;
+// monadic lift
+fun @mlift-start-request@10371[1,0,1,0] : forall<a> (active-ownership : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<kokaine/reactive/internal/async-runtime/async-lease-group>>, generation : std/core/types/int, latest-ownership : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<kokaine/reactive/internal/async-runtime/async-lease-group>>, latest-success : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<a>>, ownership : kokaine/reactive/internal/async-runtime/async-lease-group, request-active : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>, request-generation : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>, state-source : (kokaine/reactive/signal :: V -> V)<(resource-state :: V -> V)<a>>, outcome : (std/core/exn/error :: V -> V)<a>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> ();
+// monadic lift
+fun @mlift-start-request@10372[1,0,1,0] : forall<a,b> (active-ownership : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<kokaine/reactive/internal/async-runtime/async-lease-group>>, generation : std/core/types/int, latest-ownership : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<kokaine/reactive/internal/async-runtime/async-lease-group>>, latest-success : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<a>>, load : (b) -> <(kokaine/async/effects/async :: E),(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> a, ownership : kokaine/reactive/internal/async-runtime/async-lease-group, request-active : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>, request-generation : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, snapshot : b, state-source : (kokaine/reactive/signal :: V -> V)<(resource-state :: V -> V)<a>>, @y-x10097 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
+// monadic lift
+fun @mlift-start-request@10373[1,0,1,0] : forall<a,b> (active-ownership : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<kokaine/reactive/internal/async-runtime/async-lease-group>>, generation : std/core/types/int, latest-ownership : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<kokaine/reactive/internal/async-runtime/async-lease-group>>, latest-success : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<a>>, load : (b) -> <(kokaine/async/effects/async :: E),(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> a, ownership : kokaine/reactive/internal/async-runtime/async-lease-group, request-active : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>, request-generation : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, snapshot : b, state-source : (kokaine/reactive/signal :: V -> V)<(resource-state :: V -> V)<a>>, superseded-ownership : (std/core/types/maybe :: V -> V)<kokaine/reactive/internal/async-runtime/async-lease-group>, wild_@1 : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
+fun start-request[179,5,179,17] : forall<a,b> (root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, state-source : (kokaine/reactive/signal :: V -> V)<(resource-state :: V -> V)<a>>, request-generation : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>, request-active : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>, latest-success : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<a>>, active-ownership : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<kokaine/reactive/internal/async-runtime/async-lease-group>>, latest-ownership : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<kokaine/reactive/internal/async-runtime/async-lease-group>>, generation : std/core/types/int, snapshot : b, load : (b) -> <(kokaine/async/effects/async :: E),(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E),(std/core/ui :: X)> ();
+fun retire-resource[246,5,246,19] : forall<a> (state-source : (kokaine/reactive/signal :: V -> V)<(resource-state :: V -> V)<a>>, request-generation : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>, request-active : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>, latest-success : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<a>>, active-ownership : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<kokaine/reactive/internal/async-runtime/async-lease-group>>, latest-ownership : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<kokaine/reactive/internal/async-runtime/async-lease-group>>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/ui :: X)> ();
+fun apply-input[262,5,262,15] : forall<a,b> (root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, state-source : (kokaine/reactive/signal :: V -> V)<(resource-state :: V -> V)<a>>, last-source : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<(std/core/types/maybe :: V -> V)<b>>>, last-command-revision : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>, request-generation : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>, request-active : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>, latest-success : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<a>>, active-ownership : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<kokaine/reactive/internal/async-runtime/async-lease-group>>, latest-ownership : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<kokaine/reactive/internal/async-runtime/async-lease-group>>, equals : (b, b) -> std/core/types/bool, load : (b) -> <(kokaine/async/effects/async :: E),(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> a, input : (resource-input :: V -> V)<b>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E),(std/core/ui :: X)> ();
+// monadic lift
+fun @mlift-resource-by@10374[1,0,1,0] : (@pat@9 : (kokaine/reactive/internal/model/cleanup-registration :: E -> V)<<(std/core/ui :: X)>>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
+// monadic lift
+fun @mlift-resource-by@10375[1,0,1,0] : forall<a,b> (control-source : (kokaine/reactive/signal :: V -> V)<resource-command>, state-source : (kokaine/reactive/signal :: V -> V)<(resource-state :: V -> V)<a>>, wild_ : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>> (resource :: (V, V) -> V)<b,a>;
+// monadic lift
+fun @mlift-resource-by@10376[1,0,1,0] : forall<a> (@y-x10140 : (std/core/types/maybe :: V -> V)<a>, @y-x10142 : resource-command) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (resource-input :: V -> V)<a>;
+// monadic lift
+fun @mlift-resource-by@10377[1,0,1,0] : forall<a> (control-source : (kokaine/reactive/signal :: V -> V)<resource-command>, @y-x10140 : (std/core/types/maybe :: V -> V)<a>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (resource-input :: V -> V)<a>;
+// monadic lift
+fun @mlift-resource-by@10378[1,0,1,0] : forall<a,b> (active-ownership : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<kokaine/reactive/internal/async-runtime/async-lease-group>>, control-source : (kokaine/reactive/signal :: V -> V)<resource-command>, latest-ownership : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<kokaine/reactive/internal/async-runtime/async-lease-group>>, latest-success : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<a>>, request-active : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>, request-generation : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, state-source : (kokaine/reactive/signal :: V -> V)<(resource-state :: V -> V)<a>>, @y-x10144 : (kokaine/reactive/internal/model/disposer :: E -> V)<<(std/core/ui :: X)>>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)> (resource :: (V, V) -> V)<b,a>;
+// monadic lift
+fun @mlift-resource-by@10379[1,0,1,0] : forall<(_e :: E),a,b> (control-source : (kokaine/reactive/signal :: V -> V)<resource-command>, equals : (b, b) -> std/core/types/bool, load : (b) -> <(kokaine/async/effects/async :: E),(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> a, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, state-source : (kokaine/reactive/signal :: V -> V)<(resource-state :: V -> V)<a>>, @y-x10138 : (kokaine/reactive/internal/model/memo :: V -> V)<(std/core/types/maybe :: V -> V)<b>>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)> (resource :: (V, V) -> V)<b,a>;
+// monadic lift
+fun @mlift-resource-by@10380[1,0,1,0] : (@y-x10136 : (kokaine/reactive/internal/model/signal :: V -> V)<resource-command>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (kokaine/reactive/signal :: V -> V)<resource-command>;
+// monadic lift
+fun @mlift-resource-by@10381[1,0,1,0] : forall<(_e :: E),a,b> (equals : (b, b) -> std/core/types/bool, load : (b) -> <(kokaine/async/effects/async :: E),(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> a, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, source : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> (std/core/types/maybe :: V -> V)<b>, state-source : (kokaine/reactive/signal :: V -> V)<(resource-state :: V -> V)<a>>, control-source : (kokaine/reactive/signal :: V -> V)<resource-command>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>> (resource :: (V, V) -> V)<b,a>;
+// monadic lift
+fun @mlift-resource-by@10382[1,0,1,0] : forall<a> (@y-x10134 : (kokaine/reactive/internal/model/signal :: V -> V)<(resource-state :: V -> V)<a>>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (kokaine/reactive/signal :: V -> V)<(resource-state :: V -> V)<a>>;
+// monadic lift
+fun @mlift-resource-by@10383[1,0,1,0] : forall<(_e :: E),a,b> (equals : (b, b) -> std/core/types/bool, load : (b) -> <(kokaine/async/effects/async :: E),(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> a, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, source : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> (std/core/types/maybe :: V -> V)<b>, state-source : (kokaine/reactive/signal :: V -> V)<(resource-state :: V -> V)<a>>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>> (resource :: (V, V) -> V)<b,a>;
+pub fun resource-by[318,9,318,19] : forall<a,b> (root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, source : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> (std/core/types/maybe :: V -> V)<b>, load : (b) -> <(kokaine/async/effects/async :: E),(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> a, equals : (b, b) -> std/core/types/bool) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)> (resource :: (V, V) -> V)<b,a>;
+pub fun resource[360,9,360,16] : forall<a,b> (root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, source : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> (std/core/types/maybe :: V -> V)<b>, load : (b) -> <(kokaine/async/effects/async :: E),(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> a, ?(==) : (b, b) -> std/core/types/bool) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)> (resource :: (V, V) -> V)<b,a>;
+pub fun resource/state[368,9,368,22] : forall<a,b> (value : (resource :: (V, V) -> V)<b,a>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> (resource-state :: V -> V)<a>;
+// monadic lift
+fun resource/@mlift-latest@10384[1,0,1,0] : forall<a> (@y-x10151 : (resource-state :: V -> V)<a>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> (std/core/types/maybe :: V -> V)<a>;
+pub fun resource/latest[373,9,373,23] : forall<a,b> (value : (resource :: (V, V) -> V)<b,a>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> (std/core/types/maybe :: V -> V)<a>;
+pub fun resource/refresh[380,9,380,24] : forall<a,b> (value : (resource :: (V, V) -> V)<b,a>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>> ();
+pub fun resource/cancel[387,9,387,23] : forall<a,b> (value : (resource :: (V, V) -> V)<b,a>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>> ();
+ 
+fun @kokaine-cache-phase[1,0,1,0] : () -> std/core/types/int;
+ 
+//------------------------------
+//#kki: external declarations
+ 
+ 
+//------------------------------
+//#kki: inline definitions
+ 
+//.inline-section
+fun @kokaine-cache-phase // inline size: 1
+  = fn(){ 0; };

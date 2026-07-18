@@ -1,0 +1,334 @@
+/*--------------------------------------------------------------------------
+  Copyright (c) 2026 Kokaine contributors. SPDX-License-Identifier: MIT
+
+  Browser structured-asynchrony effects and cancellation-scope identities.
+
+  This is Kokaine-owned code for the Web UI backend. It deliberately contains
+  no host scheduler object or outer handler. A browser adapter interprets these
+  effects where it can safely retain and later resume a continuation.
+--------------------------------------------------------------------------*/
+module interface kokaine/async/effects
+ 
+//------------------------------
+//#kki: import declarations
+ 
+import std/core/types = std/core/types pub = "";
+import std/core/hnd = std/core/hnd pub = "";
+import std/core/exn = std/core/exn pub = "";
+import std/core/bool = std/core/bool pub = "";
+import std/core/order = std/core/order pub = "";
+import std/core/char = std/core/char pub = "";
+import std/core/int = std/core/int pub = "";
+import std/core/vector = std/core/vector pub = "";
+import std/core/string = std/core/string pub = "";
+import std/core/sslice = std/core/sslice pub = "";
+import std/core/list = std/core/list pub = "";
+import std/core/maybe = std/core/maybe pub = "";
+import std/core/maybe2 = std/core/maybe2 pub = "";
+import std/core/either = std/core/either pub = "";
+import std/core/result = std/core/result pub = "";
+import std/core/tuple = std/core/tuple pub = "";
+import std/core/lazy = std/core/lazy pub = "";
+import std/core/show = std/core/show pub = "";
+import std/core/debug = std/core/debug pub = "";
+import std/core/delayed = std/core/delayed pub = "";
+import std/core/console = std/core/console pub = "";
+import std/core = std/core = "";
+import std/core/unsafe = std/core/unsafe = "";
+ 
+//------------------------------
+//#kki: external imports
+ 
+ 
+//------------------------------
+//#kki: fixity declarations
+ 
+ 
+//------------------------------
+//#kki: local imported aliases
+ 
+// An `:error<a>` type represents a first-class exception result as a `:result<a,exception>`.
+local alias std/core/exn/error[65,1,65,40]<a> :: V -> V = (std/core/types/result :: (V, V) -> V)<a,std/core/exn/exception> = 1;
+// Index into an evidence vector
+local alias std/core/hnd/ev-index[138,1,138,28] = std/core/types/ssize_t = 1;
+ 
+//------------------------------
+//#kki: type declarations
+ 
+;
+// IDs are kept abstract so callers can compare and derive scopes but cannot
+// forge an unrelated scope. The head is the current scope and the tail its
+// ancestors through the root.
+pub value{0,2,8} type async-scope[93,1,97,3] {
+  con Scope[94,3,94,7](ids: (std/core/types/list :: V -> V)<(scope-id == 1 std/core/types/int)>, scope-namespace: std/core/types/int){0,2,8} : (ids : (std/core/types/list :: V -> V)<(scope-id == 1 std/core/types/int)>, scope-namespace : std/core/types/int) -> async-scope = 1;
+};
+// Terminal cancellation is a distinct result. Public await wrappers interpret
+// it through the final `discontinue` effect instead of manufacturing an
+// ordinary exception.
+pub type await-result[22,1,25,8] <a> :: V -> V {
+  pub con Result[23,3,23,8](value: a){0,1,8} : forall<a> (value : a) -> (await-result :: V -> V)<a> = 1;
+  pub con Exception[24,3,24,11](error: std/core/exn/exception){0,2,8} : forall<a> (error : std/core/exn/exception) -> (await-result :: V -> V)<a> = 2;
+  pub con Cancel[25,3,25,8]{0,0,0} : forall<a> (await-result :: V -> V)<a> = 3;
+};
+// Browser cleanup for an outstanding operation, for example `clearTimeout`
+// or `AbortController.abort`.
+pub alias dispose-fn[29,1,29,34] = () -> <(std/core/ui :: X)> () = 1;
+// Setup installs a callback and returns either a disposer or a setup failure.
+// The completion flag is reserved for protocol compatibility. Primitive
+// Kokaine awaits are one-shot, accept only the first callback, and pass `True`.
+pub alias await-setup[39,1,39,84]<a> :: V -> V = (((await-result :: V -> V)<a>, std/core/types/bool) -> <(std/core/ui :: X)> ()) -> <(std/core/ui :: X)> ((std/core/exn/error :: V -> V)<(dispose-fn == 1 () -> <(std/core/ui :: X)> ())> == 1 (std/core/types/result :: (V, V) -> V)<(dispose-fn == 1 () -> <(std/core/ui :: X)> ()),std/core/exn/exception>) = 2;
+pub recursive effect type async-await[41,1,50,56] <(e :: E),a> :: (E, V) -> V {
+  pub con @Hnd-async-await[41,1,41,22](@cfc: std/core/types/int, @ctl-do-await: forall<b> (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<(((await-setup :: V -> V)<b> == 2 (((await-result :: V -> V)<b>, std/core/types/bool) -> <(std/core/ui :: X)> ()) -> <(std/core/ui :: X)> ((std/core/exn/error :: V -> V)<(dispose-fn == 1 () -> <(std/core/ui :: X)> ())> == 1 (std/core/types/result :: (V, V) -> V)<(dispose-fn == 1 () -> <(std/core/ui :: X)> ()),std/core/exn/exception>)), async-scope, std/core/types/string),(await-result :: V -> V)<b>,(async-await :: (E, V) -> V),(e :: E),a>, @fun-no-await: forall<b> (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<(((await-setup :: V -> V)<b> == 2 (((await-result :: V -> V)<b>, std/core/types/bool) -> <(std/core/ui :: X)> ()) -> <(std/core/ui :: X)> ((std/core/exn/error :: V -> V)<(dispose-fn == 1 () -> <(std/core/ui :: X)> ())> == 1 (std/core/types/result :: (V, V) -> V)<(dispose-fn == 1 () -> <(std/core/ui :: X)> ()),std/core/exn/exception>)), async-scope, std/core/types/string, ((await-result :: V -> V)<b>) -> <(std/core/ui :: X)> ()),(),(async-await :: (E, V) -> V),(e :: E),a>){0,3,8} : forall<(e :: E),a> (std/core/types/int, forall<b> (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<(((await-setup :: V -> V)<b> == 2 (((await-result :: V -> V)<b>, std/core/types/bool) -> <(std/core/ui :: X)> ()) -> <(std/core/ui :: X)> ((std/core/exn/error :: V -> V)<(dispose-fn == 1 () -> <(std/core/ui :: X)> ())> == 1 (std/core/types/result :: (V, V) -> V)<(dispose-fn == 1 () -> <(std/core/ui :: X)> ()),std/core/exn/exception>)), async-scope, std/core/types/string),(await-result :: V -> V)<b>,(async-await :: (E, V) -> V),(e :: E),a>, forall<b> (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<(((await-setup :: V -> V)<b> == 2 (((await-result :: V -> V)<b>, std/core/types/bool) -> <(std/core/ui :: X)> ()) -> <(std/core/ui :: X)> ((std/core/exn/error :: V -> V)<(dispose-fn == 1 () -> <(std/core/ui :: X)> ())> == 1 (std/core/types/result :: (V, V) -> V)<(dispose-fn == 1 () -> <(std/core/ui :: X)> ()),std/core/exn/exception>)), async-scope, std/core/types/string, ((await-result :: V -> V)<b>) -> <(std/core/ui :: X)> ()),(),(async-await :: (E, V) -> V),(e :: E),a>) -> (async-await :: (E, V) -> V)<(e :: E),a> = 1;
+};
+pub recursive effect type async-cancel[57,1,64,51] <(e :: E),a> :: (E, V) -> V {
+  pub con @Hnd-async-cancel[57,1,57,23](@cfc: std/core/types/int, @val-async-scope: (std/core/hnd/clause0 :: (V, (E, V) -> V, E, V) -> V)<async-scope,(async-cancel :: (E, V) -> V),(e :: E),a>, @fun-cancel-scope: (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<async-scope,(),(async-cancel :: (E, V) -> V),(e :: E),a>, @fun-is-scope-canceled: (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<async-scope,std/core/types/bool,(async-cancel :: (E, V) -> V),(e :: E),a>, @fun-release-canceled-scope: (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<async-scope,(),(async-cancel :: (E, V) -> V),(e :: E),a>){0,5,8} : forall<(e :: E),a> (std/core/types/int, (std/core/hnd/clause0 :: (V, (E, V) -> V, E, V) -> V)<async-scope,(async-cancel :: (E, V) -> V),(e :: E),a>, (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<async-scope,(),(async-cancel :: (E, V) -> V),(e :: E),a>, (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<async-scope,std/core/types/bool,(async-cancel :: (E, V) -> V),(e :: E),a>, (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<async-scope,(),(async-cancel :: (E, V) -> V),(e :: E),a>) -> (async-cancel :: (E, V) -> V)<(e :: E),a> = 1;
+};
+// Browser-host operations which must run through the active generation
+// interpreter. The migration-shaped name keeps this internal capability
+// distinct from the application's direct-style async operations.
+pub recursive effect type async-ioc[69,1,71,72] <(e :: E),a> :: (E, V) -> V {
+  pub con @Hnd-async-ioc[69,1,69,20](@cfc: std/core/types/int, @fun-async-ioc: forall<b> (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<() -> <(std/core/ui :: X)> b,b,(async-ioc :: (E, V) -> V),(e :: E),a>, @fun-async-schedule-ioc: (std/core/hnd/clause2 :: (V, V, V, (E, V) -> V, E, V) -> V)<async-scope,() -> <(std/core/ui :: X)> (),(),(async-ioc :: (E, V) -> V),(e :: E),a>){0,3,8} : forall<(e :: E),a> (std/core/types/int, forall<b> (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<() -> <(std/core/ui :: X)> b,b,(async-ioc :: (E, V) -> V),(e :: E),a>, (std/core/hnd/clause2 :: (V, V, V, (E, V) -> V, E, V) -> V)<async-scope,() -> <(std/core/ui :: X)> (),(),(async-ioc :: (E, V) -> V),(e :: E),a>) -> (async-ioc :: (E, V) -> V)<(e :: E),a> = 1;
+};
+// Internal ownership handlers need to distinguish a successful transfer from
+// a release which lost to an already-detached retirement snapshot. Public
+// callers continue to receive an ordinary one-shot `dispose-fn` below.
+pub alias ownership-release-fn[34,1,34,46] = () -> <(std/core/ui :: X)> std/core/types/bool = 1;
+// Ownership is separate from host I/O so structured combinators and Resource
+// loaders can install a nearer lease ledger without proxying polymorphic host
+// operations through a retained continuation.
+pub recursive effect type async-ownership[76,1,81,69] <(e :: E),a> :: (E, V) -> V {
+  pub con @Hnd-async-ownership[76,1,76,26](@cfc: std/core/types/int, @fun-async-own-disposer: (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<(dispose-fn == 1 () -> <(std/core/ui :: X)> ()),(ownership-release-fn == 1 () -> <(std/core/ui :: X)> std/core/types/bool),(async-ownership :: (E, V) -> V),(e :: E),a>){0,2,8} : forall<(e :: E),a> (std/core/types/int, (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<(dispose-fn == 1 () -> <(std/core/ui :: X)> ()),(ownership-release-fn == 1 () -> <(std/core/ui :: X)> std/core/types/bool),(async-ownership :: (E, V) -> V),(e :: E),a>) -> (async-ownership :: (E, V) -> V)<(e :: E),a> = 1;
+};
+pub recursive effect type discontinue[172,1,175,29] <(e :: E),a> :: (E, V) -> V {
+  pub con @Hnd-discontinue[172,1,172,22](@cfc: std/core/types/int, @brk-discontinue: forall<b> (std/core/hnd/clause0 :: (V, (E, V) -> V, E, V) -> V)<b,(discontinue :: (E, V) -> V),(e :: E),a>){0,2,8} : forall<(e :: E),a> (std/core/types/int, forall<b> (std/core/hnd/clause0 :: (V, (E, V) -> V, E, V) -> V)<b,(discontinue :: (E, V) -> V),(e :: E),a>) -> (discontinue :: (E, V) -> V)<(e :: E),a> = 1;
+};
+pub alias async[177,1,178,31] :: E = <(std/core/types/handled :: ((E, V) -> V) -> X)<(async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(discontinue :: (E, V) -> V)>> = 1;
+ 
+//------------------------------
+//#kki: declarations
+ 
+// Automatically generated. Tests for the `Result` constructor of the `:await-result` type.
+pub fip fun is-result[23,3,23,8] : forall<a> (^ await-result : (await-result :: V -> V)<a>) -> std/core/types/bool;
+// Automatically generated. Tests for the `Exception` constructor of the `:await-result` type.
+pub fip fun is-exception[24,3,24,11] : forall<a> (^ await-result : (await-result :: V -> V)<a>) -> std/core/types/bool;
+// Automatically generated. Tests for the `Cancel` constructor of the `:await-result` type.
+pub fip fun is-cancel[25,3,25,8] : forall<a> (^ await-result : (await-result :: V -> V)<a>) -> std/core/types/bool;
+// Automatically generated. Retrieves the `@cfc` constructor field of the `:async-await` type.
+fun async-await/@cfc[41,1,41,22] : forall<(e :: E),a> (^ @this : (async-await :: (E, V) -> V)<(e :: E),a>) -> std/core/types/int;
+// runtime tag for the effect `:async-await`
+pub val async-await/@tag[41,1,41,22] : (std/core/hnd/htag :: ((E, V) -> V) -> V)<(async-await :: (E, V) -> V)>;
+// handler for the effect `:async-await`
+pub fun async-await/@handle[41,12,41,22] : forall<a,(e :: E),b> (hnd : (async-await :: (E, V) -> V)<(e :: E),b>, ret : (res : a) -> (e :: E) b, action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(async-await :: (E, V) -> V)>|(e :: E)> a) -> (e :: E) b;
+// Automatically generated. Retrieves the `@ctl-do-await` constructor field of the `:async-await` type.
+fun async-await/@ctl-do-await[43,7,44,48] : forall<(e :: E),a,b> (^ @this : (async-await :: (E, V) -> V)<(e :: E),a>) -> (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<((await-setup :: V -> V)<b>, async-scope, std/core/types/string),(await-result :: V -> V)<b>,(async-await :: (E, V) -> V),(e :: E),a>;
+// select `do-await` operation out of effect `:async-await`
+pub fun do-await/@select[43,7,44,48] : forall<a,(e :: E),b> (^ hnd : (async-await :: (E, V) -> V)<(e :: E),b>) -> (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<((await-setup :: V -> V)<a>, async-scope, std/core/types/string),(await-result :: V -> V)<a>,(async-await :: (E, V) -> V),(e :: E),b>;
+// Suspend the current strand until the host handler supplies a result.
+
+// Call the `ctl do-await` operation of the effect `:async-await`
+pub fun do-await[43,7,43,14] : forall<a> (setup : (await-setup :: V -> V)<a>, scope : async-scope, label : std/core/types/string) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(async-await :: (E, V) -> V)>> (await-result :: V -> V)<a>;
+// Automatically generated. Retrieves the `@fun-no-await` constructor field of the `:async-await` type.
+fun async-await/@fun-no-await[48,7,50,56] : forall<(e :: E),a,b> (^ @this : (async-await :: (E, V) -> V)<(e :: E),a>) -> (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<((await-setup :: V -> V)<b>, async-scope, std/core/types/string, ((await-result :: V -> V)<b>) -> <(std/core/ui :: X)> ()),(),(async-await :: (E, V) -> V),(e :: E),a>;
+// select `no-await` operation out of effect `:async-await`
+pub fun no-await/@select[48,7,50,56] : forall<a,(e :: E),b> (^ hnd : (async-await :: (E, V) -> V)<(e :: E),b>) -> (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<((await-setup :: V -> V)<a>, async-scope, std/core/types/string, ((await-result :: V -> V)<a>) -> <(std/core/ui :: X)> ()),(),(async-await :: (E, V) -> V),(e :: E),b>;
+// concurrency uses this to route completions into its own scheduler.
+
+// Call the `fun no-await` operation of the effect `:async-await`
+pub fun no-await[48,7,48,14] : forall<a> (setup : (await-setup :: V -> V)<a>, scope : async-scope, label : std/core/types/string, callback : ((await-result :: V -> V)<a>) -> <(std/core/ui :: X)> ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(async-await :: (E, V) -> V)>> ();
+// Automatically generated. Retrieves the `@cfc` constructor field of the `:async-cancel` type.
+fun async-cancel/@cfc[57,1,57,23] : forall<(e :: E),a> (^ @this : (async-cancel :: (E, V) -> V)<(e :: E),a>) -> std/core/types/int;
+// runtime tag for the effect `:async-cancel`
+pub val async-cancel/@tag[57,1,57,23] : (std/core/hnd/htag :: ((E, V) -> V) -> V)<(async-cancel :: (E, V) -> V)>;
+// handler for the effect `:async-cancel`
+pub fun async-cancel/@handle[57,12,57,23] : forall<a,(e :: E),b> (hnd : (async-cancel :: (E, V) -> V)<(e :: E),b>, ret : (res : a) -> (e :: E) b, action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(async-cancel :: (E, V) -> V)>|(e :: E)> a) -> (e :: E) b;
+// select `@val-async-scope` operation out of effect `:async-cancel`
+pub fun @val-async-scope/@select[58,7,58,31] : forall<(e :: E),a> (^ hnd : (async-cancel :: (E, V) -> V)<(e :: E),a>) -> (std/core/hnd/clause0 :: (V, (E, V) -> V, E, V) -> V)<async-scope,(async-cancel :: (E, V) -> V),(e :: E),a>;
+// Call the `val async-scope` operation of the effect `:async-cancel`
+pub fun @val-async-scope[58,7,58,17] : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(async-cancel :: (E, V) -> V)>> async-scope;
+// Automatically generated. Retrieves the `@val-async-scope` constructor field of the `:async-cancel` type.
+fun async-cancel/@val-async-scope[58,7,58,31] : forall<(e :: E),a> (^ @this : (async-cancel :: (E, V) -> V)<(e :: E),a>) -> (std/core/hnd/clause0 :: (V, (E, V) -> V, E, V) -> V)<async-scope,(async-cancel :: (E, V) -> V),(e :: E),a>;
+// Call the `val async-scope` operation of the effect `:async-cancel`
+pub val async-scope[58,7,58,17] : (std/core/types/@valueop :: (E, V) -> V)<<(std/core/types/handled :: ((E, V) -> V) -> X)<(async-cancel :: (E, V) -> V)>>,async-scope>;
+// Automatically generated. Retrieves the `@fun-cancel-scope` constructor field of the `:async-cancel` type.
+fun async-cancel/@fun-cancel-scope[59,7,59,44] : forall<(e :: E),a> (^ @this : (async-cancel :: (E, V) -> V)<(e :: E),a>) -> (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<async-scope,(),(async-cancel :: (E, V) -> V),(e :: E),a>;
+// select `cancel-scope` operation out of effect `:async-cancel`
+pub fun cancel-scope/@select[59,7,59,44] : forall<(e :: E),a> (^ hnd : (async-cancel :: (E, V) -> V)<(e :: E),a>) -> (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<async-scope,(),(async-cancel :: (E, V) -> V),(e :: E),a>;
+// Call the `fun cancel-scope` operation of the effect `:async-cancel`
+pub fun cancel-scope[59,7,59,18] : (scope : async-scope) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(async-cancel :: (E, V) -> V)>> ();
+// Automatically generated. Retrieves the `@fun-release-canceled-scope` constructor field of the `:async-cancel` type.
+fun async-cancel/@fun-release-canceled-scope[63,7,63,54] : forall<(e :: E),a> (^ @this : (async-cancel :: (E, V) -> V)<(e :: E),a>) -> (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<async-scope,(),(async-cancel :: (E, V) -> V),(e :: E),a>;
+// select `release-canceled-scope` operation out of effect `:async-cancel`
+pub fun release-canceled-scope/@select[63,7,63,54] : forall<(e :: E),a> (^ hnd : (async-cancel :: (E, V) -> V)<(e :: E),a>) -> (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<async-scope,(),(async-cancel :: (E, V) -> V),(e :: E),a>;
+// marker cannot be discarded merely because its current host tasks stopped.
+
+// Call the `fun release-canceled-scope` operation of the effect `:async-cancel`
+pub fun release-canceled-scope[63,7,63,28] : (scope : async-scope) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(async-cancel :: (E, V) -> V)>> ();
+// Automatically generated. Retrieves the `@fun-is-scope-canceled` constructor field of the `:async-cancel` type.
+fun async-cancel/@fun-is-scope-canceled[64,7,64,51] : forall<(e :: E),a> (^ @this : (async-cancel :: (E, V) -> V)<(e :: E),a>) -> (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<async-scope,std/core/types/bool,(async-cancel :: (E, V) -> V),(e :: E),a>;
+// select `is-scope-canceled` operation out of effect `:async-cancel`
+pub fun is-scope-canceled/@select[64,7,64,51] : forall<(e :: E),a> (^ hnd : (async-cancel :: (E, V) -> V)<(e :: E),a>) -> (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<async-scope,std/core/types/bool,(async-cancel :: (E, V) -> V),(e :: E),a>;
+// Call the `fun is-scope-canceled` operation of the effect `:async-cancel`
+pub fun is-scope-canceled[64,7,64,23] : (scope : async-scope) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(async-cancel :: (E, V) -> V)>> std/core/types/bool;
+// Automatically generated. Retrieves the `@cfc` constructor field of the `:async-ioc` type.
+fun async-ioc/@cfc[69,1,69,20] : forall<(e :: E),a> (^ @this : (async-ioc :: (E, V) -> V)<(e :: E),a>) -> std/core/types/int;
+// runtime tag for the effect `:async-ioc`
+pub val async-ioc/@tag[69,1,69,20] : (std/core/hnd/htag :: ((E, V) -> V) -> V)<(async-ioc :: (E, V) -> V)>;
+// handler for the effect `:async-ioc`
+pub fun async-ioc/@handle[69,12,69,20] : forall<a,(e :: E),b> (hnd : (async-ioc :: (E, V) -> V)<(e :: E),b>, ret : (res : a) -> (e :: E) b, action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ioc :: (E, V) -> V)>|(e :: E)> a) -> (e :: E) b;
+// Automatically generated. Retrieves the `@fun-async-ioc` constructor field of the `:async-ioc` type.
+fun async-ioc/@fun-async-ioc[70,7,70,40] : forall<(e :: E),a,b> (^ @this : (async-ioc :: (E, V) -> V)<(e :: E),a>) -> (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<() -> <(std/core/ui :: X)> b,b,(async-ioc :: (E, V) -> V),(e :: E),a>;
+// select `async-ioc` operation out of effect `:async-ioc`
+pub fun async-ioc/@select[70,7,70,40] : forall<a,(e :: E),b> (^ hnd : (async-ioc :: (E, V) -> V)<(e :: E),b>) -> (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<() -> <(std/core/ui :: X)> a,a,(async-ioc :: (E, V) -> V),(e :: E),b>;
+// Call the `fun async-ioc` operation of the effect `:async-ioc`
+pub fun async-ioc[70,7,70,15] : forall<a> (action : () -> <(std/core/ui :: X)> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ioc :: (E, V) -> V)>> a;
+// Automatically generated. Retrieves the `@fun-async-schedule-ioc` constructor field of the `:async-ioc` type.
+fun async-ioc/@fun-async-schedule-ioc[71,7,71,72] : forall<(e :: E),a> (^ @this : (async-ioc :: (E, V) -> V)<(e :: E),a>) -> (std/core/hnd/clause2 :: (V, V, V, (E, V) -> V, E, V) -> V)<async-scope,() -> <(std/core/ui :: X)> (),(),(async-ioc :: (E, V) -> V),(e :: E),a>;
+// select `async-schedule-ioc` operation out of effect `:async-ioc`
+pub fun async-schedule-ioc/@select[71,7,71,72] : forall<(e :: E),a> (^ hnd : (async-ioc :: (E, V) -> V)<(e :: E),a>) -> (std/core/hnd/clause2 :: (V, V, V, (E, V) -> V, E, V) -> V)<async-scope,() -> <(std/core/ui :: X)> (),(),(async-ioc :: (E, V) -> V),(e :: E),a>;
+// Call the `fun async-schedule-ioc` operation of the effect `:async-ioc`
+pub fun async-schedule-ioc[71,7,71,24] : (scope : async-scope, action : () -> <(std/core/ui :: X)> ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ioc :: (E, V) -> V)>> ();
+// Automatically generated. Retrieves the `@cfc` constructor field of the `:async-ownership` type.
+fun async-ownership/@cfc[76,1,76,26] : forall<(e :: E),a> (^ @this : (async-ownership :: (E, V) -> V)<(e :: E),a>) -> std/core/types/int;
+// runtime tag for the effect `:async-ownership`
+pub val async-ownership/@tag[76,1,76,26] : (std/core/hnd/htag :: ((E, V) -> V) -> V)<(async-ownership :: (E, V) -> V)>;
+// handler for the effect `:async-ownership`
+pub fun async-ownership/@handle[76,12,76,26] : forall<a,(e :: E),b> (hnd : (async-ownership :: (E, V) -> V)<(e :: E),b>, ret : (res : a) -> (e :: E) b, action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ownership :: (E, V) -> V)>|(e :: E)> a) -> (e :: E) b;
+// Automatically generated. Retrieves the `@fun-async-own-disposer` constructor field of the `:async-ownership` type.
+fun async-ownership/@fun-async-own-disposer[81,7,81,69] : forall<(e :: E),a> (^ @this : (async-ownership :: (E, V) -> V)<(e :: E),a>) -> (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<dispose-fn,ownership-release-fn,(async-ownership :: (E, V) -> V),(e :: E),a>;
+// select `async-own-disposer` operation out of effect `:async-ownership`
+pub fun async-own-disposer/@select[81,7,81,69] : forall<(e :: E),a> (^ hnd : (async-ownership :: (E, V) -> V)<(e :: E),a>) -> (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<dispose-fn,ownership-release-fn,(async-ownership :: (E, V) -> V),(e :: E),a>;
+// release action transfers ownership without running the disposer.
+
+// Call the `fun async-own-disposer` operation of the effect `:async-ownership`
+pub fun async-own-disposer[81,7,81,24] : (dispose : dispose-fn) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ownership :: (E, V) -> V)>> ownership-release-fn;
+// Automatically generated. Retrieves the `ids` constructor field of the `:async-scope` type.
+fun async-scope/ids[95,5,95,7] : (^ @this : async-scope) -> (std/core/types/list :: V -> V)<scope-id>;
+// Automatically generated. Retrieves the `scope-namespace` constructor field of the `:async-scope` type.
+fun async-scope/scope-namespace[96,5,96,19] : (^ @this : async-scope) -> std/core/types/int;
+pub fun async-scope/@copy[94,3,94,7] : (@this : async-scope, ids : (std/core/types/@optional :: V -> V)<(std/core/types/list :: V -> V)<scope-id>>, scope-namespace : (std/core/types/@optional :: V -> V)<std/core/types/int>) -> async-scope;
+// Kokaine's browser runtime is single-threaded. Keep scope identity allocation
+// behind total helpers just like the rest of its opaque generation metadata.
+val next-scope-id[101,5,101,17] : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>;
+// The public root is used by standalone interpreters. Generation runtimes
+// allocate separate cancellation namespaces from the same identity source.
+pub val root-scope[105,9,105,18] : async-scope;
+fun fresh-scope-id[107,5,107,18] : () -> std/core/types/int;
+// Runtime support: every interpreter gets an isolated cancellation namespace.
+pub fun new-runtime-scope-root[114,9,114,30] : () -> async-scope;
+pub fun async-scope/show[118,9,118,24] : (@pat-x118_26 : async-scope) -> std/core/types/string;
+pub fun await-result/show[202,9,202,25] : forall<a> (result : (await-result :: V -> V)<a>, ?show : (a) -> std/core/types/string) -> std/core/types/string;
+pub fun new-child-scope[121,9,121,23] : (@pat-x121_25 : async-scope) -> async-scope;
+fun current-scope-id[124,5,124,20] : (@pat-x124_22 : async-scope) -> scope-id;
+// Namespace membership is part of equality and ancestry even though hash keys
+// are globally unique. Cancellation capabilities cannot cross runtimes.
+pub fun async-scope/same-namespace[137,9,137,34] : (left : async-scope, right : async-scope) -> std/core/types/bool;
+pub fun async-scope/(==)[162,9,162,24] : (left : async-scope, right : async-scope) -> std/core/types/bool;
+// Runtime-root namespaces consume the same global ID source as children, so
+// the root namespace and every non-root head ID are mutually unique hash keys.
+pub fun async-scope/identity-key[129,9,129,32] : (scope : async-scope) -> std/core/types/int;
+pub fun async-scope/parent[143,9,143,26] : (@pat-x144_5 : async-scope) -> async-scope;
+// Is `child` the same scope as, or a descendant of, `ancestor`?
+pub fun async-scope/is-within[150,9,150,29] : (child : async-scope, ancestor : async-scope) -> std/core/types/bool;
+pub fun async-scope/(<=)[158,9,158,24] : (child : async-scope, ancestor : async-scope) -> std/core/types/bool;
+// Automatically generated. Retrieves the `@cfc` constructor field of the `:discontinue` type.
+fun discontinue/@cfc[172,1,172,22] : forall<(e :: E),a> (^ discontinue : (discontinue :: (E, V) -> V)<(e :: E),a>) -> std/core/types/int;
+// runtime tag for the effect `:discontinue`
+pub val discontinue/@tag[172,1,172,22] : (std/core/hnd/htag :: ((E, V) -> V) -> V)<(discontinue :: (E, V) -> V)>;
+// handler for the effect `:discontinue`
+pub fun discontinue/@handle[172,12,172,22] : forall<a,(e :: E),b> (hnd : (discontinue :: (E, V) -> V)<(e :: E),b>, ret : (res : a) -> (e :: E) b, action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(discontinue :: (E, V) -> V)>|(e :: E)> a) -> (e :: E) b;
+// Automatically generated. Retrieves the `@brk-discontinue` constructor field of the `:discontinue` type.
+fun discontinue/@brk-discontinue[175,13,175,29] : forall<(e :: E),a,b> (^ discontinue : (discontinue :: (E, V) -> V)<(e :: E),a>) -> (std/core/hnd/clause0 :: (V, (E, V) -> V, E, V) -> V)<b,(discontinue :: (E, V) -> V),(e :: E),a>;
+// select `discontinue` operation out of effect `:discontinue`
+pub fun discontinue/@select[175,13,175,29] : forall<a,(e :: E),b> (^ hnd : (discontinue :: (E, V) -> V)<(e :: E),b>) -> (std/core/hnd/clause0 :: (V, (E, V) -> V, E, V) -> V)<a,(discontinue :: (E, V) -> V),(e :: E),b>;
+// operation still unwinds Koka `finally` clauses in the canceled strand.
+
+// Call the `final ctl discontinue` operation of the effect `:discontinue`
+pub fun discontinue[175,13,175,23] : forall<a> () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(discontinue :: (E, V) -> V)>> a;
+// Perform browser-host work through the active generation interpreter.
+pub fun async-host[181,9,181,18] : forall<a> (action : () -> <(std/core/ui :: X)> a) -> (async :: E) a;
+// monadic lift
+fun @mlift-async-schedule@10201[1,0,1,0] : (action : () -> <(std/core/ui :: X)> (), @y-x10054 : async-scope) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(discontinue :: (E, V) -> V)>> ();
+// Schedule browser work through the active generation interpreter.
+pub fun async-schedule[185,9,185,22] : (action : () -> <(std/core/ui :: X)> ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(discontinue :: (E, V) -> V)>> ();
+// monadic lift
+fun @mlift-async-own@10202[1,0,1,0] : (release : () -> <(std/core/ui :: X)> std/core/types/bool) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(discontinue :: (E, V) -> V)>> (() -> <(std/core/ui :: X)> ());
+// Acquire a lease for a host resource. By default it follows the reactive
+// generation rather than a structured cancellation scope; a nearer structured
+// or Resource ledger may further constrain or promote that lifetime.
+pub fun async-own[191,9,191,17] : (dispose : dispose-fn) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(discontinue :: (E, V) -> V)>> dispose-fn;
+pub fun error/await-result[209,9,209,26] : forall<a> (result : (std/core/exn/error :: V -> V)<a>) -> (await-result :: V -> V)<a>;
+// This is the single conversion point for cancellation. It performs final
+// control rather than returning an error value or throwing an exception.
+pub fun await-result/error[216,9,216,26] : forall<a> (result : (await-result :: V -> V)<a>, label : (std/core/types/@optional :: V -> V)<std/core/types/string>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(discontinue :: (E, V) -> V)>> (std/core/exn/error :: V -> V)<a>;
+// monadic lift
+fun setup/@mlift-await-error1@10203[1,0,1,0] : forall<a> (label : (std/core/types/@optional :: V -> V)<std/core/types/string>, result@0 : (await-result :: V -> V)<a>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(discontinue :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ownership :: (E, V) -> V)>> (std/core/exn/error :: V -> V)<a>;
+// monadic lift
+fun setup/@mlift-await-error1@10204[1,0,1,0] : forall<a> (label : (std/core/types/@optional :: V -> V)<std/core/types/string>, setup : (((std/core/exn/error :: V -> V)<a>) -> <(std/core/ui :: X)> ()) -> <(std/core/ui :: X)> (std/core/exn/error :: V -> V)<dispose-fn>, @y-x10062 : async-scope) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(discontinue :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ownership :: (E, V) -> V)>> (std/core/exn/error :: V -> V)<a>;
+// Variant whose completion callback already carries `error<a>`.
+pub fun setup/await-error1[291,9,291,26] : forall<a> (label : (std/core/types/@optional :: V -> V)<std/core/types/string>, setup : (((std/core/exn/error :: V -> V)<a>) -> <(std/core/ui :: X)> ()) -> <(std/core/ui :: X)> (std/core/exn/error :: V -> V)<dispose-fn>) -> (async :: E) (std/core/exn/error :: V -> V)<a>;
+// monadic lift
+fun setup/@mlift-await@10205[1,0,1,0] : forall<a> (@y-x10065 : (std/core/exn/error :: V -> V)<a>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(discontinue :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> a;
+// Await a setup whose completion callback carries an `error<a>`.
+pub fun setup/await[273,9,273,19] : forall<a> (label : (std/core/types/@optional :: V -> V)<std/core/types/string>, setup : (((std/core/exn/error :: V -> V)<a>) -> <(std/core/ui :: X)> ()) -> <(std/core/ui :: X)> (std/core/exn/error :: V -> V)<dispose-fn>) -> <(async :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> a;
+// monadic lift
+fun @mlift-await1@10206[1,0,1,0] : forall<a> (@y-x10067 : (std/core/exn/error :: V -> V)<a>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(discontinue :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> a;
+// Await a callback whose setup may fail and which returns a real disposer.
+pub fun await1[258,9,258,14] : forall<a> (label : (std/core/types/@optional :: V -> V)<std/core/types/string>, setup : ((a) -> <(std/core/ui :: X)> ()) -> <(std/core/ui :: X)> (std/core/exn/error :: V -> V)<dispose-fn>) -> <(async :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> a;
+pub fun await0[266,9,266,14] : (label : (std/core/types/@optional :: V -> V)<std/core/types/string>, setup : (() -> <(std/core/ui :: X)> ()) -> <(std/core/ui :: X)> (std/core/exn/error :: V -> V)<dispose-fn>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(discontinue :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
+// monadic lift
+fun setup/@mlift-await-error@10207[1,0,1,0] : forall<a> (label : (std/core/types/@optional :: V -> V)<std/core/types/string>, result : (await-result :: V -> V)<a>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(discontinue :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ownership :: (E, V) -> V)>> (std/core/exn/error :: V -> V)<a>;
+// monadic lift
+fun setup/@mlift-await-error@10208[1,0,1,0] : forall<a> (label : (std/core/types/@optional :: V -> V)<std/core/types/string>, setup : ((a) -> <(std/core/ui :: X)> ()) -> <(std/core/ui :: X)> (std/core/exn/error :: V -> V)<dispose-fn>, @y-x10072 : async-scope) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(discontinue :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ownership :: (E, V) -> V)>> (std/core/exn/error :: V -> V)<a>;
+// Await a plain completion and preserve asynchronous exceptions as an
+// explicit `error<a>`. Cancellation still discontinues the strand.
+pub fun setup/await-error[281,9,281,25] : forall<a> (label : (std/core/types/@optional :: V -> V)<std/core/types/string>, setup : ((a) -> <(std/core/ui :: X)> ()) -> <(std/core/ui :: X)> (std/core/exn/error :: V -> V)<dispose-fn>) -> (async :: E) (std/core/exn/error :: V -> V)<a>;
+// monadic lift
+fun setup/@mlift-await-noexn@10209[1,0,1,0] : forall<a> (result : (std/core/exn/error :: V -> V)<a>) -> (async :: E) a;
+// Primitive wrapper for setup functions which return plain values and a
+// disposer but cannot fail during setup or completion.
+pub fun setup/await-noexn[231,9,231,25] : forall<a> (label : (std/core/types/@optional :: V -> V)<std/core/types/string>, setup : ((a) -> <(std/core/ui :: X)> ()) -> <(std/core/ui :: X)> dispose-fn) -> (async :: E) a;
+pub fun await1-noexn[244,9,244,20] : forall<a> (label : (std/core/types/@optional :: V -> V)<std/core/types/string>, setup : ((a) -> <(std/core/ui :: X)> ()) -> <(std/core/ui :: X)> ()) -> (async :: E) a;
+pub fun await0-noexn[252,9,252,20] : (label : (std/core/types/@optional :: V -> V)<std/core/types/string>, setup : (() -> <(std/core/ui :: X)> ()) -> <(std/core/ui :: X)> ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(discontinue :: (E, V) -> V)>> ();
+// monadic lift
+fun @mlift-cancel-outstanding@10210[1,0,1,0] : (scope@10030 : async-scope) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(async-cancel :: (E, V) -> V)>> ();
+pub fun cancel-outstanding[305,9,305,26] : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(async-cancel :: (E, V) -> V)>> ();
+// monadic lift
+fun @mlift-is-canceled@10211[1,0,1,0] : (scope@10031 : async-scope) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(async-cancel :: (E, V) -> V)>> std/core/types/bool;
+pub fun is-canceled[308,9,308,19] : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(async-cancel :: (E, V) -> V)>> std/core/types/bool;
+// monadic lift
+fun @mlift-cancelation-scope@10212[1,0,1,0] : forall<(h :: H),(e :: E)> (scope : async-scope, @c-x10087 : ()) -> ();
+// monadic lift
+fun @mlift-cancelation-scope@10213[1,0,1,0] : forall<(h :: H),(e :: E)> (scope@0@0 : async-scope, @y-x10090 : std/core/types/bool) -> <(std/core/types/local :: H -> X)<(h :: H)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(discontinue :: (E, V) -> V)>|(e :: E)> std/core/types/bool;
+// monadic lift
+fun @mlift-cancelation-scope@10214[1,0,1,0] : forall<(h :: H),(e :: E)> (scope@1@0 : async-scope, @c-x10098 : ()) -> ();
+// monadic lift
+fun @mlift-cancelation-scope@10215[1,0,1,0] : forall<(h :: H),a,(e :: E)> (action : () -> <(async :: E)|(e :: E)> a, child : async-scope, @y-x10101 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-cancel :: (E, V) -> V)>,(std/core/types/local :: H -> X)<(h :: H)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(discontinue :: (E, V) -> V)>|(e :: E)> a;
+// monadic lift
+fun @mlift-cancelation-scope@10216[1,0,1,0] : forall<(_e :: E),(h :: H),a,(e1 :: E)> (action : () -> <(async :: E)|(e1 :: E)> a, @y-x10085 : async-scope) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(discontinue :: (E, V) -> V)>,(std/core/types/local :: H -> X)<(h :: H)>|(e1 :: E)> a;
+pub fun cancelation-scope[311,9,311,25] : forall<a,(e :: E)> (action : () -> <(async :: E)|(e :: E)> a) -> <(async :: E)|(e :: E)> a;
+// monadic lift
+fun @mlift-in-parent-scope@10217[1,0,1,0] : forall<a,(e :: E)> (action : () -> <(async :: E)|(e :: E)> a, @y-x10118 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(discontinue :: (E, V) -> V)>|(e :: E)> a;
+// monadic lift
+fun @mlift-in-parent-scope@10218[1,0,1,0] : forall<a,(e :: E)> (action : () -> <(async :: E)|(e :: E)> a, @y-x10111 : async-scope) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(discontinue :: (E, V) -> V)>|(e :: E)> a;
+// Splice an action into the surrounding scope. Structured combinators use
+// this for bookkeeping which must outlive a nested child cancellation.
+pub fun in-parent-scope[328,9,328,23] : forall<a,(e :: E)> (action : () -> <(async :: E)|(e :: E)> a) -> <(async :: E)|(e :: E)> a;
+// monadic lift
+fun @mlift-unsafe-uncancel@10219[1,0,1,0] : forall<a,(e :: E)> (action : () -> <(async :: E)|(e :: E)> a, @y-x10121 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(discontinue :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(discontinue :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(async-ownership :: (E, V) -> V)>|(e :: E)> a;
+// Internal escape hatch for structured combinators which must observe a
+// canceled strand while still draining sibling finalizers. Application code
+// should not suppress cancellation.
+pub fun unsafe-uncancel[339,9,339,23] : forall<a,(e :: E)> (action : () -> <(async :: E)|(e :: E)> a) -> <(async :: E)|(e :: E)> (std/core/types/maybe :: V -> V)<a>;
+ 
+fun @kokaine-cache-phase[1,0,1,0] : () -> std/core/types/int;
+ 
+//------------------------------
+//#kki: external declarations
+ 
+ 
+//------------------------------
+//#kki: inline definitions
+ 
+//.inline-section
+fun @kokaine-cache-phase // inline size: 1
+  = fn(){ 0; };

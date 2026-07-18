@@ -1,0 +1,120 @@
+/*--------------------------------------------------------------------------
+  Generic intrusive registrations with constant-time claim and unlink.
+
+  A registration keeps a pointer to the cell which currently points at its
+  node. This pointer-to-pointer back link lets head, middle, and tail nodes use
+  the same O(1) unlink operation without rebuilding an immutable list.
+--------------------------------------------------------------------------*/
+module interface kokaine/internal/registry
+ 
+//------------------------------
+//#kki: import declarations
+ 
+import std/core/types = std/core/types pub = "";
+import std/core/hnd = std/core/hnd pub = "";
+import std/core/exn = std/core/exn pub = "";
+import std/core/bool = std/core/bool pub = "";
+import std/core/order = std/core/order pub = "";
+import std/core/char = std/core/char pub = "";
+import std/core/int = std/core/int pub = "";
+import std/core/vector = std/core/vector pub = "";
+import std/core/string = std/core/string pub = "";
+import std/core/sslice = std/core/sslice pub = "";
+import std/core/list = std/core/list pub = "";
+import std/core/maybe = std/core/maybe pub = "";
+import std/core/maybe2 = std/core/maybe2 pub = "";
+import std/core/either = std/core/either pub = "";
+import std/core/result = std/core/result pub = "";
+import std/core/tuple = std/core/tuple pub = "";
+import std/core/lazy = std/core/lazy pub = "";
+import std/core/show = std/core/show pub = "";
+import std/core/debug = std/core/debug pub = "";
+import std/core/delayed = std/core/delayed pub = "";
+import std/core/console = std/core/console pub = "";
+import std/core = std/core = "";
+import std/core/unsafe = std/core/unsafe = "";
+import std/core/undiv = std/core/undiv = "";
+ 
+//------------------------------
+//#kki: external imports
+ 
+ 
+//------------------------------
+//#kki: fixity declarations
+ 
+ 
+//------------------------------
+//#kki: local imported aliases
+ 
+ 
+//------------------------------
+//#kki: type declarations
+ 
+recursive type registry-link[24,1,30,3] <a> :: V -> V {
+  con Registry-end[25,3,25,14]{0,0,0} : forall<a> (registry-link :: V -> V)<a> = 1;
+  con Registry-link[26,3,26,15](link-value: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<a>>, link-back: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(registry-link :: V -> V)<a>>>, link-next: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(registry-link :: V -> V)<a>>){0,3,8} : forall<a> (link-value : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<a>>, link-back : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(registry-link :: V -> V)<a>>>, link-next : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(registry-link :: V -> V)<a>>) -> (registry-link :: V -> V)<a> = 2;
+};
+pub type registry[32,1,37,3] <a> :: V -> V {
+  con Registry[33,3,33,10](registry-is-sealed: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>, registry-head: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(registry-link :: V -> V)<a>>, registry-count: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>){0,3,8} : forall<a> (registry-is-sealed : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>, registry-head : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(registry-link :: V -> V)<a>>, registry-count : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>) -> (registry :: V -> V)<a> = 1;
+};
+pub value{0,4,8} type registry-registration[39,1,45,3] <a> :: V -> V {
+  con Registry-registration[40,3,40,23](registration-value: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<a>>, registration-back: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(registry-link :: V -> V)<a>>>, registration-next: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(registry-link :: V -> V)<a>>, registration-count: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>){0,4,8} : forall<a> (registration-value : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<a>>, registration-back : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(registry-link :: V -> V)<a>>>, registration-next : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(registry-link :: V -> V)<a>>, registration-count : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>) -> (registry-registration :: V -> V)<a> = 1;
+};
+ 
+//------------------------------
+//#kki: declarations
+ 
+fun cell[14,5,14,8] : forall<a> (value : a) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>;
+fun load[17,5,17,8] : forall<a> (value : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>) -> a;
+fun store[20,5,20,9] : forall<a> (target : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>, value : a) -> ();
+// Automatically generated. Tests for the `Registry-end` constructor of the `:registry-link` type.
+fip fun is-registry-end[25,3,25,14] : forall<a> (^ registry-link : (registry-link :: V -> V)<a>) -> std/core/types/bool;
+// Automatically generated. Tests for the `Registry-link` constructor of the `:registry-link` type.
+fip fun is-registry-link[26,3,26,15] : forall<a> (^ registry-link : (registry-link :: V -> V)<a>) -> std/core/types/bool;
+// Automatically generated. Retrieves the `registry-is-sealed` constructor field of the `:registry` type.
+fun registry/registry-is-sealed[34,5,34,22] : forall<a> (^ registry : (registry :: V -> V)<a>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>;
+// Automatically generated. Retrieves the `registry-head` constructor field of the `:registry` type.
+fun registry/registry-head[35,5,35,17] : forall<a> (^ registry : (registry :: V -> V)<a>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(registry-link :: V -> V)<a>>;
+// Automatically generated. Retrieves the `registry-count` constructor field of the `:registry` type.
+fun registry/registry-count[36,5,36,18] : forall<a> (^ registry : (registry :: V -> V)<a>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>;
+pub fun registry/@copy[33,3,33,10] : forall<a> (@this : (registry :: V -> V)<a>, registry-is-sealed : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>>, registry-head : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(registry-link :: V -> V)<a>>>, registry-count : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>>) -> (registry :: V -> V)<a>;
+// Automatically generated. Retrieves the `registration-value` constructor field of the `:registry-registration` type.
+fun registry-registration/registration-value[41,5,41,22] : forall<a> (^ @this : (registry-registration :: V -> V)<a>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<a>>;
+// Automatically generated. Retrieves the `registration-back` constructor field of the `:registry-registration` type.
+fun registry-registration/registration-back[42,5,42,21] : forall<a> (^ @this : (registry-registration :: V -> V)<a>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(registry-link :: V -> V)<a>>>;
+// Automatically generated. Retrieves the `registration-next` constructor field of the `:registry-registration` type.
+fun registry-registration/registration-next[43,5,43,21] : forall<a> (^ @this : (registry-registration :: V -> V)<a>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(registry-link :: V -> V)<a>>;
+// Automatically generated. Retrieves the `registration-count` constructor field of the `:registry-registration` type.
+fun registry-registration/registration-count[44,5,44,22] : forall<a> (^ @this : (registry-registration :: V -> V)<a>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>;
+pub fun registry-registration/@copy[40,3,40,23] : forall<a> (@this : (registry-registration :: V -> V)<a>, registration-value : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<a>>>, registration-back : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(registry-link :: V -> V)<a>>>>, registration-next : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(registry-link :: V -> V)<a>>>, registration-count : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>>) -> (registry-registration :: V -> V)<a>;
+fun registry-link/set-back[48,5,48,26] : forall<a> (value : (registry-link :: V -> V)<a>, pointer : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(registry-link :: V -> V)<a>>) -> ();
+pub fun new-registry[54,9,54,20] : forall<a> () -> (registry :: V -> V)<a>;
+pub fun registry/sealed[57,9,57,23] : forall<a> (target : (registry :: V -> V)<a>) -> std/core/types/bool;
+pub fun registry/count[61,9,61,22] : forall<a> (target : (registry :: V -> V)<a>) -> std/core/types/int;
+// Internal observability for structural ownership tests. Unlike `count` or
+// `snapshot`, this detects an empty tombstone still retained by the registry.
+pub fun registry/has-linked-nodes[67,18,67,42] : forall<a> (target : (registry :: V -> V)<a>) -> std/core/types/bool;
+// monadic lift
+fun registry/@mlift-try-insert@10136[1,0,1,0] : forall<(_e :: E),(_e1 :: E),(_e2 :: E),a> (count : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>, head : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(registry-link :: V -> V)<a>>, next : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(registry-link :: V -> V)<a>>, slot : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<a>>, @c-x10119 : ()) -> (std/core/types/maybe :: V -> V)<(registry-registration :: V -> V)<a>>;
+pub fun registry/try-insert[74,9,74,27] : forall<a> (target : (registry :: V -> V)<a>, value : a) -> (std/core/types/maybe :: V -> V)<(registry-registration :: V -> V)<a>>;
+pub fun registry/insert[88,9,88,23] : forall<a> (target : (registry :: V -> V)<a>, value : a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (registry-registration :: V -> V)<a>;
+// monadic lift
+fun registry-registration/@mlift-take@10137[1,0,1,0] : forall<(_e :: E),(_e1 :: E),a> (back : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(registry-link :: V -> V)<a>>>, count : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>, current : a, next : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(registry-link :: V -> V)<a>>, @c-x10124 : ()) -> (std/core/types/maybe :: V -> V)<a>;
+pub fun registry-registration/take[94,9,94,34] : forall<a> (registration : (registry-registration :: V -> V)<a>) -> (std/core/types/maybe :: V -> V)<a>;
+tail fun snapshot-loop[114,10,114,22] : forall<a> (values : (registry-link :: V -> V)<a>, collected : (std/core/types/list :: V -> V)<a>) -> <(std/core/types/div :: X)> (std/core/types/list :: V -> V)<a>;
+pub fun registry/snapshot[123,9,123,25] : forall<a> (target : (registry :: V -> V)<a>) -> (std/core/types/list :: V -> V)<a>;
+tail fun detach-loop[127,10,127,20] : forall<a> (values : (registry-link :: V -> V)<a>, collected : (std/core/types/list :: V -> V)<a>) -> <(std/core/types/div :: X)> (std/core/types/list :: V -> V)<a>;
+pub fun registry/seal-detach[143,9,143,28] : forall<a> (target : (registry :: V -> V)<a>) -> (std/core/types/maybe :: V -> V)<(std/core/types/list :: V -> V)<a>>;
+ 
+fun @kokaine-cache-phase[1,0,1,0] : () -> std/core/types/int;
+ 
+//------------------------------
+//#kki: external declarations
+ 
+ 
+//------------------------------
+//#kki: inline definitions
+ 
+//.inline-section
+fun @kokaine-cache-phase // inline size: 1
+  = fn(){ 0; };

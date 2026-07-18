@@ -1,0 +1,279 @@
+/*--------------------------------------------------------------------------
+  Copyright (c) 2026 Kokaine contributors. SPDX-License-Identifier: MIT
+
+  Browser structured concurrency. Each child strand turns host suspensions
+  into queued resumption thunks. The driver consumes those thunks until every
+  child has returned or finished unwinding after cancellation.
+--------------------------------------------------------------------------*/
+module interface kokaine/async/structured
+ 
+//------------------------------
+//#kki: import declarations
+ 
+import std/core/types = std/core/types pub = "";
+import std/core/hnd = std/core/hnd pub = "";
+import std/core/exn = std/core/exn pub = "";
+import std/core/bool = std/core/bool pub = "";
+import std/core/order = std/core/order pub = "";
+import std/core/char = std/core/char pub = "";
+import std/core/int = std/core/int pub = "";
+import std/core/vector = std/core/vector pub = "";
+import std/core/string = std/core/string pub = "";
+import std/core/sslice = std/core/sslice pub = "";
+import std/core/list = std/core/list pub = "";
+import std/core/maybe = std/core/maybe pub = "";
+import std/core/maybe2 = std/core/maybe2 pub = "";
+import std/core/either = std/core/either pub = "";
+import std/core/result = std/core/result pub = "";
+import std/core/tuple = std/core/tuple pub = "";
+import std/core/lazy = std/core/lazy pub = "";
+import std/core/show = std/core/show pub = "";
+import std/core/debug = std/core/debug pub = "";
+import std/core/delayed = std/core/delayed pub = "";
+import std/core/console = std/core/console pub = "";
+import std/core = std/core = "";
+import kokaine/async/effects = kokaine/async/effects = "";
+import kokaine/async/channel = kokaine/async/channel = "";
+import kokaine/internal/compat = kokaine/internal/compat = "";
+import kokaine/internal/registry = kokaine/internal/registry = "";
+import std/core/unsafe = std/core/unsafe = "";
+import std/core/undiv = std/core/undiv = "";
+ 
+//------------------------------
+//#kki: external imports
+ 
+ 
+//------------------------------
+//#kki: fixity declarations
+ 
+ 
+//------------------------------
+//#kki: local imported aliases
+ 
+local alias kokaine/async/effects/async[177,1,178,31] :: E = <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>> = 1;
+// Browser cleanup for an outstanding operation, for example `clearTimeout`
+// or `AbortController.abort`.
+local alias kokaine/async/effects/dispose-fn[29,1,29,34] = () -> <(std/core/ui :: X)> () = 1;
+// Internal ownership handlers need to distinguish a successful transfer from
+// a release which lost to an already-detached retirement snapshot. Public
+// callers continue to receive an ordinary one-shot `dispose-fn` below.
+local alias kokaine/async/effects/ownership-release-fn[34,1,34,46] = () -> <(std/core/ui :: X)> std/core/types/bool = 1;
+// An `:error<a>` type represents a first-class exception result as a `:result<a,exception>`.
+local alias std/core/exn/error[65,1,65,40]<a> :: V -> V = (std/core/types/result :: (V, V) -> V)<a,std/core/exn/exception> = 1;
+// Index into an evidence vector
+local alias std/core/hnd/ev-index[138,1,138,28] = std/core/types/ssize_t = 1;
+ 
+//------------------------------
+//#kki: type declarations
+ 
+type group-outcome[24,1,28,37] <a> :: V -> V {
+  con Group-values[25,3,25,14](values: (std/core/types/list :: V -> V)<(std/core/types/int, a)>){0,1,8} : forall<a> (values : (std/core/types/list :: V -> V)<(std/core/types/int, a)>) -> (group-outcome :: V -> V)<a> = 1;
+  con Group-exception[26,3,26,17](error: std/core/exn/exception){0,2,8} : forall<a> (error : std/core/exn/exception) -> (group-outcome :: V -> V)<a> = 2;
+  con Group-canceled[27,3,27,16]{0,0,0} : forall<a> (group-outcome :: V -> V)<a> = 3;
+  con Group-finalized[28,3,28,17](yield: std/core/hnd/yield-info){0,1,8} : forall<a> (yield : std/core/hnd/yield-info) -> (group-outcome :: V -> V)<a> = 4;
+};
+type group-owned[30,1,34,3] {
+  con Group-owned[31,3,31,13](group-owned-index: std/core/types/int, group-owned-discard: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<(kokaine/async/effects/dispose-fn == 1 () -> <(std/core/ui :: X)> ())>>){0,2,8} : (group-owned-index : std/core/types/int, group-owned-discard : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<(kokaine/async/effects/dispose-fn == 1 () -> <(std/core/ui :: X)> ())>>) -> group-owned = 1;
+};
+pub value{0,3,8} type group-owned-registration[36,1,40,3] {
+  con Group-owned-registration[37,3,37,26](registration-node: (std/core/types/maybe :: V -> V)<(kokaine/internal/registry/registry-registration :: V -> V)<group-owned>>, registration-discard: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<(kokaine/async/effects/dispose-fn == 1 () -> <(std/core/ui :: X)> ())>>){0,3,8} : (registration-node : (std/core/types/maybe :: V -> V)<(kokaine/internal/registry/registry-registration :: V -> V)<group-owned>>, registration-discard : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<(kokaine/async/effects/dispose-fn == 1 () -> <(std/core/ui :: X)> ())>>) -> group-owned-registration = 1;
+};
+type group-state[42,1,44,44] <a> :: V -> V {
+  con Group-state[43,3,43,13](active: std/core/types/int, outcome: (group-outcome :: V -> V)<a>, owned: (kokaine/internal/registry/registry :: V -> V)<group-owned>){0,3,8} : forall<a> (active : std/core/types/int, outcome : (group-outcome :: V -> V)<a>, owned : (kokaine/internal/registry/registry :: V -> V)<group-owned>) -> (group-state :: V -> V)<a> = 1;
+};
+// A nearer structured handler wraps the raw host disposer before the base
+// generation runtime registers it. Releasing the base registration and then
+// claiming this guard implements discard without changing the public
+// `async-own` release protocol.
+pub value{0,1,8} type ownership-guard[56,1,57,59] {
+  con Ownership-guard[57,3,57,17](disposer: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<(kokaine/async/effects/dispose-fn == 1 () -> <(std/core/ui :: X)> ())>>){0,1,8} : (disposer : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<(kokaine/async/effects/dispose-fn == 1 () -> <(std/core/ui :: X)> ())>>) -> ownership-guard = 1;
+};
+// Structured awaits are one-shot. An invocation-local cell can consequently
+// hold the drain ledger without adding a private effect to every user thunk.
+// It is never shared between parallel/race invocations or stored globally.
+pub value{1,1,8} type strand-group[49,1,50,70] <a> :: V -> V {
+  con Strand-group[50,3,50,14](state: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(group-state :: V -> V)<a>>, require-all: std/core/types/bool){1,1,8} : forall<a> (state : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(group-state :: V -> V)<a>>, require-all : std/core/types/bool) -> (strand-group :: V -> V)<a> = 1;
+};
+type strand-outcome[18,1,22,38] <a> :: V -> V {
+  con Strand-value[19,3,19,14](value: a){0,1,8} : forall<a> (value : a) -> (strand-outcome :: V -> V)<a> = 1;
+  con Strand-exception[20,3,20,18](error: std/core/exn/exception){0,2,8} : forall<a> (error : std/core/exn/exception) -> (strand-outcome :: V -> V)<a> = 2;
+  con Strand-canceled[21,3,21,17]{0,0,0} : forall<a> (strand-outcome :: V -> V)<a> = 3;
+  con Strand-finalized[22,3,22,18](yield: std/core/hnd/yield-info){0,1,8} : forall<a> (yield : std/core/hnd/yield-info) -> (strand-outcome :: V -> V)<a> = 4;
+};
+ 
+//------------------------------
+//#kki: declarations
+ 
+// Automatically generated. Tests for the `Strand-value` constructor of the `:strand-outcome` type.
+fip fun is-strand-value[19,3,19,14] : forall<a> (^ strand-outcome : (strand-outcome :: V -> V)<a>) -> std/core/types/bool;
+// Automatically generated. Tests for the `Strand-exception` constructor of the `:strand-outcome` type.
+fip fun is-strand-exception[20,3,20,18] : forall<a> (^ strand-outcome : (strand-outcome :: V -> V)<a>) -> std/core/types/bool;
+// Automatically generated. Tests for the `Strand-canceled` constructor of the `:strand-outcome` type.
+fip fun is-strand-canceled[21,3,21,17] : forall<a> (^ strand-outcome : (strand-outcome :: V -> V)<a>) -> std/core/types/bool;
+// Automatically generated. Tests for the `Strand-finalized` constructor of the `:strand-outcome` type.
+fip fun is-strand-finalized[22,3,22,18] : forall<a> (^ strand-outcome : (strand-outcome :: V -> V)<a>) -> std/core/types/bool;
+// Automatically generated. Tests for the `Group-values` constructor of the `:group-outcome` type.
+fip fun is-group-values[25,3,25,14] : forall<a> (^ group-outcome : (group-outcome :: V -> V)<a>) -> std/core/types/bool;
+// Automatically generated. Tests for the `Group-exception` constructor of the `:group-outcome` type.
+fip fun is-group-exception[26,3,26,17] : forall<a> (^ group-outcome : (group-outcome :: V -> V)<a>) -> std/core/types/bool;
+// Automatically generated. Tests for the `Group-canceled` constructor of the `:group-outcome` type.
+fip fun is-group-canceled[27,3,27,16] : forall<a> (^ group-outcome : (group-outcome :: V -> V)<a>) -> std/core/types/bool;
+// Automatically generated. Tests for the `Group-finalized` constructor of the `:group-outcome` type.
+fip fun is-group-finalized[28,3,28,17] : forall<a> (^ group-outcome : (group-outcome :: V -> V)<a>) -> std/core/types/bool;
+// Automatically generated. Retrieves the `group-owned-index` constructor field of the `:group-owned` type.
+fun group-owned/group-owned-index[32,5,32,21] : (^ @this : group-owned) -> std/core/types/int;
+// Automatically generated. Retrieves the `group-owned-discard` constructor field of the `:group-owned` type.
+fun group-owned/group-owned-discard[33,5,33,23] : (^ @this : group-owned) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<kokaine/async/effects/dispose-fn>>;
+fun group-owned/@copy[31,3,31,13] : (@this : group-owned, group-owned-index : (std/core/types/@optional :: V -> V)<std/core/types/int>, group-owned-discard : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<kokaine/async/effects/dispose-fn>>>) -> group-owned;
+// Automatically generated. Retrieves the `registration-node` constructor field of the `:group-owned-registration` type.
+fun group-owned-registration/registration-node[38,5,38,21] : (^ @this : group-owned-registration) -> (std/core/types/maybe :: V -> V)<(kokaine/internal/registry/registry-registration :: V -> V)<group-owned>>;
+// Automatically generated. Retrieves the `registration-discard` constructor field of the `:group-owned-registration` type.
+fun group-owned-registration/registration-discard[39,5,39,24] : (^ @this : group-owned-registration) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<kokaine/async/effects/dispose-fn>>;
+pub fun group-owned-registration/@copy[37,3,37,26] : (@this : group-owned-registration, registration-node : (std/core/types/@optional :: V -> V)<(std/core/types/maybe :: V -> V)<(kokaine/internal/registry/registry-registration :: V -> V)<group-owned>>>, registration-discard : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<kokaine/async/effects/dispose-fn>>>) -> group-owned-registration;
+// Automatically generated. Retrieves the `active` constructor field of the `:group-state` type.
+fun group-state/active[43,15,43,20] : forall<a> (^ @this : (group-state :: V -> V)<a>) -> std/core/types/int;
+// Automatically generated. Retrieves the `outcome` constructor field of the `:group-state` type.
+fun group-state/outcome[43,29,43,35] : forall<a> (^ @this : (group-state :: V -> V)<a>) -> (group-outcome :: V -> V)<a>;
+// Automatically generated. Retrieves the `owned` constructor field of the `:group-state` type.
+fun group-state/owned[44,15,44,19] : forall<a> (^ @this : (group-state :: V -> V)<a>) -> (kokaine/internal/registry/registry :: V -> V)<group-owned>;
+fun group-state/@copy[43,3,43,13] : forall<a> (@this : (group-state :: V -> V)<a>, active : (std/core/types/@optional :: V -> V)<std/core/types/int>, outcome : (std/core/types/@optional :: V -> V)<(group-outcome :: V -> V)<a>>, owned : (std/core/types/@optional :: V -> V)<(kokaine/internal/registry/registry :: V -> V)<group-owned>>) -> (group-state :: V -> V)<a>;
+// Automatically generated. Retrieves the `require-all` constructor field of the `:strand-group` type.
+fun strand-group/require-all[50,52,50,62] : forall<a> (^ @this : (strand-group :: V -> V)<a>) -> std/core/types/bool;
+// Automatically generated. Retrieves the `state` constructor field of the `:strand-group` type.
+fun strand-group/state[50,16,50,20] : forall<a> (^ @this : (strand-group :: V -> V)<a>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(group-state :: V -> V)<a>>;
+pub fun strand-group/@copy[50,3,50,14] : forall<a> (@this : (strand-group :: V -> V)<a>, state : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(group-state :: V -> V)<a>>>, require-all : (std/core/types/@optional :: V -> V)<std/core/types/bool>) -> (strand-group :: V -> V)<a>;
+// Automatically generated. Retrieves the `disposer` constructor field of the `:ownership-guard` type.
+fun ownership-guard/disposer[57,19,57,26] : (^ @this : ownership-guard) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<kokaine/async/effects/dispose-fn>>;
+pub fun ownership-guard/@copy[57,3,57,17] : (@this : ownership-guard, disposer : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<kokaine/async/effects/dispose-fn>>>) -> ownership-guard;
+fun group-cell[59,5,59,14] : forall<a> (value : a) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>;
+fun group-load[62,5,62,14] : forall<a> (value : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>) -> a;
+fun group-store[65,5,65,15] : forall<a> (target : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>, value : a) -> ();
+fun new-ownership-guard[68,5,68,23] : (dispose : kokaine/async/effects/dispose-fn) -> ownership-guard;
+fun ownership-guard/retire[71,5,71,26] : (guard : ownership-guard) -> <(std/core/ui :: X)> ();
+fun ownership-guard/accept[80,5,80,26] : (guard : ownership-guard) -> ();
+fun ownership-guard/as-disposer[84,5,84,31] : (guard : ownership-guard) -> kokaine/async/effects/dispose-fn;
+// monadic lift
+fun @mlift-release-ownership@10298[1,0,1,0] : (@c-x10100 : ()) -> std/core/types/bool;
+fun release-ownership[87,5,87,21] : (release : kokaine/async/effects/ownership-release-fn, guard : ownership-guard) -> <(std/core/ui :: X)> std/core/types/bool;
+fun discard-ownership[94,5,94,21] : (release : kokaine/async/effects/ownership-release-fn, guard : ownership-guard) -> <(std/core/ui :: X)> ();
+fun ownership-discard-capability[101,5,101,32] : (release : kokaine/async/effects/ownership-release-fn, guard : ownership-guard) -> kokaine/async/effects/dispose-fn;
+fun group-lift-div[105,5,105,18] : forall<a,(e :: E)> (action : () -> (e :: E) a) -> <(std/core/types/div :: X)|(e :: E)> a;
+// monadic lift
+fun @mlift-group-lift-exn@10299[1,0,1,0] : forall<a,(e :: E)> (action : () -> (e :: E) a, @y-x10103 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a;
+fun group-lift-exn[108,5,108,18] : forall<a,(e :: E)> (action : () -> (e :: E) a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a;
+fun new-strand-group[111,5,111,20] : forall<a> (require-all : std/core/types/bool) -> (strand-group :: V -> V)<a>;
+tail fun @trmc-ordered-insert[115,10,115,23] : forall<a> (values : (std/core/types/list :: V -> V)<(std/core/types/int, a)>, entry : (std/core/types/int, a), @acc : (std/core/types/ctx :: V -> V)<(std/core/types/list :: V -> V)<(std/core/types/int, a)>>) -> (std/core/types/list :: V -> V)<(std/core/types/int, a)>;
+tail fun ordered-insert[115,10,115,23] : forall<a> (values : (std/core/types/list :: V -> V)<(std/core/types/int, a)>, entry : (std/core/types/int, a)) -> (std/core/types/list :: V -> V)<(std/core/types/int, a)>;
+fun group-outcome/add[122,5,122,21] : forall<a> (current : (group-outcome :: V -> V)<a>, index : std/core/types/int, outcome : (strand-outcome :: V -> V)<a>, require-all : std/core/types/bool) -> (group-outcome :: V -> V)<a>;
+fun group-outcome/resume[156,5,156,24] : forall<a> (current : (group-outcome :: V -> V)<a>) -> <(kokaine/async/effects/async :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (std/core/types/list :: V -> V)<a>;
+fun group-outcome/keeps-owned[163,5,163,29] : forall<a> (current : (group-outcome :: V -> V)<a>, index : std/core/types/int, require-all : std/core/types/bool) -> std/core/types/bool;
+fun strand-group/active[170,5,170,23] : forall<a> (group : (strand-group :: V -> V)<a>) -> std/core/types/bool;
+fun strand-group/start[174,5,174,22] : forall<a> (group : (strand-group :: V -> V)<a>) -> ();
+fun strand-group/finish[181,5,181,23] : forall<a> (group : (strand-group :: V -> V)<a>, index : std/core/types/int, result : (strand-outcome :: V -> V)<a>) -> ();
+fun strand-group/track-owned[193,5,193,28] : forall<a> (group : (strand-group :: V -> V)<a>, index : std/core/types/int, discard : kokaine/async/effects/dispose-fn) -> group-owned-registration;
+// Explicit release and group rollback race for the same entry. A live entry
+// is physically removed before the lower ownership ledger is touched. The
+// registration captures only its intrusive node and one-shot gate, never the
+// group's sibling results. A kept winner's node may already be detached when
+// its public release later consumes that independent gate.
+fun group-owned-registration/try-untrack[209,5,209,40] : (registration : group-owned-registration) -> std/core/types/bool;
+// monadic lift
+fun @mlift-release-group-ownership@10300[1,0,1,0] : (@c-x10119 : ()) -> std/core/types/bool;
+fun release-group-ownership[225,5,225,27] : (registration : group-owned-registration, release : kokaine/async/effects/ownership-release-fn, guard : ownership-guard) -> <(std/core/ui :: X)> std/core/types/bool;
+fun group-ownership-release-capability[231,5,231,38] : (registration : group-owned-registration, release : kokaine/async/effects/ownership-release-fn, guard : ownership-guard) -> kokaine/async/effects/ownership-release-fn;
+// Claim every losing discard before invoking any of them. A re-entrant
+// release therefore either won earlier or observes an already-retired slot.
+fun @trmc-collect-group-discards[239,5,239,26] : forall<a> (values : (std/core/types/list :: V -> V)<group-owned>, outcome : (group-outcome :: V -> V)<a>, require-all : std/core/types/bool, @acc : (std/core/types/ctx :: V -> V)<(std/core/types/list :: V -> V)<kokaine/async/effects/dispose-fn>>) -> (std/core/types/list :: V -> V)<kokaine/async/effects/dispose-fn>;
+// Claim every losing discard before invoking any of them. A re-entrant
+// release therefore either won earlier or observes an already-retired slot.
+fun collect-group-discards[239,5,239,26] : forall<a> (values : (std/core/types/list :: V -> V)<group-owned>, outcome : (group-outcome :: V -> V)<a>, require-all : std/core/types/bool) -> (std/core/types/list :: V -> V)<kokaine/async/effects/dispose-fn>;
+// monadic lift
+fun strand-group/@mlift-results@10301[1,0,1,0] : forall<a> (outcome : (group-outcome :: V -> V)<a>, wild_ : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (std/core/types/list :: V -> V)<a>;
+fun strand-group/results[255,5,255,24] : forall<a> (group : (strand-group :: V -> V)<a>) -> <(kokaine/async/effects/async :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (std/core/types/list :: V -> V)<a>;
+// Once a race has a winner, or a parallel group has failed/canceled, every
+// later queued ordinary result is a loser. It must take the retained Cancel
+// path instead of running user code after its await.
+fun strand-group/is-settled[273,5,273,27] : forall<a> (group : (strand-group :: V -> V)<a>) -> std/core/types/bool;
+// monadic lift
+fun @mlift-in-strand-scope@10302[1,0,1,0] : forall<a,(e :: E)> (action : () -> <(kokaine/async/effects/async :: E)|(e :: E)> a, @y-x10138 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>|(e :: E)> a;
+// Install one explicit group scope inside the routing handler. The route is
+// deliberately outermost: when its captured strand resumes in a later browser
+// turn, the fixed scope override remains part of that continuation, including
+// for second and subsequent awaits.
+fun in-strand-scope[285,5,285,19] : forall<a,(e :: E)> (scope : kokaine/async/effects/async-scope, action : () -> <(kokaine/async/effects/async :: E)|(e :: E)> a) -> <(kokaine/async/effects/async :: E)|(e :: E)> a;
+// monadic lift
+fun @mlift-in-strand-ownership@10303[1,0,1,0] : forall<a,(e :: E)> (group : (strand-group :: V -> V)<a>, guard : ownership-guard, index : std/core/types/int, release : () -> <(std/core/ui :: X)> std/core/types/bool) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>|(e :: E)> kokaine/async/effects/ownership-release-fn;
+// monadic lift
+fun @mlift-in-strand-ownership@10304[1,0,1,0] : forall<a,(e :: E)> (action : () -> <(kokaine/async/effects/async :: E)|(e :: E)> a, @y-x10143 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>|(e :: E)> a;
+// Record ownership acquired inside a child dynamic extent. The outer runtime
+// still owns the actual one-shot lease; this nearer handler retains only its
+// discard capability so an unreachable group result can be rolled back.
+fun in-strand-ownership[297,5,297,23] : forall<a,b,(e :: E)> (group : (strand-group :: V -> V)<a>, index : std/core/types/int, action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>|(e :: E)> b) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>|(e :: E)> b;
+// monadic lift
+fun @mlift-run-strand@10305[1,0,1,0] : forall<a,(e :: E)> (group : (strand-group :: V -> V)<a>, index : std/core/types/int, require-all : std/core/types/bool, outcome : (std/core/types/either :: (V, V) -> V)<std/core/hnd/yield-info,(std/core/types/maybe :: V -> V)<(std/core/exn/error :: V -> V)<a>>>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>|(e :: E)> ();
+// monadic lift
+fun @mlift-run-strand@10306[1,0,1,0] : forall<a,(e :: E)> (action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>|(e :: E)> a, group : (strand-group :: V -> V)<a>, index : std/core/types/int, require-all : std/core/types/bool, @y-x10146 : std/core/types/bool) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>|(e :: E)> ();
+fun run-strand[308,5,308,14] : forall<a,(e :: E)> (require-all : std/core/types/bool, group : (strand-group :: V -> V)<a>, queue : (kokaine/async/channel/resume-queue :: V -> V)<(force-cancel : std/core/types/bool) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>|(e :: E)> ()>, scope : kokaine/async/effects/async-scope, index : std/core/types/int, action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>|(e :: E)> ();
+// Every queued item selects between its real completion and a first synthetic
+// cancellation. Parent retirement enters this drain through the driver's
+// `finally` while the async interpreter is still installed, so no later
+// browser turn or live structural frame is needed to unwind child finalizers.
+// `noinline` also keeps this higher-rank queue row out of Koka 3.2's cached
+// inline printer.
+fun cancel-queued[348,14,348,26] : forall<(e :: E)> (queue : (kokaine/async/channel/resume-queue :: V -> V)<(std/core/types/bool) -> (e :: E) ()>) -> <(std/core/types/div :: X)|(e :: E)> ();
+// monadic lift
+fun @mlift-drive-strands@10307[1,0,1,0] : forall<(e :: E)> (queue : (kokaine/async/channel/resume-queue :: V -> V)<(force-cancel : std/core/types/bool) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>|(e :: E)> ()>, wild_ : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>,(std/core/types/div :: X)|(e :: E)> ();
+// monadic lift
+fun @mlift-drive-strands@10308[1,0,1,0] : forall<a,(e :: E)> (group : (strand-group :: V -> V)<a>, select : (force-cancel : std/core/types/bool) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>|(e :: E)> ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>|(e :: E)> ();
+// monadic lift
+fun @mlift-drive-strands@10309[1,0,1,0] : forall<(_e :: E),a,(e1 :: E)> (group : (strand-group :: V -> V)<a>, queue : (kokaine/async/channel/resume-queue :: V -> V)<(force-cancel : std/core/types/bool) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>|(e1 :: E)> ()>, scope : kokaine/async/effects/async-scope, @y-x10168 : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>|(e1 :: E)> ();
+// monadic lift
+fun @mlift-drive-strands@10310[1,0,1,0] : forall<(_e :: E),a,(e1 :: E)> (actions : (std/core/types/list :: V -> V)<() -> <(kokaine/async/effects/async :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e1 :: E)> a>, group : (strand-group :: V -> V)<a>, queue : (kokaine/async/channel/resume-queue :: V -> V)<(force-cancel : std/core/types/bool) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>|(e1 :: E)> ()>, require-all : std/core/types/bool, @y-x10166 : kokaine/async/effects/async-scope) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>|(e1 :: E)> ();
+fun drive-strands[354,5,354,17] : forall<a,(e :: E)> (actions : (std/core/types/list :: V -> V)<() -> <(kokaine/async/effects/async :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a>, require-all : std/core/types/bool, group : (strand-group :: V -> V)<a>) -> <(kokaine/async/effects/async :: E)|(e :: E)> ();
+// monadic lift
+fun @mlift-run-group@10311[1,0,1,0] : forall<a,(e :: E)> (group : (strand-group :: V -> V)<a>, wild_ : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>|(e :: E)> (std/core/types/list :: V -> V)<a>;
+// monadic lift
+fun @mlift-run-group@10312[1,0,1,0] : forall<a,(e :: E)> (actions : (std/core/types/list :: V -> V)<() -> <(kokaine/async/effects/async :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a>, group : (strand-group :: V -> V)<a>, require-all : std/core/types/bool, @y-x10184 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>|(e :: E)> (std/core/types/list :: V -> V)<a>;
+fun run-group[387,5,387,13] : forall<a,(e :: E)> (actions : (std/core/types/list :: V -> V)<() -> <(kokaine/async/effects/async :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a>, require-all : std/core/types/bool) -> <(kokaine/async/effects/async :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> (std/core/types/list :: V -> V)<a>;
+// monadic lift
+fun @mlift-parallel@10313[1,0,1,0] : forall<a,b,(e :: E)> (results : (std/core/types/list :: V -> V)<(std/core/types/either :: (V, V) -> V)<a,b>>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> (a, b);
+// monadic lift
+fun @mlift-parallel@10314[1,0,1,0] : forall<a,b,(e :: E)> (@y-x10189 : a) -> <(kokaine/async/effects/async :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> (std/core/types/either :: (V, V) -> V)<a,b>;
+// monadic lift
+fun @mlift-parallel@10315[1,0,1,0] : forall<a,b,(e :: E)> (@y-x10190 : b) -> <(kokaine/async/effects/async :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> (std/core/types/either :: (V, V) -> V)<a,b>;
+// monadic lift
+fun @mlift-parallel@10316[1,0,1,0] : forall<a,b,(e :: E)> (group : (strand-group :: V -> V)<(std/core/types/either :: (V, V) -> V)<a,b>>, wild_ : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>|(e :: E)> (a, b);
+// monadic lift
+fun @mlift-parallel@10317[1,0,1,0] : forall<a,b,(e :: E)> (group : (strand-group :: V -> V)<(std/core/types/either :: (V, V) -> V)<a,b>>, left : () -> <(kokaine/async/effects/async :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a, right : () -> <(kokaine/async/effects/async :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> b, @y-x10188 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>|(e :: E)> (a, b);
+// Run both actions concurrently and preserve argument/result order. Internal
+// completion order is nondeterministic, but a successful pair is not.
+pub fun parallel[395,9,395,16] : forall<a,b,(e :: E)> (left : () -> <(kokaine/async/effects/async :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a, right : () -> <(kokaine/async/effects/async :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> b) -> <(kokaine/async/effects/async :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> (a, b);
+// monadic lift
+fun @mlift-race@10318[1,0,1,0] : forall<a,(e :: E)> (@y-x10198 : (std/core/types/list :: V -> V)<a>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a;
+// monadic lift
+fun @mlift-race@10319[1,0,1,0] : forall<a,(e :: E)> (group : (strand-group :: V -> V)<a>, wild_ : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>|(e :: E)> a;
+// monadic lift
+fun @mlift-race@10320[1,0,1,0] : forall<a,(e :: E)> (group : (strand-group :: V -> V)<a>, left : () -> <(kokaine/async/effects/async :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a, right : () -> <(kokaine/async/effects/async :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a, @y-x10195 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>|(e :: E)> a;
+// Settle on the first terminal outcome, cancel the loser, and keep driving the
+// group until every loser finalizer has run.
+pub fun race[406,9,406,12] : forall<a,(e :: E)> (left : () -> <(kokaine/async/effects/async :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a, right : () -> <(kokaine/async/effects/async :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a) -> <(kokaine/async/effects/async :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a;
+// monadic lift
+fun @mlift-timeout-with@10321[1,0,1,0] : forall<a,(e :: E)> (wild_ : ()) -> <(kokaine/async/effects/async :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> (std/core/types/maybe :: V -> V)<a>;
+// monadic lift
+fun @mlift-timeout-with@10322[1,0,1,0] : forall<a,(e :: E)> (@y-x10201 : a) -> <(kokaine/async/effects/async :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> (std/core/types/maybe :: V -> V)<a>;
+// The facade supplies a browser timer action, keeping this leaf independent
+// of Web timer representation and avoiding an import cycle.
+pub fun timeout-with[414,9,414,20] : forall<a,(e :: E)> (timer-action : () -> <(kokaine/async/effects/async :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> (), action : () -> <(kokaine/async/effects/async :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a) -> <(kokaine/async/effects/async :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> (std/core/types/maybe :: V -> V)<a>;
+ 
+fun @kokaine-cache-phase[1,0,1,0] : () -> std/core/types/int;
+ 
+//------------------------------
+//#kki: external declarations
+ 
+ 
+//------------------------------
+//#kki: inline definitions
+ 
+//.inline-section
+fun @kokaine-cache-phase // inline size: 1
+  = fn(){ 0; };

@@ -2,6 +2,9 @@ HOMEBREW_KOKA := $(firstword $(wildcard /opt/homebrew/opt/koka/bin/koka /usr/loc
 KOKA ?= $(if $(HOMEBREW_KOKA),$(HOMEBREW_KOKA),koka)
 PYTHON ?= python3
 UV ?= uv
+NPM ?= npm
+WRANGLER ?= npx wrangler
+PLAYGROUND_PAGES_PROJECT ?= kokaine-playground
 
 PROJECT_ROOT := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 RUN_LOCKED := $(PROJECT_ROOT)/support/run_locked.py
@@ -10,11 +13,33 @@ DIST_KOKA = $(PYTHON) "$(RUN_LOCKED)" dist/.koka-build.lock \
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist
 
 .PHONY: test test-native test-tooling test-all test-wasm test-report build-counter build-top-layer build-keyed build-report build-window-fixture build-browser-fixtures browser-install test-browser serve serve-top-layer serve-keyed serve-report
+.PHONY: playground-install playground-sync-assets playground-build playground-preview playground-deploy serve-playground
 
 test: test-native
 
 test-tooling:
 	npm test
+
+playground-install:
+	$(NPM) install --workspace @kokaine/playground
+
+playground-sync-assets: playground-install
+	$(NPM) run assets:koka --workspace @kokaine/playground
+	$(NPM) run assets:devtools --workspace @kokaine/playground
+
+playground-build: playground-install
+	$(NPM) run build --workspace @kokaine/playground
+
+playground-preview: playground-build
+	@echo "Static browser-only playground: http://127.0.0.1:4173/ (COOP/COEP enabled)"
+	$(NPM) run preview --workspace @kokaine/playground
+
+playground-deploy: playground-build
+	$(WRANGLER) pages deploy packages/playground/dist --project-name=$(PLAYGROUND_PAGES_PROJECT)
+
+serve-playground: playground-install
+	@echo "Koka compiler and LSP run as browser WASM Workers; no native Koka, server, or container."
+	$(NPM) run dev --workspace @kokaine/playground
 
 test-native:
 	$(KOKA) $(KOKA_FLAGS) -e test/root-construction.kk

@@ -1,0 +1,199 @@
+/*--------------------------------------------------------------------------
+  Kokaine continuation-native reactive API.
+
+  Synchronous tracked reads capture their exact suffix. Sources index those
+  actual continuation capabilities; no retained computation action or
+  retained callback runtime participates in propagation.
+--------------------------------------------------------------------------*/
+module interface kokaine/reactive
+ 
+//------------------------------
+//#kki: import declarations
+ 
+import std/core/types = std/core/types pub = "";
+import std/core/hnd = std/core/hnd pub = "";
+import std/core/exn = std/core/exn pub = "";
+import std/core/bool = std/core/bool pub = "";
+import std/core/order = std/core/order pub = "";
+import std/core/char = std/core/char pub = "";
+import std/core/int = std/core/int pub = "";
+import std/core/vector = std/core/vector pub = "";
+import std/core/string = std/core/string pub = "";
+import std/core/sslice = std/core/sslice pub = "";
+import std/core/list = std/core/list pub = "";
+import std/core/maybe = std/core/maybe pub = "";
+import std/core/maybe2 = std/core/maybe2 pub = "";
+import std/core/either = std/core/either pub = "";
+import std/core/result = std/core/result pub = "";
+import std/core/tuple = std/core/tuple pub = "";
+import std/core/lazy = std/core/lazy pub = "";
+import std/core/show = std/core/show pub = "";
+import std/core/debug = std/core/debug pub = "";
+import std/core/delayed = std/core/delayed pub = "";
+import std/core/console = std/core/console pub = "";
+import std/core = std/core = "";
+import kokaine/reactive/internal/model = kokaine/reactive/internal/model = "";
+pub import kokaine/reactive/effects = kokaine/reactive/effects = "";
+import kokaine/reactive/internal/bridge = kokaine/reactive/internal/bridge = "";
+import kokaine/reactive/internal/structural = kokaine/reactive/internal/structural = "";
+import kokaine/async/effects = kokaine/async/effects = "";
+import kokaine/reactive/internal/async-runtime = kokaine/reactive/internal/async-runtime inline = "";
+import kokaine/reactive/internal/handlers = kokaine/reactive/internal/handlers inline = "";
+import kokaine/reactive/internal/reentry = kokaine/reactive/internal/reentry inline = "";
+import kokaine/reactive/internal/runtime = kokaine/reactive/internal/runtime inline = "";
+import kokaine/reactive/internal/scheduler = kokaine/reactive/internal/scheduler inline = "";
+ 
+//------------------------------
+//#kki: external imports
+ 
+ 
+//------------------------------
+//#kki: fixity declarations
+ 
+ 
+//------------------------------
+//#kki: local imported aliases
+ 
+local alias kokaine/reactive/internal/model/disposer[93,1,93,40]<(e :: E)> :: E -> V = () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> () = 1;
+// Index into an evidence vector
+local alias std/core/hnd/ev-index[138,1,138,28] = std/core/types/ssize_t = 1;
+// An alias for pure effects: a pure function always returns the same result
+// when called with the same arguments but may not terminate or raise an exception.
+local alias std/core/pure[55,1,55,26] :: E = <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/div :: X)> = 1;
+ 
+//------------------------------
+//#kki: type declarations
+ 
+pub alias disposer[38,1,38,67]<(e :: E)> :: E -> V = ((kokaine/reactive/internal/model/disposer :: E -> V)<(e :: E)> == 1 () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ()) = 2;
+pub value{0,2,8} type memo[22,1,23,70] <a> :: V -> V {
+  con Public-memo[23,3,23,13](internal-memo: (kokaine/reactive/internal/model/memo :: V -> V)<a>){0,2,8} : forall<a> (internal-memo : (kokaine/reactive/internal/model/memo :: V -> V)<a>) -> (memo :: V -> V)<a> = 1;
+};
+pub value{0,4,8} type reentry[25,1,26,79] <(e :: E)> :: E -> V {
+  con Public-reentry[26,3,26,16](internal-reentry: (kokaine/reactive/internal/model/reentry :: E -> V)<(e :: E)>){0,4,8} : forall<(e :: E)> (internal-reentry : (kokaine/reactive/internal/model/reentry :: E -> V)<(e :: E)>) -> (reentry :: E -> V)<(e :: E)> = 1;
+};
+pub value{0,1,8} type root[16,1,17,70] <(e :: E)> :: E -> V {
+  con Public-root[17,3,17,13](internal-root: (kokaine/reactive/internal/model/root :: E -> V)<(e :: E)>){0,1,8} : forall<(e :: E)> (internal-root : (kokaine/reactive/internal/model/root :: E -> V)<(e :: E)>) -> (root :: E -> V)<(e :: E)> = 1;
+};
+pub value{0,1,8} type signal[19,1,20,76] <a> :: V -> V {
+  con Public-signal[20,3,20,15](internal-signal: (kokaine/reactive/internal/model/signal :: V -> V)<a>){0,1,8} : forall<a> (internal-signal : (kokaine/reactive/internal/model/signal :: V -> V)<a>) -> (signal :: V -> V)<a> = 1;
+};
+pub value{0,1,8} type structural-owner[28,1,31,3] <(e :: E)> :: E -> V {
+  con Public-structural-owner[29,3,29,25](internal-structural-owner: (kokaine/reactive/internal/structural/structural-owner :: E -> V)<(e :: E)>){0,1,8} : forall<(e :: E)> (internal-structural-owner : (kokaine/reactive/internal/structural/structural-owner :: E -> V)<(e :: E)>) -> (structural-owner :: E -> V)<(e :: E)> = 1;
+};
+pub value{0,1,8} type structural-transaction[33,1,36,3] <(e :: E)> :: E -> V {
+  con Public-structural-transaction[34,3,34,31](internal-structural-transaction: (kokaine/reactive/internal/structural/structural-transaction :: E -> V)<(e :: E)>){0,1,8} : forall<(e :: E)> (internal-structural-transaction : (kokaine/reactive/internal/structural/structural-transaction :: E -> V)<(e :: E)>) -> (structural-transaction :: E -> V)<(e :: E)> = 1;
+};
+ 
+//------------------------------
+//#kki: declarations
+ 
+// Automatically generated. Retrieves the `internal-root` constructor field of the `:root` type.
+fun root/internal-root[17,15,17,27] : forall<(e :: E)> (^ root : (root :: E -> V)<(e :: E)>) -> (kokaine/reactive/internal/model/root :: E -> V)<(e :: E)>;
+pub fun root/@copy[17,3,17,13] : forall<(e :: E)> (@this : (root :: E -> V)<(e :: E)>, internal-root : (std/core/types/@optional :: V -> V)<(kokaine/reactive/internal/model/root :: E -> V)<(e :: E)>>) -> (root :: E -> V)<(e :: E)>;
+// Automatically generated. Retrieves the `internal-signal` constructor field of the `:signal` type.
+fun signal/internal-signal[20,17,20,31] : forall<a> (^ signal : (signal :: V -> V)<a>) -> (kokaine/reactive/internal/model/signal :: V -> V)<a>;
+pub fun signal/@copy[20,3,20,15] : forall<a> (@this : (signal :: V -> V)<a>, internal-signal : (std/core/types/@optional :: V -> V)<(kokaine/reactive/internal/model/signal :: V -> V)<a>>) -> (signal :: V -> V)<a>;
+// Automatically generated. Retrieves the `internal-memo` constructor field of the `:memo` type.
+fun memo/internal-memo[23,15,23,27] : forall<a> (^ memo : (memo :: V -> V)<a>) -> (kokaine/reactive/internal/model/memo :: V -> V)<a>;
+pub fun memo/@copy[23,3,23,13] : forall<a> (@this : (memo :: V -> V)<a>, internal-memo : (std/core/types/@optional :: V -> V)<(kokaine/reactive/internal/model/memo :: V -> V)<a>>) -> (memo :: V -> V)<a>;
+// Automatically generated. Retrieves the `internal-reentry` constructor field of the `:reentry` type.
+fun reentry/internal-reentry[26,18,26,33] : forall<(e :: E)> (^ reentry : (reentry :: E -> V)<(e :: E)>) -> (kokaine/reactive/internal/model/reentry :: E -> V)<(e :: E)>;
+pub fun reentry/@copy[26,3,26,16] : forall<(e :: E)> (@this : (reentry :: E -> V)<(e :: E)>, internal-reentry : (std/core/types/@optional :: V -> V)<(kokaine/reactive/internal/model/reentry :: E -> V)<(e :: E)>>) -> (reentry :: E -> V)<(e :: E)>;
+// Automatically generated. Retrieves the `internal-structural-owner` constructor field of the `:structural-owner` type.
+fun structural-owner/internal-structural-owner[30,5,30,29] : forall<(e :: E)> (^ @this : (structural-owner :: E -> V)<(e :: E)>) -> (kokaine/reactive/internal/structural/structural-owner :: E -> V)<(e :: E)>;
+pub fun structural-owner/@copy[29,3,29,25] : forall<(e :: E)> (@this : (structural-owner :: E -> V)<(e :: E)>, internal-structural-owner : (std/core/types/@optional :: V -> V)<(kokaine/reactive/internal/structural/structural-owner :: E -> V)<(e :: E)>>) -> (structural-owner :: E -> V)<(e :: E)>;
+// Automatically generated. Retrieves the `internal-structural-transaction` constructor field of the `:structural-transaction` type.
+fun structural-transaction/internal-structural-transaction[35,5,35,35] : forall<(e :: E)> (^ @this : (structural-transaction :: E -> V)<(e :: E)>) -> (kokaine/reactive/internal/structural/structural-transaction :: E -> V)<(e :: E)>;
+pub fun structural-transaction/@copy[34,3,34,31] : forall<(e :: E)> (@this : (structural-transaction :: E -> V)<(e :: E)>, internal-structural-transaction : (std/core/types/@optional :: V -> V)<(kokaine/reactive/internal/structural/structural-transaction :: E -> V)<(e :: E)>>) -> (structural-transaction :: E -> V)<(e :: E)>;
+fun unwrap-root[40,5,40,15] : forall<(e :: E)> (value : (root :: E -> V)<(e :: E)>) -> (kokaine/reactive/internal/model/root :: E -> V)<(e :: E)>;
+fun unwrap-signal[44,5,44,17] : forall<a> (value : (signal :: V -> V)<a>) -> (kokaine/reactive/internal/model/signal :: V -> V)<a>;
+fun unwrap-memo[49,5,49,15] : forall<a> (value : (memo :: V -> V)<a>) -> (kokaine/reactive/internal/model/memo :: V -> V)<a>;
+fun unwrap-reentry[53,5,53,18] : forall<(e :: E)> (value : (reentry :: E -> V)<(e :: E)>) -> (kokaine/reactive/internal/model/reentry :: E -> V)<(e :: E)>;
+fun unwrap-structural-owner[58,5,58,27] : forall<(e :: E)> (value : (structural-owner :: E -> V)<(e :: E)>) -> (kokaine/reactive/internal/structural/structural-owner :: E -> V)<(e :: E)>;
+fun unwrap-structural-transaction[63,5,63,33] : forall<(e :: E)> (value : (structural-transaction :: E -> V)<(e :: E)>) -> (kokaine/reactive/internal/structural/structural-transaction :: E -> V)<(e :: E)>;
+pub fun dispatch[68,9,68,16] : forall<a,(e :: E)> (root : (root :: E -> V)<(e :: E)>, action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)|(e :: E)> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a;
+// monadic lift
+fun @mlift-create-root@10205[1,0,1,0] : forall<a,(e :: E)> (@y-x10099 : ((kokaine/reactive/internal/model/root :: E -> V)<(e :: E)>, a)) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ((root :: E -> V)<(e :: E)>, a);
+pub fun create-root[73,9,73,19] : forall<a,(e :: E)> (action : ((root :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)|(e :: E)> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ((root :: E -> V)<(e :: E)>, a);
+pub fun root/dispose[79,9,79,20] : forall<(e :: E)> (root : (root :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+pub fun root/is-disposed[82,18,82,33] : forall<(e :: E)> (root : (root :: E -> V)<(e :: E)>) -> std/core/types/bool;
+pub fun update[85,9,85,14] : forall<a,(e :: E)> (root : (root :: E -> V)<(e :: E)>, action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)|(e :: E)> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a;
+// monadic lift
+fun @mlift-sample@10206[1,0,1,0] : forall<a,(e :: E)> (action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/pure :: E)|(e :: E)> a, @y-x10103 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>|(e :: E)> a;
+pub fun sample[93,9,93,14] : forall<a,(e :: E)> (root : (root :: E -> V)<(e :: E)>, action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/pure :: E)|(e :: E)> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a;
+// monadic lift
+fun @mlift-signal-by@10207[1,0,1,0] : forall<a> (@y-x10106 : (kokaine/reactive/internal/model/signal :: V -> V)<a>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (signal :: V -> V)<a>;
+pub fun signal-by[97,9,97,17] : forall<a,(e :: E)> (root : (root :: E -> V)<(e :: E)>, initial : a, equals : (a, a) -> std/core/types/bool) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (signal :: V -> V)<a>;
+// monadic lift
+fun @mlift-signal@10208[1,0,1,0] : forall<a> (@y-x10107 : (kokaine/reactive/internal/model/signal :: V -> V)<a>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (signal :: V -> V)<a>;
+pub fun signal[101,9,101,14] : forall<a,(e :: E)> (root : (root :: E -> V)<(e :: E)>, initial : a, ?(==) : (a, a) -> std/core/types/bool) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (signal :: V -> V)<a>;
+// monadic lift
+fun @mlift-signal-always@10209[1,0,1,0] : forall<a> (@y-x10108 : (kokaine/reactive/internal/model/signal :: V -> V)<a>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (signal :: V -> V)<a>;
+pub fun signal-always[105,9,105,21] : forall<a,(e :: E)> (root : (root :: E -> V)<(e :: E)>, initial : a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (signal :: V -> V)<a>;
+pub fun signal/get[108,9,108,18] : forall<a> (value : (signal :: V -> V)<a>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> a;
+pub fun signal/set[111,9,111,18] : forall<a> (value : (signal :: V -> V)<a>, next : a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>> ();
+pub fun signal/modify[114,9,114,21] : forall<a> (value : (signal :: V -> V)<a>, update : (a) -> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>> ();
+pub fun signal/update[117,9,117,21] : forall<a> (value : (signal :: V -> V)<a>, update : (a) -> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>> ();
+pub fun batch[120,9,120,13] : forall<a,(e :: E),(e1 :: E)> (root : (root :: E -> V)<(e :: E)>, action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)|(e1 :: E)> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)|(e1 :: E)> a;
+pub fun untrack[124,9,124,15] : forall<a,(e :: E)> (action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/pure :: E)|(e :: E)> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/pure :: E)|(e :: E)> a;
+// monadic lift
+fun @mlift-derive-by@10210[1,0,1,0] : forall<a> (@y-x10115 : (kokaine/reactive/internal/model/memo :: V -> V)<a>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)> (memo :: V -> V)<a>;
+pub fun derive-by[128,9,128,17] : forall<a,(e :: E)> (root : (root :: E -> V)<(e :: E)>, initial : a, calculate : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/pure :: E)> a, equals : (a, a) -> std/core/types/bool) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)> (memo :: V -> V)<a>;
+// monadic lift
+fun @mlift-derive@10211[1,0,1,0] : forall<a> (@y-x10116 : (kokaine/reactive/internal/model/memo :: V -> V)<a>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)> (memo :: V -> V)<a>;
+pub fun derive[134,9,134,14] : forall<a,(e :: E)> (root : (root :: E -> V)<(e :: E)>, initial : a, calculate : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/pure :: E)> a, ?(==) : (a, a) -> std/core/types/bool) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)> (memo :: V -> V)<a>;
+// monadic lift
+fun @mlift-derive-always@10212[1,0,1,0] : forall<a> (@y-x10117 : (kokaine/reactive/internal/model/memo :: V -> V)<a>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)> (memo :: V -> V)<a>;
+pub fun derive-always[139,9,139,21] : forall<a,(e :: E)> (root : (root :: E -> V)<(e :: E)>, initial : a, calculate : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/pure :: E)> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)> (memo :: V -> V)<a>;
+// monadic lift
+fun @mlift-memo-by@10213[1,0,1,0] : forall<a> (@y-x10118 : (kokaine/reactive/internal/model/memo :: V -> V)<a>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)> (memo :: V -> V)<a>;
+pub fun memo-by[144,9,144,15] : forall<a,(e :: E)> (root : (root :: E -> V)<(e :: E)>, initial : a, calculate : (previous : a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/pure :: E)> a, equals : (a, a) -> std/core/types/bool) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)> (memo :: V -> V)<a>;
+// monadic lift
+fun @mlift-memo@10214[1,0,1,0] : forall<a> (@y-x10119 : (kokaine/reactive/internal/model/memo :: V -> V)<a>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)> (memo :: V -> V)<a>;
+pub fun memo[150,9,150,12] : forall<a,(e :: E)> (root : (root :: E -> V)<(e :: E)>, initial : a, calculate : (previous : a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/pure :: E)> a, ?(==) : (a, a) -> std/core/types/bool) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)> (memo :: V -> V)<a>;
+// monadic lift
+fun @mlift-memo-always@10215[1,0,1,0] : forall<a> (@y-x10120 : (kokaine/reactive/internal/model/memo :: V -> V)<a>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)> (memo :: V -> V)<a>;
+pub fun memo-always[155,9,155,19] : forall<a,(e :: E)> (root : (root :: E -> V)<(e :: E)>, initial : a, calculate : (previous : a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/pure :: E)> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)> (memo :: V -> V)<a>;
+pub fun memo/get[160,9,160,16] : forall<a> (value : (memo :: V -> V)<a>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> a;
+pub fun create-effect[163,9,163,21] : forall<a,(e :: E)> (root : (root :: E -> V)<(e :: E)>, track : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/pure :: E)> a, apply : (value : a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)|(e :: E)> ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)> (disposer :: E -> V)<(e :: E)>;
+// monadic lift
+fun @mlift-on-cleanup@10216[1,0,1,0] : forall<(e :: E)> (@pat : (kokaine/reactive/internal/model/cleanup-registration :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
+pub fun on-cleanup[169,9,169,18] : forall<(e :: E)> (root : (root :: E -> V)<(e :: E)>, cleanup : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)|(e :: E)> ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
+// monadic lift
+fun @mlift-capture-reentry@10217[1,0,1,0] : forall<(e :: E)> (@y-x10124 : (kokaine/reactive/internal/model/reentry :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (reentry :: E -> V)<(e :: E)>;
+// Host callbacks capture the continuation generation which registered them.
+// Work created during re-entry is structurally owned by that generation.
+pub fun capture-reentry[175,9,175,23] : forall<(e :: E)> (root : (root :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (reentry :: E -> V)<(e :: E)>;
+pub fun reenter[178,9,178,15] : forall<a,(e :: E)> (value : (reentry :: E -> V)<(e :: E)>, action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)|(e :: E)> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a;
+// monadic lift
+fun internal/@mlift-open-structural-owner@10218[1,0,1,0] : forall<(e :: E)> (@y-x10126 : (kokaine/reactive/internal/structural/structural-owner :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (structural-owner :: E -> V)<(e :: E)>;
+// Koka has no package-private exports. These qualified names form the narrow
+// backend bridge used by `kokaine/dom` and are not application API.
+pub fun internal/open-structural-owner[185,9,185,38] : forall<(e :: E)> (root : (root :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (structural-owner :: E -> V)<(e :: E)>;
+pub fun internal/with-structural-owner[190,9,190,38] : forall<a,(e :: E),(e1 :: E)> (root : (root :: E -> V)<(e1 :: E)>, owner : (structural-owner :: E -> V)<(e1 :: E)>, action : () -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a;
+pub fun internal/dispose-structural-owner[197,9,197,41] : forall<(e :: E)> (owner : (structural-owner :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+// monadic lift
+fun internal/@mlift-open-structural-transaction@10219[1,0,1,0] : forall<(e :: E)> (@y-x10129 : (kokaine/reactive/internal/structural/structural-transaction :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (structural-transaction :: E -> V)<(e :: E)>;
+pub fun internal/open-structural-transaction[201,9,201,44] : forall<(e :: E)> (root : (root :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (structural-transaction :: E -> V)<(e :: E)>;
+pub fun internal/drain-structural-transaction[206,9,206,45] : forall<(e :: E)> (transaction : (structural-transaction :: E -> V)<(e :: E)>) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+pub fun internal/structural-transaction-owned[211,9,211,45] : forall<(e :: E)> (transaction : (structural-transaction :: E -> V)<(e :: E)>) -> std/core/types/bool;
+pub fun internal/stage-structural-publication[216,9,216,45] : forall<(e :: E)> (transaction : (structural-transaction :: E -> V)<(e :: E)>, prepare : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> (), publish : () -> (), rollback : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
+pub fun internal/commit-structural-transaction[224,9,224,46] : forall<(e :: E)> (transaction : (structural-transaction :: E -> V)<(e :: E)>) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+pub fun internal/abort-structural-transaction[229,9,229,45] : forall<(e :: E)> (transaction : (structural-transaction :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+// Run a direct-style browser task under the exact structural generation which
+// is current at the call site. Each suspension is registered with that owner;
+// later completion re-enters through a fresh Kokaine batch.
+pub fun run-async[237,9,237,17] : (root : (root :: E -> V)<<(std/core/ui :: X)>>, action : () -> <(std/core/pure :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/ui :: X)> ()) -> <(std/core/pure :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/ui :: X)> ();
+ 
+fun @kokaine-cache-phase[1,0,1,0] : () -> std/core/types/int;
+ 
+//------------------------------
+//#kki: external declarations
+ 
+ 
+//------------------------------
+//#kki: inline definitions
+ 
+//.inline-section
+fun @kokaine-cache-phase // inline size: 1
+  = fn(){ 0; };

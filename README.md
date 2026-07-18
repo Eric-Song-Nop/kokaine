@@ -228,6 +228,36 @@ when the Python 3 executable is not named `python3`. The browser checks
 additionally use [`uv`](https://docs.astral.sh/uv/) to run Playwright without
 adding project dependencies.
 
+To open the single-file Koka + Kokaine playground, also install Node.js 20.19
+or newer and run:
+
+```sh
+make serve-playground
+```
+
+The playground itself does not need a native Koka installation. The Koka
+compiler and real Koka LSP both run as WebAssembly in browser Workers against
+an in-memory filesystem containing the Koka standard library and this
+checkout's Kokaine sources. It includes Monaco syntax highlighting, a
+sandboxed live preview, generated/build/runtime output, and self-hosted
+Chromium DevTools. `@kokaine/cli` from issue #11 can extend the browser VFS and
+package-resolution layer without introducing a compiler server.
+
+The app is fully static and deploys to Cloudflare Pages without a container,
+Cloudflare Worker, or Pages Function. Vite and `public/_headers` provide the
+COOP/COEP headers required by the WASM LSP's `SharedArrayBuffer` transport:
+
+```sh
+make playground-sync-assets  # only when intentionally updating pinned assets
+make playground-build
+make playground-preview
+make playground-deploy       # Wrangler Direct Upload
+```
+
+See [`packages/playground/README.md`](packages/playground/README.md) for the
+pinned-asset workflow, Pages setup, browser requirements, and security
+boundary.
+
 ```sh
 make test-tooling
 make test

@@ -5,6 +5,7 @@ module kokaine/reactive/internal/scheduler
 
 import kokaine/reactive/internal/model
 import kokaine/reactive/internal/lifetime
+import kokaine/internal/compat
 import kokaine/internal/registry
 import kokaine/reactive/internal/work-transaction
 import std/core/undiv
@@ -227,7 +228,7 @@ pub fun resume-node(plane : plane<e>, current : trace<e>,
       finally(
         fn() lift-div(fn(){
           if load(completed) then () else
-            // An ambient final control never returns through error/try. Keep
+            // An ambient final control never returns through capture-error. Keep
             // the actual queued resumption Pending and synchronously retire
             // every continuation/scope created by the abandoned generation.
             match load(state)
@@ -261,7 +262,7 @@ pub fun resume-node(plane : plane<e>, current : trace<e>,
                 ])
               }
               val retired = pretend-no-div{
-                error/try(fn() run-finalizers(
+                capture-error(fn() run-finalizers(
                   old-frame.frame-lifetime.lifetime-retirement,retirement))
               }
               match retired
@@ -321,7 +322,7 @@ pub fun run-bootstrap(scope : continuation-scope<e>) : <div|e> error<()>
       // the calculate closure after bootstrap starts.
       store(run-slot,Nothing)
       match pending
-        Nothing -> error/try(fn()
+        Nothing -> capture-error(fn()
           throw("bootstrap slot was already consumed while scope is starting")
         )
         Just(run) ->
@@ -332,7 +333,7 @@ pub fun run-bootstrap(scope : continuation-scope<e>) : <div|e> error<()>
                   // An ambient final control effect may abandon `run`
                   // without producing Error. Its dynamic finalizer still
                   // retires the empty one-shot scope.
-                  val _ = error/try(fn(){
+                  val _ = capture-error(fn(){
                     pretend-no-div{ retire-scope(scope) }
                   })
                   ()
@@ -598,11 +599,11 @@ pub fun drain-work-transaction(root : root<e>,
       finally(
         fn() lift-div(fn(){
           if load(completed) then () else
-            // `error/try` cannot observe an abortive final control operation.
+            // `capture-error` cannot observe an abortive final control operation.
             // Dynamically abort and detach the local groups before control
             // returns to the host, just as abandoned continuation drafts roll
             // back from their surrounding `finally`.
-            val _ = error/try(fn(){
+            val _ = capture-error(fn(){
               abort-work-transaction(root,transaction)
             })
             ()
@@ -815,7 +816,7 @@ pub fun abort-work-transaction(root : root<e>,
   }
 
 pub fun settle-failure(message : string) : settle-result
-  match error/try(fn() throw(message))
+  match capture-error(fn() throw(message))
     Error(failure) -> Settle-failed(failure)
     Ok(_) -> Settle-ok
 

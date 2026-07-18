@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "compilerVersion": "3.2.4",
+  "upstreamCommit": "c0f1a10a60b8644fd6f08dfcec654fa815c06e3f",
+  "wasm": {
+    "koka-playground.wasm": {
+      "bytes": 14759212,
+      "sha256": "e4c77ffd06391435865d7e6aef7d7ecabb211601dfa181e1c6b819633959c660"
+    },
+    "koka-lsp.wasm": {
+      "bytes": 20303184,
+      "sha256": "ce950710f27fda0f325d9046885d525f3e87daf30d93be1d45058d556c6039c0"
+    }
+  },
+  "runtime": {
+    "files": 402,
+    "jsonBytes": 8050253,
+    "gzipBytes": 1254976,
+    "sha256": "7e42f444a40d85b5f0f79207d71cc1441b1796248a04858ee40137d93443e166"
+  },
+  "staticPrecompiledModules": 139,
+  "kokainePrecompiledFiles": 68
+}

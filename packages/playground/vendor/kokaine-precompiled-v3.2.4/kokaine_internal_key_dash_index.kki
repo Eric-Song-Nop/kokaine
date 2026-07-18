@@ -1,0 +1,92 @@
+/*--------------------------------------------------------------------------
+  Minimal persistent AVL index used by backend-neutral keyed rendering.
+
+  Koka's standard map module is not yet a usable dependency for Kokaine.  This
+  index deliberately exposes only lookup and unique insertion: reconciliation
+  rebuilds one table per published collection snapshot, so deletion and
+  mutation are unnecessary.  Every operation is driven by the caller's key
+  comparison function and remains O(log n).
+--------------------------------------------------------------------------*/
+module interface kokaine/internal/key-index
+ 
+//------------------------------
+//#kki: import declarations
+ 
+import std/core/types = std/core/types pub = "";
+import std/core/hnd = std/core/hnd pub = "";
+import std/core/exn = std/core/exn pub = "";
+import std/core/bool = std/core/bool pub = "";
+import std/core/order = std/core/order pub = "";
+import std/core/char = std/core/char pub = "";
+import std/core/int = std/core/int pub = "";
+import std/core/vector = std/core/vector pub = "";
+import std/core/string = std/core/string pub = "";
+import std/core/sslice = std/core/sslice pub = "";
+import std/core/list = std/core/list pub = "";
+import std/core/maybe = std/core/maybe pub = "";
+import std/core/maybe2 = std/core/maybe2 pub = "";
+import std/core/either = std/core/either pub = "";
+import std/core/result = std/core/result pub = "";
+import std/core/tuple = std/core/tuple pub = "";
+import std/core/lazy = std/core/lazy pub = "";
+import std/core/show = std/core/show pub = "";
+import std/core/debug = std/core/debug pub = "";
+import std/core/delayed = std/core/delayed pub = "";
+import std/core/console = std/core/console pub = "";
+import std/core = std/core = "";
+ 
+//------------------------------
+//#kki: external imports
+ 
+ 
+//------------------------------
+//#kki: fixity declarations
+ 
+ 
+//------------------------------
+//#kki: local imported aliases
+ 
+ 
+//------------------------------
+//#kki: type declarations
+ 
+pub recursive type key-index[13,1,21,3] <a,b> :: (V, V) -> V {
+  pub con Key-index-empty[14,3,14,17]{0,0,0} : forall<a,b> (key-index :: (V, V) -> V)<a,b> = 1;
+  pub con Key-index-node[15,3,15,16](index-height: std/core/types/int, index-key: a, index-value: b, index-left: (key-index :: (V, V) -> V)<a,b>, index-right: (key-index :: (V, V) -> V)<a,b>){0,5,8} : forall<a,b> (index-height : std/core/types/int, index-key : a, index-value : b, index-left : (key-index :: (V, V) -> V)<a,b>, index-right : (key-index :: (V, V) -> V)<a,b>) -> (key-index :: (V, V) -> V)<a,b> = 2;
+};
+pub type insert-result[23,1,25,25] <a,b> :: (V, V) -> V {
+  pub con Inserted[24,3,24,10](index: (key-index :: (V, V) -> V)<a,b>){0,1,8} : forall<a,b> (index : (key-index :: (V, V) -> V)<a,b>) -> (insert-result :: (V, V) -> V)<a,b> = 1;
+  pub con Duplicate[25,3,25,11](existing: b){0,1,8} : forall<a,b> (existing : b) -> (insert-result :: (V, V) -> V)<a,b> = 2;
+};
+ 
+//------------------------------
+//#kki: declarations
+ 
+// Automatically generated. Tests for the `Key-index-empty` constructor of the `:key-index` type.
+pub fip fun is-key-index-empty[14,3,14,17] : forall<a,b> (^ key-index : (key-index :: (V, V) -> V)<a,b>) -> std/core/types/bool;
+// Automatically generated. Tests for the `Key-index-node` constructor of the `:key-index` type.
+pub fip fun is-key-index-node[15,3,15,16] : forall<a,b> (^ key-index : (key-index :: (V, V) -> V)<a,b>) -> std/core/types/bool;
+// Automatically generated. Tests for the `Inserted` constructor of the `:insert-result` type.
+pub fip fun is-inserted[24,3,24,10] : forall<a,b> (^ insert-result : (insert-result :: (V, V) -> V)<a,b>) -> std/core/types/bool;
+// Automatically generated. Tests for the `Duplicate` constructor of the `:insert-result` type.
+pub fip fun is-duplicate[25,3,25,11] : forall<a,b> (^ insert-result : (insert-result :: (V, V) -> V)<a,b>) -> std/core/types/bool;
+pub fun empty[27,9,27,13] : forall<a,b> () -> (key-index :: (V, V) -> V)<a,b>;
+fun height[30,5,30,10] : forall<a,b> (index : (key-index :: (V, V) -> V)<a,b>) -> std/core/types/int;
+fun make-node[35,5,35,13] : forall<a,b> (left : (key-index :: (V, V) -> V)<a,b>, key : a, value : b, right : (key-index :: (V, V) -> V)<a,b>) -> (key-index :: (V, V) -> V)<a,b>;
+fun balance[39,5,39,11] : forall<a,b> (left : (key-index :: (V, V) -> V)<a,b>, key : a, value : b, right : (key-index :: (V, V) -> V)<a,b>) -> (key-index :: (V, V) -> V)<a,b>;
+pub fun find[77,9,77,12] : forall<a,b> (index : (key-index :: (V, V) -> V)<a,b>, key : a, cmp : (a, a) -> std/core/types/order) -> (std/core/types/maybe :: V -> V)<b>;
+pub fun insert[87,9,87,14] : forall<a,b> (index : (key-index :: (V, V) -> V)<a,b>, key : a, value : b, cmp : (a, a) -> std/core/types/order) -> (insert-result :: (V, V) -> V)<a,b>;
+pub fun size[105,9,105,12] : forall<a,b> (index : (key-index :: (V, V) -> V)<a,b>) -> std/core/types/int;
+ 
+fun @kokaine-cache-phase[1,0,1,0] : () -> std/core/types/int;
+ 
+//------------------------------
+//#kki: external declarations
+ 
+ 
+//------------------------------
+//#kki: inline definitions
+ 
+//.inline-section
+fun @kokaine-cache-phase // inline size: 1
+  = fn(){ 0; };

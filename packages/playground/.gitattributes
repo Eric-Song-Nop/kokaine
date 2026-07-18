@@ -1,0 +1,5 @@
+public/koka/precompiled/** linguist-generated=true -whitespace
+vendor/kokaine-precompiled-v3.2.4/** linguist-generated=true -whitespace
+public/devtools/** linguist-vendored=true -whitespace
+public/koka/*.wasm binary
+public/koka/*.gz binary

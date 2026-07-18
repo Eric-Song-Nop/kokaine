@@ -7,6 +7,7 @@ import kokaine/reactive/internal/model
 import kokaine/reactive/effects
 import kokaine/reactive/internal/lifetime
 import kokaine/reactive/internal/scheduler
+import kokaine/internal/compat
 import kokaine/internal/registry
 import std/core/undiv
 
@@ -28,7 +29,7 @@ pub fun reify-trace(root : root<r>, plane : plane<e>,
           val checkpoint = load(plane.plane-current)
           Built-trace(
             Trace-end,
-            fn() error/try(fn()
+            fn() capture-error(fn()
               // A publication starts a fresh structural extent. It must not
               // inherit a state entry target from the calculation it commits.
               with-entry(plane,Nothing,fn()
@@ -155,7 +156,7 @@ pub fun prepare-trace(root : root<r>, plane : plane<e>,
         finally(
           fn() lift-div(fn(){
             if load(completed) then () else
-              // A final control operation cannot return through `error/try`.
+              // A final control operation cannot return through `capture-error`.
               // Claim both the unpublished scope and every raw capture before
               // the first draft-owned cleanup is allowed to re-enter user code.
               val _ = try-retire-scope-drafts(current,load(drafts))

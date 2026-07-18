@@ -12,6 +12,7 @@ module kokaine/resource
 
 import kokaine/reactive
 import kokaine/async/effects
+import kokaine/internal/compat
 import kokaine/reactive/internal/async-runtime
 import std/core/unsafe
 
@@ -219,7 +220,7 @@ fun start-request(
                   val load-owned = fn() load(snapshot)
                   val outcome = in-resource-ownership(
                     ownership,
-                    fn() error/try(load-owned)
+                    fn() capture-error(load-owned)
                   )
                   // The numeric guard rejects a completion which raced with a
                   // refresh/cancel before host retirement won.

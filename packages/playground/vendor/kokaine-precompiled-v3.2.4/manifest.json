@@ -1,0 +1,415 @@
+{
+  "compilerVersion": "3.2.4",
+  "compilerCommit": "c0f1a10a60b8644fd6f08dfcec654fa815c06e3f",
+  "vfsDestination": "/lib/js-debug",
+  "files": [
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_async_channel.kki",
+      "name": "kokaine_async_channel.kki",
+      "bytes": 17430,
+      "sha256": "396fefbf00e4b4c6e1df6e6f5b3f35b782c14c18a0b4ec80bb782de0b82fb7ab"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_async_channel.mjs",
+      "name": "kokaine_async_channel.mjs",
+      "bytes": 21644,
+      "sha256": "568cbf00ccf1d7e5755a1e44c8d8316ed8f8b1d4b3daacac011d4a95355b5a93"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_async_effects.kki",
+      "name": "kokaine_async_effects.kki",
+      "bytes": 44282,
+      "sha256": "07cd0da70dc331018624d23ce93b0a009d46e1c05db090caa32ad528bcd3446f"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_async_effects.mjs",
+      "name": "kokaine_async_effects.mjs",
+      "bytes": 52989,
+      "sha256": "87edd5bb1a7bbf0897cb1bfd7ded9280a0575e15270fb38a17ff06325f66e1f9"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_async_internal_web_dash_schedule.kki",
+      "name": "kokaine_async_internal_web_dash_schedule.kki",
+      "bytes": 2536,
+      "sha256": "c1fc8c33d189a9f562be59aa1be6847870412ea2b6cb0a5e2ed121cde0c40863"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_async_internal_web_dash_schedule.mjs",
+      "name": "kokaine_async_internal_web_dash_schedule.mjs",
+      "bytes": 1807,
+      "sha256": "97f70da32775059bce5ce3e2188555d540e5f791178f3fc7ce54ed0be2e0e8e9"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_async_structured.kki",
+      "name": "kokaine_async_structured.kki",
+      "bytes": 46456,
+      "sha256": "4035d7b3065bf64a3957e1d43fc7a1234328f73e518e44d1728081918381b9ca"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_async_structured.mjs",
+      "name": "kokaine_async_structured.mjs",
+      "bytes": 67932,
+      "sha256": "a522071b5d6ab1c7555e98b46e96ddc650d06b36feb3e9777979e97098b19a8a"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_async_web.kki",
+      "name": "kokaine_async_web.kki",
+      "bytes": 19409,
+      "sha256": "b2b62f6de85a566ce6ca9049b39b9c7d2eee67e915b193cf3b5aec90f1d0146b"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_async_web.mjs",
+      "name": "kokaine_async_web.mjs",
+      "bytes": 28493,
+      "sha256": "2755d272e696b2cac1a7cef1ea9a143e5faa7d30a86b925b397cc8f9a4b1face"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_async.kki",
+      "name": "kokaine_async.kki",
+      "bytes": 2149,
+      "sha256": "44e1b61d27daf8a355b2b7563a02e375d77ee325040e3b00f98759b0d65585b2"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_async.mjs",
+      "name": "kokaine_async.mjs",
+      "bytes": 1531,
+      "sha256": "165f7fcff3387f09f3d97398273d3be999f684688abb2de3428bf2278c8c3085"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_control.kki",
+      "name": "kokaine_control.kki",
+      "bytes": 6342,
+      "sha256": "37f5232892715f1700da2c3e4f78fba3624e5a9d59ab0ebf8ec33a4493508d37"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_control.mjs",
+      "name": "kokaine_control.mjs",
+      "bytes": 5857,
+      "sha256": "732753319c6a52ceae19cb3128ff83fb96c3e0deedbfc6734040b6acfb7b07f3"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_dom.kki",
+      "name": "kokaine_dom.kki",
+      "bytes": 170761,
+      "sha256": "b9a99e44d060c91d0b9e6410a371711190ca89d5dd16eed5dd631682764779bc"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_dom.mjs",
+      "name": "kokaine_dom.mjs",
+      "bytes": 348401,
+      "sha256": "16a99e5ed25f53e4d37b63c569d190015e472437f0b94ef26fc5c3da24c69b5c"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_html.kki",
+      "name": "kokaine_html.kki",
+      "bytes": 70315,
+      "sha256": "e3322e70f0163fea59808ea0af58900152e83414db7befc4a8cc24a51a0d5827"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_html.mjs",
+      "name": "kokaine_html.mjs",
+      "bytes": 73681,
+      "sha256": "60d5a323dca30b352edff85a54154db3915b8f449c97deed800ee5e3296fc1c1"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_internal_compat.kki",
+      "name": "kokaine_internal_compat.kki",
+      "bytes": 2992,
+      "sha256": "045be68365ebe0576529bb410c1856af3d11f641aae8011081dbb210fb1e64be"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_internal_compat.mjs",
+      "name": "kokaine_internal_compat.mjs",
+      "bytes": 2419,
+      "sha256": "befb3963a40b521a4e1a0850689b48b1fb3fd6ef3bdc17d2f7c545fd92d17f7f"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_internal_event_dash_runtime.kki",
+      "name": "kokaine_internal_event_dash_runtime.kki",
+      "bytes": 22010,
+      "sha256": "8c035e8d4b19e5799ee504ee4e8171b88f340df79638b36673edbdad157a68dc"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_internal_event_dash_runtime.mjs",
+      "name": "kokaine_internal_event_dash_runtime.mjs",
+      "bytes": 12302,
+      "sha256": "202d2626dc7ae36433a6717d375a5db2dd15d5777d026c8817ad01afd5a1fe4d"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_internal_int_dash_index.kki",
+      "name": "kokaine_internal_int_dash_index.kki",
+      "bytes": 14385,
+      "sha256": "728307456c6fb332f5a12012695adf8962a1c606076d6af8d534140b3264ceaf"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_internal_int_dash_index.mjs",
+      "name": "kokaine_internal_int_dash_index.mjs",
+      "bytes": 21362,
+      "sha256": "987b34ab4b952304e60fc7b447675eff86c9afeb94af3ebd91b8880c548ecd03"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_internal_key_dash_index.kki",
+      "name": "kokaine_internal_key_dash_index.kki",
+      "bytes": 5166,
+      "sha256": "f11d6a24d804a42852d363989ab3ff1b77e2f1870218e800c2a6f991626d821e"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_internal_key_dash_index.mjs",
+      "name": "kokaine_internal_key_dash_index.mjs",
+      "bytes": 11121,
+      "sha256": "8e49ba662a9f00fc28b925c0b66c4e505727f4df3383171b79d5bacda356d05f"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_internal_registry.kki",
+      "name": "kokaine_internal_registry.kki",
+      "bytes": 12925,
+      "sha256": "bb89b65f6e21f0057054f10bb41b38e104fa76228de48f3a93201054d3654137"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_internal_registry.mjs",
+      "name": "kokaine_internal_registry.mjs",
+      "bytes": 15158,
+      "sha256": "8da00d91b36b2abaea3d5f2a1291b605755dfe1b4c072d2af352072e3aef683b"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_reactive_effects.kki",
+      "name": "kokaine_reactive_effects.kki",
+      "bytes": 13993,
+      "sha256": "5fa1ab0f13b5161c86d61a95b6eea9d720df0664ec2bc143926d533bba6e61c3"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_reactive_effects.mjs",
+      "name": "kokaine_reactive_effects.mjs",
+      "bytes": 11003,
+      "sha256": "aa3199bd500d1ad3f4d3378fec5d81aa67275e5c747b64000330323cf38a5290"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_reactive_internal_application_dash_runner.kki",
+      "name": "kokaine_reactive_internal_application_dash_runner.kki",
+      "bytes": 3562,
+      "sha256": "b4ede3ed9bd02f7aebf2455b5c2a880f54af4424a2f893d94d5277ff7eff900d"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_reactive_internal_application_dash_runner.mjs",
+      "name": "kokaine_reactive_internal_application_dash_runner.mjs",
+      "bytes": 3011,
+      "sha256": "fc10a739f84ee9241c96cdce92e2e2ae56f6336fbb75f811ce10af6afc830336"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_reactive_internal_async_dash_runtime.kki",
+      "name": "kokaine_reactive_internal_async_dash_runtime.kki",
+      "bytes": 82492,
+      "sha256": "1db7f448442776a1f21bf7e7567a89f08fd02938a532af2d60caa8eb7c790784"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_reactive_internal_async_dash_runtime.mjs",
+      "name": "kokaine_reactive_internal_async_dash_runtime.mjs",
+      "bytes": 112658,
+      "sha256": "cf234ace3e69467c436624c105652fb3d380308a7e2fb8aa6860b92a7f1b4738"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_reactive_internal_bridge.kki",
+      "name": "kokaine_reactive_internal_bridge.kki",
+      "bytes": 15423,
+      "sha256": "a12c1312c3de64780bf3f268e0b04113c7dcefac9b7e0f9e9970a8572dacc605"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_reactive_internal_bridge.mjs",
+      "name": "kokaine_reactive_internal_bridge.mjs",
+      "bytes": 12846,
+      "sha256": "03d18664b28eb6d325b4ced0ea36c991cbbb6f9a421a324e13deca41679b54c8"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_reactive_internal_cancellation_dash_supervisor.kki",
+      "name": "kokaine_reactive_internal_cancellation_dash_supervisor.kki",
+      "bytes": 6846,
+      "sha256": "ffc434ec999721483919499f919e405286519b79e172f518e91bf08f04f68719"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_reactive_internal_cancellation_dash_supervisor.mjs",
+      "name": "kokaine_reactive_internal_cancellation_dash_supervisor.mjs",
+      "bytes": 7245,
+      "sha256": "35f350810457c2a61a7e289896733287befa51b84d8a22570566c0fd1d04b634"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_reactive_internal_capture.kki",
+      "name": "kokaine_reactive_internal_capture.kki",
+      "bytes": 15592,
+      "sha256": "be94bd733e6e0791fadb32e8bbfb4e41ee2e94452082c7d55d20df5a915f4c96"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_reactive_internal_capture.mjs",
+      "name": "kokaine_reactive_internal_capture.mjs",
+      "bytes": 29830,
+      "sha256": "34cfcb4bdadfd7d84d4639288f10abfe30c54ca4925444f2c259785617be5b9e"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_reactive_internal_handlers.kki",
+      "name": "kokaine_reactive_internal_handlers.kki",
+      "bytes": 10079,
+      "sha256": "235230660c7ca04a782f2433626d285444b70947a080f9cceb64f9d656234bba"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_reactive_internal_handlers.mjs",
+      "name": "kokaine_reactive_internal_handlers.mjs",
+      "bytes": 20996,
+      "sha256": "4e400df5dd611d3dd5a77c84079ae547c0141b034101d376c0aa03f0bd588dc9"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_reactive_internal_lifetime.kki",
+      "name": "kokaine_reactive_internal_lifetime.kki",
+      "bytes": 23399,
+      "sha256": "2b8b43ad4e485b689ee19e1692c42e5cff796256641d27a9ec1d081ea942a73c"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_reactive_internal_lifetime.mjs",
+      "name": "kokaine_reactive_internal_lifetime.mjs",
+      "bytes": 43787,
+      "sha256": "55cd289b0b60c2c3b325b8174bd0b4f3d0a8094b840a215592db12d856c789da"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_reactive_internal_model.kki",
+      "name": "kokaine_reactive_internal_model.kki",
+      "bytes": 55637,
+      "sha256": "c126f2a9a230be260b9988071a58a9e5a0eafb15995953dd8d39176a9c1a67eb"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_reactive_internal_model.mjs",
+      "name": "kokaine_reactive_internal_model.mjs",
+      "bytes": 45562,
+      "sha256": "205346f6397273d220974f49e3b2c4d70e63a52b34e3fd6115ebe43dcdb49de9"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_reactive_internal_one_dash_shot_dash_task.kki",
+      "name": "kokaine_reactive_internal_one_dash_shot_dash_task.kki",
+      "bytes": 10536,
+      "sha256": "e7062bcb012e2b9b20d4f26e5d05585dc7a9af2a3d18f1df1c087054c19351a0"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_reactive_internal_one_dash_shot_dash_task.mjs",
+      "name": "kokaine_reactive_internal_one_dash_shot_dash_task.mjs",
+      "bytes": 11964,
+      "sha256": "13a3a6c34184f1ad1d6e7c1730b1e04b70ed1f1266a57d92f213de26c9d9bf25"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_reactive_internal_reentry.kki",
+      "name": "kokaine_reactive_internal_reentry.kki",
+      "bytes": 9981,
+      "sha256": "38325d94a3ddbec600cc664a62db87ccf361c66ecb0ebc98a5381c5f03dde59a"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_reactive_internal_reentry.mjs",
+      "name": "kokaine_reactive_internal_reentry.mjs",
+      "bytes": 14623,
+      "sha256": "1de913594fdb2b6c36b526fd92abf05cc7c420f13b75bc82477a5ee4828385a7"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_reactive_internal_resource.kki",
+      "name": "kokaine_reactive_internal_resource.kki",
+      "bytes": 9320,
+      "sha256": "df85f0305307fecfb36cf5fc9c1689fa6017e71ecf4ffc4106f71510b14c5750"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_reactive_internal_resource.mjs",
+      "name": "kokaine_reactive_internal_resource.mjs",
+      "bytes": 9154,
+      "sha256": "23055d1e3922fc1f3f7876de7dcdacf8c241ff821fe478e49024ba156533415b"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_reactive_internal_runtime.kki",
+      "name": "kokaine_reactive_internal_runtime.kki",
+      "bytes": 39741,
+      "sha256": "0eeb6f33190ef1ab57afb938a96cdcbb608f8c9caae6d8608d6c8c8420331956"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_reactive_internal_runtime.mjs",
+      "name": "kokaine_reactive_internal_runtime.mjs",
+      "bytes": 105061,
+      "sha256": "31377a5aec2a0359fff5cdc892d7608e82fcff24931ade0eb100903a16c5fc51"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_reactive_internal_scheduler.kki",
+      "name": "kokaine_reactive_internal_scheduler.kki",
+      "bytes": 49217,
+      "sha256": "4413b9e3e4ccde5996c8131b9dd27c88646d3ba158a907b43fbfc93737a95c01"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_reactive_internal_scheduler.mjs",
+      "name": "kokaine_reactive_internal_scheduler.mjs",
+      "bytes": 145107,
+      "sha256": "52cae0802d7859336c4b8128a9969b3b37fed8960953de8c73904574e39c2d14"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_reactive_internal_structural.kki",
+      "name": "kokaine_reactive_internal_structural.kki",
+      "bytes": 15398,
+      "sha256": "49036ec173abc5b7b5e0d034d3bf68a33c3847070cf14e5bf9bfd63cbc139018"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_reactive_internal_structural.mjs",
+      "name": "kokaine_reactive_internal_structural.mjs",
+      "bytes": 30937,
+      "sha256": "931977b2d229b2270faa7fb9db3ab2ce01693f491427296b1ddff5fa91ef8615"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_reactive_internal_work_dash_transaction.kki",
+      "name": "kokaine_reactive_internal_work_dash_transaction.kki",
+      "bytes": 15990,
+      "sha256": "146c29aed7c72246724dd349dd9d903ad10a2ab0eb7a6b46f7aef0d46d461216"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_reactive_internal_work_dash_transaction.mjs",
+      "name": "kokaine_reactive_internal_work_dash_transaction.mjs",
+      "bytes": 23074,
+      "sha256": "5e6f928e87284a28821ebd17873818bd0403a8cc899cbde45da3958e09a08735"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_reactive.kki",
+      "name": "kokaine_reactive.kki",
+      "bytes": 27009,
+      "sha256": "8035fa9339c7b917d3e436e10bfdc106d983992bd7c39cde42eb044528d3d915"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_reactive.mjs",
+      "name": "kokaine_reactive.mjs",
+      "bytes": 30448,
+      "sha256": "52cd000fe1224c1477ac9db415003d738374a9aee52dedcee7e80409aa7570c9"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_resource.kki",
+      "name": "kokaine_resource.kki",
+      "bytes": 35769,
+      "sha256": "5db7b3fa1abb3276873da04ec7061be0b47bcabf8b9b81a27d5a057e2d03cb28"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_resource.mjs",
+      "name": "kokaine_resource.mjs",
+      "bytes": 58312,
+      "sha256": "2827ce0c7959153c541a1149ca7a1ece5331b4375b0b8486d426ab95fcb4b0bc"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_ssr.kki",
+      "name": "kokaine_ssr.kki",
+      "bytes": 16175,
+      "sha256": "479678e0ee2a5f6a26ef072ca663b7877502069a3da5493ec1e68cd8501ebaa7"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_ssr.mjs",
+      "name": "kokaine_ssr.mjs",
+      "bytes": 28380,
+      "sha256": "2e96090cbb58b00032d7d17cce4310ac39679d9597ab53daa9927eb1a25d571b"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_web_window.kki",
+      "name": "kokaine_web_window.kki",
+      "bytes": 11045,
+      "sha256": "0acdc4f5fd5564da1b66ed2896dc26e81df083381de8481ac66bab16604ce85d"
+    },
+    {
+      "sourcePath": "/.koka/v3.2.4/js-debug-28b40c/kokaine_web_window.mjs",
+      "name": "kokaine_web_window.mjs",
+      "bytes": 18370,
+      "sha256": "c55930e4a5e08f255b6eb0cf47806eb5a46989e620846d9396e8e9df775528b3"
+    }
+  ]
+}

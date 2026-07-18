@@ -1,0 +1,168 @@
+/*--------------------------------------------------------------------------
+  Amortized O(1) scheduler queues and short-lived bootstrap transactions.
+
+  Structural owners never retain a work group. A group is installed only for
+  the construction transaction which created it: resumptions stay global,
+  while bootstraps append locally until the group is frozen.
+--------------------------------------------------------------------------*/
+module interface kokaine/reactive/internal/work-transaction
+ 
+//------------------------------
+//#kki: import declarations
+ 
+import std/core/types = std/core/types pub = "";
+import std/core/hnd = std/core/hnd pub = "";
+import std/core/exn = std/core/exn pub = "";
+import std/core/bool = std/core/bool pub = "";
+import std/core/order = std/core/order pub = "";
+import std/core/char = std/core/char pub = "";
+import std/core/int = std/core/int pub = "";
+import std/core/vector = std/core/vector pub = "";
+import std/core/string = std/core/string pub = "";
+import std/core/sslice = std/core/sslice pub = "";
+import std/core/list = std/core/list pub = "";
+import std/core/maybe = std/core/maybe pub = "";
+import std/core/maybe2 = std/core/maybe2 pub = "";
+import std/core/either = std/core/either pub = "";
+import std/core/result = std/core/result pub = "";
+import std/core/tuple = std/core/tuple pub = "";
+import std/core/lazy = std/core/lazy pub = "";
+import std/core/show = std/core/show pub = "";
+import std/core/debug = std/core/debug pub = "";
+import std/core/delayed = std/core/delayed pub = "";
+import std/core/console = std/core/console pub = "";
+import std/core = std/core = "";
+import std/core/unsafe = std/core/unsafe = "";
+import std/core/undiv = std/core/undiv = "";
+ 
+//------------------------------
+//#kki: external imports
+ 
+ 
+//------------------------------
+//#kki: fixity declarations
+ 
+ 
+//------------------------------
+//#kki: local imported aliases
+ 
+ 
+//------------------------------
+//#kki: type declarations
+ 
+// The front is stored in dequeue order and the back in reverse append order.
+// Reversing an exhausted back list amortizes across all preceding appends.
+pub type deque[26,1,30,3] <a> :: V -> V {
+  pub con Deque[27,3,27,7](deque-front: (std/core/types/list :: V -> V)<a>, deque-back: (std/core/types/list :: V -> V)<a>){0,2,8} : forall<a> (deque-front : (std/core/types/list :: V -> V)<a>, deque-back : (std/core/types/list :: V -> V)<a>) -> (deque :: V -> V)<a> = 1;
+};
+pub alias work-queue[54,1,54,46]<a> :: V -> V = (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(deque :: V -> V)<a>> = 1;
+pub type work-transaction-state[92,1,98,14] {
+  pub con Work-open[93,3,93,11]{0,0,0} : work-transaction-state = 1;
+  pub con Work-draining[94,3,94,15]{0,0,0} : work-transaction-state = 2;
+  pub con Work-ready[95,3,95,12]{0,0,0} : work-transaction-state = 3;
+  pub con Work-failed[96,3,96,13](work-failure: std/core/exn/exception){0,2,8} : (work-failure : std/core/exn/exception) -> work-transaction-state = 4;
+  pub con Work-committed[97,3,97,16]{0,0,0} : work-transaction-state = 5;
+  pub con Work-aborted[98,3,98,14]{0,0,0} : work-transaction-state = 6;
+};
+pub type work-group[110,1,115,3] <a> :: V -> V {
+  pub con Work-group[111,3,111,12](group-state: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),work-transaction-state>, group-queue: ((work-queue :: V -> V)<a> == 1 (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(deque :: V -> V)<a>>), group-rollback: ((work-queue :: V -> V)<a> == 1 (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(deque :: V -> V)<a>>)){0,3,8} : forall<a> (group-state : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),work-transaction-state>, group-queue : ((work-queue :: V -> V)<a> == 1 (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(deque :: V -> V)<a>>), group-rollback : ((work-queue :: V -> V)<a> == 1 (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(deque :: V -> V)<a>>)) -> (work-group :: V -> V)<a> = 1;
+};
+// Structural adapters which join an outer bootstrap transaction cannot
+// publish independently. They enlist a fallible preparation, a total state
+// publication, and a rollback action in the outer transaction instead.
+pub type work-publication[103,1,108,3] <(e :: E)> :: E -> V {
+  pub con Work-publication[104,3,104,18](publication-prepare: () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> (), publication-publish: () -> (), publication-rollback: () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ()){0,3,8} : forall<(e :: E)> (publication-prepare : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> (), publication-publish : () -> (), publication-rollback : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ()) -> (work-publication :: E -> V)<(e :: E)> = 1;
+};
+ 
+//------------------------------
+//#kki: declarations
+ 
+fun cell[14,5,14,8] : forall<a> (value : a) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>;
+fun load[17,5,17,8] : forall<a> (value : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>) -> a;
+fun store[20,5,20,9] : forall<a> (target : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>, value : a) -> ();
+// Automatically generated. Retrieves the `deque-front` constructor field of the `:deque` type.
+pub fun deque/deque-front[28,5,28,15] : forall<a> (^ deque : (deque :: V -> V)<a>) -> (std/core/types/list :: V -> V)<a>;
+// Automatically generated. Retrieves the `deque-back` constructor field of the `:deque` type.
+pub fun deque/deque-back[29,5,29,14] : forall<a> (^ deque : (deque :: V -> V)<a>) -> (std/core/types/list :: V -> V)<a>;
+pub fun deque/@copy[27,3,27,7] : forall<a> (@this : (deque :: V -> V)<a>, deque-front : (std/core/types/@optional :: V -> V)<(std/core/types/list :: V -> V)<a>>, deque-back : (std/core/types/@optional :: V -> V)<(std/core/types/list :: V -> V)<a>>) -> (deque :: V -> V)<a>;
+pub fun empty-deque[32,9,32,19] : forall<a> () -> (deque :: V -> V)<a>;
+pub fun deque/prepend[35,9,35,21] : forall<a> (target : (deque :: V -> V)<a>, value : a) -> (deque :: V -> V)<a>;
+pub fun deque/append[38,9,38,20] : forall<a> (target : (deque :: V -> V)<a>, value : a) -> (deque :: V -> V)<a>;
+pub fun deque/pop[41,9,41,17] : forall<a> (target : (deque :: V -> V)<a>) -> ((std/core/types/maybe :: V -> V)<a>, (deque :: V -> V)<a>);
+pub fun deque/values[50,9,50,20] : forall<a> (target : (deque :: V -> V)<a>) -> (std/core/types/list :: V -> V)<a>;
+pub fun new-work-queue[56,9,56,22] : forall<a> () -> (work-queue :: V -> V)<a>;
+// Automatically generated. Retrieves the `publication-prepare` constructor field of the `:work-publication` type.
+pub fun work-publication/publication-prepare[105,5,105,23] : forall<(e :: E)> (^ @this : (work-publication :: E -> V)<(e :: E)>) -> (() -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ());
+// Automatically generated. Retrieves the `publication-publish` constructor field of the `:work-publication` type.
+pub fun work-publication/publication-publish[106,5,106,23] : forall<(e :: E)> (^ @this : (work-publication :: E -> V)<(e :: E)>) -> (() -> ());
+// Automatically generated. Retrieves the `publication-rollback` constructor field of the `:work-publication` type.
+pub fun work-publication/publication-rollback[107,5,107,24] : forall<(e :: E)> (^ @this : (work-publication :: E -> V)<(e :: E)>) -> (() -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ());
+// monadic lift
+fun work-publication/@mlift-copy@10158[1,0,1,0] : forall<(e :: E)> (@c-x10148 : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> (), @this : (work-publication :: E -> V)<(e :: E)>, publication-publish : (std/core/types/@optional :: V -> V)<() -> ()>, @c-x10150 : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ()) -> (work-publication :: E -> V)<(e :: E)>;
+// monadic lift
+fun work-publication/@mlift-copy@10159[1,0,1,0] : forall<(e :: E)> (@this : (work-publication :: E -> V)<(e :: E)>, publication-publish : (std/core/types/@optional :: V -> V)<() -> ()>, publication-rollback : (std/core/types/@optional :: V -> V)<() -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ()>, @c-x10148 : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ()) -> (work-publication :: E -> V)<(e :: E)>;
+pub fun work-publication/@copy[104,3,104,18] : forall<(e :: E)> (@this : (work-publication :: E -> V)<(e :: E)>, publication-prepare : (std/core/types/@optional :: V -> V)<() -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ()>, publication-publish : (std/core/types/@optional :: V -> V)<() -> ()>, publication-rollback : (std/core/types/@optional :: V -> V)<() -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ()>) -> (work-publication :: E -> V)<(e :: E)>;
+// Automatically generated. Retrieves the `group-state` constructor field of the `:work-group` type.
+pub fun work-group/group-state[112,5,112,15] : forall<a> (^ @this : (work-group :: V -> V)<a>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),work-transaction-state>;
+// Automatically generated. Retrieves the `group-queue` constructor field of the `:work-group` type.
+pub fun work-group/group-queue[113,5,113,15] : forall<a> (^ @this : (work-group :: V -> V)<a>) -> (work-queue :: V -> V)<a>;
+pub fun work-queue/prepend[59,9,59,26] : forall<a> (target : (work-queue :: V -> V)<a>, value : a) -> ();
+pub fun work-group/prepend[143,9,143,26] : forall<a> (group : (work-group :: V -> V)<a>, value : a) -> ();
+pub fun work-queue/append[62,9,62,25] : forall<a> (target : (work-queue :: V -> V)<a>, value : a) -> ();
+pub fun work-group/append[133,9,133,25] : forall<a> (group : (work-group :: V -> V)<a>, value : a) -> ();
+pub fun work-queue/pop[65,9,65,22] : forall<a> (target : (work-queue :: V -> V)<a>) -> (std/core/types/maybe :: V -> V)<a>;
+pub fun work-group/pop[146,9,146,22] : forall<a> (group : (work-group :: V -> V)<a>) -> (std/core/types/maybe :: V -> V)<a>;
+pub fun work-queue/values[70,9,70,25] : forall<a> (target : (work-queue :: V -> V)<a>) -> (std/core/types/list :: V -> V)<a>;
+pub fun work-group/values[149,9,149,25] : forall<a> (group : (work-group :: V -> V)<a>) -> (std/core/types/list :: V -> V)<a>;
+pub fun work-queue/clear[73,9,73,24] : forall<a> (target : (work-queue :: V -> V)<a>) -> ();
+pub fun work-queue/same[76,9,76,23] : forall<a> (left : (work-queue :: V -> V)<a>, right : (work-queue :: V -> V)<a>) -> std/core/types/bool;
+tail fun append-values-loop[80,10,80,27] : forall<a> (target : (work-queue :: V -> V)<a>, values : (std/core/types/list :: V -> V)<a>) -> <(std/core/types/div :: X)> ();
+pub fun work-queue/append-values[88,9,88,32] : forall<a> (target : (work-queue :: V -> V)<a>, values : (std/core/types/list :: V -> V)<a>) -> ();
+// Automatically generated. Tests for the `Work-open` constructor of the `:work-transaction-state` type.
+pub fip fun is-work-open[93,3,93,11] : (^ work-transaction-state : work-transaction-state) -> std/core/types/bool;
+// Automatically generated. Tests for the `Work-draining` constructor of the `:work-transaction-state` type.
+pub fip fun is-work-draining[94,3,94,15] : (^ work-transaction-state : work-transaction-state) -> std/core/types/bool;
+// Automatically generated. Tests for the `Work-ready` constructor of the `:work-transaction-state` type.
+pub fip fun is-work-ready[95,3,95,12] : (^ work-transaction-state : work-transaction-state) -> std/core/types/bool;
+// Automatically generated. Tests for the `Work-failed` constructor of the `:work-transaction-state` type.
+pub fip fun is-work-failed[96,3,96,13] : (^ work-transaction-state : work-transaction-state) -> std/core/types/bool;
+// Automatically generated. Tests for the `Work-committed` constructor of the `:work-transaction-state` type.
+pub fip fun is-work-committed[97,3,97,16] : (^ work-transaction-state : work-transaction-state) -> std/core/types/bool;
+// Automatically generated. Tests for the `Work-aborted` constructor of the `:work-transaction-state` type.
+pub fip fun is-work-aborted[98,3,98,14] : (^ work-transaction-state : work-transaction-state) -> std/core/types/bool;
+// Automatically generated. Retrieves the `group-rollback` constructor field of the `:work-group` type.
+pub fun work-group/group-rollback[114,5,114,18] : forall<a> (^ @this : (work-group :: V -> V)<a>) -> (work-queue :: V -> V)<a>;
+pub fun work-group/@copy[111,3,111,12] : forall<a> (@this : (work-group :: V -> V)<a>, group-state : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),work-transaction-state>>, group-queue : (std/core/types/@optional :: V -> V)<(work-queue :: V -> V)<a>>, group-rollback : (std/core/types/@optional :: V -> V)<(work-queue :: V -> V)<a>>) -> (work-group :: V -> V)<a>;
+pub fun new-work-transaction-state[117,9,117,34] : () -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),work-transaction-state>;
+pub fun new-work-group[121,9,121,22] : forall<a> (state : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),work-transaction-state>) -> (work-group :: V -> V)<a>;
+pub fun work-group/state[125,18,125,33] : forall<a> (group : (work-group :: V -> V)<a>) -> work-transaction-state;
+pub fun work-group/same-transaction[129,9,129,35] : forall<a,b> (left : (work-group :: V -> V)<a>, right : (work-group :: V -> V)<b>) -> std/core/types/bool;
+// A bootstrap enters the runnable queue once but remains in the rollback
+// ledger until the complete transaction commits or aborts. Drain-time requeues
+// use `append`/`prepend` and therefore cannot duplicate transaction ownership.
+pub fun work-group/track[139,9,139,24] : forall<a> (group : (work-group :: V -> V)<a>, value : a) -> ();
+pub fun work-group/append-values[165,9,165,32] : forall<a> (group : (work-group :: V -> V)<a>, values : (std/core/types/list :: V -> V)<a>) -> ();
+pub fun work-group/clear[168,9,168,24] : forall<a> (group : (work-group :: V -> V)<a>) -> ();
+pub fun work-group/take-all[152,9,152,27] : forall<a> (group : (work-group :: V -> V)<a>) -> (std/core/types/list :: V -> V)<a>;
+pub fun work-group/take-rollback[157,9,157,32] : forall<a> (group : (work-group :: V -> V)<a>) -> (std/core/types/list :: V -> V)<a>;
+pub fun work-group/release-rollback[162,9,162,35] : forall<a> (group : (work-group :: V -> V)<a>) -> ();
+pub fun work-group/begin-drain[172,9,172,30] : forall<a> (group : (work-group :: V -> V)<a>) -> std/core/types/bool;
+pub fun work-group/mark-ready[179,9,179,29] : forall<a> (group : (work-group :: V -> V)<a>) -> std/core/types/bool;
+pub fun work-group/mark-failed[186,9,186,30] : forall<a> (group : (work-group :: V -> V)<a>, failure : std/core/exn/exception) -> std/core/types/bool;
+pub fun work-group/mark-committed[197,9,197,33] : forall<a> (group : (work-group :: V -> V)<a>) -> std/core/types/bool;
+pub fun work-group/mark-aborted[204,9,204,31] : forall<a> (group : (work-group :: V -> V)<a>) -> std/core/types/bool;
+pub fun route-resume[213,9,213,20] : forall<a> (global : (work-queue :: V -> V)<a>, value : a) -> ();
+pub fun route-bootstrap[216,9,216,23] : forall<a> (global : (work-queue :: V -> V)<a>, active : (std/core/types/maybe :: V -> V)<(work-group :: V -> V)<a>>, value : a) -> ();
+ 
+fun @kokaine-cache-phase[1,0,1,0] : () -> std/core/types/int;
+ 
+//------------------------------
+//#kki: external declarations
+ 
+ 
+//------------------------------
+//#kki: inline definitions
+ 
+//.inline-section
+fun @kokaine-cache-phase // inline size: 1
+  = fn(){ 0; };
