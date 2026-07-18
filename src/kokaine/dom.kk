@@ -13,6 +13,7 @@ import kokaine/html
 import kokaine/internal/event-runtime
 import kokaine/internal/key-index
 import kokaine/internal/compat
+import kokaine/dom/internal/keyed-transaction
 import std/core/unsafe
 import std/core/undiv
 
@@ -965,7 +966,7 @@ fun commit-keyed-update<a,k,e::E>(update : keyed-update<e,a,k>)
   else ()
 
 fun create-keyed-row<a,k,e::E>(
-      root : root<<ui>>, parent : node, last : node,
+      renderer : keyed-context, root : root<<ui>>, parent : node, last : node,
       identity : k, item : a, index : int,
       children : (item : accessor<a>, index : accessor<int>)
                  -> <html<e>,signal-read> ())
@@ -1016,7 +1017,7 @@ fun create-keyed-row<a,k,e::E>(
               view fn()
                 children(fn() item-source.get,fn() index-source.get)
             )
-            mount-view(root,parent,Just(row-last),tree)
+            mount-view(renderer,root,parent,Just(row-last),tree)
             // Keep descendant bootstrap capabilities queued until every draft
             // row is reachable from the reconciler's rollback ledger.  The
             // reconciler settles all draft owners as one targeted set.
@@ -1030,7 +1031,8 @@ fun create-keyed-row<a,k,e::E>(
   )
 
 fun reconcile-keyed<a,k,e::E>(
-      root : root<<ui>>, parent : node, first : node, last : node,
+      renderer : keyed-context, root : root<<ui>>,
+      parent : node, first : node, last : node,
       owner : structural-owner<<ui>>,
       table : ref<global,keyed-table<e,a,k>>, items : list<a>,
       key : (a) -> k,
@@ -1052,6 +1054,9 @@ fun reconcile-keyed<a,k,e::E>(
       }
       val owns-transaction =
         internal/structural-transaction-owned(transaction)
+      val publication-transaction =
+        if owns-transaction then new-keyed-transaction()
+        else current-keyed-transaction(renderer)
       val next-index = transaction-cell(
         kokaine/internal/key-index/empty())
       val updates = transaction-cell([])
@@ -1082,7 +1087,15 @@ fun reconcile-keyed<a,k,e::E>(
                         transaction-load(staged-retirements))
                       dispose-keyed-rows(transaction-load(drafts))
                     },
-                    fn() internal/abort-structural-transaction(transaction)
+                    fn()
+                      finally(
+                        fn() {
+                          if owns-transaction
+                          then abort-keyed-transaction(publication-transaction)
+                          else ()
+                        },
+                        fn() internal/abort-structural-transaction(transaction)
+                      )
                   )
               )
             }
@@ -1118,7 +1131,7 @@ fun reconcile-keyed<a,k,e::E>(
                                 item))
                 Nothing ->
                   val draft = create-keyed-row(
-                    root,parent,last,identity,item,current-index,children)
+                    renderer,root,parent,last,identity,item,current-index,children)
                   // Publish the draft handle before another fallible comparison
                   // so final-control and comparator failure can always reach it.
                   transaction-store(drafts,
@@ -1148,9 +1161,12 @@ fun reconcile-keyed<a,k,e::E>(
             // Every draft is now rollback-reachable and all comparator work has
             // succeeded. Drain only this transaction's bootstrap FIFO; resume
             // work remains on the root's global frontier.
-            reactive-structural{
-              internal/drain-structural-transaction(transaction)
-            }
+            with-keyed-transaction(
+              renderer,publication-transaction,
+              fn() reactive-structural{
+                internal/drain-structural-transaction(transaction)
+              }
+            )
 
             // Fail closed before the first physical move if a retained custom
             // or stale element would receive synchronous disconnect/reconnect
@@ -1183,11 +1199,18 @@ fun reconcile-keyed<a,k,e::E>(
             val retirements = stage-keyed-retirements(stale)
             transaction-store(staged-retirements,retirements)
 
-            // Committing the owned lease first prepares and publishes every
-            // nested participant. Only then may the outer adapter publish its
-            // retained source changes and authoritative table.
+            // The renderer prepares every nested DOM participant before the
+            // reactive bootstrap lease is committed. Publication is then a
+            // total renderer-owned suffix; the scheduler never stores DOM
+            // callbacks.
+            reactive-structural{
+              prepare-keyed-transaction(publication-transaction)
+            }
             reactive-structural{
               internal/commit-structural-transaction(transaction)
+            }
+            reactive-structural{
+              publish-keyed-transaction(publication-transaction)
             }
             reactive-write-ui{
               final-updates.foreach(fn(update) commit-keyed-update(update))
@@ -1211,8 +1234,8 @@ fun reconcile-keyed<a,k,e::E>(
             then throw("joined keyed reconciliation must be initial construction")
             else ()
             reactive-structural{
-              internal/stage-structural-publication(
-                transaction,
+              stage-keyed-publication(
+                publication-transaction,
                 fn() pretend-no-div{
                   val current-cursor = range-first(parent,first,last)
                   val order-changed = !keyed-order-matches(
@@ -1249,7 +1272,8 @@ fun reconcile-keyed<a,k,e::E>(
       )
 
 fun mount-keyed-fields<s,a,k,e::E>(
-      root : root<<ui>>, parent : node, before : maybe<node>,
+      renderer : keyed-context, root : root<<ui>>,
+      parent : node, before : maybe<node>,
       read : () -> signal-read s,
       walk : forall<p::E> (s,(a) -> p ()) -> p (), key : (a) -> k,
       compare : (k,k) -> order, item-equals : (a,a) -> bool,
@@ -1303,7 +1327,7 @@ fun mount-keyed-fields<s,a,k,e::E>(
                     transaction-store(items,
                       Cons(item,transaction-load(items)))
                   reconcile-keyed(
-                    root,parent,first,last,owner,table,
+                    renderer,root,parent,first,last,owner,table,
                     transaction-load(items).reverse,
                     key,compare,item-equals,children)
                 )
@@ -1314,17 +1338,18 @@ fun mount-keyed-fields<s,a,k,e::E>(
       )
   )
 
-fun mount-keyed-plan<e::E>(root : root<<ui>>, parent : node,
-                     before : maybe<node>, plan : keyed-plan<e>)
+fun mount-keyed-plan<e::E>(renderer : keyed-context, root : root<<ui>>,
+                     parent : node, before : maybe<node>, plan : keyed-plan<e>)
                     : <signal-write,ui,pure> ()
   match plan
     Keyed-plan(spec) ->
       match spec
         Keyed-spec(read,walk,key,compare,item-equals,children) ->
           mount-keyed-fields(
-            root,parent,before,read,walk,key,compare,item-equals,children)
+            renderer,root,parent,before,
+            read,walk,key,compare,item-equals,children)
 
-fun mount-view(root : root<<ui>>, parent : node,
+fun mount-view(renderer : keyed-context, root : root<<ui>>, parent : node,
                before : maybe<node>, tree : view<e>)
               : <signal-write,ui,pure> ()
   match tree
@@ -1348,10 +1373,10 @@ fun mount-view(root : root<<ui>>, parent : node,
         attributes.foreach fn(attribute)
           mount-attribute(root,target,attribute)
         children.foreach fn(child)
-          mount-view(root,element-node(target),Nothing,child)
+          mount-view(renderer,root,element-node(target),Nothing,child)
         insert(parent,before,element-node(target))
     Fragment(children) ->
-      children.foreach fn(child) mount-view(root,parent,before,child)
+      children.foreach fn(child) mount-view(renderer,root,parent,before,child)
     Region(read) ->
       val first = dom-attempt{ dom-create-comment("kokaine:region") }
       val last = dom-attempt{ dom-create-comment("/kokaine:region") }
@@ -1362,14 +1387,15 @@ fun mount-view(root : root<<ui>>, parent : node,
             dom-attempt{ dom-clear-between(first,last) }
           }
         )
-        mount-view(root,parent,Just(last),next)
+        mount-view(renderer,root,parent,Just(last),next)
       )
       ()
-    Keyed-region(plan) -> mount-keyed-plan(root,parent,before,plan)
+    Keyed-region(plan) -> mount-keyed-plan(renderer,root,parent,before,plan)
     Raw-html(content) ->
       insert-html(root,parent,before,trusted-content(content))
 
-fun mount-effect(root : root<<ui>>, parent : node, tree : view<e>)
+fun mount-effect(renderer : keyed-context, root : root<<ui>>,
+                 parent : node, tree : view<e>)
                  : <signal-write,ui,pure> disposer<<ui>>
   create-effect(root,constant-track,fn(_)
     val first = dom-attempt{ dom-create-comment("kokaine:mount") }
@@ -1380,13 +1406,14 @@ fun mount-effect(root : root<<ui>>, parent : node, tree : view<e>)
         dom-attempt{ dom-remove-range(first,last) }
       }
     )
-    mount-view(root,parent,Just(last),tree)
+    mount-view(renderer,root,parent,Just(last),tree)
   )
 
 fun mount-transaction(root : root<<ui>>, parent : node, tree : view<e>,
                       inherit-owner : bool)
                      : <ui,exn> disposer<<ui>>
   dom-attempt{ dom-install-shadow-tracker(parent) }
+  val renderer = new-keyed-context()
   val pending = transaction-cell(Nothing)
   val committed = transaction-cell(False)
   finally(
@@ -1398,7 +1425,7 @@ fun mount-transaction(root : root<<ui>>, parent : node, tree : view<e>,
     },
     fn()
       val register = fn()
-        val dispose = mount-effect(root,parent,tree)
+        val dispose = mount-effect(renderer,root,parent,tree)
         // `mount-effect` only queues its bootstrap while the surrounding batch
         // is open. Remember the disposer before that batch is allowed to flush.
         transaction-store(pending,Just(dispose))

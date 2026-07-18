@@ -381,9 +381,10 @@ transaction:
    or any retained-row source updates;
 2. drain only the transaction-local bootstrap FIFO while resumptions remain on
    the global frontier; nested keyed construction enlists a two-phase
-   prepare/publish participant in the active outer lease;
-3. prepare and revalidate every enlisted DOM change, commit the outer scheduler
-   lease, and only then publish joined and outer keyed tables; and
+   prepare/publish participant in the mount's renderer-owned journal;
+3. prepare and revalidate every enlisted DOM change, commit the independent
+   bootstrap lease, and only then publish the renderer journal plus the outer
+   keyed table; and
 4. retire stale rows through an explicit pending-retirement ledger which keeps
    a failed host cleanup retryable without making unmanaged DOM invisible to
    the authoritative table.
@@ -394,8 +395,9 @@ rollback-reachable draft and rolls back every enlisted publication. On a move
 or participant-prepare failure, it restores the previous row order and disposes
 draft owners before rethrowing. A joined nested lease cannot steal commit or
 abort authority from its outer owner, and cannot publish merely because its own
-adapter call returned. Structural transactions encode that distinction as
-`Owned` versus `Joined` authority rather than inferring it from a no-op commit.
+adapter call returned. The mount-level keyed context owns that journal; the
+reactive structural lease supplies only bootstrap isolation and the
+`Owned`/`Joined` decision.
 Joined keyed reconciliation is intentionally initial-only: updating retained
 rows would require signal writes in the journal's total publication suffix, so
 that case fails closed instead of weakening the two-phase contract.
@@ -454,10 +456,11 @@ validated native or fragment paths, including ordinary `div`/`span` content.
 Initial mounts, data-only updates, and keyed updates whose physical order
 already matches remain unaffected.
 
-The atomicity claim is about scheduler ownership and authoritative reactive
-publication: no joined or outer table/source state becomes visible until every
-enlisted prepare succeeds. Browser DOM preparation itself is not a reversible
-database transaction. Ordinary ranges are restored on modeled failure, and
+The atomicity claim coordinates two independent owners: Reactive owns draft
+bootstrap work, while the renderer owns authoritative table/source publication.
+No joined or outer state becomes visible until every renderer prepare succeeds.
+Browser DOM preparation itself is not a reversible database transaction.
+Ordinary ranges are restored on modeled failure, and
 custom-element or opaque lifecycle cases which could synchronously observe an
 unrecoverable partial move are rejected before mutation. Stale-row removal is
 deliberately post-commit; while it is pending, the table explicitly records the

@@ -664,6 +664,7 @@ src/kokaine/reactive/internal/runtime.kk   roots and high-level reactive values
 src/kokaine/reactive/internal/bridge.kk    names used by the public facade
 src/kokaine/internal/event-runtime.kk      guarded multi-shot browser event K
 src/kokaine/internal/key-index.kk          persistent balanced keyed-row index
+src/kokaine/dom/internal/keyed-transaction.kk renderer publication journal
 src/kokaine/control.kk                     branch, when, and list/vector keyed For
 src/kokaine/async.kk                       structured async public facade
 src/kokaine/async/effects.kk               await, cancellation, and scope algebra
