@@ -34,7 +34,7 @@ import std/core/undiv
 // The parked suffix is resumed shallowly: its primitive `async-await` handler
 // is deliberately absent. This lets the generation installed at the host
 // callback boundary become the nearest base interpreter for the next await.
-alias taskresume<e,a> = (await-result<a>,bool) -> <async,signal-read,signal-write,pure,ui|e> ()
+alias taskresume<e,a> = await-result<a> -> <async,signal-read,signal-write,pure,ui|e> ()
 
 alias task-cancel-strand = () -> ui ()
 
@@ -372,17 +372,17 @@ fun run-task-result(task : generation-task<a,e>, family : async-family<e>)
                         family.family-runner.run(fn()
                           run-reentry(portal,fn() {
                             resume-generation(root,family,fn() {
-                              resume-action(completion,True)
+                              resume-action(completion)
                             })
                           })
                         )
             )
 
 fun accept-task-result(task : generation-task<a,e>, family : async-family<e>,
-                       result : await-result<a>, _is-done : bool) : <div,ui> ()
+                       result : await-result<a>) : <div,ui> ()
   lift-div fn()
-    // `is-done` is reserved for future stream adapters. Primitive Kokaine
-    // awaits are one-shot: the first callback owns the scheduled resumption.
+    // Primitive Kokaine awaits are one-shot: the first callback owns the
+    // scheduled resumption.
     if task.task-state.accept(result)
     then enqueue-microtask(as-host-action(fn() run-task-result(task,family)))
     else ()
@@ -406,7 +406,7 @@ fun stopped-task-cancellation(
               family.family-runner.run(fn()
                 run-retirement-reentry(portal,fn() {
                   resume-generation(root,family,fn() {
-                    resume-action(Cancel,True)
+                    resume-action(Cancel)
                   })
                 })
               )
@@ -443,7 +443,7 @@ fun register-task(
       scope : async-scope,
       label : string,
       setup : await-setup<a>,
-      resume-action : (await-result<a>,bool) -> <async,signal-read,signal-write,pure,ui|e> ())
+      resume-action : await-result<a> -> <async,signal-read,signal-write,pure,ui|e> ())
     : <signal-write,pure,ui|e> ()
   check-not-pure-plane("async suspension")
 
@@ -463,13 +463,13 @@ fun register-task(
   // links are durable. Rejected registration cannot retain an unowned task.
   increment-outstanding()
 
-  val complete = fn(result,is-done)
+  val complete = fn(result)
     as-host-action(fn()
-      accept-task-result(task,family,result,is-done)
+      accept-task-result(task,family,result)
     )()
   match setup(complete)
     Error(problem) ->
-      accept-task-result(task,family,Exception(problem),True)
+      accept-task-result(task,family,Exception(problem))
     Ok(dispose) ->
       match task.task-state.install-disposer(dispose)
         Nothing -> ()
@@ -568,9 +568,9 @@ fun register-scheduled-ioc(root : root<<ui|e>>,
                            host-action : () -> ui ())
                           : <signal-write,pure,ui|e> ()
   val scheduled-setup = fn(resume)
-    enqueue-microtask(fn() resume(Result(()),True))
+    enqueue-microtask(fn() resume(Result(())))
     Ok(fn() ())
-  val scheduled-resume = fn(result,_)
+  val scheduled-resume = fn(result)
     match result
       Result(_) -> host-action()
       _ -> ()
@@ -611,7 +611,7 @@ fun interpret-generation-await(
                 // captured re-entry. Registration itself performs no read.
                 mask<signal-read>{
                   register-task(root,runtime,scope,label,setup,
-                    fn(result,_) rcontext.resume-shallow(result))
+                    fn(result) rcontext.resume-shallow(result))
                 }
             }
           }
@@ -626,7 +626,7 @@ fun interpret-generation-await(
               if runtime.is-canceled(scope) then callback(Cancel) else
                 mask<signal-read>{
                   register-task(root,runtime,scope,label,setup,
-                    fn(result,_) callback(result))
+                    fn(result) callback(result))
                 }
             }
           }

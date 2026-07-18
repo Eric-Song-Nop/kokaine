@@ -97,7 +97,7 @@ fun observe-supervisor-claim(root : root<<ui>>) : ui ()
 
 fun install-supervised-no-await(root : root<<ui>>, ready : bool) : <async,ui> ()
   val setup : await-setup<()> = fn(complete)
-    if ready then complete(Result(()),True) else ()
+    if ready then complete(Result(())) else ()
     Ok(fn() observe-supervisor-claim(root))
   no-await(setup,async-scope,"supervisor sibling",fn(result)
     match result
