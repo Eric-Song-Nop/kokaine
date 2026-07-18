@@ -8,7 +8,6 @@ import kokaine/reactive/effects
 import kokaine/reactive/internal/lifetime
 import kokaine/reactive/internal/scheduler
 import kokaine/reactive/internal/handlers
-import kokaine/reactive/internal/application-runner
 import std/core/undiv
 
 // Capture is non-resumptive: it records the structural capability already
@@ -50,22 +49,12 @@ pub fun run-reentry(value : reentry<e>,
         )
       }
 
-// The application runner deliberately surrounds the complete reactive
-// re-entry, not merely the user's action. Batch exit may flush replacements,
-// run cleanup, and publish newly bootstrapped work after `action` returns.
-pub fun run-application-reentry(
-    runner : app-runner<<exn|e>,h>,
-    value : reentry<e>,
-    action : () -> <signal-read,signal-write,pure|e> a)
-    : <|h> a
-  runner.run(fn() run-reentry(value,action))
-
 // Retirement marks the captured frame dead before finalizers run. A parked
 // async strand still has to be discontinued so its lexical `finally` clauses
-// unwind, but it must not gain a fresh registration or host batch. Keep this
-// path private to runtime-owned cancellation and restore only the already
-// captured reactive handlers/context.
-fun run-retirement-reentry(
+// unwind, but it must not gain a fresh registration or host batch. This is
+// exported only for runtime-owned cancellation and restores the captured
+// reactive handlers/context.
+pub fun run-retirement-reentry(
     value : reentry<e>,
     action : () -> <signal-read,signal-write,pure|e> a)
     : <exn|e> a
@@ -77,13 +66,3 @@ fun run-retirement-reentry(
         with-context(plane,checkpoint,current,
           fn() lift-div(fn() dispatch-handled(root,action)))
       }
-
-// The application runner surrounds the complete cancellation turn. It is the
-// explicit capability which reinstalls application handlers after the host
-// callback that initiated retirement has outlived their dynamic extent.
-pub fun run-application-retirement-reentry(
-    runner : app-runner<<exn|e>,h>,
-    value : reentry<e>,
-    action : () -> <signal-read,signal-write,pure|e> a)
-    : <|h> a
-  runner.run(fn() run-retirement-reentry(value,action))

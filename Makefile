@@ -50,7 +50,7 @@ test-native:
 	$(KOKA) $(KOKA_FLAGS) -e test/lifetime-foundation.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/work-transaction.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/integration-boundaries.kk
-	$(KOKA) $(KOKA_FLAGS) -e test/application-runner.kk
+	$(KOKA) $(KOKA_FLAGS) -e test/async-host-turn.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/one-shot-task.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/cancellation-supervisor.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/trace-semantics.kk

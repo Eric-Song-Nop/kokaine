@@ -1,6 +1,6 @@
-module application-runner
+module async-host-turn
 
-import kokaine/reactive/internal/application-runner
+import kokaine/reactive/async/internal/host-turn
 import kokaine/reactive/internal/model
 import kokaine/reactive/internal/runtime
 import kokaine/reactive/internal/reentry
@@ -20,7 +20,7 @@ fun hidden-store(target : ref<global,a>, value : a) : ()
   unsafe-total { target := value }
 
 fun check(ok : bool, message : string)
-  if ok then () else throw("application runner: " ++ message)
+  if ok then () else throw("async host turn: " ++ message)
 
 fun with-application(action : () -> <application-value,exn> a) : exn a
   with fun application-value() 41
@@ -29,12 +29,12 @@ fun with-application(action : () -> <application-value,exn> a) : exn a
 fun require-reentry(slot : ref<global,maybe<reentry<<application-value>>>>)
                    : exn reentry<<application-value>>
   match hidden-load(slot)
-    Nothing -> throw("application runner: reentry was not captured")
+    Nothing -> throw("async host turn: reentry was not captured")
     Just(value) -> value
 
-fun test-runner_wraps_batch_exit_and_cleanup()
-  val runner : app-runner<<application-value,exn>,<exn>> =
-    App-runner(with-application)
+fun test-runner-closes-the-complete-host-turn()
+  val runner : host-turn-runner<<application-value,exn>,<exn>> =
+    Host-turn-runner(with-application)
   val portal-slot : ref<global,maybe<reentry<<application-value>>>> =
     hidden(Nothing)
   val cleanups = hidden([])
@@ -54,14 +54,14 @@ fun test-runner_wraps_batch_exit_and_cleanup()
   val (root,generation) = built
   val portal = require-reentry(portal-slot)
 
-  run-application-reentry(runner,portal,fn() generation.set(1))
+  runner.run(fn() run-reentry(portal,fn() generation.set(1)))
   check(hidden-load(cleanups) == [41],
-        "retirement cleanup remains inside the application handler")
+        "replacement cleanup remains inside the application handler")
 
   runner.run(fn() root.dispose())
   check(hidden-load(cleanups) == [41,41],
-        "root disposal can use the same explicit runner boundary")
+        "root disposal can use the same host-turn boundary")
 
 pub fun main()
-  test-runner_wraps_batch_exit_and_cleanup()
-  println("application-runner: all checks passed")
+  test-runner-closes-the-complete-host-turn()
+  println("async host turn: all checks passed")
