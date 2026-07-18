@@ -205,11 +205,11 @@ branch failures and deferrals.
 
 A trace is both an execution boundary and the parent of a structural
 generation. Each replacement resume runs in a draft frame that records child
-effects, derived scopes, and opaque parked resource continuations for listeners
-and region contents created by that suffix. The cleanup action lives in the
-resource K's `finally`; the owner ledger retains only its one-shot finalize
-capability. Only a successful publication activates the draft. Replacement
-marks the previous frame subtree dead before finalizing its resources, so
+effects, derived scopes, and one-shot cleanup registrations for listeners and
+region contents created by that suffix. The owner registry is the sole
+finalization authority; each entry retains its cleanup together with the
+frame/gate context it must restore. Only a successful publication activates the
+draft. Replacement marks the previous frame subtree dead before finalization, so
 cleanup cannot register new work into a half-retired generation.
 
 This explicit owner ledger is necessary even though the Observer graph was
@@ -293,9 +293,8 @@ remains closed.
 - Source invalidation is local, but source capture compaction and deep retirement
   still have costs that should be measured under large traces.
 - The structural ownership ledger remains explicit because raw continuations,
-  parked resource Ks, DOM ranges, and listeners require deterministic
-  retirement. Resource cleanup is entered by `rcontext.finalize`, not by an
-  owner-stored action closure.
+  DOM ranges, and listeners require deterministic retirement. Registry detach
+  claims the complete cleanup snapshot before any user finalizer can re-enter.
 - JavaScript remains the event transport ABI, while the user action is entered
   only by resuming the guarded event continuation under structural re-entry.
 - The public callback row is closed over the capabilities reinstalled by this
@@ -323,8 +322,8 @@ The important tests are behavioral rather than source-string checks:
 - `entry-targeted-settle.kk` fails if state-entry routing is bypassed.
 - `final-control-rollback.kk` proves abandoned drafts retry through the exact K.
 - `continuation-reentry.kk` fails if re-entry is changed to plain root dispatch.
-- `resource-finalization.kk` proves resource capture is parked, one-shot, LIFO,
-  and cannot skip sibling finalizers after a failure.
+- `cleanup-finalization.kk` proves cleanup is one-shot, LIFO, and cannot skip
+  sibling finalizers after failure or final control.
 - `dom-lifecycle.kk` and `browser_counter.py` prove event-created work retires
   with the DOM generation that registered its listener.
 - `dom-event-continuation.kk` proves repeated and nested browser dispatches

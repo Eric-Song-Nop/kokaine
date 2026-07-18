@@ -8,7 +8,6 @@ module kokaine/reactive/internal/model
 
 import std/core/unsafe
 import std/core/undiv
-import kokaine/reactive/internal/resource
 import kokaine/internal/registry
 import kokaine/reactive/internal/work-transaction
 
@@ -172,7 +171,7 @@ pub type retirement-coordinator<e::E>
     retirement-dispose-root      : ref<global,maybe<() -> <div,exn|e> ()>>
   )
 
-// Causal continuation gates and resource lifetime are deliberately separate.
+// Causal continuation gates and structural lifetime are deliberately separate.
 // Children and user finalizers have distinct registries so every descendant
 // is closed before any cleanup runs, while both classes retain LIFO order.
 pub type lifetime-owner<e::E>
@@ -185,8 +184,7 @@ pub type lifetime-owner<e::E>
 
 pub type cleanup-registration<e::E>
   Cleanup-registration(
-    cleanup-node     : registry-registration<retirement-work<e>>,
-    cleanup-resource : resource-k<e>
+    cleanup-node : registry-registration<retirement-work<e>>
   )
 
 pub type continuation-scope<e::E>

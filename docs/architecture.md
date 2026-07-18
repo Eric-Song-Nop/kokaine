@@ -267,10 +267,10 @@ Every resumed suffix runs in a fresh draft frame. Work created during that
 dynamic extent—child effect scopes, pure derivation scopes, and opaque resource
 continuations for DOM listeners or region contents—is inserted into removable
 child or finalizer registries on the frame's lifetime owner. Each registration
-has an O(1), idempotent unlink handle. A resource's cleanup action remains
-inside the parked K's `finally`; the registry retains only its abstract
-one-shot finalization capability. On successful publication the draft frame
-becomes the live structural extent of that trace node.
+has an O(1), idempotent unlink handle. A cleanup action is stored once as a
+registry finalizer together with the frame/gate context it must restore. On
+successful publication the draft frame becomes the live structural extent of
+that trace node.
 
 Replacing a generation first marks the old frame and its complete subtree dead,
 then runs finalizers. This prevents cleanup code from attaching new reactive
@@ -279,10 +279,10 @@ disposal applies the same retirement transitively and idempotently.
 
 Lifetime ownership is explicit, but it is not part of dependency propagation.
 Retirement seals and detaches the complete structural subtree, marks every
-scope dead, and only then runs collected finalizers iteratively. Cleanup calls
-`rcontext.finalize`, which enters the parked resource K's `finally` to remove
-DOM listeners and ranges exactly once. Explicit unregistration consumes the
-resource capability as well as its registry handle.
+scope dead, and only then runs collected finalizers iteratively. The detached
+registry snapshot is the unique owner: explicit unregistration wins only
+before detach, while retirement invokes each claimed cleanup exactly once.
+Failure or final control from one cleanup cannot skip older siblings.
 
 Keyed rows require a lifetime that outlasts any one collection-trace
 generation. An explicit structural owner is only a lifetime, frame, captured
