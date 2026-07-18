@@ -4,6 +4,7 @@ import kokaine/async/effects
 import kokaine/async/structured
 import kokaine/reactive/internal/model
 import kokaine/reactive/effects
+import kokaine/reactive/internal/resource
 import kokaine/reactive/internal/runtime
 import kokaine/reactive/async/internal/runtime
 import kokaine/internal/registry

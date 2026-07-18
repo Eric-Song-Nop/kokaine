@@ -9,6 +9,7 @@ import kokaine/reactive/internal/lifetime
 import kokaine/reactive/internal/scheduler
 import kokaine/reactive/internal/handlers
 import kokaine/reactive/internal/capture
+import kokaine/reactive/internal/resource
 import kokaine/internal/registry
 import kokaine/reactive/internal/work-transaction
 import std/core/undiv
@@ -340,15 +341,16 @@ pub fun register-cleanup(root : root<e>,
   val current = load(plane.plane-current-frame)
   val checkpoint = load(plane.plane-current)
   check-frame-registration(root,current)
-  val finalizer = Retirement-finalizer(fn()
+  val resource = capture-resource(fn()
     with-context(plane,checkpoint,current,
       fn() interpret-write(root,cleanup))
   )
-  val node = current.frame-lifetime.register-finalizer(finalizer)
-  Cleanup-registration(node)
+  val node = current.frame-lifetime.register-finalizer(
+    Retirement-finalizer(fn() finalize-resource(resource)))
+  Cleanup-registration(node,resource)
 
 pub fun cleanup-registration/unregister(
     registration : cleanup-registration<e>) : bool
   match registration.cleanup-node.take
     Nothing -> False
-    Just(_) -> True
+    Just(_) -> discard-resource(registration.cleanup-resource)

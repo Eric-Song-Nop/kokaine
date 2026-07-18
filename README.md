@@ -116,10 +116,10 @@ attempts.
 - Replacement generations are built as drafts. Failure or abortive final
   control retires unpublished continuations and structural children while the
   committed source value and pending retry K remain explicit.
-- Continuation frames own nested effects, derivations, and cleanup actions
-  through removable lifetime registrations. Retirement seals and detaches the
-  complete child/finalizer registries before invoking any user cleanup; root
-  disposal follows the same exhaustive,
+- Continuation frames own nested effects, derivations, and opaque parked
+  resource continuations through removable lifetime registrations. Retirement
+  seals and detaches the complete child/finalizer registries before invoking
+  any resource K's `finally`; root disposal follows the same exhaustive,
   idempotent path.
 - Nested batches delay settling while making newly committed source values
   immediately readable. Host re-entry is also one atomic batched turn.
@@ -580,7 +580,7 @@ action explicitly transfers that ownership back to application code.
   previous successfully committed value.
 - `create-effect(root, track, apply)` tracks only `track`; reads performed by
   `apply` do not silently become dependencies.
-- `on-cleanup` registers a one-shot finalizer under the current lifetime owner.
+- `on-cleanup` parks a one-shot resource continuation under the current owner.
   Disposers returned by `create-effect` finalize the complete owned subtree.
 - `capture-reentry` and `reenter` let a host callback re-enter the exact
   continuation generation that registered it. They restore Kokaine's reactive
@@ -653,6 +653,7 @@ src/kokaine/reactive/internal/model.kk     traces, planes, scopes, and capabilit
 src/kokaine/reactive/internal/capture.kk   exact read-suffix reification
 src/kokaine/internal/registry.kk           removable O(1) lifetime registrations
 src/kokaine/reactive/internal/lifetime.kk  detached two-phase retirement
+src/kokaine/reactive/internal/resource.kk  opaque parked resource continuations
 src/kokaine/reactive/internal/work-transaction.kk deque and local work groups
 src/kokaine/reactive/internal/scheduler.kk invalidation, queues, targeted settle
 src/kokaine/reactive/internal/structural.kk retained integration lifetimes
@@ -679,7 +680,7 @@ src/kokaine/html.kk                        handled backend-neutral view DSL
 src/kokaine/dom.kk                         jsweb renderer and event boundary
 src/kokaine/ssr.kk                         escaped deterministic string renderer
 test/trace-semantics.kk                    exact suffix and branching semantics
-test/cleanup-finalization.kk               one-shot and exhaustive cleanup
+test/resource-finalization.kk              resource-K parking and finalization
 test/structural-scopes.kk                  ownership and cleanup generations
 test/targeted-settle*.kk                   isolated and transitive memo settling
 test/execution-planes.kk                   pure/effect plane behavior
