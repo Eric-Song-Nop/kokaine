@@ -220,7 +220,7 @@ def main() -> int:
         "capture-reentry": "captured reactive reentry",
         "reenter(": "manual reactive reentry",
         "event-continuation": "duplicated DOM event continuation",
-        "reactive/internal/reentry": "internal reactive reentry import",
+        "reactive/integration/internal/reentry": "internal integration reentry import",
         "internal/event-runtime": "internal DOM event runtime import",
     }
     for token, label in forbidden_reentry.items():

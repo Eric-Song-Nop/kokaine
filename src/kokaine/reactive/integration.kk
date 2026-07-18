@@ -11,12 +11,19 @@ module kokaine/reactive/integration
 import kokaine/reactive
 import kokaine/reactive/integration/internal/lifetime-scope
 import kokaine/reactive/integration/internal/provision
+import kokaine/reactive/integration/internal/reentry
 
 
 abstract value type lifetime-scope<e::E>
   Public-lifetime-scope(
     internal-lifetime-scope
       : kokaine/reactive/integration/internal/lifetime-scope/lifetime-scope<e>
+  )
+
+abstract value type reentry<e::E>
+  Public-reentry(
+    internal-reentry
+      : kokaine/reactive/integration/internal/reentry/reentry<e>
   )
 
 
@@ -36,6 +43,11 @@ fun unwrap-lifetime-scope(value : lifetime-scope<e>)
     : kokaine/reactive/integration/internal/lifetime-scope/lifetime-scope<e>
   match value
     Public-lifetime-scope(inner) -> inner
+
+fun unwrap-reentry(value : reentry<e>)
+    : kokaine/reactive/integration/internal/reentry/reentry<e>
+  match value
+    Public-reentry(inner) -> inner
 
 fun unwrap-provision(value : provision<e>)
     : kokaine/reactive/integration/internal/provision/provision<e>
@@ -62,6 +74,19 @@ pub fun with-lifetime-scope(
 pub fun lifetime-scope/dispose(scope : lifetime-scope<e>) : <exn|e> ()
   kokaine/reactive/integration/internal/lifetime-scope/lifetime-scope/dispose(
     scope.unwrap-lifetime-scope)
+
+// Host callbacks capture the continuation generation which registered them.
+// Work created during re-entry remains owned by that generation.
+pub fun capture-reentry(root : root<e>) : exn reentry<e>
+  Public-reentry(
+    kokaine/reactive/integration/internal/reentry/capture-reentry(
+      internal/root-handle(root)))
+
+pub fun reenter(value : reentry<e>,
+                action : () -> <signal-read,signal-write,pure|e> a)
+               : <exn|e> a
+  kokaine/reactive/integration/internal/reentry/run-reentry(
+    value.unwrap-reentry,action)
 
 pub fun current-provision(root : root<e>) : exn maybe<provision<e>>
   match kokaine/reactive/integration/internal/provision/current-provision(

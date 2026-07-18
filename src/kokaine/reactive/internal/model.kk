@@ -222,17 +222,6 @@ pub type root<e::E>
     root-disposed     : ref<global,bool>
   )
 
-// A host callback cannot retain Koka's dynamic handler stack after its
-// originating turn returns. It can, however, retain the exact structural
-// capability of that turn: the effect plane, continuation gate, and frame
-// which own any reactive work created when the callback later re-enters.
-pub value type reentry<e::E>
-  Reentry(
-    reentry-root       : root<e>,
-    reentry-checkpoint : maybe<continuation-gate>,
-    reentry-frame      : frame<e>
-  )
-
 pub type derive-producer
   Derive-producer(
     producer-plane    : plane<total>,

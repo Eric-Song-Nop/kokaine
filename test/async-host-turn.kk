@@ -3,7 +3,7 @@ module async-host-turn
 import kokaine/reactive/async/internal/host-turn
 import kokaine/reactive/internal/model
 import kokaine/reactive/internal/runtime
-import kokaine/reactive/internal/reentry
+import kokaine/reactive/integration/internal/reentry
 import std/core/unsafe
 
 

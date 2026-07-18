@@ -20,9 +20,6 @@ abstract value type signal<a>
 abstract value type memo<a>
   Public-memo(internal-memo : kokaine/reactive/internal/model/memo<a>)
 
-abstract value type reentry<e::E>
-  Public-reentry(internal-reentry : kokaine/reactive/internal/model/reentry<e>)
-
 pub alias disposer<e> = kokaine/reactive/internal/model/disposer<e>
 
 fun unwrap-root(value : root<e>) : kokaine/reactive/internal/model/root<e>
@@ -43,11 +40,6 @@ fun unwrap-signal(value : signal<a>)
 fun unwrap-memo(value : memo<a>) : kokaine/reactive/internal/model/memo<a>
   match value
     Public-memo(inner) -> inner
-
-fun unwrap-reentry(value : reentry<e>)
-                   : kokaine/reactive/internal/model/reentry<e>
-  match value
-    Public-reentry(inner) -> inner
 
 pub fun dispatch(root : root<e>,
                  action : () -> <signal-read,signal-write,pure|e> a)
@@ -134,13 +126,3 @@ pub fun create-effect(root : root<e>,
 pub fun on-cleanup(root : root<e>,
                    cleanup : () -> <signal-write,pure|e> ()) : exn ()
   runtime-on-cleanup(root.unwrap-root,cleanup)
-
-// Host callbacks capture the continuation generation which registered them.
-// Work created during re-entry is structurally owned by that generation.
-pub fun capture-reentry(root : root<e>) : exn reentry<e>
-  Public-reentry(runtime-capture-reentry(root.unwrap-root))
-
-pub fun reenter(value : reentry<e>,
-                action : () -> <signal-read,signal-write,pure|e> a)
-               : <exn|e> a
-  runtime-run-reentry(value.unwrap-reentry,action)

@@ -113,5 +113,26 @@ kokaine_sources = "\n".join(
 assert "structural-owner" not in kokaine_sources, (
     "the removed core structural-owner capability must not survive as an alias"
 )
+
+core_sources = "\n".join(
+    [
+        (ROOT / "src/kokaine/reactive.kk").read_text(),
+        (ROOT / "src/kokaine/reactive/effects.kk").read_text(),
+        *[
+            path.read_text()
+            for path in (ROOT / "src/kokaine/reactive/internal").rglob("*.kk")
+        ],
+    ]
+)
+for forbidden in (
+    "kokaine/reactive/integration",
+    "kokaine/reactive/async",
+    "kokaine/dom",
+    "reentry",
+):
+    assert forbidden not in core_sources, (
+        f"host integration leaked into reactive core: {forbidden}"
+    )
+
 assert "open-lifetime-scope(root)" in text
 assert "with-lifetime-scope(root,scope" in text

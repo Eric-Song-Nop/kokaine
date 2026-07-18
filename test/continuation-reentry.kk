@@ -1,6 +1,7 @@
 module continuation-reentry
 
 import kokaine/reactive
+import kokaine/reactive/integration
 import std/core/unsafe
 
 effect ctl abandon-host-turn() : ()

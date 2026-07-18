@@ -17,7 +17,7 @@ import kokaine/async/effects
 import kokaine/async/internal/web-schedule
 import kokaine/reactive/effects
 import kokaine/reactive/internal/model
-import kokaine/reactive/internal/reentry
+import kokaine/reactive/integration/internal/reentry
 import kokaine/reactive/internal/runtime
 import kokaine/reactive/async/internal/host-turn
 import kokaine/async/internal/one-shot-task
@@ -367,15 +367,14 @@ fun run-task-result(task : generation-task<a,e>, family : async-family<e>)
                 match result
                   Nothing -> ()
                   Just(completion) ->
-                    match portal
-                      Reentry(root,_,_) ->
-                        family.family-runner.run(fn()
-                          run-reentry(portal,fn() {
-                            resume-generation(root,family,fn() {
-                              resume-action(completion)
-                            })
-                          })
-                        )
+                    val root = portal.root
+                    family.family-runner.run(fn()
+                      run-reentry(portal,fn() {
+                        resume-generation(root,family,fn() {
+                          resume-action(completion)
+                        })
+                      })
+                    )
             )
 
 fun accept-task-result(task : generation-task<a,e>, family : async-family<e>,
@@ -401,15 +400,14 @@ fun stopped-task-cancellation(
           with catch fn(problem)
             report-async-error("uncaught Kokaine async cancellation exception (" ++
                                label ++ "): " ++ problem.show)
-          match portal
-            Reentry(root,_,_) ->
-              family.family-runner.run(fn()
-                run-retirement-reentry(portal,fn() {
-                  resume-generation(root,family,fn() {
-                    resume-action(Cancel)
-                  })
-                })
-              )
+          val root = portal.root
+          family.family-runner.run(fn()
+            run-retirement-reentry(portal,fn() {
+              resume-generation(root,family,fn() {
+                resume-action(Cancel)
+              })
+            })
+          )
         val dispose-host = fn()
           match disposer
             Nothing -> ()
