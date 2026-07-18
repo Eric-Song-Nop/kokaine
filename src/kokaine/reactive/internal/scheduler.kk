@@ -772,7 +772,7 @@ pub fun settle-producer-body(producer : derive-producer) : <div> settle-result
         Settle-deferred -> Settle-deferred
         Settle-failed(failure) -> Settle-failed(failure)
         Settle-ok ->
-          // Validation can retire the structural owner, so recheck before
+          // Validation can retire the parent lifetime, so recheck before
           // starting or walking the producer.
           match load(producer.producer-scope.scope-lifetime.lifetime-token)
             Scope-starting ->

@@ -24,28 +24,124 @@ fun emit(events : ref<global,list<string>>, event : string) : ()
 fun check(ok : bool, message : string) : exn ()
   if ok then () else throw("integration boundaries: " ++ message)
 
-fun test-stable-owner-uses-independent-lifetime()
+fun test-lifetime-scope-uses-independent-lifetime()
   val runs = hidden(0)
   val cleanups = hidden(0)
-  val (root,(owner,source)) = create-root fn(root)
+  val (root,(scope,source)) = create-root fn(root)
     val source = signal(root,0)
-    val owner = internal/open-structural-owner(root)
-    internal/with-structural-owner(root,owner,fn()
+    val scope = open-lifetime-scope(root)
+    with-lifetime-scope(root,scope,fn()
       on-cleanup(root,fn() increment(cleanups))
       val stop = create-effect(root,fn() source.get,fn(_) increment(runs))
       ()
     )
-    (owner,source)
+    (scope,source)
 
-  check(hidden-load(runs) == 1,"owner bootstraps its child")
+  check(hidden-load(runs) == 1,"scope bootstraps its child")
   update(root){ source.set(1) }
-  check(hidden-load(runs) == 2,"owner remains reactive")
-  internal/dispose-structural-owner(owner)
-  internal/dispose-structural-owner(owner)
-  check(hidden-load(cleanups) == 1,"owner disposal is idempotent")
+  check(hidden-load(runs) == 2,"scope remains reactive")
+  scope.dispose
+  scope.dispose
+  check(hidden-load(cleanups) == 1,"scope disposal is idempotent")
   update(root){ source.set(2) }
-  check(hidden-load(runs) == 2,"retired owner no longer observes sources")
+  check(hidden-load(runs) == 2,"retired scope no longer observes sources")
   root.dispose()
+
+fun test-retired-scope-rejects-entry()
+  val (root,scope) = create-root fn(root)
+    open-lifetime-scope(root)
+
+  scope.dispose
+  val attempted : error<()> = mask<exn>{
+    error/try fn()
+      pretend-no-div{ with-lifetime-scope(root,scope,fn() ()) }
+  }
+  check(attempted.is-error,"a retired scope rejects later entry")
+  root.dispose()
+
+fun test-lifetime-scope-rejects-wrong-root()
+  val (left,scope) = create-root fn(root)
+    open-lifetime-scope(root)
+  val (right,_) = create-root fn(_root) ()
+
+  val attempted : error<()> = mask<exn>{
+    error/try fn()
+      pretend-no-div{ with-lifetime-scope(right,scope,fn() ()) }
+  }
+  check(attempted.is-error,"a scope rejects entry through another root")
+  scope.dispose
+  left.dispose()
+  right.dispose()
+
+fun test-recursive-scope-retirement-is-idempotent()
+  val cleanups = hidden(0)
+  val (root,parent) : (root<total>,lifetime-scope<total>) =
+    create-root fn(root)
+      val parent = open-lifetime-scope(root)
+      with-lifetime-scope(root,parent,fn()
+        val child = open-lifetime-scope(root)
+        with-lifetime-scope(root,child,fn()
+          on-cleanup(root,fn() increment(cleanups))
+        )
+      )
+      parent
+
+  parent.dispose
+  parent.dispose
+  check(hidden-load(cleanups) == 1,
+        "recursive scope retirement runs nested cleanup once")
+  root.dispose()
+
+fun test-root-retires-lifetime-scope-tree()
+  val cleanups = hidden(0)
+  val (root,scope) = create-root fn(root)
+    val scope = open-lifetime-scope(root)
+    with-lifetime-scope(root,scope,fn()
+      val child = open-lifetime-scope(root)
+      with-lifetime-scope(root,child,fn()
+        on-cleanup(root,fn() increment(cleanups))
+      )
+    )
+    scope
+
+  root.dispose()
+  scope.dispose
+  check(hidden-load(cleanups) == 1,
+        "root retirement reaches the complete scope tree exactly once")
+
+fun test-exception-restores-lifetime-context()
+  val scoped-cleanups = hidden(0)
+  val root-cleanups = hidden(0)
+  val runs = hidden(0)
+  val (root,(scope,source)) = create-root fn(root)
+    val source = signal(root,0)
+    val scope = open-lifetime-scope(root)
+    val attempted : error<()> = mask<exn>{
+      error/try fn()
+        pretend-no-div{
+          with-lifetime-scope(root,scope,fn()
+            on-cleanup(root,fn() increment(scoped-cleanups))
+            throw("scope action failed")
+          )
+        }
+    }
+    check(attempted.is-error,"scope action exposes its exception")
+    on-cleanup(root,fn() increment(root-cleanups))
+    val stop = create-effect(root,fn() source.get,fn(_) increment(runs))
+    (scope,source)
+
+  check(hidden-load(runs) == 1,"root context remains usable after failure")
+  scope.dispose
+  check(hidden-load(scoped-cleanups) == 1,
+        "scope cleanup retires after exceptional exit")
+  check(hidden-load(root-cleanups) == 0,
+        "exception restoration keeps later cleanup on the root frame")
+  update(root){ source.set(1) }
+  check(hidden-load(runs) == 2,
+        "exception restoration keeps later effects on the root frame")
+  root.dispose()
+  check(hidden-load(root-cleanups) == 1,
+        "root cleanup remains registered until root disposal")
 
 fun test-current-provision-borrows_the_outer_fifo()
   val events = hidden([])
@@ -134,7 +230,12 @@ fun test-discarded-provision-rejects-promotion()
   root.dispose()
 
 pub fun main()
-  test-stable-owner-uses-independent-lifetime()
+  test-lifetime-scope-uses-independent-lifetime()
+  test-retired-scope-rejects-entry()
+  test-lifetime-scope-rejects-wrong-root()
+  test-recursive-scope-retirement-is-idempotent()
+  test-root-retires-lifetime-scope-tree()
+  test-exception-restores-lifetime-context()
   test-current-provision-borrows_the_outer_fifo()
   test-second-open-cannot-steal_the_outer_lease()
   test_joined_outer_abort_retires_successful_prefix()

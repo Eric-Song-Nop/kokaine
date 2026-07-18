@@ -67,3 +67,12 @@ for forbidden in (
     assert forbidden not in reactive_sources, (
         f"obsolete host coordination leaked into reactive core: {forbidden}"
     )
+
+kokaine_sources = "\n".join(
+    path.read_text() for path in (ROOT / "src/kokaine").rglob("*.kk")
+)
+assert "structural-owner" not in kokaine_sources, (
+    "the removed core structural-owner capability must not survive as an alias"
+)
+assert "open-lifetime-scope(root)" in text
+assert "with-lifetime-scope(root,scope" in text

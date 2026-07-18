@@ -10,6 +10,14 @@ module kokaine/reactive/integration
 
 import kokaine/reactive
 import kokaine/reactive/internal/scheduler
+import kokaine/reactive/integration/internal/lifetime-scope
+
+
+abstract value type lifetime-scope<e::E>
+  Public-lifetime-scope(
+    internal-lifetime-scope
+      : kokaine/reactive/integration/internal/lifetime-scope/lifetime-scope<e>
+  )
 
 
 abstract value type provision<e::E>
@@ -23,6 +31,11 @@ abstract value type provision-lease<e::E>
       : kokaine/reactive/internal/scheduler/provision-lease<e>
   )
 
+fun unwrap-lifetime-scope(value : lifetime-scope<e>)
+    : kokaine/reactive/integration/internal/lifetime-scope/lifetime-scope<e>
+  match value
+    Public-lifetime-scope(inner) -> inner
+
 fun unwrap-provision(value : provision<e>)
     : kokaine/reactive/internal/scheduler/provision<e>
   match value
@@ -32,6 +45,22 @@ fun unwrap-provision-lease(value : provision-lease<e>)
     : kokaine/reactive/internal/scheduler/provision-lease<e>
   match value
     Public-provision-lease(inner) -> inner
+
+pub fun open-lifetime-scope(root : root<e>) : exn lifetime-scope<e>
+  Public-lifetime-scope(
+    kokaine/reactive/integration/internal/lifetime-scope/open-lifetime-scope(
+      internal/root-handle(root)))
+
+pub fun with-lifetime-scope(
+          root : root<r>, scope : lifetime-scope<r>,
+          action : () -> <div,exn|e> a)
+         : <div,exn|e> a
+  kokaine/reactive/integration/internal/lifetime-scope/with-lifetime-scope(
+    internal/root-handle(root),scope.unwrap-lifetime-scope,action)
+
+pub fun lifetime-scope/dispose(scope : lifetime-scope<e>) : <exn|e> ()
+  kokaine/reactive/integration/internal/lifetime-scope/lifetime-scope/dispose(
+    scope.unwrap-lifetime-scope)
 
 pub fun current-provision(root : root<e>) : exn maybe<provision<e>>
   match kokaine/reactive/internal/scheduler/current-provision(

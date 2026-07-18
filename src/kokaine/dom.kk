@@ -64,7 +64,7 @@ type keyed-row<e::E,a,k>
     row-current-index : ref<global,int>,
     row-item-source   : signal<a>,
     row-index-source  : signal<int>,
-    row-owner         : structural-owner<<ui>>,
+    row-scope         : lifetime-scope<<ui>>,
     row-first         : node,
     row-last          : node
   )
@@ -599,7 +599,7 @@ fun reactive-ui-exn-open(action : () -> <ui,exn|e> a)
 
 // Row renderers are sampled once while their live closures retain the item and
 // index accessors.  Widen the handled sample back to the DOM apply row so Koka
-// does not prematurely close a surrounding structural-owner action at `<ui>`.
+// does not prematurely close a surrounding lifetime-scope action at `<ui>`.
 fun reactive-sample(root : root<<ui>>,
                     action : () -> <signal-read,pure> a)
                    : <signal-write,pure,ui> a
@@ -609,8 +609,8 @@ fun reactive-write-ui(action : () -> signal-write a)
                      : <signal-write,pure,ui|e> a
   mask<ui>{ mask<exn>{ mask<div>{ action() } } }
 
-fun reactive-structural(action : () -> <div,exn,ui|e> a)
-                       : <signal-write,pure,ui|e> a
+fun reactive-integration(action : () -> <div,exn,ui|e> a)
+                         : <signal-write,pure,ui|e> a
   mask<signal-write>{ action() }
 
 fun insert(parent : node, before : maybe<node>, child : node) : <ui,exn> ()
@@ -893,7 +893,7 @@ fun dispose-keyed-rows<a,k,e::E>(rows : list<keyed-row<e,a,k>>)
                                   : <ui,exn> ()
   // A throwing cleanup cannot prevent later draft/stale rows from retiring.
   exhaust-keyed-row-actions(rows,fn(row)
-    internal/dispose-structural-owner(row.row-owner)
+    row.row-scope.dispose
   )
 
 fun rollback-keyed-order<a,k,e::E>(parent : node, last : node,
@@ -1031,7 +1031,7 @@ fun create-keyed-row<a,k,e::E>(
       children : (item : accessor<a>, index : accessor<int>)
                  -> <html<e>,signal-read> ())
     : <signal-write,ui,pure> keyed-row<e,a,k>
-  val owner = internal/open-structural-owner(root)
+  val scope = open-lifetime-scope(root)
   val committed = transaction-cell(False)
   val installed = transaction-cell(False)
   val range-owned = transaction-cell(False)
@@ -1039,17 +1039,17 @@ fun create-keyed-row<a,k,e::E>(
     fn() {
       if transaction-load(committed) then ()
       else reactive-ui-exn-open{
-        internal/dispose-structural-owner(owner)
+        scope.dispose
       }
     },
     fn()
-      internal/with-structural-owner(root,owner,fn()
+      with-lifetime-scope(root,scope,fn()
         val first = dom-attempt{ dom-create-comment("kokaine:for-row") }
         val row-last = dom-attempt{ dom-create-comment("/kokaine:for-row") }
         finally(
           fn() {
             // Cover the tiny interval between publishing the pair and parking
-            // its owner cleanup.  The pair insertion primitive compensates a
+            // its scope cleanup.  The pair insertion primitive compensates a
             // commit-then-throw before `installed` can become true.
             if transaction-load(installed) &&
                !transaction-load(range-owned)
@@ -1080,10 +1080,10 @@ fun create-keyed-row<a,k,e::E>(
             mount-view(renderer,root,parent,Just(row-last),tree)
             // Keep descendant bootstrap capabilities queued until every draft
             // row is reachable from the reconciler's rollback ledger.  The
-            // reconciler settles all draft owners as one targeted set.
+            // reconciler settles all draft scopes as one targeted set.
             val row = Keyed-row(
               identity,transaction-cell(item),transaction-cell(index),
-              item-source,index-source,owner,first,row-last)
+              item-source,index-source,scope,first,row-last)
             transaction-store(committed,True)
             row
         )
@@ -1093,7 +1093,7 @@ fun create-keyed-row<a,k,e::E>(
 fun reconcile-keyed<a,k,e::E>(
       renderer : keyed-context, root : root<<ui>>,
       parent : node, first : node, last : node,
-      owner : structural-owner<<ui>>,
+      scope : lifetime-scope<<ui>>,
       table : ref<global,keyed-table<e,a,k>>, items : list<a>,
       key : (a) -> k,
       compare : (k,k) -> order, item-equals : (a,a) -> bool,
@@ -1109,7 +1109,7 @@ fun reconcile-keyed<a,k,e::E>(
       // The outermost reconciler opens a local bootstrap provision. A nested
       // keyed adapter resolves the matching renderer journal but receives no
       // lease, so only the outer participation can terminate reactive work.
-      val participation = reactive-structural{
+      val participation = reactive-integration{
         open-keyed-participation(renderer,root)
       }
       val owns-provision = participation.is-owned
@@ -1211,7 +1211,7 @@ fun reconcile-keyed<a,k,e::E>(
             // Every draft is now rollback-reachable and all comparator work has
             // succeeded. Drain only this provision's bootstrap FIFO; resume
             // work remains on the root's global frontier.
-            reactive-structural{
+            reactive-integration{
               drain-keyed-participation(renderer,participation)
             }
 
@@ -1234,11 +1234,11 @@ fun reconcile-keyed<a,k,e::E>(
             else ()
 
             // Moving a row may synchronously reconnect custom elements. Validate
-            // the complete region before publishing owner or table state.
+            // the complete region before publishing scope or table state.
             val placed = range-first(parent,first,last)
             validate-keyed-order(parent,last,placed,physical-order)
-            reactive-structural{
-              internal/with-structural-owner(root,owner,fn() ())
+            reactive-integration{
+              with-lifetime-scope(root,scope,fn() ())
             }
 
             // Snapshot every stale range while its markers are still connected.
@@ -1250,13 +1250,13 @@ fun reconcile-keyed<a,k,e::E>(
             // reactive provision lease is promoted. Publication is then a
             // total renderer-owned suffix; the scheduler never stores DOM
             // callbacks.
-            reactive-structural{
+            reactive-integration{
               prepare-keyed-transaction(publication-transaction)
             }
-            reactive-structural{
+            reactive-integration{
               promote-keyed-participation(participation)
             }
-            reactive-structural{
+            reactive-integration{
               publish-keyed-transaction(publication-transaction)
             }
             reactive-write-ui{
@@ -1280,7 +1280,7 @@ fun reconcile-keyed<a,k,e::E>(
             if !old-order.is-nil || !stale.is-nil
             then throw("joined keyed reconciliation must be initial construction")
             else ()
-            reactive-structural{
+            reactive-integration{
               stage-keyed-publication(
                 publication-transaction,
                 fn() pretend-no-div{
@@ -1296,7 +1296,7 @@ fun reconcile-keyed<a,k,e::E>(
                   else ()
                   val placed = range-first(parent,first,last)
                   validate-keyed-order(parent,last,placed,final-order)
-                  internal/with-structural-owner(root,owner,fn() ())
+                  with-lifetime-scope(root,scope,fn() ())
                 },
                 fn(){
                   transaction-store(
@@ -1327,7 +1327,7 @@ fun mount-keyed-fields<s,a,k,e::E>(
       children : (item : accessor<a>, index : accessor<int>)
                  -> <html<e>,signal-read> ())
     : <signal-write,ui,pure> ()
-  val owner = internal/open-structural-owner(root)
+  val scope = open-lifetime-scope(root)
   val committed = transaction-cell(False)
   val installed = transaction-cell(False)
   val range-owned = transaction-cell(False)
@@ -1335,11 +1335,11 @@ fun mount-keyed-fields<s,a,k,e::E>(
     fn() {
       if transaction-load(committed) then ()
       else reactive-ui-exn-open{
-        internal/dispose-structural-owner(owner)
+        scope.dispose
       }
     },
     fn()
-      internal/with-structural-owner(root,owner,fn()
+      with-lifetime-scope(root,scope,fn()
         val first = dom-attempt{ dom-create-comment("kokaine:for") }
         val last = dom-attempt{ dom-create-comment("/kokaine:for") }
         finally(
@@ -1364,7 +1364,7 @@ fun mount-keyed-fields<s,a,k,e::E>(
               kokaine/internal/key-index/empty(),[],[]))
             val dispose = create-effect(
               root,fn() tracked(read),fn(snapshot)
-                internal/with-structural-owner(root,owner,fn()
+                with-lifetime-scope(root,scope,fn()
                   // Keep the higher-ranked source walker local to the packed
                   // collection closure.  Koka 3.2.3 mis-specializes it if it
                   // crosses another generic function boundary.  This still
@@ -1374,7 +1374,7 @@ fun mount-keyed-fields<s,a,k,e::E>(
                     transaction-store(items,
                       Cons(item,transaction-load(items)))
                   reconcile-keyed(
-                    renderer,root,parent,first,last,owner,table,
+                    renderer,root,parent,first,last,scope,table,
                     transaction-load(items).reverse,
                     key,compare,item-equals,children)
                 )

@@ -347,7 +347,7 @@ pub fun attempt-build(plane : plane<e>,
       capture-error(action)
   )
 
-pub fun with-frame(plane : plane<e>, current : frame<e>,
+pub fun with-frame(plane : plane<r>, current : frame<r>,
                action : () -> <div,exn|e> a) : <div,exn|e> a
   val previous = load(plane.plane-current-frame)
   finally(
@@ -363,8 +363,8 @@ pub fun with-current(plane : plane<e>, current : trace<e>, current-frame : frame
     Nothing -> with-context(plane,Nothing,current-frame,action)
     Just(gate) -> with-context(plane,Just(gate),current-frame,action)
 
-pub fun with-context(plane : plane<e>, current : maybe<continuation-gate>,
-                 current-frame : frame<e>,
+pub fun with-context(plane : plane<r>, current : maybe<continuation-gate>,
+                 current-frame : frame<r>,
                  action : () -> <div,exn|e> a) : <div,exn|e> a
   val previous = load(plane.plane-current)
   finally(
