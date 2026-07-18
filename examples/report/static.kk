@@ -230,10 +230,10 @@ pub fun render-wasm()
           target-route("JS event snapshot","reenter","resume event K")
 
     div(attrs=[class("boundary-note")])
-      element("h3","structural reentry 恢复什么，又不恢复什么？")
+      element("h3","lifetime reentry 恢复什么，又不恢复什么？")
       p
         inline-code("reenter")
-        text(" 本身仍是 non-resumptive structural capability：它检查 frame、恢复 effect-plane gate 与 generation frame、清除 state-entry target，并安装新的读写 handler。随后 adapter 在这个 batch 内同步 resume 独立的 event continuation；因此嵌套 ")
+        text(" 本身仍是 non-resumptive lifetime capability：它检查 frame、恢复 effect-plane gate 与 generation frame，并安装新的读写 handler。随后 adapter 在这个 batch 内同步 resume 独立的 event continuation；因此嵌套 ")
         inline-code("dispatchEvent")
         text(" 与 ")
         inline-code("preventDefault")

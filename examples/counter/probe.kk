@@ -49,7 +49,7 @@ pub fun render-probe(root, model : lab-model)
     div(attrs=[class("panel__heading")])
       div
         p("CONTINUATION LIFETIME",attrs=[class("kicker")])
-        h2("Re-entry & structural cleanup")
+        h2("Re-entry & lifetime cleanup")
       label(attrs=[class("switch")])
         input(attrs=[
           id("probe-toggle"),kind("checkbox"),

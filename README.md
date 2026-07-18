@@ -3,7 +3,7 @@
 Kokaine is an experimental fine-grained UI runtime for
 [Koka](https://koka-lang.github.io/koka/doc/book.html). Signal operations and
 the HTML vocabulary are exposed as algebraic effects; propagation resumes
-captured continuations, while continuation frames record structural lifetime.
+captured continuations, while continuation frames record reactive lifetime.
 The browser layer uses an effect-handled Koka DSL instead of JSX or a virtual
 DOM.
 
@@ -81,9 +81,9 @@ attempts.
   scheduling advances the earliest runnable ancestor and lets replacement
   retire or supersede its old descendants; there is no read de-duplication token
   or dirty observer.
-- Each source indexes rank-2 packages containing the actual execution plane,
-  target trace, and owning read trace. There are no subscriber wake closures,
-  retained calculation actions, or old-style Observer dependency graph.
+- Each source indexes rank-2 packages containing the actual execution plane and
+  captured read trace. There are no subscriber wake closures, retained
+  calculation actions, or old-style Observer dependency graph.
 - This index, parent gates, and child traces are graph-shaped runtime data. The
   precise claim is **no separate Observer dependency graph**, not "no graph at
   all."
@@ -106,15 +106,14 @@ attempts.
 - The pure plane is dynamically read-only. Hidden signal writes and structural
   registration are rejected before mutating a source, queue, or lifetime registry;
   the phase is restored across exceptions and abortive final control.
-- `derive` is stateless: its captured read suffix calculates from current
-  inputs. `memo(previous)` adds a separate state-entry continuation that
-  injects the latest successfully committed output without subscribing to its
-  own source. Both publish through source equality before downstream work is
-  invalidated.
+- The `derive` family is stateless: its captured read suffix calculates from
+  current inputs and publishes through source equality before downstream work
+  is invalidated. Accumulated values are explicit state: a `signal` stores the
+  value and `create-effect` tracks the inputs before modifying that signal.
 - Unequal commits advance the source version and invalidate its indexed
   continuations. Equality cuts propagation before downstream work is scheduled.
 - Replacement generations are built as drafts. Failure or abortive final
-  control retires unpublished continuations and structural children while the
+  control retires unpublished continuations and lifetime children while the
   committed source value and pending retry K remain explicit.
 - Continuation frames own nested effects, derivations, and opaque parked
   resource continuations through removable lifetime registrations. Retirement
@@ -123,9 +122,10 @@ attempts.
   idempotent path.
 - Nested batches delay settling while making newly committed source values
   immediately readable. Host re-entry is also one atomic batched turn.
-- Browser listeners capture a typed `reentry<e>` containing their registering
-  generation's root, gate, and frame, plus a guarded multi-shot event K that
-  contains the user action. Re-entry restores the structural context and
+- Browser listeners use the integration layer's typed `reentry<e>` containing
+  their registering generation's root, gate, and frame, plus a guarded
+  multi-shot event K that
+  contains the user action. Re-entry restores the owning lifetime context and
   synchronously resumes that K; a retired generation rejects later delivery,
   so event-created reactive work cannot escape to the root.
 - A listener's `run-async` delimiter executes direct-style code only through
@@ -308,7 +308,7 @@ demo component:
 
 | Module | What it demonstrates |
 | --- | --- |
-| `model.kk` | Sources, dynamic `derive`, custom equality, `memo(previous)`, `untrack`, `signal-always`, and a tracked/apply effect sink. |
+| `model.kk` | Sources, dynamic `derive`, custom equality, explicit accumulated signals, `untrack`, `signal-always`, and tracked/apply effect sinks. |
 | `actions.kk` | Ordinary writes, explicit batches, and callback-created effects and cleanups. |
 | `controls.kk` | Typed events plus live value, checked, and disabled DOM properties. |
 | `meter.kk` | Fine-grained live text/attributes and a visible `source -> captured suffix -> DOM effect` trace. |
@@ -318,7 +318,8 @@ demo component:
 `examples/counter.kk` is only the browser entry point: it creates the root and
 model, composes the page, and mounts it. In the lab, changing the inactive
 channel demonstrates dependency pruning and switching the selector replaces
-the dynamic branch; crossing zero shows custom equality and state entry;
+the dynamic branch; crossing zero shows custom equality and explicit
+accumulation through a signal/effect pair;
 editing the operator separates tracked reads from `untrack`; repeatedly
 publishing heartbeat `0` demonstrates `signal-always`; and retiring the probe
 region removes its listener, child effect, and cleanup as one
@@ -511,14 +512,19 @@ callback and returns a disposer. Use the public `run-async(root, action)`
 delimiter when starting the same kind of task from another live reactive turn.
 Every resumed suffix uses a fresh base async interpreter. Active tasks in one
 lexical cancellation scope share a registry-backed supervisor and one
-structural cleanup registration. Completion unlinks its task in O(1); cancel or
+lifetime cleanup registration. Completion unlinks its task in O(1); cancel or
 retirement first claims every sibling `TaskState`, detaches the supervisor, and
 then unwinds every cancellation continuation and user `finally` before invoking
 any host disposer. Scope lookup is direct while a separate intrusive registry
 provides subtree enumeration; neither completion nor sibling-heavy setup scans
 an accumulated task list.
-Host turns re-enter through the explicit application runner supplied by the
-runtime instead of fabricating handlers from an escaped dynamic stack.
+Async owns a rank-2 `host-turn-runner` around each complete completion or
+cancellation turn. The current closed Web surface supplies an identity runtime
+function, but its polymorphic type still closes the family row before the turn
+becomes a retained `ui` callback. Reactive re-entry then restores only the
+captured reactive lifetime and handlers; neither layer fabricates an escaped
+dynamic handler stack. DOM event callbacks use their separate closed event-K
+boundary and do not pass through the Async host-turn runner.
 Fetch header delivery installs a generation-owned disposer lease;
 `response.text` and `response.json` transfer it only after the body await is
 registered, while `response.discard` releases an unconsumed response explicitly.
@@ -575,15 +581,16 @@ action explicitly transfers that ownership back to application code.
   initial queue drains successfully; a failed action or bootstrap retires the
   unpublished root and its registered resources.
 - `signal`, `signal-by`, and `signal-always` select equality behavior.
-- `derive`, `derive-by`, and `derive-always` cache stateless derived values.
-- `memo`, `memo-by`, and `memo-always` add a state entry that receives the
-  previous successfully committed value.
+- `derive`, `derive-by`, and `derive-always` create stateless read-only
+  `memo<a>` values. Use `signal` plus `create-effect` when a value must
+  accumulate across updates.
 - `create-effect(root, track, apply)` tracks only `track`; reads performed by
   `apply` do not silently become dependencies.
 - `on-cleanup` parks a one-shot resource continuation under the current owner.
   Disposers returned by `create-effect` finalize the complete owned subtree.
-- `capture-reentry` and `reenter` let a host callback re-enter the exact
-  continuation generation that registered it. They restore Kokaine's reactive
+- `kokaine/reactive/integration` exposes `capture-reentry` and `reenter` so a
+  host callback can re-enter the exact continuation generation that registered
+  it. They restore Kokaine's reactive
   structure, not arbitrary lexical effect handlers. DOM listeners additionally
   park the user action in an opaque multi-shot event continuation; the host
   callback only snapshots the event and synchronously resumes that capability.
@@ -605,9 +612,9 @@ action explicitly transfers that ownership back to application code.
   typed listeners form the HTML DSL. A listener callback has the closed
   `<signal-read,signal-write,ui,async,pure>` capability row; unsupported
   application effects are rejected instead of escaping into a later host turn.
-- `branch` and `when` consume memos and delimit conditional regions. List and
-  vector `for` consume a sequential collection reader plus stable-key function;
-  row item/index accessors are reactive but read-only.
+- `branch` and `when` consume read-only memos and delimit conditional regions.
+  List and vector `for` consume a sequential collection reader plus stable-key
+  function; row item/index accessors are reactive but read-only.
 - `mount`/`unmount` interpret a view into validated DOM ranges. Browser mounts
   likewise require a `root<<ui>>`, because a tree may contain a retained
   listener. A mount into a
@@ -648,7 +655,10 @@ examples/counter/probe.kk                   dynamic region and re-entry lifetime
 examples/counter/app.kk                     page composition
 src/kokaine/reactive.kk                    opaque public facade
 src/kokaine/reactive/effects.kk            signal read/write effect operations
-src/kokaine/reactive/integration.kk        borrowed provisions and owner leases
+src/kokaine/reactive/integration.kk        host re-entry, provisions, and lifetime scopes
+src/kokaine/reactive/integration/internal/lifetime-scope.kk persistent integration lifetimes
+src/kokaine/reactive/integration/internal/provision.kk provisional work orchestration
+src/kokaine/reactive/integration/internal/reentry.kk captured host re-entry
 src/kokaine/reactive/internal/model.kk     traces, planes, scopes, and capabilities
 src/kokaine/reactive/internal/capture.kk   exact read-suffix reification
 src/kokaine/internal/registry.kk           removable O(1) lifetime registrations
@@ -656,10 +666,9 @@ src/kokaine/reactive/internal/lifetime.kk  detached two-phase retirement
 src/kokaine/reactive/internal/resource.kk  opaque parked resource continuations
 src/kokaine/reactive/internal/work-transaction.kk deque and local work groups
 src/kokaine/reactive/internal/scheduler.kk invalidation, queues, targeted settle
-src/kokaine/reactive/internal/structural.kk retained integration lifetimes
 src/kokaine/reactive/internal/handlers.kk  signal interpreters and dispatch
-src/kokaine/reactive/internal/reentry.kk   batched structural host re-entry
 src/kokaine/reactive/async.kk             generation-owned Async integration
+src/kokaine/reactive/async/internal/host-turn.kk rank-2 retained-turn closure
 src/kokaine/reactive/async/internal/runtime.kk Web await interpreter
 src/kokaine/reactive/internal/runtime.kk   roots and high-level reactive values
 src/kokaine/reactive/internal/bridge.kk    names used by the public facade
@@ -684,11 +693,10 @@ test/resource-finalization.kk              resource-K parking and finalization
 test/structural-scopes.kk                  ownership and cleanup generations
 test/targeted-settle*.kk                   isolated and transitive memo settling
 test/execution-planes.kk                   pure/effect plane behavior
-test/stateful-entry-gates.kk               memo(previous) entry semantics
-test/entry-targeted-settle.kk              entry routing and recovery canaries
+test/derived-structural.kk                 derived ownership and replacement
 test/final-control-rollback.kk              abandoned generation rollback
 test/continuation-reentry.kk               callback-created ownership and staleness
-test/reactive*.kk                          compatibility, advanced, and stress suites
+test/reactive*.kk                          core, advanced, and stress suites
 test/control-flow.kk                       branch/when/For snapshots and duplicate keys
 test/key-index.kk                          balanced-index correctness and growth bound
 test/integration-boundaries.kk             retained lifetimes and provision leases
@@ -725,7 +733,7 @@ row identity and lifetime unambiguous.
 Browser delivery still begins at an ordinary host ABI callback, but that
 callback no longer calls the user action directly. Listener installation parks
 the action behind `await-browser-event`; delivery snapshots the event, restores
-the structural/reactive context with `reentry<<ui>>`, and synchronously resumes the
+the lifetime/reactive context with `reentry<<ui>>`, and synchronously resumes the
 opaque multi-shot event K. Multi-shot is required because DOM dispatch may nest
 before the outer action returns. Retirement changes the capability to
 `Event-retired`, clears the trampoline's retained action cell, and only then

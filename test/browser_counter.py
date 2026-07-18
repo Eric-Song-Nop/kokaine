@@ -2,7 +2,7 @@
 
 The public example exercises dynamic tracked suffixes, equality publication
 boundaries, explicit accumulated state, untracked sampling, explicit batching,
-host re-entry, and structural cleanup. The separate lifecycle fixture keeps
+host re-entry, and lifetime cleanup. The separate lifecycle fixture keeps
 the lower-level disposal and stale-listener stress checks.
 """
 
