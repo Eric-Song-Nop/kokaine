@@ -1,4 +1,4 @@
-// Koka generated module: kokaine/reactive/internal/application-runner, koka version: 3.2.4
+// Koka generated module: kokaine/reactive/async/internal/host-turn, koka version: 3.2.4
 "use strict";
  
 // imports
@@ -28,35 +28,35 @@ import * as $std_core from './std_core.mjs';
 // externals
  
 // type declarations
-// type app-runner
-export function App_runner(run_app) /* forall<e,e1> (run-app : forall<a> (() -> e a) -> e1 a) -> app-runner<e,e1> */  {
-  return run_app;
+// type host-turn-runner
+export function Host_turn_runner(run_host_turn) /* forall<e,e1> (run-host-turn : forall<a> (() -> e a) -> e1 a) -> host-turn-runner<e,e1> */  {
+  return run_host_turn;
 }
  
 // declarations
  
  
-// Automatically generated. Retrieves the `run-app` constructor field of the `:app-runner` type.
-export function app_runner_fs_run_app(_this) /* forall<e,e1,a> (app-runner<e,e1>) -> ((() -> e a) -> e1 a) */  {
+// Automatically generated. Retrieves the `run-host-turn` constructor field of the `:host-turn-runner` type.
+export function host_turn_runner_fs_run_host_turn(_this) /* forall<e,e1,a> (host-turn-runner<e,e1>) -> ((() -> e a) -> e1 a) */  {
   return _this;
 }
  
  
 // monadic lift
-export function app_runner_fs__mlift_copy_10006(_c_x10002) /* forall<a,e,e1> ((() -> e a) -> e1 a) -> (forall<a> (() -> e a) -> e1 a) */  {
+export function host_turn_runner_fs__mlift_copy_10006(_c_x10002) /* forall<a,e,e1> ((() -> e a) -> e1 a) -> (forall<a> (() -> e a) -> e1 a) */  {
   return _c_x10002;
 }
  
  
 // monadic lift
-export function app_runner_fs__mlift_copy_10007(_c_x10003) /* forall<e,e1> (forall<a> (() -> e a) -> e1 a) -> app-runner<e,e1> */  {
+export function host_turn_runner_fs__mlift_copy_10007(_c_x10003) /* forall<e,e1> (forall<a> (() -> e a) -> e1 a) -> host-turn-runner<e,e1> */  {
   return _c_x10003;
 }
  
-export function app_runner_fs__copy(_this, run_app) /* forall<e,e1> (app-runner<e,e1>, run-app : ? (forall<a> (() -> e a) -> e1 a)) -> app-runner<e,e1> */  {
+export function host_turn_runner_fs__copy(_this, run_host_turn) /* forall<e,e1> (host-turn-runner<e,e1>, run-host-turn : ? (forall<a> (() -> e a) -> e1 a)) -> host-turn-runner<e,e1> */  {
    
-  if (run_app !== undefined) {
-    var x_10008 = run_app;
+  if (run_host_turn !== undefined) {
+    var x_10008 = run_host_turn;
   }
   else {
     if ($std_core_hnd._yielding()) {
@@ -79,6 +79,6 @@ export function app_runner_fs__copy(_this, run_app) /* forall<e,e1> (app-runner<
   }
 }
  
-export function app_runner_fs_run(runner, action) /* forall<a,e,e1> (runner : app-runner<e,e1>, action : () -> e a) -> e1 a */  {
+export function host_turn_runner_fs_run(runner, action) /* forall<a,e,e1> (runner : host-turn-runner<e,e1>, action : () -> e a) -> e1 a */  {
   return runner(action);
 }

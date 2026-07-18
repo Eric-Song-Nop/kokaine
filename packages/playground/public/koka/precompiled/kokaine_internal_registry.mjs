@@ -184,7 +184,7 @@ export function registry_fs_count(target) /* forall<a> (target : registry<a>) ->
 }
  
  
-// Internal observability for structural ownership tests. Unlike `count` or
+// Internal observability for lifetime ownership tests. Unlike `count` or
 // `snapshot`, this detects an empty tombstone still retained by the registry.
 export function registry_fs_has_linked_nodes(target) /* forall<a> (target : registry<a>) -> bool */  {
   var _x7 = (target.registry_head).value;

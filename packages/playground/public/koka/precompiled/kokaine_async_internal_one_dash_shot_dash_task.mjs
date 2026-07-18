@@ -1,4 +1,4 @@
-// Koka generated module: kokaine/reactive/internal/one-shot-task, koka version: 3.2.4
+// Koka generated module: kokaine/async/internal/one-shot-task, koka version: 3.2.4
 "use strict";
  
 // imports

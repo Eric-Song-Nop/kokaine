@@ -27,12 +27,7 @@ import * as $std_core from './std_core.mjs';
 import * as $kokaine_reactive_internal_model from './kokaine_reactive_internal_model.mjs';
 import * as $kokaine_reactive_effects from './kokaine_reactive_effects.mjs';
 import * as $kokaine_reactive_internal_runtime from './kokaine_reactive_internal_runtime.mjs';
-import * as $kokaine_reactive_internal_reentry from './kokaine_reactive_internal_reentry.mjs';
-import * as $kokaine_reactive_internal_structural from './kokaine_reactive_internal_structural.mjs';
-import * as $kokaine_reactive_internal_async_dash_runtime from './kokaine_reactive_internal_async_dash_runtime.mjs';
-import * as $kokaine_async_effects from './kokaine_async_effects.mjs';
 import * as $kokaine_reactive_internal_handlers from './kokaine_reactive_internal_handlers.mjs';
-import * as $kokaine_reactive_internal_scheduler from './kokaine_reactive_internal_scheduler.mjs';
  
 // externals
  
@@ -62,21 +57,21 @@ export function runtime_update(root, action) /* forall<a,e> (root : kokaine/reac
  
  
 // monadic lift
-export function _mlift_runtime_sample_10058(action, _y_x10029) /* forall<a,e> (action : () -> <kokaine/reactive/effects/signal-read,pure|e> a, hnd/ev-index) -> <kokaine/reactive/effects/signal-write,div,exn,kokaine/reactive/effects/signal-read|e> a */  {
-  return $std_core_hnd._mask_at(_y_x10029, false, action);
+export function _mlift_runtime_sample_10030(action, _y_x10017) /* forall<a,e> (action : () -> <kokaine/reactive/effects/signal-read,pure|e> a, hnd/ev-index) -> <kokaine/reactive/effects/signal-write,div,exn,kokaine/reactive/effects/signal-read|e> a */  {
+  return $std_core_hnd._mask_at(_y_x10017, false, action);
 }
  
 export function runtime_sample(root, action) /* forall<a,e> (root : kokaine/reactive/internal/model/root<e>, action : () -> <kokaine/reactive/effects/signal-read,pure|e> a) -> <exn|e> a */  {
   return $kokaine_reactive_internal_handlers.dispatch_handled(root, function() {
        
-      var x_10060 = $std_core_hnd._evv_index($kokaine_reactive_effects.signal_write_fs__tag);
+      var x_10032 = $std_core_hnd._evv_index($kokaine_reactive_effects.signal_write_fs__tag);
       if ($std_core_hnd._yielding()) {
-        return $std_core_hnd.yield_extend(function(_y_x10029 /* hnd/ev-index */ ) {
-          return $std_core_hnd._mask_at(_y_x10029, false, action);
+        return $std_core_hnd.yield_extend(function(_y_x10017 /* hnd/ev-index */ ) {
+          return $std_core_hnd._mask_at(_y_x10017, false, action);
         });
       }
       else {
-        return $std_core_hnd._mask_at(x_10060, false, action);
+        return $std_core_hnd._mask_at(x_10032, false, action);
       }
     });
 }
@@ -109,10 +104,6 @@ export function runtime_derive_by(root, initial, calculate, equals) /* forall<a,
   return $kokaine_reactive_internal_runtime.derive_by_inner(root, initial, calculate, equals);
 }
  
-export function runtime_memo_by(root, initial, calculate, equals) /* forall<a,e> (root : kokaine/reactive/internal/model/root<e>, initial : a, calculate : (previous : a) -> <kokaine/reactive/effects/signal-read,pure> a, equals : (a, a) -> bool) -> <kokaine/reactive/effects/signal-write,pure> kokaine/reactive/internal/model/memo<a> */  {
-  return $kokaine_reactive_internal_runtime.memo_by_inner(root, initial, calculate, equals);
-}
- 
 export function runtime_memo_get(value) /* forall<a> (value : kokaine/reactive/internal/model/memo<a>) -> kokaine/reactive/effects/signal-read a */  {
   return $kokaine_reactive_internal_runtime.memo_fs_get(value);
 }
@@ -123,86 +114,19 @@ export function runtime_create_effect(root, track, apply) /* forall<a,e> (root :
  
  
 // monadic lift
-export function _mlift_runtime_on_cleanup_10059(_pat) /* forall<e> (kokaine/reactive/internal/model/cleanup-registration<e>) -> exn () */  {
+export function _mlift_runtime_on_cleanup_10031(_pat) /* forall<e> (kokaine/reactive/internal/model/cleanup-registration<e>) -> exn () */  {
   return $std_core_types.Unit;
 }
  
 export function runtime_on_cleanup(root, cleanup) /* forall<e> (root : kokaine/reactive/internal/model/root<e>, cleanup : () -> <kokaine/reactive/effects/signal-write,pure|e> ()) -> exn () */  {
    
-  var x_10064 = $kokaine_reactive_internal_runtime.register_cleanup(root, cleanup);
+  var x_10036 = $kokaine_reactive_internal_runtime.register_cleanup(root, cleanup);
   if ($std_core_hnd._yielding()) {
-    return $std_core_hnd.yield_extend(function(_pat_1 /* kokaine/reactive/internal/model/cleanup-registration<719> */ ) {
+    return $std_core_hnd.yield_extend(function(_pat_1 /* kokaine/reactive/internal/model/cleanup-registration<579> */ ) {
       return $std_core_types.Unit;
     });
   }
   else {
     return $std_core_types.Unit;
   }
-}
- 
-export function runtime_capture_reentry(root) /* forall<e> (root : kokaine/reactive/internal/model/root<e>) -> exn kokaine/reactive/internal/model/reentry<e> */  {
-  return $kokaine_reactive_internal_reentry.capture_reentry(root);
-}
- 
-export function runtime_run_reentry(value, action) /* forall<a,e> (value : kokaine/reactive/internal/model/reentry<e>, action : () -> <kokaine/reactive/effects/signal-read,kokaine/reactive/effects/signal-write,pure|e> a) -> <exn|e> a */  {
-  return $kokaine_reactive_internal_reentry.run_reentry(value, action);
-}
- 
-export function runtime_open_structural_owner(root) /* forall<e> (root : kokaine/reactive/internal/model/root<e>) -> exn kokaine/reactive/internal/structural/structural-owner<e> */  {
-  return $kokaine_reactive_internal_structural.open_structural_owner(root);
-}
- 
-export function runtime_with_structural_owner(root, owner, action) /* forall<a,e,e1> (root : kokaine/reactive/internal/model/root<e1>, owner : kokaine/reactive/internal/structural/structural-owner<e1>, action : () -> <div,exn|e> a) -> <div,exn|e> a */  {
-  return $kokaine_reactive_internal_structural.with_structural_owner(root, owner, action);
-}
- 
-export function runtime_dispose_structural_owner(owner) /* forall<e> (owner : kokaine/reactive/internal/structural/structural-owner<e>) -> <exn|e> () */  {
-  return $kokaine_reactive_internal_structural.dispose_structural_owner(owner);
-}
- 
-export function runtime_open_structural_transaction(root) /* forall<e> (root : kokaine/reactive/internal/model/root<e>) -> exn kokaine/reactive/internal/structural/structural-transaction<e> */  {
-  return $kokaine_reactive_internal_structural.open_structural_transaction(root);
-}
- 
-export function runtime_drain_structural_transaction(transaction) /* forall<e> (transaction : kokaine/reactive/internal/structural/structural-transaction<e>) -> <div,exn|e> () */  {
-  if (transaction.structural_authority === 1) {
-    return $kokaine_reactive_internal_scheduler.drain_work_transaction(transaction.structural_transaction_root, transaction.structural_scheduler);
-  }
-  else {
-    return $std_core_types.Unit;
-  }
-}
- 
-export function runtime_structural_transaction_owned(transaction) /* forall<e> (transaction : kokaine/reactive/internal/structural/structural-transaction<e>) -> bool */  {
-  return (transaction.structural_authority === 1);
-}
- 
-export function runtime_stage_structural_publication(transaction, prepare, publish, rollback) /* forall<e> (transaction : kokaine/reactive/internal/structural/structural-transaction<e>, prepare : () -> <exn|e> (), publish : () -> (), rollback : () -> <exn|e> ()) -> exn () */  {
-  return $kokaine_reactive_internal_scheduler.stage_work_publication(transaction.structural_transaction_root, transaction.structural_scheduler, prepare, publish, rollback);
-}
- 
-export function runtime_commit_structural_transaction(transaction) /* forall<e> (transaction : kokaine/reactive/internal/structural/structural-transaction<e>) -> <div,exn|e> () */  {
-  if (transaction.structural_authority === 1) {
-    return $kokaine_reactive_internal_scheduler.commit_work_transaction(transaction.structural_transaction_root, transaction.structural_scheduler);
-  }
-  else {
-    return $std_core_types.Unit;
-  }
-}
- 
-export function runtime_abort_structural_transaction(transaction) /* forall<e> (transaction : kokaine/reactive/internal/structural/structural-transaction<e>) -> <exn|e> () */  {
-  if (transaction.structural_authority === 1) {
-    return $kokaine_reactive_internal_scheduler.abort_work_transaction(transaction.structural_transaction_root, transaction.structural_scheduler);
-  }
-  else {
-    return $std_core_types.Unit;
-  }
-}
- 
- 
-// Browser async is interpreted only at explicit application/task boundaries.
-// Keeping this bridge separate from `dispatch` prevents async from entering
-// derivation or scheduler APIs merely because a root happens to carry `ui`.
-export function runtime_run_generation_async(root, action) /* (root : kokaine/reactive/internal/model/root<ui>, action : () -> <pure,kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue,kokaine/reactive/effects/signal-read,kokaine/reactive/effects/signal-write,ui> ()) -> <pure,kokaine/reactive/effects/signal-read,kokaine/reactive/effects/signal-write,ui> () */  {
-  return $kokaine_reactive_internal_async_dash_runtime.run_generation_async(root, action);
 }

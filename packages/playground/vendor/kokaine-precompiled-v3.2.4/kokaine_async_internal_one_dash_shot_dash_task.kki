@@ -4,7 +4,7 @@
   Every transition stores its winning state before returning a payload. No
   user callback, disposer, or continuation runs while the cell is claimable.
 --------------------------------------------------------------------------*/
-module interface kokaine/reactive/internal/one-shot-task
+module interface kokaine/async/internal/one-shot-task
  
 //------------------------------
 //#kki: import declarations

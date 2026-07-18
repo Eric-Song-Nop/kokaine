@@ -68,12 +68,9 @@ export function Built_trace(built_root, built_publish) /* forall<e> (built-root 
   return { built_root: built_root, built_publish: built_publish };
 }
 // type trace
-export const Trace_end = { _tag: 1 }; // forall<e> trace<e>
-export function Trace_read(trace_gate, trace_owner, trace_entry_target, trace_child, trace_frame, trace_resume, trace_finalize, trace_unlink, trace_stale) /* forall<e> (trace-gate : continuation-gate, trace-owner : ref<global,maybe<derive-producer>>, trace-entry-target : maybe<trace<e>>, trace-child : ref<global,trace<e>>, trace-frame : ref<global,frame<e>>, trace-resume : (frame<e>) -> <div,exn|e> built-trace<e>, trace-finalize : () -> <div,exn|e> (), trace-unlink : () -> (), trace-stale : () -> bool) -> trace<e> */  {
-  return { _tag: 2, trace_gate: trace_gate, trace_owner: trace_owner, trace_entry_target: trace_entry_target, trace_child: trace_child, trace_frame: trace_frame, trace_resume: trace_resume, trace_finalize: trace_finalize, trace_unlink: trace_unlink, trace_stale: trace_stale };
-}
-export function Trace_entry(entry_gate, entry_owner, entry_child, entry_frame, entry_resume, entry_finalize) /* forall<e> (entry-gate : continuation-gate, entry-owner : ref<global,maybe<derive-producer>>, entry-child : ref<global,trace<e>>, entry-frame : ref<global,frame<e>>, entry-resume : (frame<e>) -> <div,exn|e> built-trace<e>, entry-finalize : () -> <div,exn|e> ()) -> trace<e> */  {
-  return { _tag: 3, entry_gate: entry_gate, entry_owner: entry_owner, entry_child: entry_child, entry_frame: entry_frame, entry_resume: entry_resume, entry_finalize: entry_finalize };
+export const Trace_end = null; // forall<e> trace<e>
+export function Trace_read(trace_gate, trace_owner, trace_child, trace_frame, trace_resume, trace_finalize, trace_unlink, trace_stale) /* forall<e> (trace-gate : continuation-gate, trace-owner : ref<global,maybe<derive-producer>>, trace-child : ref<global,trace<e>>, trace-frame : ref<global,frame<e>>, trace-resume : (frame<e>) -> <div,exn|e> built-trace<e>, trace-finalize : () -> <div,exn|e> (), trace-unlink : () -> (), trace-stale : () -> bool) -> trace<e> */  {
+  return { trace_gate: trace_gate, trace_owner: trace_owner, trace_child: trace_child, trace_frame: trace_frame, trace_resume: trace_resume, trace_finalize: trace_finalize, trace_unlink: trace_unlink, trace_stale: trace_stale };
 }
 // type continuation-scope
 export function Scope(scope_lifetime, scope_body, scope_parent, scope_bootstrap_slot, scope_unlink) /* forall<e> (scope-lifetime : lifetime-owner<e>, scope-body : ref<global,trace<e>>, scope-parent : maybe<continuation-gate>, scope-bootstrap-slot : ref<global,maybe<() -> <div|e> error<()>>>, scope-unlink : ref<global,maybe<() -> bool>>) -> continuation-scope<e> */  {
@@ -88,8 +85,8 @@ export function Continuation_gate(gate_state, gate_parent, gate_input_producer) 
   return { gate_state: gate_state, gate_parent: gate_parent, gate_input_producer: gate_input_producer };
 }
 // type plane
-export function Plane(plane_queue, plane_work_group, plane_current, plane_current_entry, plane_current_frame, plane_draft, plane_retirement) /* forall<e> (plane-queue : kokaine/reactive/internal/work-transaction/work-queue<work<e>>, plane-work-group : ref<global,maybe<kokaine/reactive/internal/work-transaction/work-group<work<e>>>>, plane-current : ref<global,maybe<continuation-gate>>, plane-current-entry : ref<global,maybe<trace<e>>>, plane-current-frame : ref<global,frame<e>>, plane-draft : ref<global,maybe<ref<global,list<trace<e>>>>>, plane-retirement : retirement-coordinator<e>) -> plane<e> */  {
-  return { plane_queue: plane_queue, plane_work_group: plane_work_group, plane_current: plane_current, plane_current_entry: plane_current_entry, plane_current_frame: plane_current_frame, plane_draft: plane_draft, plane_retirement: plane_retirement };
+export function Plane(plane_queue, plane_work_group, plane_current, plane_current_frame, plane_draft, plane_retirement) /* forall<e> (plane-queue : kokaine/reactive/internal/work-transaction/work-queue<work<e>>, plane-work-group : ref<global,maybe<kokaine/reactive/internal/work-transaction/work-group<work<e>>>>, plane-current : ref<global,maybe<continuation-gate>>, plane-current-frame : ref<global,frame<e>>, plane-draft : ref<global,maybe<ref<global,list<trace<e>>>>>, plane-retirement : retirement-coordinator<e>) -> plane<e> */  {
+  return { plane_queue: plane_queue, plane_work_group: plane_work_group, plane_current: plane_current, plane_current_frame: plane_current_frame, plane_draft: plane_draft, plane_retirement: plane_retirement };
 }
 // type work
 export function Resume_work(resume_trace) /* forall<e> (resume-trace : trace<e>) -> work<e> */  {
@@ -103,7 +100,7 @@ export function Cleanup_registration(cleanup_node, cleanup_resource) /* forall<e
   return { cleanup_node: cleanup_node, cleanup_resource: cleanup_resource };
 }
 // type packed-capture
-export function Packed_capture(run_packed) /* (run-packed : forall<a> (forall<e> (plane<e>, trace<e>, trace<e>) -> a) -> a) -> packed-capture */  {
+export function Packed_capture(run_packed) /* (run-packed : forall<a> (forall<e> (plane<e>, trace<e>) -> a) -> a) -> packed-capture */  {
   return run_packed;
 }
 // type root-key
@@ -121,14 +118,9 @@ export function Memo(memo_source, memo_producer) /* forall<a> (memo-source : sou
 // type read-mode
 export const Track_read = 1; // read-mode
 export const Sample_read = 2; // read-mode
-export const State_entry_read = 3; // read-mode
 // type root
-export function Root(root_key, root_derive_plane, root_effect_plane, root_work_publications, root_lifetime, root_batch_depth, root_flushing, root_disposing, root_disposed) /* forall<e> (root-key : root-key, root-derive-plane : plane<total>, root-effect-plane : plane<e>, root-work-publications : ref<global,maybe<kokaine/reactive/internal/work-transaction/work-queue<kokaine/reactive/internal/work-transaction/work-publication<e>>>>, root-lifetime : lifetime-owner<e>, root-batch-depth : ref<global,int>, root-flushing : ref<global,bool>, root-disposing : ref<global,bool>, root-disposed : ref<global,bool>) -> root<e> */  {
-  return { root_key: root_key, root_derive_plane: root_derive_plane, root_effect_plane: root_effect_plane, root_work_publications: root_work_publications, root_lifetime: root_lifetime, root_batch_depth: root_batch_depth, root_flushing: root_flushing, root_disposing: root_disposing, root_disposed: root_disposed };
-}
-// type reentry
-export function Reentry(reentry_root, reentry_checkpoint, reentry_frame) /* forall<e> (reentry-root : root<e>, reentry-checkpoint : maybe<continuation-gate>, reentry-frame : frame<e>) -> reentry<e> */  {
-  return { reentry_root: reentry_root, reentry_checkpoint: reentry_checkpoint, reentry_frame: reentry_frame };
+export function Root(root_key, root_derive_plane, root_effect_plane, root_lifetime, root_batch_depth, root_flushing, root_disposing, root_disposed) /* forall<e> (root-key : root-key, root-derive-plane : plane<total>, root-effect-plane : plane<e>, root-lifetime : lifetime-owner<e>, root-batch-depth : ref<global,int>, root-flushing : ref<global,bool>, root-disposing : ref<global,bool>, root-disposed : ref<global,bool>) -> root<e> */  {
+  return { root_key: root_key, root_derive_plane: root_derive_plane, root_effect_plane: root_effect_plane, root_lifetime: root_lifetime, root_batch_depth: root_batch_depth, root_flushing: root_flushing, root_disposing: root_disposing, root_disposed: root_disposed };
 }
 // type settle-result
 export const Settle_ok = { _tag: 1 }; // settle-result
@@ -194,20 +186,20 @@ export function lift_div(action) /* forall<a,e> (action : () -> e a) -> <div|e> 
  
  
 // monadic lift
-export function _mlift_lift_exn_10078(action, _y_x10072) /* forall<a,e> (action : () -> e a, hnd/ev-index) -> <exn|e> a */  {
-  return $std_core_hnd._mask_at(_y_x10072, false, action);
+export function _mlift_lift_exn_10073(action, _y_x10067) /* forall<a,e> (action : () -> e a, hnd/ev-index) -> <exn|e> a */  {
+  return $std_core_hnd._mask_at(_y_x10067, false, action);
 }
  
 export function lift_exn(action) /* forall<a,e> (action : () -> e a) -> <exn|e> a */  {
    
-  var x_10081 = $std_core_hnd._evv_index($std_core_exn.exn_fs__tag);
+  var x_10076 = $std_core_hnd._evv_index($std_core_exn.exn_fs__tag);
   if ($std_core_hnd._yielding()) {
-    return $std_core_hnd.yield_extend(function(_y_x10072 /* hnd/ev-index */ ) {
-      return $std_core_hnd._mask_at(_y_x10072, false, action);
+    return $std_core_hnd.yield_extend(function(_y_x10067 /* hnd/ev-index */ ) {
+      return $std_core_hnd._mask_at(_y_x10067, false, action);
     });
   }
   else {
-    return $std_core_hnd._mask_at(x_10081, false, action);
+    return $std_core_hnd._mask_at(x_10076, false, action);
   }
 }
  
@@ -235,11 +227,11 @@ export function same_root(left, right) /* (left : root-key, right : root-key) ->
  
  
 // Automatically generated. Retrieves the `run-packed` constructor field of the `:packed-capture` type.
-export function packed_capture_fs_run_packed(_this) /* forall<a> (packed-capture) -> ((forall<e> (plane<e>, trace<e>, trace<e>) -> a) -> a) */  {
+export function packed_capture_fs_run_packed(_this) /* forall<a> (packed-capture) -> ((forall<e> (plane<e>, trace<e>) -> a) -> a) */  {
   return _this;
 }
  
-export function packed_capture_fs__copy(_this, run_packed) /* (packed-capture, run-packed : ? (forall<a> (forall<e> (plane<e>, trace<e>, trace<e>) -> a) -> a)) -> packed-capture */  {
+export function packed_capture_fs__copy(_this, run_packed) /* (packed-capture, run-packed : ? (forall<a> (forall<e> (plane<e>, trace<e>) -> a) -> a)) -> packed-capture */  {
   if (run_packed !== undefined) {
     var _x4 = run_packed;
   }
@@ -324,12 +316,6 @@ export function is_track_read(read_mode) /* (read-mode : read-mode) -> bool */  
 // Automatically generated. Tests for the `Sample-read` constructor of the `:read-mode` type.
 export function is_sample_read(read_mode) /* (read-mode : read-mode) -> bool */  {
   return (read_mode === 2);
-}
- 
- 
-// Automatically generated. Tests for the `State-entry-read` constructor of the `:read-mode` type.
-export function is_state_entry_read(read_mode) /* (read-mode : read-mode) -> bool */  {
-  return (read_mode === 3);
 }
  
  
@@ -439,19 +425,13 @@ export function continuation_gate_fs__copy(_this, gate_state, gate_parent, gate_
  
 // Automatically generated. Tests for the `Trace-end` constructor of the `:trace` type.
 export function is_trace_end(trace) /* forall<e> (trace : trace<e>) -> bool */  {
-  return (trace._tag === 1);
+  return (trace === null);
 }
  
  
 // Automatically generated. Tests for the `Trace-read` constructor of the `:trace` type.
 export function is_trace_read(trace) /* forall<e> (trace : trace<e>) -> bool */  {
-  return (trace._tag === 2);
-}
- 
- 
-// Automatically generated. Tests for the `Trace-entry` constructor of the `:trace` type.
-export function is_trace_entry(trace) /* forall<e> (trace : trace<e>) -> bool */  {
-  return (trace._tag === 3);
+  return (trace !== null);
 }
  
  
@@ -468,26 +448,26 @@ export function built_trace_fs_built_publish(_this) /* forall<e> (built-trace<e>
  
  
 // monadic lift
-export function built_trace_fs__mlift_copy_10079(_this, built_root, _c_x10076) /* forall<e> (built-trace<e>, built-root : ? (trace<e>), () -> <div|e> error<()>) -> built-trace<e> */  {
+export function built_trace_fs__mlift_copy_10074(_this, built_root, _c_x10071) /* forall<e> (built-trace<e>, built-root : ? (trace<e>), () -> <div|e> error<()>) -> built-trace<e> */  {
   if (built_root !== undefined) {
     var _x15 = built_root;
   }
   else {
     var _x15 = _this.built_root;
   }
-  return Built_trace(_x15, _c_x10076);
+  return Built_trace(_x15, _c_x10071);
 }
  
 export function built_trace_fs__copy(_this, built_root, built_publish) /* forall<e> (built-trace<e>, built-root : ? (trace<e>), built-publish : ? (() -> <div|e> error<()>)) -> built-trace<e> */  {
   if ($std_core_hnd._yielding()) {
-    return $std_core_hnd.yield_extend(function(_c_x10076 /* () -> <div|1216> error<()> */ ) {
+    return $std_core_hnd.yield_extend(function(_c_x10071 /* () -> <div|1152> error<()> */ ) {
       if (built_root !== undefined) {
         var _x16 = built_root;
       }
       else {
         var _x16 = _this.built_root;
       }
-      return Built_trace(_x16, _c_x10076);
+      return Built_trace(_x16, _c_x10071);
     });
   }
   else {
@@ -774,12 +754,6 @@ export function plane_fs_plane_current(plane) /* forall<e> (plane : plane<e>) ->
 }
  
  
-// Automatically generated. Retrieves the `plane-current-entry` constructor field of the `:plane` type.
-export function plane_fs_plane_current_entry(plane) /* forall<e> (plane : plane<e>) -> ref<global,maybe<trace<e>>> */  {
-  return plane.plane_current_entry;
-}
- 
- 
 // Automatically generated. Retrieves the `plane-current-frame` constructor field of the `:plane` type.
 export function plane_fs_plane_current_frame(plane) /* forall<e> (plane : plane<e>) -> ref<global,frame<e>> */  {
   return plane.plane_current_frame;
@@ -797,7 +771,7 @@ export function plane_fs_plane_retirement(plane) /* forall<e> (plane : plane<e>)
   return plane.plane_retirement;
 }
  
-export function plane_fs__copy(_this, plane_queue, plane_work_group, plane_current, plane_current_entry, plane_current_frame, plane_draft, plane_retirement) /* forall<e> (plane<e>, plane-queue : ? (kokaine/reactive/internal/work-transaction/work-queue<work<e>>), plane-work-group : ? (ref<global,maybe<kokaine/reactive/internal/work-transaction/work-group<work<e>>>>), plane-current : ? (ref<global,maybe<continuation-gate>>), plane-current-entry : ? (ref<global,maybe<trace<e>>>), plane-current-frame : ? (ref<global,frame<e>>), plane-draft : ? (ref<global,maybe<ref<global,list<trace<e>>>>>), plane-retirement : ? (retirement-coordinator<e>)) -> plane<e> */  {
+export function plane_fs__copy(_this, plane_queue, plane_work_group, plane_current, plane_current_frame, plane_draft, plane_retirement) /* forall<e> (plane<e>, plane-queue : ? (kokaine/reactive/internal/work-transaction/work-queue<work<e>>), plane-work-group : ? (ref<global,maybe<kokaine/reactive/internal/work-transaction/work-group<work<e>>>>), plane-current : ? (ref<global,maybe<continuation-gate>>), plane-current-frame : ? (ref<global,frame<e>>), plane-draft : ? (ref<global,maybe<ref<global,list<trace<e>>>>>), plane-retirement : ? (retirement-coordinator<e>)) -> plane<e> */  {
   if (plane_queue !== undefined) {
     var _x34 = plane_queue;
   }
@@ -816,31 +790,25 @@ export function plane_fs__copy(_this, plane_queue, plane_work_group, plane_curre
   else {
     var _x36 = _this.plane_current;
   }
-  if (plane_current_entry !== undefined) {
-    var _x37 = plane_current_entry;
-  }
-  else {
-    var _x37 = _this.plane_current_entry;
-  }
   if (plane_current_frame !== undefined) {
-    var _x38 = plane_current_frame;
+    var _x37 = plane_current_frame;
   }
   else {
-    var _x38 = _this.plane_current_frame;
+    var _x37 = _this.plane_current_frame;
   }
   if (plane_draft !== undefined) {
-    var _x39 = plane_draft;
+    var _x38 = plane_draft;
   }
   else {
-    var _x39 = _this.plane_draft;
+    var _x38 = _this.plane_draft;
   }
   if (plane_retirement !== undefined) {
-    var _x40 = plane_retirement;
+    var _x39 = plane_retirement;
   }
   else {
-    var _x40 = _this.plane_retirement;
+    var _x39 = _this.plane_retirement;
   }
-  return Plane(_x34, _x35, _x36, _x37, _x38, _x39, _x40);
+  return Plane(_x34, _x35, _x36, _x37, _x38, _x39);
 }
  
  
@@ -859,12 +827,6 @@ export function root_fs_root_derive_plane(root) /* forall<e> (root : root<e>) ->
 // Automatically generated. Retrieves the `root-effect-plane` constructor field of the `:root` type.
 export function root_fs_root_effect_plane(root) /* forall<e> (root : root<e>) -> plane<e> */  {
   return root.root_effect_plane;
-}
- 
- 
-// Automatically generated. Retrieves the `root-work-publications` constructor field of the `:root` type.
-export function root_fs_root_work_publications(root) /* forall<e> (root : root<e>) -> ref<global,maybe<kokaine/reactive/internal/work-transaction/work-queue<kokaine/reactive/internal/work-transaction/work-publication<e>>>> */  {
-  return root.root_work_publications;
 }
  
  
@@ -897,102 +859,56 @@ export function root_fs_root_disposed(root) /* forall<e> (root : root<e>) -> ref
   return root.root_disposed;
 }
  
-export function root_fs__copy(_this, root_key, root_derive_plane, root_effect_plane, root_work_publications, root_lifetime, root_batch_depth, root_flushing, root_disposing, root_disposed) /* forall<e> (root<e>, root-key : ? root-key, root-derive-plane : ? (plane<total>), root-effect-plane : ? (plane<e>), root-work-publications : ? (ref<global,maybe<kokaine/reactive/internal/work-transaction/work-queue<kokaine/reactive/internal/work-transaction/work-publication<e>>>>), root-lifetime : ? (lifetime-owner<e>), root-batch-depth : ? (ref<global,int>), root-flushing : ? (ref<global,bool>), root-disposing : ? (ref<global,bool>), root-disposed : ? (ref<global,bool>)) -> root<e> */  {
+export function root_fs__copy(_this, root_key, root_derive_plane, root_effect_plane, root_lifetime, root_batch_depth, root_flushing, root_disposing, root_disposed) /* forall<e> (root<e>, root-key : ? root-key, root-derive-plane : ? (plane<total>), root-effect-plane : ? (plane<e>), root-lifetime : ? (lifetime-owner<e>), root-batch-depth : ? (ref<global,int>), root-flushing : ? (ref<global,bool>), root-disposing : ? (ref<global,bool>), root-disposed : ? (ref<global,bool>)) -> root<e> */  {
   if (root_key !== undefined) {
-    var _x41 = root_key;
+    var _x40 = root_key;
   }
   else {
-    var _x41 = _this.root_key;
+    var _x40 = _this.root_key;
   }
   if (root_derive_plane !== undefined) {
-    var _x42 = root_derive_plane;
+    var _x41 = root_derive_plane;
   }
   else {
-    var _x42 = _this.root_derive_plane;
+    var _x41 = _this.root_derive_plane;
   }
   if (root_effect_plane !== undefined) {
-    var _x43 = root_effect_plane;
+    var _x42 = root_effect_plane;
   }
   else {
-    var _x43 = _this.root_effect_plane;
-  }
-  if (root_work_publications !== undefined) {
-    var _x44 = root_work_publications;
-  }
-  else {
-    var _x44 = _this.root_work_publications;
+    var _x42 = _this.root_effect_plane;
   }
   if (root_lifetime !== undefined) {
-    var _x45 = root_lifetime;
+    var _x43 = root_lifetime;
   }
   else {
-    var _x45 = _this.root_lifetime;
+    var _x43 = _this.root_lifetime;
   }
   if (root_batch_depth !== undefined) {
-    var _x46 = root_batch_depth;
+    var _x44 = root_batch_depth;
   }
   else {
-    var _x46 = _this.root_batch_depth;
+    var _x44 = _this.root_batch_depth;
   }
   if (root_flushing !== undefined) {
-    var _x47 = root_flushing;
+    var _x45 = root_flushing;
   }
   else {
-    var _x47 = _this.root_flushing;
+    var _x45 = _this.root_flushing;
   }
   if (root_disposing !== undefined) {
-    var _x48 = root_disposing;
+    var _x46 = root_disposing;
   }
   else {
-    var _x48 = _this.root_disposing;
+    var _x46 = _this.root_disposing;
   }
   if (root_disposed !== undefined) {
-    var _x49 = root_disposed;
+    var _x47 = root_disposed;
   }
   else {
-    var _x49 = _this.root_disposed;
+    var _x47 = _this.root_disposed;
   }
-  return Root(_x41, _x42, _x43, _x44, _x45, _x46, _x47, _x48, _x49);
-}
- 
- 
-// Automatically generated. Retrieves the `reentry-root` constructor field of the `:reentry` type.
-export function reentry_fs_reentry_root(reentry) /* forall<e> (reentry : reentry<e>) -> root<e> */  {
-  return reentry.reentry_root;
-}
- 
- 
-// Automatically generated. Retrieves the `reentry-checkpoint` constructor field of the `:reentry` type.
-export function reentry_fs_reentry_checkpoint(reentry) /* forall<e> (reentry : reentry<e>) -> maybe<continuation-gate> */  {
-  return reentry.reentry_checkpoint;
-}
- 
- 
-// Automatically generated. Retrieves the `reentry-frame` constructor field of the `:reentry` type.
-export function reentry_fs_reentry_frame(reentry) /* forall<e> (reentry : reentry<e>) -> frame<e> */  {
-  return reentry.reentry_frame;
-}
- 
-export function reentry_fs__copy(_this, reentry_root, reentry_checkpoint, reentry_frame) /* forall<e> (reentry<e>, reentry-root : ? (root<e>), reentry-checkpoint : ? (maybe<continuation-gate>), reentry-frame : ? (frame<e>)) -> reentry<e> */  {
-  if (reentry_root !== undefined) {
-    var _x50 = reentry_root;
-  }
-  else {
-    var _x50 = _this.reentry_root;
-  }
-  if (reentry_checkpoint !== undefined) {
-    var _x51 = reentry_checkpoint;
-  }
-  else {
-    var _x51 = _this.reentry_checkpoint;
-  }
-  if (reentry_frame !== undefined) {
-    var _x52 = reentry_frame;
-  }
-  else {
-    var _x52 = _this.reentry_frame;
-  }
-  return Reentry(_x50, _x51, _x52);
+  return Root(_x40, _x41, _x42, _x43, _x44, _x45, _x46, _x47);
 }
  
  
@@ -1015,24 +931,24 @@ export function derive_producer_fs_producer_settling(_this) /* (derive-producer)
  
 export function derive_producer_fs__copy(_this, producer_plane, producer_scope, producer_settling) /* (derive-producer, producer-plane : ? (plane<total>), producer-scope : ? (continuation-scope<total>), producer-settling : ? (ref<global,bool>)) -> derive-producer */  {
   if (producer_plane !== undefined) {
-    var _x53 = producer_plane;
+    var _x48 = producer_plane;
   }
   else {
-    var _x53 = _this.producer_plane;
+    var _x48 = _this.producer_plane;
   }
   if (producer_scope !== undefined) {
-    var _x54 = producer_scope;
+    var _x49 = producer_scope;
   }
   else {
-    var _x54 = _this.producer_scope;
+    var _x49 = _this.producer_scope;
   }
   if (producer_settling !== undefined) {
-    var _x55 = producer_settling;
+    var _x50 = producer_settling;
   }
   else {
-    var _x55 = _this.producer_settling;
+    var _x50 = _this.producer_settling;
   }
-  return Derive_producer(_x53, _x54, _x55);
+  return Derive_producer(_x48, _x49, _x50);
 }
  
  
@@ -1049,16 +965,16 @@ export function memo_fs_memo_producer(memo) /* forall<a> (memo : memo<a>) -> der
  
 export function memo_fs__copy(_this, memo_source, memo_producer) /* forall<a> (memo<a>, memo-source : ? (source<a>), memo-producer : ? derive-producer) -> memo<a> */  {
   if (memo_source !== undefined) {
-    var _x56 = memo_source;
+    var _x51 = memo_source;
   }
   else {
-    var _x56 = _this.memo_source;
+    var _x51 = _this.memo_source;
   }
   if (memo_producer !== undefined) {
-    var _x57 = memo_producer;
+    var _x52 = memo_producer;
   }
   else {
-    var _x57 = _this.memo_producer;
+    var _x52 = _this.memo_producer;
   }
-  return Memo(_x56, _x57);
+  return Memo(_x51, _x52);
 }

@@ -399,9 +399,9 @@ export function new_runtime_scope_root() /* () -> async-scope */  {
   return Scope($std_core_types.Cons(0, $std_core_types.Nil), current);
 }
  
-export function async_scope_fs_show(_pat_x118__26) /* (async-scope) -> string */  {
+export function async_scope_fs_show(_pat_x117__26) /* (async-scope) -> string */  {
    
-  var xs_10004 = $std_core_list.map(_pat_x118__26.ids, $std_core_int.show);
+  var xs_10004 = $std_core_list.map(_pat_x117__26.ids, $std_core_int.show);
   return $std_core_list.joinsep(xs_10004, "<");
 }
  
@@ -418,16 +418,16 @@ export function await_result_fs_show(result, _implicit_fs_show) /* forall<a> (re
   }
 }
  
-export function new_child_scope(_pat_x121__25) /* (async-scope) -> async-scope */  {
+export function new_child_scope(_pat_x120__25) /* (async-scope) -> async-scope */  {
    
   var current = next_scope_id.value;
    
   ((next_scope_id).value = ($std_core_types._int_add(current,1)));
-  return Scope($std_core_types.Cons(current, _pat_x121__25.ids), _pat_x121__25.scope_namespace);
+  return Scope($std_core_types.Cons(current, _pat_x120__25.ids), _pat_x120__25.scope_namespace);
 }
  
-export function current_scope_id(_pat_x124__22) /* (async-scope) -> scope-id */  {
-  return (_pat_x124__22.ids !== null) ? _pat_x124__22.ids.head : 0;
+export function current_scope_id(_pat_x123__22) /* (async-scope) -> scope-id */  {
+  return (_pat_x123__22.ids !== null) ? _pat_x123__22.ids.head : 0;
 }
  
  
@@ -462,12 +462,12 @@ export function async_scope_fs_identity_key(scope) /* (scope : async-scope) -> i
   }
 }
  
-export function async_scope_fs_parent(_pat_x144__5) /* (async-scope) -> async-scope */  {
-  if (_pat_x144__5.ids !== null && _pat_x144__5.ids.tail !== null) {
-    return Scope(_pat_x144__5.ids.tail, _pat_x144__5.scope_namespace);
+export function async_scope_fs_parent(_pat_x143__5) /* (async-scope) -> async-scope */  {
+  if (_pat_x143__5.ids !== null && _pat_x143__5.ids.tail !== null) {
+    return Scope(_pat_x143__5.ids.tail, _pat_x143__5.scope_namespace);
   }
   else {
-    return Scope(_pat_x144__5.ids, _pat_x144__5.scope_namespace);
+    return Scope(_pat_x143__5.ids, _pat_x143__5.scope_namespace);
   }
 }
  
@@ -580,9 +580,9 @@ export function _mlift_async_own_10202(release) /* (release : () -> ui bool) -> 
 }
  
  
-// Acquire a lease for a host resource. By default it follows the reactive
-// generation rather than a structured cancellation scope; a nearer structured
-// or Resource ledger may further constrain or promote that lifetime.
+// Acquire a lease for a host resource. The active ownership interpreter
+// decides its default lifetime; a nearer structured or Resource ledger may
+// further constrain or promote that lifetime.
 export function async_own(dispose) /* (dispose : dispose-fn) -> <async-await,async-cancel,async-ioc,async-ownership,discontinue> dispose-fn */  {
    
   var x_10264 = $std_core_hnd._open_at1(3, function(dispose_0 /* dispose-fn */ ) {
@@ -641,21 +641,21 @@ export function setup_fs__mlift_await_error1_10203(label, result_0) /* forall<a>
 export function setup_fs__mlift_await_error1_10204(label, setup, _y_x10062) /* forall<a> (label : ? string, setup : ((error<a>) -> ui ()) -> ui error<dispose-fn>, async-scope) -> <async-cancel,async-await,discontinue,async-ioc,async-ownership> error<a> */  {
    
   var _x14 = (label !== undefined) ? label : "";
-  var x_10272 = $std_core_hnd._open_at3(0, function(setup_0 /* await-setup<3641> */ , scope /* async-scope */ , label_0 /* string */ ) {
+  var x_10272 = $std_core_hnd._open_at3(0, function(setup_0 /* await-setup<3638> */ , scope /* async-scope */ , label_0 /* string */ ) {
       return $std_core_hnd._perform3($std_core_hnd._evv_at(0), do_await_fs__select, setup_0, scope, label_0);
-    }, function(complete /* (await-result<3641>, bool) -> ui () */ ) {
-      return setup(function(value /* error<3641> */ ) {
+    }, function(complete /* (await-result<3638>) -> ui () */ ) {
+      return setup(function(value /* error<3638> */ ) {
         if (value._tag === 2) {
           var _x13 = Result(value.value);
         }
         else {
           var _x13 = Exception(value.error);
         }
-        return complete(_x13, true);
+        return complete(_x13);
       });
     }, _y_x10062, _x14);
    
-  function next_10273(result_0) /* (await-result<3641>) -> <async-await,async-cancel,discontinue,async-ioc,async-ownership> error<3641> */  {
+  function next_10273(result_0) /* (await-result<3638>) -> <async-await,async-cancel,discontinue,async-ioc,async-ownership> error<3638> */  {
     var _x15 = (label !== undefined) ? label : "";
     return $std_core_hnd._open_at2(4, await_result_fs_error, result_0, _x15);
   }
@@ -684,21 +684,21 @@ export function setup_fs_await_error1(label, setup) /* forall<a> (label : ? stri
   else {
      
     var _x14 = (label !== undefined) ? label : "";
-    var x_0_10281 = $std_core_hnd._open_at3(0, function(setup_0 /* await-setup<3641> */ , scope /* async-scope */ , label_0 /* string */ ) {
+    var x_0_10281 = $std_core_hnd._open_at3(0, function(setup_0 /* await-setup<3638> */ , scope /* async-scope */ , label_0 /* string */ ) {
         return $std_core_hnd._perform3($std_core_hnd._evv_at(0), do_await_fs__select, setup_0, scope, label_0);
-      }, function(complete /* (await-result<3641>, bool) -> ui () */ ) {
-        return setup(function(value /* error<3641> */ ) {
+      }, function(complete /* (await-result<3638>) -> ui () */ ) {
+        return setup(function(value /* error<3638> */ ) {
           if (value._tag === 2) {
             var _x13 = Result(value.value);
           }
           else {
             var _x13 = Exception(value.error);
           }
-          return complete(_x13, true);
+          return complete(_x13);
         });
       }, x_10276, _x14);
     if ($std_core_hnd._yielding()) {
-      return $std_core_hnd.yield_extend(function(result_0 /* await-result<3641> */ ) {
+      return $std_core_hnd.yield_extend(function(result_0 /* await-result<3638> */ ) {
         var _x13 = (label !== undefined) ? label : "";
         return $std_core_hnd._open_at2(4, await_result_fs_error, result_0, _x13);
       });
@@ -723,7 +723,7 @@ export function setup_fs_await(label, setup) /* forall<a> (label : ? string, set
   var _x15 = (label !== undefined) ? label : "";
   var x_10286 = $std_core_hnd._open2($std_core_vector.unvlist($std_core_types.Cons(0, $std_core_types.Cons(1, $std_core_types.Cons(2, $std_core_types.Cons(3, $std_core_types.Cons(4, $std_core_types.Nil)))))), setup_fs_await_error1, _x15, setup);
   if ($std_core_hnd._yielding()) {
-    return $std_core_hnd.yield_extend(function(_y_x10065 /* error<3684> */ ) {
+    return $std_core_hnd.yield_extend(function(_y_x10065 /* error<3681> */ ) {
       return $std_core_hnd._open_at1(5, $std_core_exn.untry, _y_x10065);
     });
   }
@@ -743,13 +743,13 @@ export function _mlift_await1_10206(_y_x10067) /* forall<a> (error<a>) -> <async
 export function await1(label, setup) /* forall<a> (label : ? string, setup : ((a) -> ui ()) -> ui error<dispose-fn>) -> <async,exn> a */  {
    
   var _x15 = (label !== undefined) ? label : "";
-  var x_10290 = $std_core_hnd._open2($std_core_vector.unvlist($std_core_types.Cons(0, $std_core_types.Cons(1, $std_core_types.Cons(2, $std_core_types.Cons(3, $std_core_types.Cons(4, $std_core_types.Nil)))))), setup_fs_await_error1, _x15, function(complete /* (error<3738>) -> ui () */ ) {
-      return setup(function(value /* 3738 */ ) {
+  var x_10290 = $std_core_hnd._open2($std_core_vector.unvlist($std_core_types.Cons(0, $std_core_types.Cons(1, $std_core_types.Cons(2, $std_core_types.Cons(3, $std_core_types.Cons(4, $std_core_types.Nil)))))), setup_fs_await_error1, _x15, function(complete /* (error<3735>) -> ui () */ ) {
+      return setup(function(value /* 3735 */ ) {
         return complete($std_core_types.Ok(value));
       });
     });
   if ($std_core_hnd._yielding()) {
-    return $std_core_hnd.yield_extend(function(_y_x10067 /* error<3738> */ ) {
+    return $std_core_hnd.yield_extend(function(_y_x10067 /* error<3735> */ ) {
       return $std_core_hnd._open_at1(5, $std_core_exn.untry, _y_x10067);
     });
   }
@@ -779,15 +779,15 @@ export function setup_fs__mlift_await_error_10207(label, result) /* forall<a> (l
 export function setup_fs__mlift_await_error_10208(label, setup, _y_x10072) /* forall<a> (label : ? string, setup : ((a) -> ui ()) -> ui error<dispose-fn>, async-scope) -> <async-cancel,async-await,discontinue,async-ioc,async-ownership> error<a> */  {
    
   var _x17 = (label !== undefined) ? label : "";
-  var x_10294 = $std_core_hnd._open_at3(0, function(setup_0 /* await-setup<3858> */ , scope /* async-scope */ , label_0 /* string */ ) {
+  var x_10294 = $std_core_hnd._open_at3(0, function(setup_0 /* await-setup<3852> */ , scope /* async-scope */ , label_0 /* string */ ) {
       return $std_core_hnd._perform3($std_core_hnd._evv_at(0), do_await_fs__select, setup_0, scope, label_0);
-    }, function(complete /* (await-result<3858>, bool) -> ui () */ ) {
-      return setup(function(value /* 3858 */ ) {
-        return complete(Result(value), true);
+    }, function(complete /* (await-result<3852>) -> ui () */ ) {
+      return setup(function(value /* 3852 */ ) {
+        return complete(Result(value));
       });
     }, _y_x10072, _x17);
    
-  function next_10295(result) /* (await-result<3858>) -> <async-await,async-cancel,discontinue,async-ioc,async-ownership> error<3858> */  {
+  function next_10295(result) /* (await-result<3852>) -> <async-await,async-cancel,discontinue,async-ioc,async-ownership> error<3852> */  {
     var _x18 = (label !== undefined) ? label : "";
     return $std_core_hnd._open_at2(4, await_result_fs_error, result, _x18);
   }
@@ -817,15 +817,15 @@ export function setup_fs_await_error(label, setup) /* forall<a> (label : ? strin
   else {
      
     var _x17 = (label !== undefined) ? label : "";
-    var x_0_10303 = $std_core_hnd._open_at3(0, function(setup_0 /* await-setup<3858> */ , scope /* async-scope */ , label_0 /* string */ ) {
+    var x_0_10303 = $std_core_hnd._open_at3(0, function(setup_0 /* await-setup<3852> */ , scope /* async-scope */ , label_0 /* string */ ) {
         return $std_core_hnd._perform3($std_core_hnd._evv_at(0), do_await_fs__select, setup_0, scope, label_0);
-      }, function(complete /* (await-result<3858>, bool) -> ui () */ ) {
-        return setup(function(value /* 3858 */ ) {
-          return complete(Result(value), true);
+      }, function(complete /* (await-result<3852>) -> ui () */ ) {
+        return setup(function(value /* 3852 */ ) {
+          return complete(Result(value));
         });
       }, x_10298, _x17);
     if ($std_core_hnd._yielding()) {
-      return $std_core_hnd.yield_extend(function(result /* await-result<3858> */ ) {
+      return $std_core_hnd.yield_extend(function(result /* await-result<3852> */ ) {
         var _x17 = (label !== undefined) ? label : "";
         return $std_core_hnd._open_at2(4, await_result_fs_error, result, _x17);
       });
@@ -846,7 +846,7 @@ export function setup_fs__mlift_await_noexn_10209(result) /* forall<a> (result :
   else {
     return $std_core_debug.impossible($std_core_types._lp__plus__plus__rp_("unexpected exception from non-throwing async await: ", $std_core_hnd._open_none1(function(exn /* exception */ ) {
             return exn.message;
-          }, result.error)), $std_core_types._lp__plus__plus__rp_("kokaine/async/effects.kk", $std_core_types._lp__plus__plus__rp_("(", $std_core_types._lp__plus__plus__rp_($std_core_int.show(241), ")"))));
+          }, result.error)), $std_core_types._lp__plus__plus__rp_("kokaine/async/effects.kk", $std_core_types._lp__plus__plus__rp_("(", $std_core_types._lp__plus__plus__rp_($std_core_int.show(240), ")"))));
   }
 }
  
@@ -856,11 +856,11 @@ export function setup_fs__mlift_await_noexn_10209(result) /* forall<a> (result :
 export function setup_fs_await_noexn(label, setup) /* forall<a> (label : ? string, setup : ((a) -> ui ()) -> ui dispose-fn) -> async a */  {
    
   var _x19 = (label !== undefined) ? label : "";
-  var x_10308 = setup_fs_await_error(_x19, function(complete /* (3963) -> ui () */ ) {
+  var x_10308 = setup_fs_await_error(_x19, function(complete /* (3957) -> ui () */ ) {
       return $std_core_types.Ok(setup(complete));
     });
   if ($std_core_hnd._yielding()) {
-    return $std_core_hnd.yield_extend(function(result /* error<3963> */ ) {
+    return $std_core_hnd.yield_extend(function(result /* error<3957> */ ) {
       return setup_fs__mlift_await_noexn_10209(result);
     });
   }
@@ -871,14 +871,14 @@ export function setup_fs_await_noexn(label, setup) /* forall<a> (label : ? strin
     else {
       return $std_core_debug.impossible($std_core_types._lp__plus__plus__rp_("unexpected exception from non-throwing async await: ", $std_core_hnd._open_none1(function(exn /* exception */ ) {
               return exn.message;
-            }, x_10308.error)), $std_core_types._lp__plus__plus__rp_("kokaine/async/effects.kk", $std_core_types._lp__plus__plus__rp_("(", $std_core_types._lp__plus__plus__rp_($std_core_int.show(241), ")"))));
+            }, x_10308.error)), $std_core_types._lp__plus__plus__rp_("kokaine/async/effects.kk", $std_core_types._lp__plus__plus__rp_("(", $std_core_types._lp__plus__plus__rp_($std_core_int.show(240), ")"))));
     }
   }
 }
  
 export function await1_noexn(label, setup) /* forall<a> (label : ? string, setup : ((a) -> ui ()) -> ui ()) -> async a */  {
   var _x19 = (label !== undefined) ? label : "";
-  return setup_fs_await_noexn(_x19, function(complete /* (4005) -> ui () */ ) {
+  return setup_fs_await_noexn(_x19, function(complete /* (3999) -> ui () */ ) {
        
       setup(complete);
       return function() {
@@ -999,12 +999,12 @@ export function _mlift_cancelation_scope_10215(action, child, _y_x10101) /* fora
 // monadic lift
 export function _mlift_cancelation_scope_10216(action, _y_x10085) /* forall<_e,h,a,e1> (action : () -> <async|e1> a, async-scope) -> <async-cancel,async-await,async-ioc,async-ownership,discontinue,local<h>|e1> a */  {
    
-  var child = $std_core_hnd._open_none1(function(_pat_x121__25 /* async-scope */ ) {
+  var child = $std_core_hnd._open_none1(function(_pat_x120__25 /* async-scope */ ) {
        
       var current = next_scope_id.value;
        
       ((next_scope_id).value = ($std_core_types._int_add(current,1)));
-      return Scope($std_core_types.Cons(current, _pat_x121__25.ids), _pat_x121__25.scope_namespace);
+      return Scope($std_core_types.Cons(current, _pat_x120__25.ids), _pat_x120__25.scope_namespace);
     }, _y_x10085);
    
   var loc = { value: false };
@@ -1066,7 +1066,7 @@ export function _mlift_cancelation_scope_10216(action, _y_x10085) /* forall<_e,h
         else {
           return _mlift_cancelation_scope_10214(scope_1_0, x_2_10357);
         }
-      })), function(_res /* 4614 */ ) {
+      })), function(_res /* 4608 */ ) {
       return _res;
     }, function() {
        
@@ -1112,16 +1112,16 @@ export function _mlift_in_parent_scope_10217(action, _y_x10118) /* forall<a,e> (
 // monadic lift
 export function _mlift_in_parent_scope_10218(action, _y_x10111) /* forall<a,e> (action : () -> <async|e> a, async-scope) -> <async-cancel,async-await,async-ioc,async-ownership,discontinue|e> a */  {
    
-  var _value_async_scope_l330_c9 = $std_core_hnd._open_none1(function(_pat_x144__5 /* async-scope */ ) {
-      if (_pat_x144__5.ids !== null && _pat_x144__5.ids.tail !== null) {
-        return Scope(_pat_x144__5.ids.tail, _pat_x144__5.scope_namespace);
+  var _value_async_scope_l329_c9 = $std_core_hnd._open_none1(function(_pat_x143__5 /* async-scope */ ) {
+      if (_pat_x143__5.ids !== null && _pat_x143__5.ids.tail !== null) {
+        return Scope(_pat_x143__5.ids.tail, _pat_x143__5.scope_namespace);
       }
       else {
-        return Scope(_pat_x144__5.ids, _pat_x144__5.scope_namespace);
+        return Scope(_pat_x143__5.ids, _pat_x143__5.scope_namespace);
       }
     }, _y_x10111);
   return async_cancel_fs__handle(_Hnd_async_cancel(1, $std_core_hnd.clause_tail0(function() {
-        return _value_async_scope_l330_c9;
+        return _value_async_scope_l329_c9;
       }), $std_core_hnd.clause_tail1(function(scope /* async-scope */ ) {
         return $std_core_hnd._open_at1($std_core_hnd._evv_index(async_cancel_fs__tag), function(scope_0 /* async-scope */ ) {
              
@@ -1140,7 +1140,7 @@ export function _mlift_in_parent_scope_10218(action, _y_x10111) /* forall<a,e> (
             var ev_1_10371 = $std_core_hnd._evv_at(0);
             return ev_1_10371.hnd._fun_release_canceled_scope(ev_1_10371.marker, ev_1_10371, scope_2);
           }, scope_1_0);
-      })), function(_res /* 4803 */ ) {
+      })), function(_res /* 4797 */ ) {
       return _res;
     }, function() {
        
@@ -1173,16 +1173,16 @@ export function in_parent_scope(action) /* forall<a,e> (action : () -> <async|e>
   }
   else {
      
-    var _value_async_scope_l330_c9 = $std_core_hnd._open_none1(function(_pat_x144__5 /* async-scope */ ) {
-        if (_pat_x144__5.ids !== null && _pat_x144__5.ids.tail !== null) {
-          return Scope(_pat_x144__5.ids.tail, _pat_x144__5.scope_namespace);
+    var _value_async_scope_l329_c9 = $std_core_hnd._open_none1(function(_pat_x143__5 /* async-scope */ ) {
+        if (_pat_x143__5.ids !== null && _pat_x143__5.ids.tail !== null) {
+          return Scope(_pat_x143__5.ids.tail, _pat_x143__5.scope_namespace);
         }
         else {
-          return Scope(_pat_x144__5.ids, _pat_x144__5.scope_namespace);
+          return Scope(_pat_x143__5.ids, _pat_x143__5.scope_namespace);
         }
       }, x_10378);
     return async_cancel_fs__handle(_Hnd_async_cancel(1, $std_core_hnd.clause_tail0(function() {
-          return _value_async_scope_l330_c9;
+          return _value_async_scope_l329_c9;
         }), $std_core_hnd.clause_tail1(function(scope /* async-scope */ ) {
           return $std_core_hnd._open_at1($std_core_hnd._evv_index(async_cancel_fs__tag), function(scope_0 /* async-scope */ ) {
                
@@ -1201,7 +1201,7 @@ export function in_parent_scope(action) /* forall<a,e> (action : () -> <async|e>
               var ev_2_10389 = $std_core_hnd._evv_at(0);
               return ev_2_10389.hnd._fun_release_canceled_scope(ev_2_10389.marker, ev_2_10389, scope_2);
             }, scope_1_0);
-        })), function(_res /* 4803 */ ) {
+        })), function(_res /* 4797 */ ) {
         return _res;
       }, function() {
          
@@ -1229,11 +1229,11 @@ export function _mlift_unsafe_uncancel_10219(action, _y_x10121) /* forall<a,e> (
 // canceled strand while still draining sibling finalizers. Application code
 // should not suppress cancellation.
 export function unsafe_uncancel(action) /* forall<a,e> (action : () -> <async|e> a) -> <async|e> maybe<a> */  {
-  return discontinue_fs__handle(_Hnd_discontinue(0, function(m /* hnd/marker<<discontinue,async-await,async-cancel,async-ioc,async-ownership|4932>,maybe<4931>> */ , ___wildcard_x701__16 /* hnd/ev<discontinue> */ ) {
-        return $std_core_hnd.yield_to_final(m, function(___wildcard_x701__43 /* (hnd/resume-result<4893,maybe<4931>>) -> <discontinue,async-await,async-cancel,async-ioc,async-ownership|4932> maybe<4931> */ ) {
+  return discontinue_fs__handle(_Hnd_discontinue(0, function(m /* hnd/marker<<discontinue,async-await,async-cancel,async-ioc,async-ownership|4926>,maybe<4925>> */ , ___wildcard_x701__16 /* hnd/ev<discontinue> */ ) {
+        return $std_core_hnd.yield_to_final(m, function(___wildcard_x701__43 /* (hnd/resume-result<4887,maybe<4925>>) -> <discontinue,async-await,async-cancel,async-ioc,async-ownership|4926> maybe<4925> */ ) {
             return $std_core_types.Nothing;
           });
-      }), function(value /* 4931 */ ) {
+      }), function(value /* 4925 */ ) {
       return $std_core_types.Just(value);
     }, function() {
        
