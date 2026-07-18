@@ -14,38 +14,17 @@ import std/core/undiv
 // Source-local continuation indexing and invalidation
 // --------------------------------------------------------------------------
 
-pub fun pack-capture(plane : plane<e>, target : trace<e>, owner : trace<e>)
+pub fun pack-capture(plane : plane<e>, current : trace<e>)
                 : packed-capture
-  Packed-capture(fn(consume) consume(plane,target,owner))
-
-pub fun packed-active(packed : packed-capture) : bool
-  match packed
-    Packed-capture(run) -> run(fn(_,target,owner)
-      match owner.trace-state-of
-        Capture-dead -> False
-        _ ->
-          match target.trace-state-of
-            Capture-dead -> False
-            _ -> True
-    )
+  Packed-capture(fn(consume) consume(plane,current))
 
 pub fun cut-capture(packed : packed-capture) : ()
   match packed
     Packed-capture(run) ->
-      run(fn(plane,target,owner)
-        match owner.trace-state-of
+      run(fn(plane,current)
+        match current.trace-state-of
           Capture-dead -> ()
-          _ ->
-            match target.trace-state-of
-              Capture-running ->
-                match owner.trace-state-of
-                  // A Live owner belongs to the entry generation currently
-                  // being replaced. Its upstream commit is already observed
-                  // by the running entry calculation, so it must not schedule
-                  // a second recurrence. New-generation owners remain Draft.
-                  Capture-live -> ()
-                  _ -> enqueue-trace(plane,target)
-              _ -> enqueue-trace(plane,target)
+          _ -> enqueue-trace(plane,current)
       )
 
 pub fun pending-ancestor-loop(parent : maybe<continuation-gate>) : <div> bool
@@ -65,7 +44,7 @@ pub fun pending-ancestor(parent : maybe<continuation-gate>) : bool
 pub fun enqueue-trace(plane : plane<e>, current : trace<e>) : ()
   match current
     Trace-end -> ()
-    Trace-read(gate,_,_,_,_,_,_,_,_) ->
+    Trace-read(gate,_,_,_,_,_,_,_) ->
       val state = gate.gate-state
       match load(state)
         Capture-live ->
@@ -77,17 +56,6 @@ pub fun enqueue-trace(plane : plane<e>, current : trace<e>) : ()
           // an effect-plane final-control unwind preserves that exact ticket.
           store(state,Capture-pending)
         _ -> ()
-    Trace-entry(gate,_,_,_,_,_) ->
-      val state = gate.gate-state
-      match load(state)
-        Capture-live ->
-          store(state,Capture-pending)
-          route-resume(plane.plane-queue,Resume-work(current))
-        Capture-running ->
-          // A write from the currently resumed suffix schedules a later turn;
-          // the active queue ticket remains in place until this turn settles.
-          store(state,Capture-pending)
-        _ -> ()
 
 pub fun notify-source(source : source<a>) : ()
   source.source-captures.snapshot.foreach(cut-capture)
@@ -96,7 +64,7 @@ pub fun notify-source(source : source<a>) : ()
 pub fun activate-trace-loop(plane : plane<e>, current : trace<e>) : <div> ()
   match current
     Trace-end -> ()
-    Trace-read(gate,_,entry,child,current-frame-slot,_,_,_,stale) ->
+    Trace-read(gate,_,child,current-frame-slot,_,_,_,stale) ->
       val state = gate.gate-state
       match load(state)
         Capture-draft ->
@@ -104,20 +72,7 @@ pub fun activate-trace-loop(plane : plane<e>, current : trace<e>) : <div> ()
           store(state,Capture-live)
           store(current-frame.frame-lifetime.lifetime-token,Scope-live)
           activate-trace-loop(plane,load(child))
-          if stale() then
-            match entry
-              Nothing -> enqueue-trace(plane,current)
-              Just(target) -> enqueue-trace(plane,target)
-          else ()
-        _ -> ()
-    Trace-entry(gate,_,child,current-frame-slot,_,_) ->
-      val state = gate.gate-state
-      match load(state)
-        Capture-draft ->
-          val current-frame = load(current-frame-slot)
-          store(state,Capture-live)
-          store(current-frame.frame-lifetime.lifetime-token,Scope-live)
-          activate-trace-loop(plane,load(child))
+          if stale() then enqueue-trace(plane,current) else ()
         _ -> ()
 
 pub fun activate-trace(plane : plane<e>, current : trace<e>) : ()
@@ -309,9 +264,7 @@ pub fun resume-capture(plane : plane<e>, current : trace<e>)
                    : <div|e> error<()>
   match current
     Trace-end -> Ok(())
-    Trace-read(gate,_,_,child,current-frame-slot,resume,_,_,_) ->
-      resume-node(plane,current,gate,child,current-frame-slot,resume)
-    Trace-entry(gate,_,child,current-frame-slot,resume,_) ->
+    Trace-read(gate,_,child,current-frame-slot,resume,_,_,_) ->
       resume-node(plane,current,gate,child,current-frame-slot,resume)
 pub fun run-bootstrap(scope : continuation-scope<e>) : <div|e> error<()>
   match load(scope.scope-lifetime.lifetime-token)
@@ -356,8 +309,7 @@ pub fun run-derive-work(plane : plane<total>, current : work<total>)
       Resume-work(capture) ->
         match capture
           Trace-end -> Nothing
-          Trace-read(_,slot,_,_,_,_,_,_,_) -> load(slot)
-          Trace-entry(_,slot,_,_,_,_) -> load(slot)
+          Trace-read(_,slot,_,_,_,_,_,_) -> load(slot)
       Bootstrap-work(_,slot) -> load(slot)
     match owner
       Nothing ->
@@ -768,104 +720,47 @@ pub fun settle-trace-recheck(plane : plane<total>, current : trace<total>,
     Capture-running -> settle-failure("cyclic read of a running derivation")
     Capture-dead -> settle-failure("derived continuation was retired")
 
-pub fun settle-entry-target(plane : plane<total>,
-                        entry : maybe<trace<total>>) : <div> settle-result
-  match entry
-    Nothing -> Settle-ok
-    Just(target) ->
-      match target.trace-state-of
-        Capture-live -> Settle-ok
-        Capture-pending -> settle-trace-result(plane,target)
-        // The owner read belongs to a generation already replaced/retired.
-        Capture-dead -> Settle-ok
-        Capture-draft -> settle-failure("state entry target is draft")
-        Capture-running -> settle-failure("cyclic state entry target")
-
-pub fun settle-entry-node(plane : plane<total>, current : trace<total>,
+pub fun settle-read-child(plane : plane<total>, current : trace<total>,
                       gate : continuation-gate,
                       child : ref<global,trace<total>>)
                      : <div> settle-result
   match load(gate.gate-state)
-    Capture-pending -> settle-trace-recheck(plane,current,gate)
+    Capture-dead -> Settle-ok
     Capture-live ->
       val nested = settle-trace-result(plane,load(child))
-      // Any result from the previous child is obsolete if nested settlement
-      // invalidated the Entry. Resume the Entry K before propagating a stale
-      // child failure/defer result.
       match load(gate.gate-state)
-        Capture-pending -> settle-trace-recheck(plane,current,gate)
-        Capture-live -> nested
+        Capture-dead -> Settle-ok
         _ ->
           match nested
             Settle-ok -> settle-trace-recheck(plane,current,gate)
             _ -> nested
     _ -> settle-trace-recheck(plane,current,gate)
 
-pub fun settle-read-child(plane : plane<total>, current : trace<total>,
-                      gate : continuation-gate,
-                      entry : maybe<trace<total>>,
-                      child : ref<global,trace<total>>)
-                     : <div> settle-result
-  match settle-entry-target(plane,entry)
-    Settle-deferred -> Settle-deferred
-    Settle-failed(failure) -> Settle-failed(failure)
-    Settle-ok ->
-      match load(gate.gate-state)
-        Capture-dead -> Settle-ok
-        Capture-live ->
-          val nested = settle-trace-result(plane,load(child))
-          match settle-entry-target(plane,entry)
-            Settle-deferred -> Settle-deferred
-            Settle-failed(failure) -> Settle-failed(failure)
-            Settle-ok ->
-              match load(gate.gate-state)
-                Capture-dead -> Settle-ok
-                _ ->
-                  match nested
-                    Settle-ok -> settle-trace-recheck(plane,current,gate)
-                    _ -> nested
-        _ -> settle-trace-recheck(plane,current,gate)
-
 pub fun settle-read-node(plane : plane<total>, current : trace<total>,
                      gate : continuation-gate,
-                     entry : maybe<trace<total>>,
                      child : ref<global,trace<total>>)
                     : <div> settle-result
-  // Entry is checked before the producer input, after that input settles, and
-  // again after the child. This prevents work in an obsolete entry generation
-  // from winning over the actual Entry continuation.
-  match settle-entry-target(plane,entry)
-    Settle-deferred -> Settle-deferred
-    Settle-failed(failure) -> Settle-failed(failure)
-    Settle-ok ->
+  match load(gate.gate-state)
+    Capture-dead -> Settle-ok
+    Capture-live ->
+      val input = match gate.gate-input-producer
+        Nothing -> Settle-ok
+        Just(upstream) -> settle-producer-result(upstream)
       match load(gate.gate-state)
         Capture-dead -> Settle-ok
-        Capture-live ->
-          val input = match gate.gate-input-producer
-            Nothing -> Settle-ok
-            Just(upstream) -> settle-producer-result(upstream)
-          match settle-entry-target(plane,entry)
+        _ ->
+          match input
+            Settle-ok -> settle-read-child(plane,current,gate,child)
             Settle-deferred -> Settle-deferred
             Settle-failed(failure) -> Settle-failed(failure)
-            Settle-ok ->
-              match load(gate.gate-state)
-                Capture-dead -> Settle-ok
-                _ ->
-                  match input
-                    Settle-ok ->
-                      settle-read-child(plane,current,gate,entry,child)
-                    Settle-deferred -> Settle-deferred
-                    Settle-failed(failure) -> Settle-failed(failure)
-        _ -> settle-trace-recheck(plane,current,gate)
+    _ -> settle-trace-recheck(plane,current,gate)
 
 pub fun settle-trace-result(plane : plane<total>, current : trace<total>)
                        : <div> settle-result
   match current
     Trace-end -> Settle-ok
-    Trace-read(gate,_,entry,child,_,_,_,_,_) ->
-      settle-read-node(plane,current,gate,entry,child)
-    Trace-entry(gate,_,child,_,_,_) ->
-      settle-entry-node(plane,current,gate,child)
+    Trace-read(gate,_,child,_,_,_,_,_) ->
+      settle-read-node(plane,current,gate,child)
 
 pub fun settle-producer-body(producer : derive-producer) : <div> settle-result
   match load(producer.producer-scope.scope-lifetime.lifetime-token)

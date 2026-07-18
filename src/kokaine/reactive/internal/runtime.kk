@@ -27,7 +27,7 @@ pub fun dispatch(root : root<e>,
 
 fun fresh-plane(current-frame : frame<e>,
                 retirement : retirement-coordinator<e>) : plane<e>
-  Plane(new-work-queue(),cell(Nothing),cell(Nothing),cell(Nothing),
+  Plane(new-work-queue(),cell(Nothing),cell(Nothing),
         cell(current-frame),cell(Nothing),retirement)
 
 fun fresh-root() : root<e>
@@ -86,8 +86,6 @@ fun retire-root-now(root : root<e>) : <div,exn|e> ()
       store(root.root-effect-plane.plane-work-group,Nothing)
       store(root.root-derive-plane.plane-current,Nothing)
       store(root.root-effect-plane.plane-current,Nothing)
-      store(root.root-derive-plane.plane-current-entry,Nothing)
-      store(root.root-effect-plane.plane-current-entry,Nothing)
       store(root.root-derive-plane.plane-draft,Nothing)
       store(root.root-effect-plane.plane-draft,Nothing)
     },
@@ -271,52 +269,6 @@ pub fun derive-always(root : root<e>, initial : a,
                       calculate : () -> <signal-read,pure> a)
                      : <signal-write,pure> memo<a>
   derive-by(root,initial,calculate,fn(_,_) False)
-
-fun memo-by-inner(root : root<e>, initial : a,
-                  calculate : (previous : a) -> <signal-read,pure> a,
-                  equals : (a,a) -> bool) : <signal-write,pure> memo<a>
-  check-not-pure-plane("memo creation")
-  check-registration(root)
-  val source = new-source(root,initial,equals)
-  val effect-plane = root.root-effect-plane
-  val owner = load(effect-plane.plane-current-frame)
-  check-frame-registration(root,owner)
-  val derive-plane = root.root-derive-plane
-  val owner-slot = cell(Nothing)
-  // Bootstrap consumes `calculate` once. The retained execution capability is
-  // the raw continuation captured at State-entry-read; each resume injects the
-  // latest successfully committed source value as `previous`.
-  val track = fn() calculate(
-    read-source(source,State-entry-read,Nothing))
-  val (current,bootstrap,_) = prepare-trace(
-    root,derive-plane,owner-slot,load(effect-plane.plane-current),track,
-    fn(value) commit-derived(root,source,value)
-  )
-  val producer = Derive-producer(derive-plane,current,cell(False))
-  store(owner-slot,Just(producer))
-  val structural = pretend-no-div{
-    widen-pure-retirement(scope-retirement-work(current))
-  }
-  val registration = owner.frame-lifetime.register-child(structural)
-  store(current.scope-unlink,Just(fn() registration.take.is-just))
-  queue-work(derive-plane,bootstrap)
-  request-flush(root.root-key)
-  Memo(source,producer)
-
-pub fun memo-by(root : root<e>, initial : a,
-                calculate : (previous : a) -> <signal-read,pure> a,
-                equals : (a,a) -> bool) : <signal-write,pure> memo<a>
-  memo-by-inner(root,initial,calculate,equals)
-
-pub fun memo(root : root<e>, initial : a,
-             calculate : (previous : a) -> <signal-read,pure> a,
-             ?(==) : (a,a) -> bool) : <signal-write,pure> memo<a>
-  memo-by(root,initial,calculate,(==))
-
-pub fun memo-always(root : root<e>, initial : a,
-                    calculate : (previous : a) -> <signal-read,pure> a)
-                   : <signal-write,pure> memo<a>
-  memo-by(root,initial,calculate,fn(_,_) False)
 
 pub fun memo/get(memo : memo<a>) : signal-read a
   validate-derived(memo.memo-producer)

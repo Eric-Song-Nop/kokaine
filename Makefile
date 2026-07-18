@@ -58,9 +58,7 @@ test-native:
 	$(KOKA) $(KOKA_FLAGS) -e test/targeted-settle.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/targeted-settle-canary.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/execution-planes.kk
-	$(KOKA) $(KOKA_FLAGS) -e test/stateful-entry-gates.kk
-	$(KOKA) $(KOKA_FLAGS) -e test/entry-targeted-settle.kk
-	$(KOKA) $(KOKA_FLAGS) -e test/entry-structural.kk
+	$(KOKA) $(KOKA_FLAGS) -e test/derived-structural.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/smoke.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/continuation.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/final-control-rollback.kk

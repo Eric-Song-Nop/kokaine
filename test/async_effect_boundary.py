@@ -11,7 +11,6 @@ import tempfile
 
 FIXTURES = (
     "derive-async-invalid.kk",
-    "memo-async-invalid.kk",
     "resource-source-async-invalid.kk",
     "run-async-effect-boundary-invalid.kk",
     "run-async-root-effect-boundary-invalid.kk",

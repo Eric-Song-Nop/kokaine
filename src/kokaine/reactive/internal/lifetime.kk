@@ -16,14 +16,12 @@ import std/core/undiv
 pub fun trace-state-of(current : trace<e>) : capture-state
   match current
     Trace-end -> Capture-dead
-    Trace-read(gate,_,_,_,_,_,_,_,_) -> load(gate.gate-state)
-    Trace-entry(gate,_,_,_,_,_) -> load(gate.gate-state)
+    Trace-read(gate,_,_,_,_,_,_,_) -> load(gate.gate-state)
 
 pub fun trace-gate-of(current : trace<e>) : maybe<continuation-gate>
   match current
     Trace-end -> Nothing
-    Trace-read(gate,_,_,_,_,_,_,_,_) -> Just(gate)
-    Trace-entry(gate,_,_,_,_,_) -> Just(gate)
+    Trace-read(gate,_,_,_,_,_,_,_) -> Just(gate)
 
 pub fun trace-parent-of(current : trace<e>) : maybe<continuation-gate>
   match current.trace-gate-of
@@ -122,7 +120,7 @@ fun trace-retirement-expand(current : trace<e>)
                        : <div> list<retirement-work<e>>
   match current
     Trace-end -> []
-    Trace-read(gate,_,_,child,current-frame-slot,_,finalize,unlink,_) ->
+    Trace-read(gate,_,child,current-frame-slot,_,finalize,unlink,_) ->
       val state = gate.gate-state
       match load(state)
         Capture-dead -> []
@@ -132,20 +130,6 @@ fun trace-retirement-expand(current : trace<e>)
           store(state,Capture-dead)
           store(lifetime.lifetime-token,Scope-branch-dead)
           unlink()
-          val nested = load(child)
-          store(child,Trace-end)
-          [trace-retirement-work(nested),
-           lifetime-retirement-work(lifetime),
-           Retirement-finalizer(finalize)]
-    Trace-entry(gate,_,child,current-frame-slot,_,finalize) ->
-      val state = gate.gate-state
-      match load(state)
-        Capture-dead -> []
-        _ ->
-          val current-frame = load(current-frame-slot)
-          val lifetime = current-frame.frame-lifetime
-          store(state,Capture-dead)
-          store(lifetime.lifetime-token,Scope-branch-dead)
           val nested = load(child)
           store(child,Trace-end)
           [trace-retirement-work(nested),
@@ -262,9 +246,7 @@ fun trace-retirement-coordinator(current : trace<e>)
                             : maybe<retirement-coordinator<e>>
   match current
     Trace-end -> Nothing
-    Trace-read(_,_,_,_,frame,_,_,_,_) ->
-      Just(load(frame).frame-lifetime.lifetime-retirement)
-    Trace-entry(_,_,_,frame,_,_) ->
+    Trace-read(_,_,_,frame,_,_,_,_) ->
       Just(load(frame).frame-lifetime.lifetime-retirement)
 
 tail fun traces-retirement-coordinator(values : list<trace<e>>)
@@ -390,17 +372,4 @@ pub fun with-context(plane : plane<e>, current : maybe<continuation-gate>,
     fn()
       store(plane.plane-current,current)
       with-frame(plane,current-frame,action)
-  )
-
-// Entry targeting is a dynamic capability, deliberately separate from the
-// structural gate parent. Structural scopes inherit `plane-current` for
-// lifetime gating, but never inherit a surrounding state entry target.
-pub fun with-entry(plane : plane<e>, current : maybe<trace<e>>,
-               action : () -> <div,exn|e> a) : <div,exn|e> a
-  val previous = load(plane.plane-current-entry)
-  finally(
-    fn() store(plane.plane-current-entry,previous),
-    fn()
-      store(plane.plane-current-entry,current)
-      action()
   )

@@ -136,22 +136,6 @@ pub fun derive-always(root : root<e>, initial : a,
                      : <signal-write,pure> memo<a>
   derive-by(root,initial,calculate,fn(_,_) False)
 
-pub fun memo-by(root : root<e>, initial : a,
-                calculate : (previous : a) -> <signal-read,pure> a,
-                equals : (a,a) -> bool) : <signal-write,pure> memo<a>
-  Public-memo(runtime-memo-by(
-    root.unwrap-root,initial,calculate,equals))
-
-pub fun memo(root : root<e>, initial : a,
-             calculate : (previous : a) -> <signal-read,pure> a,
-             ?(==) : (a,a) -> bool) : <signal-write,pure> memo<a>
-  memo-by(root,initial,calculate,(==))
-
-pub fun memo-always(root : root<e>, initial : a,
-                    calculate : (previous : a) -> <signal-read,pure> a)
-                   : <signal-write,pure> memo<a>
-  memo-by(root,initial,calculate,fn(_,_) False)
-
 pub fun memo/get(value : memo<a>) : signal-read a
   runtime-memo-get(value.unwrap-memo)
 

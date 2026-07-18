@@ -41,17 +41,14 @@ pub fun with-structural-owner(root : root<r>, owner : structural-owner<r>,
   check-frame-registration(root,owner.structural-frame)
   val plane = root.root-effect-plane
   val previous-current = load(plane.plane-current)
-  val previous-entry = load(plane.plane-current-entry)
   val previous-frame = load(plane.plane-current-frame)
   finally(
     fn() {
       store(plane.plane-current,previous-current)
-      store(plane.plane-current-entry,previous-entry)
       store(plane.plane-current-frame,previous-frame)
     },
     fn()
       store(plane.plane-current,owner.structural-checkpoint)
-      store(plane.plane-current-entry,Nothing)
       store(plane.plane-current-frame,owner.structural-frame)
       action()
   )

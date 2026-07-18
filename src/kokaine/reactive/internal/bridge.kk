@@ -62,13 +62,6 @@ pub fun runtime-derive-by(root : root<e>, initial : a,
   kokaine/reactive/internal/runtime/derive-by(
     root,initial,calculate,equals)
 
-pub fun runtime-memo-by(root : root<e>, initial : a,
-                        calculate : (previous : a) -> <signal-read,pure> a,
-                        equals : (a,a) -> bool)
-                       : <signal-write,pure> memo<a>
-  kokaine/reactive/internal/runtime/memo-by(
-    root,initial,calculate,equals)
-
 pub fun runtime-memo-get(value : memo<a>) : signal-read a
   kokaine/reactive/internal/runtime/memo/get(value)
 

@@ -40,17 +40,13 @@ pub fun run-reentry(value : reentry<e>,
       check-frame-registration(root,current)
       val plane = root.root-effect-plane
       pretend-no-div{
-        // State-entry targets are local to a running stateful memo and must
-        // never escape into a later host callback.
-        with-entry(plane,Nothing,fn()
-          with-context(plane,checkpoint,current,
-            fn()
-              lift-div(fn()
-                dispatch-handled(root,fn()
-                  reentry-turn(root,action)
-                )
+        with-context(plane,checkpoint,current,
+          fn()
+            lift-div(fn()
+              dispatch-handled(root,fn()
+                reentry-turn(root,action)
               )
-          )
+            )
         )
       }
 
@@ -78,10 +74,8 @@ fun run-retirement-reentry(
     Reentry(root,checkpoint,current) ->
       val plane = root.root-effect-plane
       pretend-no-div{
-        with-entry(plane,Nothing,fn()
-          with-context(plane,checkpoint,current,
-            fn() lift-div(fn() dispatch-handled(root,action)))
-        )
+        with-context(plane,checkpoint,current,
+          fn() lift-div(fn() dispatch-handled(root,action)))
       }
 
 // The application runner surrounds the complete cancellation turn. It is the
