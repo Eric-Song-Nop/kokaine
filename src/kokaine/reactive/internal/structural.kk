@@ -92,19 +92,11 @@ pub fun drain-structural-transaction(
       drain-work-transaction(root,current)
     Structural-transaction(_,_,Structural-joined) -> ()
 
-pub fun structural-transaction/owns-publication(
+pub fun structural-transaction/owns-transaction(
     transaction : structural-transaction<e>) : bool
   match transaction
     Structural-transaction(_,_,Structural-owned) -> True
     Structural-transaction(_,_,Structural-joined) -> False
-
-pub fun stage-structural-publication(
-    transaction : structural-transaction<e>,
-    prepare : () -> <exn|e> (), publish : () -> (),
-    rollback : () -> <exn|e> ()) : exn ()
-  match transaction
-    Structural-transaction(root,current,_) ->
-      stage-work-publication(root,current,prepare,publish,rollback)
 
 pub fun commit-structural-transaction(
     transaction : structural-transaction<e>) : <div,exn|e> ()

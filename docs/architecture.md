@@ -606,8 +606,9 @@ complete rollback snapshot, and stale handles no longer retain sibling values.
   `entry-structural.kk` check state-entry routing and ownership.
 - `structural-scopes.kk` checks replacement cleanup and stale-frame rejection.
 - `structural-transactions.kk` checks persistent row ownership, parent/root
-  retirement, stale-owner rejection, outer-versus-joined leases, and the
-  prepare/publish/rollback journal.
+  retirement, stale-owner rejection, outer-versus-joined bootstrap leases, and
+  failed-prefix cleanup. Renderer journal ordering is guarded separately by
+  `keyed_transaction_boundary.py` and the keyed browser fixture.
 - `control-flow.kk` checks conditional/list/vector snapshots and duplicate-key
   parity; `key-index.kk` checks balanced lookup under adversarial insertion.
 - `final-control-rollback.kk` checks abandoned drafts and exact-K retry.

@@ -97,16 +97,6 @@ pub type work-transaction-state
   Work-committed
   Work-aborted
 
-// Structural adapters which join an outer bootstrap transaction cannot
-// publish independently. They enlist a fallible preparation, a total state
-// publication, and a rollback action in the outer transaction instead.
-pub type work-publication<e::E>
-  Work-publication(
-    publication-prepare  : () -> <exn|e> (),
-    publication-publish  : () -> (),
-    publication-rollback : () -> <exn|e> ()
-  )
-
 pub type work-group<a>
   Work-group(
     group-state    : ref<global,work-transaction-state>,

@@ -84,53 +84,13 @@ fun test_joined_abort_does_not_steal_the_outer_lease()
         "only the outer lease owns commit or abort")
   root.dispose()
 
-fun test_joined_publication_waits_for_outer_commit()
-  val prepared = hidden(0)
-  val published = hidden(False)
-  val rolled-back = hidden(0)
-  val (root,outer) = create-root fn(root)
-    val outer = internal/open-structural-transaction(root)
-    val bootstrap = create-effect(root,fn() (),fn(_)
-      val joined = internal/open-structural-transaction(root)
-      internal/stage-structural-publication(
-        joined,
-        fn() increment(prepared),
-        fn() hidden-store(published,True),
-        fn() increment(rolled-back)
-      )
-    )
-    outer
-
-  pretend-no-div{ internal/drain-structural-transaction(outer) }
-  check(hidden-load(prepared) == 0,
-        "joined publication is not prepared during the outer drain")
-  check(!hidden-load(published),
-        "joined publication remains private before the outer commit")
-  pretend-no-div{ internal/commit-structural-transaction(outer) }
-  check(hidden-load(prepared) == 1,
-        "outer commit prepares each joined publication once")
-  check(hidden-load(published),
-        "outer commit publishes the joined adapter")
-  check(hidden-load(rolled-back) == 0,
-        "a committed joined publication is never rolled back")
-  root.dispose()
-
-fun test_joined_outer_abort_rolls_back_without_publication()
+fun test_joined_outer_abort_retires_successful_prefix()
   val runs = hidden(0)
   val cleanups = hidden(0)
-  val prepared = hidden(0)
-  val published = hidden(False)
-  val rolled-back = hidden(0)
   val (root,outer) = create-root fn(root)
     val outer = internal/open-structural-transaction(root)
     val bootstrap = create-effect(root,fn() (),fn(_)
       val joined = internal/open-structural-transaction(root)
-      internal/stage-structural-publication(
-        joined,
-        fn() increment(prepared),
-        fn() hidden-store(published,True),
-        fn() increment(rolled-back)
-      )
       val first = create-effect(root,fn() (),fn(_)
         increment(runs)
         on-cleanup(root,fn() increment(cleanups))
@@ -149,20 +109,13 @@ fun test_joined_outer_abort_rolls_back_without_publication()
   check(attempted.is-error,
         "a later joined child failure rejects the outer drain")
   internal/abort-structural-transaction(outer)
-  check(hidden-load(prepared) == 0,
-        "an aborted outer transaction never prepares publication")
-  check(!hidden-load(published),
-        "an aborted outer transaction never publishes joined state")
-  check(hidden-load(rolled-back) == 1,
-        "outer abort rolls back the enlisted adapter exactly once")
   check(hidden-load(runs) == 1,
         "the successful joined child ran before the later failure")
   check(hidden-load(cleanups) == 1,
         "outer abort retires the successful joined child without leaking")
   root.dispose()
 
-fun test-failed-outer-commit-cannot-reach-publication()
-  val published = hidden(False)
+fun test-terminal-transaction-rejects-commit()
   val (root,transaction) = create-root fn(root)
     internal/open-structural-transaction(root)
 
@@ -170,19 +123,15 @@ fun test-failed-outer-commit-cannot-reach-publication()
   val attempted : error<()> = mask<exn>{
     error/try fn()
       pretend-no-div{ internal/commit-structural-transaction(transaction) }
-      hidden-store(published,True)
   }
 
   check(attempted.is-error,"a terminal transaction rejects commit")
-  check(!hidden-load(published),
-        "failed commit cannot enter the irreversible publication suffix")
   root.dispose()
 
 pub fun main()
   test-stable-owner-uses-independent-lifetime()
   test-nested-transaction-borrows_the_outer_fifo()
   test_joined_abort_does_not_steal_the_outer_lease()
-  test_joined_publication_waits_for_outer_commit()
-  test_joined_outer_abort_rolls_back_without_publication()
-  test-failed-outer-commit-cannot-reach-publication()
+  test_joined_outer_abort_retires_successful_prefix()
+  test-terminal-transaction-rejects-commit()
   println("structural transactions: lifetime and joined-drain contracts passed")

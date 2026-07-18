@@ -43,35 +43,14 @@ fun fresh-root() : root<e>
     Root-key(cell(True)),
     fresh-plane(derive-frame,derive-retirement),
     fresh-plane(effect-frame,effect-retirement),
-    cell(Nothing),lifetime,cell(0),cell(False),cell(False),cell(False)
+    lifetime,cell(0),cell(False),cell(False),cell(False)
   )
   effect-retirement.install-root-disposal(fn() retire-root-now(root))
   root
 
-tail fun prepend-root-publication-rollbacks(
-    values : list<work-publication<e>>,
-    collected : list<retirement-work<e>>)
-    : <div> list<retirement-work<e>>
-  match values
-    Nil -> collected
-    Cons(current,rest) ->
-      val rollback = current.publication-rollback
-      prepend-root-publication-rollbacks(
-        rest,Cons(Retirement-finalizer(
-          fn() lift-div(fn() rollback())),collected))
-
-// Root retirement must claim every transaction capability before invoking any
-// user cleanup. A retained transaction can otherwise re-enter abort while the
-// copied journal and live queue still name the same rollback callbacks.
-fun claim-root-work(root : root<e>) : list<work-publication<e>>
-  val publications = match load(root.root-work-publications)
-    Nothing -> []
-    Just(pending) ->
-      val values = pending.values
-      pending.clear
-      values
-  store(root.root-work-publications,Nothing)
-
+// Root retirement detaches local bootstrap groups before invoking cleanup so
+// retained transaction capabilities cannot reclaim their scopes by re-entry.
+fun claim-root-work(root : root<e>) : ()
   val derive-group = load(root.root-derive-plane.plane-work-group)
   val effect-group = load(root.root-effect-plane.plane-work-group)
   store(root.root-derive-plane.plane-work-group,Nothing)
@@ -86,7 +65,6 @@ fun claim-root-work(root : root<e>) : list<work-publication<e>>
     Just(group) ->
       val _ = group.mark-aborted
       group.clear
-  publications
 
 // This is the non-validating half of root disposal. Besides ordinary public
 // disposal, it is used to roll back a root whose construction has not been
@@ -95,7 +73,7 @@ fun claim-root-work(root : root<e>) : list<work-publication<e>>
 fun retire-root-now(root : root<e>) : <div,exn|e> ()
   store(root.root-disposing,True)
   store(root.root-lifetime.lifetime-token,Scope-dead)
-  val publications = claim-root-work(root)
+  claim-root-work(root)
   finally(
     fn() {
       store(root.root-batch-depth,0)
@@ -115,12 +93,8 @@ fun retire-root-now(root : root<e>) : <div,exn|e> ()
     },
     fn()
       val lifetime-finalizers = collect-lifetime(root.root-lifetime)
-      val publication-rollbacks = prepend-root-publication-rollbacks(
-        publications,[])
-      val finalizers = pretend-no-div{
-        lifetime-finalizers ++ publication-rollbacks
-      }
-      run-finalizers(root.root-lifetime.lifetime-retirement,finalizers)
+      run-finalizers(
+        root.root-lifetime.lifetime-retirement,lifetime-finalizers)
   )
 
 pub fun create-root(action : (root<e>) -> <signal-write,pure|e> a)

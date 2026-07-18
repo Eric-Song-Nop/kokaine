@@ -114,13 +114,7 @@ pub fun runtime-drain-structural-transaction(
 
 pub fun runtime-structural-transaction-owned(
     transaction : structural-transaction<e>) : bool
-  transaction.owns-publication
-
-pub fun runtime-stage-structural-publication(
-    transaction : structural-transaction<e>,
-    prepare : () -> <exn|e> (), publish : () -> (),
-    rollback : () -> <exn|e> ()) : exn ()
-  stage-structural-publication(transaction,prepare,publish,rollback)
+  transaction.owns-transaction
 
 pub fun runtime-commit-structural-transaction(
     transaction : structural-transaction<e>) : <div,exn|e> ()

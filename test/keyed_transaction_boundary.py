@@ -3,7 +3,8 @@
 from pathlib import Path
 
 
-SOURCE = Path(__file__).resolve().parents[1] / "src/kokaine/dom.kk"
+ROOT = Path(__file__).resolve().parents[1]
+SOURCE = ROOT / "src/kokaine/dom.kk"
 text = SOURCE.read_text()
 start = text.index("fun reconcile-keyed")
 end = text.index("fun mount-keyed-fields", start)
@@ -46,3 +47,17 @@ assert mark_committed < drain_retirements, (
 assert "stage-keyed-publication(" in reconcile
 assert "internal/stage-structural-publication(" not in reconcile
 assert "joined keyed reconciliation must be initial construction" in reconcile
+
+reactive_sources = "\n".join(
+    path.read_text()
+    for path in (ROOT / "src/kokaine/reactive").rglob("*.kk")
+)
+for forbidden in (
+    "work-publication",
+    "root-work-publications",
+    "stage-structural-publication",
+    "stage-work-publication",
+):
+    assert forbidden not in reactive_sources, (
+        f"renderer publication concern leaked into reactive core: {forbidden}"
+    )
