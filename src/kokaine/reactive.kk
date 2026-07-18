@@ -11,7 +11,6 @@ import kokaine/reactive/internal/model
 pub import kokaine/reactive/effects
 import kokaine/reactive/internal/bridge
 import kokaine/reactive/internal/structural
-import kokaine/async/effects
 
 abstract value type root<e::E>
   Public-root(internal-root : kokaine/reactive/internal/model/root<e>)
@@ -40,6 +39,12 @@ pub alias disposer<e> = kokaine/reactive/internal/model/disposer<e>
 fun unwrap-root(value : root<e>) : kokaine/reactive/internal/model/root<e>
   match value
     Public-root(inner) -> inner
+
+// Koka has no package-private exports. Integration modules use this qualified
+// capability to bind a public root without making the core depend on them.
+pub fun internal/root-handle(value : root<e>)
+    : kokaine/reactive/internal/model/root<e>
+  value.unwrap-root
 
 fun unwrap-signal(value : signal<a>)
                  : kokaine/reactive/internal/model/signal<a>
@@ -230,11 +235,3 @@ pub fun internal/abort-structural-transaction(
     transaction : structural-transaction<e>) : <exn|e> ()
   runtime-abort-structural-transaction(
     transaction.unwrap-structural-transaction)
-
-// Run a direct-style browser task under the exact structural generation which
-// is current at the call site. Each suspension is registered with that owner;
-// later completion re-enters through a fresh Kokaine batch.
-pub fun run-async(root : root<<ui>>,
-                  action : () -> <async,signal-read,signal-write,pure,ui> ())
-                 : <signal-read,signal-write,pure,ui> ()
-  runtime-run-generation-async(root.unwrap-root,action)

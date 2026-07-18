@@ -31,9 +31,10 @@ memos, and re-entry capabilities. Its implementation is split by responsibility:
 | `internal/reentry.kk` | continuation-derived host re-entry |
 | `internal/application-runner.kk` | explicit rank-2 application-handler reinstallation |
 | `kokaine/internal/registry.kk` | shared O(1) intrusive registration, claim, and unlink |
-| `internal/one-shot-task.kk` | atomic host-task state and winning claims |
-| `internal/cancellation-supervisor.kk` | claim-first lexical scope cancellation |
-| `internal/async-runtime.kk` | generation-bound Web awaits and task leases |
+| `kokaine/async/internal/one-shot-task.kk` | atomic host-task state and winning claims |
+| `kokaine/async/internal/cancellation-supervisor.kk` | claim-first lexical scope cancellation |
+| `reactive/async.kk` | public generation-owned Async integration |
+| `reactive/async/internal/runtime.kk` | generation-bound Web awaits and task leases |
 | `kokaine/internal/event-runtime.kk` | guarded multi-shot browser-event continuation |
 | `kokaine/internal/key-index.kk` | persistent balanced key lookup shared by renderers |
 | `kokaine/control.kk` | memo branches and list/vector keyed control flow |
@@ -528,7 +529,9 @@ innermost boundary and translate them to Koka `exn`, as the DOM adapter does.
 
 ## Browser async task leases
 
-`run-async(root, action)` is the explicit boundary for direct-style Web async.
+`kokaine/reactive/async.run-async(root, action)` is the explicit boundary for
+direct-style Web async. The reactive core does not import this integration
+module; it supplies only the root and generation capabilities used by it.
 An await parks only its suffix and returns from the initiating reactive turn.
 Even a synchronously reported setup result is queued as a microtask, so every
 continuation after an await enters a fresh reactive batch through the captured

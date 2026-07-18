@@ -488,6 +488,8 @@ the current sequence once in source order.
 ## Web async and Resource
 
 Import `kokaine/async/web` for browser adapters and structured combinators.
+Import `kokaine/reactive/async` when starting a generation-owned task outside
+the DOM listener interpreter.
 DOM listeners already install `run-async`, so their callbacks can suspend in
 direct style:
 
@@ -585,7 +587,8 @@ action explicitly transfers that ownership back to application code.
   structure, not arbitrary lexical effect handlers. DOM listeners additionally
   park the user action in an opaque multi-shot event continuation; the host
   callback only snapshots the event and synchronously resumes that capability.
-- `run-async(root, action)` delimits one generation-bound browser task. Each
+- `kokaine/reactive/async.run-async(root, action)` delimits one
+  generation-bound browser task. Each
   await returns control to close the current turn; completion resumes under a
   newly installed async interpreter inside the captured generation. Its root
   is closed to `ui`: a later browser turn cannot reconstruct a lexical handler
@@ -655,7 +658,8 @@ src/kokaine/reactive/internal/scheduler.kk invalidation, queues, targeted settle
 src/kokaine/reactive/internal/structural.kk retained owners and transaction leases
 src/kokaine/reactive/internal/handlers.kk  signal interpreters and dispatch
 src/kokaine/reactive/internal/reentry.kk   batched structural host re-entry
-src/kokaine/reactive/internal/async-runtime.kk generation-owned Web awaits
+src/kokaine/reactive/async.kk             generation-owned Async integration
+src/kokaine/reactive/async/internal/runtime.kk Web await interpreter
 src/kokaine/reactive/internal/runtime.kk   roots and high-level reactive values
 src/kokaine/reactive/internal/bridge.kk    names used by the public facade
 src/kokaine/internal/event-runtime.kk      guarded multi-shot browser event K
@@ -666,6 +670,8 @@ src/kokaine/async/effects.kk               await, cancellation, and scope algebr
 src/kokaine/async/channel.kk               structured strand resumption queue
 src/kokaine/async/structured.kk            parallel, race, and timeout core
 src/kokaine/async/web.kk                   timer, Promise, and Fetch adapters
+src/kokaine/async/internal/one-shot-task.kk atomic host-task state
+src/kokaine/async/internal/cancellation-supervisor.kk lexical cancellation
 src/kokaine/web/window.kk                  one-shot window awaits and geometry
 src/kokaine/resource.kk                    tracked-source async Resource
 src/kokaine/html.kk                        handled backend-neutral view DSL

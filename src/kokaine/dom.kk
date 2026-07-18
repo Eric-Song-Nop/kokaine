@@ -8,6 +8,7 @@
 module kokaine/dom
 
 import kokaine/reactive
+import kokaine/reactive/async
 import kokaine/html
 import kokaine/internal/event-runtime
 import kokaine/internal/key-index

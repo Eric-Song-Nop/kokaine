@@ -5,6 +5,7 @@
 module report
 
 import kokaine/reactive
+import kokaine/reactive/async
 import kokaine/dom
 import kokaine/web/window
 import examples/report/model

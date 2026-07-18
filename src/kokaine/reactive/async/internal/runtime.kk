@@ -11,7 +11,7 @@
   generation through `run-reentry`, installs a fresh async handler inside the
   re-entry batch, and only then resumes the parked suffix.
 --------------------------------------------------------------------------*/
-module kokaine/reactive/internal/async-runtime
+module kokaine/reactive/async/internal/runtime
 
 import kokaine/async/effects
 import kokaine/async/internal/web-schedule
@@ -20,8 +20,8 @@ import kokaine/reactive/internal/model
 import kokaine/reactive/internal/reentry
 import kokaine/reactive/internal/runtime
 import kokaine/reactive/internal/application-runner
-import kokaine/reactive/internal/one-shot-task
-import kokaine/reactive/internal/cancellation-supervisor
+import kokaine/async/internal/one-shot-task
+import kokaine/async/internal/cancellation-supervisor
 import kokaine/internal/registry
 import kokaine/internal/int-index
 import std/core/undiv

@@ -185,9 +185,9 @@ pub fun async-host(action : () -> ui a) : async a
 pub fun async-schedule(action : () -> ui ()) : async ()
   async-schedule-ioc(async-scope,action)
 
-// Acquire a lease for a host resource. By default it follows the reactive
-// generation rather than a structured cancellation scope; a nearer structured
-// or Resource ledger may further constrain or promote that lifetime.
+// Acquire a lease for a host resource. The active ownership interpreter
+// decides its default lifetime; a nearer structured or Resource ledger may
+// further constrain or promote that lifetime.
 pub fun async-own(dispose : dispose-fn) : async dispose-fn
   val release = async-own-disposer(dispose)
   fn()

@@ -1,6 +1,7 @@
 module dom-event-continuation
 
 import kokaine/reactive
+import kokaine/reactive/async
 import kokaine/html
 import kokaine/dom
 import kokaine/internal/event-runtime

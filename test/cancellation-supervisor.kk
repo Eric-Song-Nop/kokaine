@@ -1,6 +1,6 @@
 module cancellation-supervisor
 
-import kokaine/reactive/internal/cancellation-supervisor
+import kokaine/async/internal/cancellation-supervisor
 import std/core/unsafe
 import std/core/undiv
 
