@@ -178,9 +178,6 @@ pub fun signal/set(signal : signal<a>, value : a) : signal-write ()
 pub fun signal/modify(signal : signal<a>, update : a -> a) : signal-write ()
   modify-source(signal.signal-source,update)
 
-pub fun signal/update(signal : signal<a>, update : a -> a) : signal-write ()
-  signal.modify(update)
-
 pub fun batch(root : root<e>, action : () -> <signal-write,pure|e1> a)
              : <signal-write,pure|e1> a
   enter-batch(root.root-key)

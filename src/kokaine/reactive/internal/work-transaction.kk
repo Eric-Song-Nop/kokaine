@@ -73,10 +73,6 @@ pub fun work-queue/values(target : work-queue<a>) : list<a>
 pub fun work-queue/clear(target : work-queue<a>) : ()
   store(target,empty-deque())
 
-pub fun work-queue/same(left : work-queue<a>,
-                        right : work-queue<a>) : bool
-  unsafe-ptr-eq(left,right)
-
 tail fun append-values-loop(target : work-queue<a>, values : list<a>)
                            : <div> ()
   match values

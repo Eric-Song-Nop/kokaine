@@ -4,7 +4,6 @@
 module kokaine/reactive/internal/lifetime
 
 import kokaine/reactive/internal/model
-import kokaine/reactive/internal/resource
 import kokaine/internal/compat
 import kokaine/internal/registry
 import std/core/undiv
@@ -174,10 +173,6 @@ pub fun collect-retirement-work(values : list<retirement-work<e>>)
                            : <div> list<retirement-work<e>>
   collect-retirement-loop(values,[])
 
-pub fun collect-retirement(current : trace<e>)
-                      : <div> list<retirement<e>>
-  collect-retirement-work([trace-retirement-work(current)])
-
 pub fun collect-scope(current : continuation-scope<e>)
                  : <div> list<retirement<e>>
   collect-retirement-work([scope-retirement-work(current)])
@@ -258,13 +253,6 @@ tail fun traces-retirement-coordinator(values : list<trace<e>>)
         Nothing -> traces-retirement-coordinator(rest)
         found -> found
 
-pub fun retire-trace(current : trace<e>) : <div,exn|e> ()
-  match trace-retirement-coordinator(current)
-    Nothing -> ()
-    Just(coordinator) ->
-      val finalizers = pretend-no-div{ collect-retirement(current) }
-      run-finalizers(coordinator,finalizers)
-
 pub fun retire-lifetime(owner : lifetime-owner<e>) : <div,exn|e> ()
   val finalizers = pretend-no-div{ collect-lifetime(owner) }
   run-finalizers(owner.lifetime-retirement,finalizers)
@@ -315,12 +303,6 @@ pub fun retire-drafts(values : list<trace<e>>) : <div,exn|e> ()
 
 pub fun retire-drafts-now(values : list<trace<e>>) : <exn|e> ()
   pretend-no-div{ retire-drafts(values) }
-
-pub fun try-retire-lifetime(owner : lifetime-owner<e>) : e error<()>
-  capture-error(fn() pretend-no-div{ retire-lifetime(owner) })
-
-pub fun try-retire-drafts(values : list<trace<e>>) : e error<()>
-  capture-error(fn() retire-drafts-now(values))
 
 pub fun try-retire-scope-drafts(current : continuation-scope<e>,
                                 values : list<trace<e>>) : e error<()>

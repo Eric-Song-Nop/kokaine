@@ -108,21 +108,6 @@ pub fun work-stale(current : work<e>) : bool
         Capture-live -> True
         _ -> False
 
-pub fun take-work-loop(values : list<work<e>>, skipped : list<work<e>>)
-                  : <div> (maybe<work<e>>,list<work<e>>)
-  match values
-    Nil -> (Nothing,skipped.reverse)
-    Cons(current,rest) ->
-      if current.work-runnable
-      then (Just(current),skipped.reverse ++ rest)
-      elif current.work-stale
-      then take-work-loop(rest,skipped)
-      else take-work-loop(rest,Cons(current,skipped))
-
-pub fun take-work(values : list<work<e>>)
-             : (maybe<work<e>>,list<work<e>>)
-  pretend-no-div{ take-work-loop(values,[]) }
-
 tail fun restore-skipped(queue : work-queue<work<e>>,
                          skipped : list<work<e>>) : <div> ()
   match skipped

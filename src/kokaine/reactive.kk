@@ -98,9 +98,6 @@ pub fun signal/set(value : signal<a>, next : a) : signal-write ()
 pub fun signal/modify(value : signal<a>, update : a -> a) : signal-write ()
   runtime-signal-modify(value.unwrap-signal,update)
 
-pub fun signal/update(value : signal<a>, update : a -> a) : signal-write ()
-  value.modify(update)
-
 pub fun batch(root : root<e>, action : () -> <signal-write,pure|e1> a)
              : <signal-write,pure|e1> a
   runtime-batch(root.unwrap-root,action)
