@@ -329,7 +329,7 @@ def main() -> int:
         "显式累积状态",
         "final control",
         "html.emit",
-        "structural reentry",
+        "lifetime reentry",
         "ABI callback",
         "event continuation",
         "resume event K",
