@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-  Executable signal -> derive -> memo(previous) flow.
+  Executable pure derivations and explicit accumulated state.
 --------------------------------------------------------------------------*/
 module examples/report/flow
 
@@ -35,11 +35,11 @@ pub fun render-flow(root, model : report-model)
     header(attrs=[class("kk-island-heading")])
       div
         p("LIVE KOKAINE ROOT",attrs=[class("kk-eyebrow")])
-        h2("signal、derive 与 previous 正在运行")
+        h2("signal、derive 与显式状态正在运行")
       span("真实续体",attrs=[class("kk-badge")])
 
     p(
-      "每次操作都直接写入 Kokaine signal。平方与奇偶由 derive 计算；revision 与 peak 由 memo(previous) 保存状态。",
+      "每次操作都直接写入 count signal。平方与奇偶由 derive 计算；revision 与 peak 是独立 signal，由 create-effect 显式更新。",
       attrs=[class("kk-island-copy")]
     )
 
@@ -79,9 +79,9 @@ pub fun render-flow(root, model : report-model)
                 fn() model.report-flow-square.get.show)
       flow-stat("PARITY","kk-flow-parity","derive + equality",
                 fn() model.report-flow-parity.get)
-      flow-stat("REVISION","kk-flow-revision","memo(previous)",
+      flow-stat("REVISION","kk-flow-revision","effect -> signal",
                 fn() model.report-flow-revision.get.show)
-      flow-stat("PEAK","kk-flow-peak","memo(previous)",
+      flow-stat("PEAK","kk-flow-peak","accumulated signal",
                 fn() model.report-flow-peak.get.show)
 
     div(attrs=[class("kk-flow__pipeline"),aria("hidden","true")])
@@ -89,8 +89,8 @@ pub fun render-flow(root, model : report-model)
       strong("→",attrs=[class("kk-flow__arrow")])
       span("derive square / parity",attrs=[class("kk-flow__node kk-flow__node--derive")])
       strong("→",attrs=[class("kk-flow__arrow")])
-      span("memo(previous)",attrs=[class("kk-flow__node kk-flow__node--memo")])
+      span("effect → state signals",attrs=[class("kk-flow__node kk-flow__node--state")])
 
     p(attrs=[class("kk-note")])
       strong("batch +3 ")
-      text("会执行三次 source write，但只在 batch 边界结算依赖图；复位不会抹掉 peak，因为 previous 正是这个状态实验要展示的语义。")
+      text("会执行三次 source write，但只在 batch 边界结算依赖图；复位只写 count，不会抹掉独立的 peak 累积状态。")

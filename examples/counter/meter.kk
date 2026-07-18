@@ -54,7 +54,7 @@ pub fun render-meter(model : lab-model)
              fn() model.lab-square-value.get.show)
       metric("PARITY / DERIVE","parity-value",
              fn() model.lab-parity-value.get)
-      metric("PEAK / PREVIOUS","peak-value",
+      metric("PEAK / STATE","peak-value",
              fn() model.lab-peak-value.get.show)
 
     div(attrs=[class("trace")])
