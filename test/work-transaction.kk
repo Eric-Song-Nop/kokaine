@@ -2,6 +2,7 @@ module work-transaction
 
 import kokaine/reactive/internal/work-transaction
 import kokaine/reactive/internal/scheduler
+import kokaine/reactive/integration/internal/provision
 import kokaine/reactive/internal/model
 import kokaine/reactive/internal/runtime
 import std/core/unsafe
