@@ -1,0 +1,129 @@
+/*--------------------------------------------------------------------------
+  Reclaimable integer-keyed index.
+
+  Buckets contain intrusive links. A registration holds the pointer-to-pointer
+  backlink for its node, so deletion is O(1) and stale handles sever their
+  connection to the table. Rehashing updates those backlinks in place.
+--------------------------------------------------------------------------*/
+module interface kokaine/internal/int-index
+ 
+//------------------------------
+//#kki: import declarations
+ 
+import std/core/types = std/core/types pub = "";
+import std/core/hnd = std/core/hnd pub = "";
+import std/core/exn = std/core/exn pub = "";
+import std/core/bool = std/core/bool pub = "";
+import std/core/order = std/core/order pub = "";
+import std/core/char = std/core/char pub = "";
+import std/core/int = std/core/int pub = "";
+import std/core/string = std/core/string pub = "";
+import std/core/sslice = std/core/sslice pub = "";
+import std/core/list = std/core/list pub = "";
+import std/core/maybe = std/core/maybe pub = "";
+import std/core/maybe2 = std/core/maybe2 pub = "";
+import std/core/either = std/core/either pub = "";
+import std/core/result = std/core/result pub = "";
+import std/core/tuple = std/core/tuple pub = "";
+import std/core/lazy = std/core/lazy pub = "";
+import std/core/show = std/core/show pub = "";
+import std/core/debug = std/core/debug pub = "";
+import std/core/delayed = std/core/delayed pub = "";
+import std/core/console = std/core/console pub = "";
+import std/core = std/core = "";
+import std/core/unsafe = std/core/unsafe = "";
+import std/core/undiv = std/core/undiv = "";
+import std/core/vector = std/core/vector = "";
+ 
+//------------------------------
+//#kki: external imports
+ 
+ 
+//------------------------------
+//#kki: fixity declarations
+ 
+ 
+//------------------------------
+//#kki: local imported aliases
+ 
+ 
+//------------------------------
+//#kki: type declarations
+ 
+recursive type int-index-link[27,1,34,3] <a> :: V -> V {
+  con Int-index-end[28,3,28,15]{0,0,0} : forall<a> (int-index-link :: V -> V)<a> = 1;
+  con Int-index-link[29,3,29,16](link-key: std/core/types/int, link-value: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<a>>, link-back: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(int-index-link :: V -> V)<a>>>, link-next: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(int-index-link :: V -> V)<a>>){0,4,8} : forall<a> (link-key : std/core/types/int, link-value : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<a>>, link-back : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(int-index-link :: V -> V)<a>>>, link-next : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(int-index-link :: V -> V)<a>>) -> (int-index-link :: V -> V)<a> = 2;
+};
+pub type int-index[36,1,40,3] <a> :: V -> V {
+  con Int-index[37,3,37,11](index-buckets: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/vector :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(int-index-link :: V -> V)<a>>>>, index-count: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>){0,2,8} : forall<a> (index-buckets : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/vector :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(int-index-link :: V -> V)<a>>>>, index-count : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>) -> (int-index :: V -> V)<a> = 1;
+};
+pub type int-index-registration[42,1,48,3] <a> :: V -> V {
+  con Int-index-registration[43,3,43,24](registration-value: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<a>>, registration-back: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(int-index-link :: V -> V)<a>>>, registration-next: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(int-index-link :: V -> V)<a>>, registration-owner: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<(int-index :: V -> V)<a>>>){0,4,8} : forall<a> (registration-value : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<a>>, registration-back : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(int-index-link :: V -> V)<a>>>, registration-next : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(int-index-link :: V -> V)<a>>, registration-owner : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<(int-index :: V -> V)<a>>>) -> (int-index-registration :: V -> V)<a> = 1;
+};
+ 
+//------------------------------
+//#kki: declarations
+ 
+val minimum-capacity[15,5,15,20] : std/core/types/int;
+fun cell[17,5,17,8] : forall<a> (value : a) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>;
+fun load[20,5,20,8] : forall<a> (value : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>) -> a;
+fun store[23,5,23,9] : forall<a> (target : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>, value : a) -> ();
+// Automatically generated. Tests for the `Int-index-end` constructor of the `:int-index-link` type.
+fip fun is-int-index-end[28,3,28,15] : forall<a> (^ int-index-link : (int-index-link :: V -> V)<a>) -> std/core/types/bool;
+// Automatically generated. Tests for the `Int-index-link` constructor of the `:int-index-link` type.
+fip fun is-int-index-link[29,3,29,16] : forall<a> (^ int-index-link : (int-index-link :: V -> V)<a>) -> std/core/types/bool;
+// Automatically generated. Retrieves the `index-buckets` constructor field of the `:int-index` type.
+fun int-index/index-buckets[38,5,38,17] : forall<a> (^ @this : (int-index :: V -> V)<a>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/vector :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(int-index-link :: V -> V)<a>>>>;
+// Automatically generated. Retrieves the `index-count` constructor field of the `:int-index` type.
+fun int-index/index-count[39,5,39,15] : forall<a> (^ @this : (int-index :: V -> V)<a>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>;
+pub fun int-index/@copy[37,3,37,11] : forall<a> (@this : (int-index :: V -> V)<a>, index-buckets : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/vector :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(int-index-link :: V -> V)<a>>>>>, index-count : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>>) -> (int-index :: V -> V)<a>;
+// Automatically generated. Retrieves the `registration-value` constructor field of the `:int-index-registration` type.
+fun int-index-registration/registration-value[44,5,44,22] : forall<a> (^ @this : (int-index-registration :: V -> V)<a>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<a>>;
+// Automatically generated. Retrieves the `registration-back` constructor field of the `:int-index-registration` type.
+fun int-index-registration/registration-back[45,5,45,21] : forall<a> (^ @this : (int-index-registration :: V -> V)<a>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(int-index-link :: V -> V)<a>>>;
+// Automatically generated. Retrieves the `registration-next` constructor field of the `:int-index-registration` type.
+fun int-index-registration/registration-next[46,5,46,21] : forall<a> (^ @this : (int-index-registration :: V -> V)<a>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(int-index-link :: V -> V)<a>>;
+// Automatically generated. Retrieves the `registration-owner` constructor field of the `:int-index-registration` type.
+fun int-index-registration/registration-owner[47,5,47,22] : forall<a> (^ @this : (int-index-registration :: V -> V)<a>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<(int-index :: V -> V)<a>>>;
+pub fun int-index-registration/@copy[43,3,43,24] : forall<a> (@this : (int-index-registration :: V -> V)<a>, registration-value : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<a>>>, registration-back : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(int-index-link :: V -> V)<a>>>>, registration-next : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(int-index-link :: V -> V)<a>>>, registration-owner : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<(int-index :: V -> V)<a>>>>) -> (int-index-registration :: V -> V)<a>;
+fun new-buckets[51,5,51,15] : forall<a> (capacity : std/core/types/int) -> (std/core/types/vector :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(int-index-link :: V -> V)<a>>>;
+pub fun new-int-index[56,9,56,21] : forall<a> () -> (int-index :: V -> V)<a>;
+pub fun int-index/count[59,9,59,23] : forall<a> (target : (int-index :: V -> V)<a>) -> std/core/types/int;
+pub fun int-index/capacity[63,9,63,26] : forall<a> (target : (int-index :: V -> V)<a>) -> std/core/types/int;
+fun normalized-key[67,5,67,18] : (key : std/core/types/int) -> std/core/types/int;
+fun bucket-offset[70,5,70,17] : (key : std/core/types/int, capacity : std/core/types/int) -> std/core/types/int;
+fun bucket-at[73,5,73,13] : forall<a> (buckets : (std/core/types/vector :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(int-index-link :: V -> V)<a>>>, key : std/core/types/int) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(int-index-link :: V -> V)<a>>;
+fun int-index-link/set-back[80,5,80,27] : forall<a> (value : (int-index-link :: V -> V)<a>, pointer : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(int-index-link :: V -> V)<a>>) -> ();
+tail fun lookup-link[86,10,86,20] : forall<a> (value : (int-index-link :: V -> V)<a>, key : std/core/types/int) -> <(std/core/types/div :: X)> (std/core/types/maybe :: V -> V)<a>;
+pub fun int-index/lookup[94,9,94,24] : forall<a> (target : (int-index :: V -> V)<a>, key : std/core/types/int) -> (std/core/types/maybe :: V -> V)<a>;
+// monadic lift
+fun @mlift-move-links@10179[1,0,1,0] : forall<(_e :: E),(h :: H),a> (back : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(int-index-link :: V -> V)<a>>>, bucket : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(int-index-link :: V -> V)<a>>, current : (int-index-link :: V -> V)<a>, pending : (std/core/types/local-var :: (H, V) -> V)<(h :: H),(int-index-link :: V -> V)<a>>, rest : (int-index-link :: V -> V)<a>, @c-x10138 : ()) -> ();
+fun move-links[100,5,100,14] : forall<a> (value : (int-index-link :: V -> V)<a>, buckets : (std/core/types/vector :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(int-index-link :: V -> V)<a>>>) -> ();
+// monadic lift
+fun int-index/@mlift-resize@10180[1,0,1,0] : forall<(h :: H)> (offset : (std/core/types/local-var :: (H, V) -> V)<(h :: H),std/core/types/int>, @c-x10140 : ()) -> ();
+fun int-index/resize[120,5,120,20] : forall<a> (target : (int-index :: V -> V)<a>, requested : std/core/types/int) -> ();
+// monadic lift
+fun int-index/@mlift-ensure-insert-capacity@10181[1,0,1,0] : forall<a> (capacity : std/core/types/int, target : (int-index :: V -> V)<a>, @c-x10143 : std/core/types/int) -> ();
+fun int-index/ensure-insert-capacity[138,5,138,36] : forall<a> (target : (int-index :: V -> V)<a>) -> ();
+// monadic lift
+fun int-index/@mlift-reclaim-delete-capacity@10182[1,0,1,0] : forall<a> (capacity : std/core/types/int, target : (int-index :: V -> V)<a>, @c-x10144 : std/core/types/int) -> ();
+fun int-index/reclaim-delete-capacity[144,5,144,37] : forall<a> (target : (int-index :: V -> V)<a>) -> ();
+pub fun int-index/insert[151,9,151,24] : forall<a> (target : (int-index :: V -> V)<a>, key : std/core/types/int, value : a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (int-index-registration :: V -> V)<a>;
+// monadic lift
+fun int-index-registration/@mlift-take@10183[1,0,1,0] : forall<(_e :: E),a> (back : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(int-index-link :: V -> V)<a>>>, current : a, next : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(int-index-link :: V -> V)<a>>, target@1 : (int-index :: V -> V)<a>, @c-x10151 : ()) -> (std/core/types/maybe :: V -> V)<a>;
+// monadic lift
+fun int-index-registration/@mlift-take@10184[1,0,1,0] : forall<(_e :: E),(_e1 :: E),a> (back : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(int-index-link :: V -> V)<a>>>, current : a, next : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(int-index-link :: V -> V)<a>>, target@1 : (int-index :: V -> V)<a>, @c-x10150 : ()) -> (std/core/types/maybe :: V -> V)<a>;
+pub fun int-index-registration/take[169,9,169,35] : forall<a> (registration : (int-index-registration :: V -> V)<a>) -> (std/core/types/maybe :: V -> V)<a>;
+ 
+fun @kokaine-cache-phase[1,0,1,0] : () -> std/core/types/int;
+ 
+//------------------------------
+//#kki: external declarations
+ 
+ 
+//------------------------------
+//#kki: inline definitions
+ 
+//.inline-section
+fun @kokaine-cache-phase // inline size: 1
+  = fn(){ 0; };

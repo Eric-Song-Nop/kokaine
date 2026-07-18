@@ -1,0 +1,43 @@
+{
+  "name": "@kokaine/playground",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "assets:koka": "node scripts/sync-koka-assets.mjs",
+    "precompile:kokaine": "node scripts/smoke-wasm.mjs --update-kokaine-cache && npm run assets:koka",
+    "assets:devtools": "node scripts/sync-devtools-assets.mjs",
+    "predev": "npm run assets:devtools",
+    "dev": "vite --host 127.0.0.1",
+    "prebuild": "npm run assets:devtools",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test:wasm": "node scripts/smoke-wasm.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@bjorn3/browser_wasi_shim": "0.4.2",
+    "@codingame/monaco-vscode-editor-api": "25.1.2",
+    "@fontsource-variable/ibm-plex-sans": "5.2.8",
+    "@fontsource-variable/jetbrains-mono": "5.2.8",
+    "lucide-solid": "1.25.0",
+    "lz-string": "1.5.0",
+    "monaco-editor": "0.55.1",
+    "monaco-languageclient": "10.7.0",
+    "solid-js": "1.9.12",
+    "vscode": "npm:@codingame/monaco-vscode-extension-api@25.1.2",
+    "vscode-jsonrpc": "8.2.1",
+    "vscode-languageclient": "9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "chii": "1.15.0",
+    "chobitsu": "1.8.6",
+    "typescript": "6.0.3",
+    "vite": "8.0.0",
+    "vite-plugin-solid": "2.11.12"
+  },
+  "engines": {
+    "node": ">=20.19"
+  }
+}

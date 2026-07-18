@@ -1,0 +1,129 @@
+/*--------------------------------------------------------------------------
+  Copyright (c) 2026 Kokaine contributors. SPDX-License-Identifier: MIT
+
+  Narrow browser-window adapter.
+
+  Host callbacks only complete a one-shot async await. They never enter the
+  reactive runtime or execute application policy themselves; the generation
+  driver owns the disposer and resumes Koka code in a fresh managed turn.
+--------------------------------------------------------------------------*/
+module interface kokaine/web/window
+ 
+//------------------------------
+//#kki: import declarations
+ 
+import std/core/types = std/core/types pub = "";
+import std/core/hnd = std/core/hnd pub = "";
+import std/core/exn = std/core/exn pub = "";
+import std/core/bool = std/core/bool pub = "";
+import std/core/order = std/core/order pub = "";
+import std/core/char = std/core/char pub = "";
+import std/core/int = std/core/int pub = "";
+import std/core/vector = std/core/vector pub = "";
+import std/core/string = std/core/string pub = "";
+import std/core/sslice = std/core/sslice pub = "";
+import std/core/list = std/core/list pub = "";
+import std/core/maybe = std/core/maybe pub = "";
+import std/core/maybe2 = std/core/maybe2 pub = "";
+import std/core/either = std/core/either pub = "";
+import std/core/result = std/core/result pub = "";
+import std/core/tuple = std/core/tuple pub = "";
+import std/core/lazy = std/core/lazy pub = "";
+import std/core/show = std/core/show pub = "";
+import std/core/debug = std/core/debug pub = "";
+import std/core/delayed = std/core/delayed pub = "";
+import std/core/console = std/core/console pub = "";
+import std/core = std/core = "";
+import kokaine/async/effects = kokaine/async/effects = "";
+import kokaine/async/structured = kokaine/async/structured = "";
+ 
+//------------------------------
+//#kki: external imports
+ 
+ 
+//------------------------------
+//#kki: fixity declarations
+ 
+ 
+//------------------------------
+//#kki: local imported aliases
+ 
+local alias kokaine/async/effects/async[177,1,178,31] :: E = <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>> = 1;
+ 
+//------------------------------
+//#kki: type declarations
+ 
+pub value{1,0,1} type window-event[16,1,18,20] {
+  pub con Window-scroll[17,3,17,15]{0,0,0} : window-event = 1;
+  pub con Window-hash-change[18,3,18,20]{0,0,0} : window-event = 2;
+};
+pub value{0,1,8} type window-event-subscription[20,1,21,40] {
+  con Window-event-subscription[21,3,21,27](value: std/core/types/any){0,1,8} : (value : std/core/types/any) -> window-event-subscription = 1;
+};
+ 
+//------------------------------
+//#kki: declarations
+ 
+// Automatically generated. Tests for the `Window-scroll` constructor of the `:window-event` type.
+pub fip fun is-window-scroll[17,3,17,15] : (^ window-event : window-event) -> std/core/types/bool;
+// Automatically generated. Tests for the `Window-hash-change` constructor of the `:window-event` type.
+pub fip fun is-window-hash-change[18,3,18,20] : (^ window-event : window-event) -> std/core/types/bool;
+// Automatically generated. Retrieves the `value` constructor field of the `:window-event-subscription` type.
+fun window-event-subscription/value[21,29,21,33] : (^ @this : window-event-subscription) -> std/core/types/any;
+pub fun window-event-subscription/@copy[21,3,21,27] : (@this : window-event-subscription, value : (std/core/types/@optional :: V -> V)<std/core/types/any>) -> window-event-subscription;
+fun window-event/name[24,5,24,21] : (value : window-event) -> std/core/types/string;
+fun window-event-setup-raw[29,8,29,29] : (name : std/core/types/string, complete : () -> <(std/core/ui :: X)> (), reject : (std/core/types/any) -> <(std/core/ui :: X)> ()) -> <(std/core/ui :: X)> std/core/types/any;
+fun host-result-ok[34,8,34,21] : (value : std/core/types/any) -> std/core/types/bool;
+fun host-result-error[37,8,37,24] : (value : std/core/types/any) -> std/core/types/any;
+fun host-result-state[40,8,40,24] : (value : std/core/types/any) -> window-event-subscription;
+fun host-attempt-raw[43,8,43,23] : forall<a> (action : () -> <(std/core/ui :: X)> a) -> <(std/core/ui :: X)> std/core/types/any;
+fun host-result-value[46,8,46,24] : forall<a> (value : std/core/types/any) -> a;
+fun host-error-message[49,8,49,25] : (value : std/core/types/any) -> std/core/types/string;
+fun retire-window-event[52,8,52,26] : (value : window-event-subscription) -> <(std/core/ui :: X)> ();
+fun focus-selector-raw[55,8,55,25] : (selector : std/core/types/string) -> <(std/core/ui :: X)> std/core/types/any;
+fun viewport-bounds-raw[58,8,58,26] : (selector : std/core/types/string) -> <(std/core/ui :: X)> std/core/types/any;
+fun viewport-result-top[61,8,61,26] : (value : std/core/types/any) -> std/core/types/int;
+fun viewport-result-bottom[64,8,64,29] : (value : std/core/types/any) -> std/core/types/int;
+fun viewport-height-raw[67,8,67,26] : () -> <(std/core/ui :: X)> std/core/types/int;
+fun location-fragment-raw[70,8,70,28] : () -> <(std/core/ui :: X)> std/core/types/string;
+fun prefers-reduced-motion-raw[73,8,73,33] : () -> <(std/core/ui :: X)> std/core/types/bool;
+fun require-host-result[77,5,77,23] : (result : std/core/types/any, operation : std/core/types/string) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
+// monadic lift
+fun @mlift-host-attempt@10058[1,0,1,0] : forall<a> (result : std/core/types/any, wild_ : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> a;
+// Native JavaScript throws do not automatically become Koka `exn`. Invoke
+// synchronous host reads behind one result box so Koka catch/finally clauses
+// remain authoritative at every public adapter boundary.
+fun host-attempt[86,5,86,16] : forall<a> (operation : std/core/types/string, action : () -> <(std/core/ui :: X)> a) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> a;
+pub fun await-window-event[91,9,91,26] : (value : window-event) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
+// monadic lift
+fun @mlift-monitor-window-events@10059[1,0,1,0] : forall<(e :: E)> (wild_ : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/div :: X)|(e :: E)> window-event;
+// monadic lift
+fun @mlift-monitor-window-events@10060[1,0,1,0] : forall<(e :: E)> (wild_@0 : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/div :: X)|(e :: E)> window-event;
+pub fun monitor-window-events[110,9,110,29] : forall<(e :: E)> (action : (window-event) -> <(kokaine/async/effects/async :: E),(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ()) -> <(kokaine/async/effects/async :: E),(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+pub fun focus-selector[125,9,125,22] : (selector : std/core/types/string) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
+// monadic lift
+fun @mlift-viewport-bounds@10061[1,0,1,0] : (result : std/core/types/any, wild_ : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (std/core/types/int, std/core/types/int);
+pub fun viewport-bounds[128,9,128,23] : (selector : std/core/types/string) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> (std/core/types/int, std/core/types/int);
+// monadic lift
+fun @mlift-viewport-height@10062[1,0,1,0] : (result : std/core/types/any, wild_ : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> std/core/types/int;
+pub fun viewport-height[133,9,133,23] : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> std/core/types/int;
+// monadic lift
+fun @mlift-location-fragment@10063[1,0,1,0] : (result : std/core/types/any, wild_ : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> std/core/types/string;
+pub fun location-fragment[136,9,136,25] : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> std/core/types/string;
+// monadic lift
+fun @mlift-prefers-reduced-motion@10064[1,0,1,0] : (result : std/core/types/any, wild_ : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> std/core/types/bool;
+pub fun prefers-reduced-motion[139,9,139,30] : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> std/core/types/bool;
+pub fun log-window-error[142,12,142,27] : (message : std/core/types/string) -> <(std/core/ui :: X)> ();
+ 
+fun @kokaine-cache-phase[1,0,1,0] : () -> std/core/types/int;
+ 
+//------------------------------
+//#kki: external declarations
+ 
+ 
+//------------------------------
+//#kki: inline definitions
+ 
+//.inline-section
+fun @kokaine-cache-phase // inline size: 1
+  = fn(){ 0; };

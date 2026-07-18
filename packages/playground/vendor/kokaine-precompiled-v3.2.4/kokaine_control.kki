@@ -1,0 +1,83 @@
+/*--------------------------------------------------------------------------
+  Native Koka responsive control flow.
+
+  `branch` and `when` remain ordinary dynamic HTML with memo equality as their
+  publication barrier.  The two `for` overloads share one packed sequential
+  plan interpreted incrementally by DOM and as a snapshot by SSR.
+--------------------------------------------------------------------------*/
+module interface kokaine/control
+ 
+//------------------------------
+//#kki: import declarations
+ 
+import std/core/types = std/core/types pub = "";
+import std/core/hnd = std/core/hnd pub = "";
+import std/core/exn = std/core/exn pub = "";
+import std/core/bool = std/core/bool pub = "";
+import std/core/order = std/core/order pub = "";
+import std/core/char = std/core/char pub = "";
+import std/core/int = std/core/int pub = "";
+import std/core/vector = std/core/vector pub = "";
+import std/core/string = std/core/string pub = "";
+import std/core/sslice = std/core/sslice pub = "";
+import std/core/list = std/core/list pub = "";
+import std/core/maybe = std/core/maybe pub = "";
+import std/core/maybe2 = std/core/maybe2 pub = "";
+import std/core/either = std/core/either pub = "";
+import std/core/result = std/core/result pub = "";
+import std/core/tuple = std/core/tuple pub = "";
+import std/core/lazy = std/core/lazy pub = "";
+import std/core/show = std/core/show pub = "";
+import std/core/debug = std/core/debug pub = "";
+import std/core/delayed = std/core/delayed pub = "";
+import std/core/console = std/core/console pub = "";
+import kokaine/reactive/effects = kokaine/reactive/effects pub = "";
+import std/core = std/core = "";
+import kokaine/reactive = kokaine/reactive = "";
+import kokaine/html = kokaine/html = "";
+import kokaine/reactive/internal/model = kokaine/reactive/internal/model inline = "";
+import kokaine/reactive/internal/runtime = kokaine/reactive/internal/runtime inline = "";
+ 
+//------------------------------
+//#kki: external imports
+ 
+ 
+//------------------------------
+//#kki: fixity declarations
+ 
+ 
+//------------------------------
+//#kki: local imported aliases
+ 
+// A For plan existentially packages both the source collection type and the
+// application item/key types.  Backends receive only a sequential walker; the
+// DOM reconciler therefore cannot accidentally depend on random access and the
+// list entry point never detours through a vector.
+local alias kokaine/html/accessor[146,1,146,43]<a> :: V -> V = () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> a = 1;
+ 
+//------------------------------
+//#kki: type declarations
+ 
+ 
+//------------------------------
+//#kki: declarations
+ 
+pub fun branch[14,9,14,14] : forall<a,(e :: E)> (value : (kokaine/reactive/memo :: V -> V)<a>, children : (a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e :: E)>>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e :: E)>>> ();
+// monadic lift
+fun @mlift-when@10052[1,0,1,0] : forall<(e :: E)> (children : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e :: E)>>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> (), fallback : (std/core/types/@optional :: V -> V)<() -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e :: E)>>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> ()>, visible@10002 : std/core/types/bool) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e :: E)>>> ();
+pub fun when[19,9,19,12] : forall<(e :: E)> (condition : (kokaine/reactive/memo :: V -> V)<std/core/types/bool>, children : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e :: E)>>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> (), fallback : (std/core/types/@optional :: V -> V)<() -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e :: E)>>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> ()>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e :: E)>>> ();
+pub fun list/for[26,9,26,16] : forall<a,(e :: E),b> (each : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> (std/core/types/list :: V -> V)<a>, key : (a) -> b, children : (item : (kokaine/html/accessor :: V -> V)<a>, index : (kokaine/html/accessor :: V -> V)<std/core/types/int>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e :: E)>>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> (), ?cmp : (b, b) -> std/core/types/order, ?(==) : (a, a) -> std/core/types/bool) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e :: E)>>> ();
+pub fun vector/for[39,9,39,18] : forall<a,(e :: E),b> (each : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> (std/core/types/vector :: V -> V)<a>, key : (a) -> b, children : (item : (kokaine/html/accessor :: V -> V)<a>, index : (kokaine/html/accessor :: V -> V)<std/core/types/int>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e :: E)>>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> (), ?cmp : (b, b) -> std/core/types/order, ?(==) : (a, a) -> std/core/types/bool) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e :: E)>>> ();
+ 
+fun @kokaine-cache-phase[1,0,1,0] : () -> std/core/types/int;
+ 
+//------------------------------
+//#kki: external declarations
+ 
+ 
+//------------------------------
+//#kki: inline definitions
+
+//.inline-section
+fun @kokaine-cache-phase // inline size: 1
+  = fn(){ 0; };

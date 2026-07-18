@@ -5,6 +5,7 @@ module kokaine/reactive/internal/lifetime
 
 import kokaine/reactive/internal/model
 import kokaine/reactive/internal/resource
+import kokaine/internal/compat
 import kokaine/internal/registry
 import std/core/undiv
 
@@ -225,7 +226,7 @@ fun run-finalizers-loop(coordinator : retirement-coordinator<e>,
               else run-finalizers-loop(coordinator,rest,Nothing)
             },
             fn() lift-exn(fn()
-              val result = error/try(finalize)
+              val result = capture-error(finalize)
               store(completed,True)
               result
             )
@@ -334,18 +335,18 @@ pub fun retire-drafts-now(values : list<trace<e>>) : <exn|e> ()
   pretend-no-div{ retire-drafts(values) }
 
 pub fun try-retire-lifetime(owner : lifetime-owner<e>) : e error<()>
-  error/try(fn() pretend-no-div{ retire-lifetime(owner) })
+  capture-error(fn() pretend-no-div{ retire-lifetime(owner) })
 
 pub fun try-retire-drafts(values : list<trace<e>>) : e error<()>
-  error/try(fn() retire-drafts-now(values))
+  capture-error(fn() retire-drafts-now(values))
 
 pub fun try-retire-scope-drafts(current : continuation-scope<e>,
                                 values : list<trace<e>>) : e error<()>
-  error/try(fn() pretend-no-div{ retire-scope-drafts(current,values) })
+  capture-error(fn() pretend-no-div{ retire-scope-drafts(current,values) })
 
 pub fun try-retire-lifetime-drafts(owner : lifetime-owner<e>,
                                    values : list<trace<e>>) : e error<()>
-  error/try(fn() pretend-no-div{ retire-lifetime-drafts(owner,values) })
+  capture-error(fn() pretend-no-div{ retire-lifetime-drafts(owner,values) })
 
 pub fun record-draft(plane : plane<e>, current : trace<e>) : exn ()
   match load(plane.plane-draft)
@@ -361,7 +362,7 @@ pub fun attempt-build(plane : plane<e>,
     fn() store(plane.plane-draft,previous),
     fn()
       store(plane.plane-draft,Just(drafts))
-      error/try(action)
+      capture-error(action)
   )
 
 pub fun with-frame(plane : plane<e>, current : frame<e>,
