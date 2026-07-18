@@ -1,6 +1,7 @@
-module structural-transactions
+module integration-boundaries
 
 import kokaine/reactive
+import kokaine/reactive/integration
 import std/core/undiv
 import std/core/unsafe
 
@@ -21,7 +22,7 @@ fun emit(events : ref<global,list<string>>, event : string) : ()
   hidden-store(events,hidden-load(events) ++ [event])
 
 fun check(ok : bool, message : string) : exn ()
-  if ok then () else throw("structural transaction: " ++ message)
+  if ok then () else throw("integration boundaries: " ++ message)
 
 fun test-stable-owner-uses-independent-lifetime()
   val runs = hidden(0)
@@ -46,11 +47,13 @@ fun test-stable-owner-uses-independent-lifetime()
   check(hidden-load(runs) == 2,"retired owner no longer observes sources")
   root.dispose()
 
-fun test-nested-transaction-borrows_the_outer_fifo()
+fun test-current-provision-borrows_the_outer_fifo()
   val events = hidden([])
   val (root,(outer,joined)) = create-root fn(root)
-    val outer = internal/open-structural-transaction(root)
-    val joined = internal/open-structural-transaction(root)
+    val outer = open-provision(root)
+    val joined = match current-provision(root)
+      Nothing -> throw("active provision disappeared")
+      Just(current) -> current
     val first = create-effect(root,fn() (),fn(_)
       emit(events,"outer")
     )
@@ -60,37 +63,39 @@ fun test-nested-transaction-borrows_the_outer_fifo()
     (outer,joined)
 
   check(hidden-load(events).is-nil,
-        "an open transaction isolates bootstrap work")
-  pretend-no-div{ internal/drain-structural-transaction(joined) }
-  pretend-no-div{ internal/commit-structural-transaction(joined) }
-  pretend-no-div{ internal/drain-structural-transaction(outer) }
+        "an open provision isolates bootstrap work")
+  check(outer.provision.same(joined),
+        "current provision borrows the exact outer frontier")
+  pretend-no-div{ drain-provision(outer) }
   check(hidden-load(events) == ["outer","inner"],
-        "a nested lease leaves work in the outer FIFO drain")
-  pretend-no-div{ internal/commit-structural-transaction(outer) }
+        "borrowed construction leaves work in the outer FIFO drain")
+  pretend-no-div{ promote-provision(outer) }
   root.dispose()
 
-fun test_joined_abort_does_not_steal_the_outer_lease()
+fun test-second-open-cannot-steal_the_outer_lease()
   val events = hidden([])
-  val (root,(outer,joined)) = create-root fn(root)
-    val outer = internal/open-structural-transaction(root)
-    val joined = internal/open-structural-transaction(root)
+  val (root,(outer,rejected)) = create-root fn(root)
+    val outer = open-provision(root)
+    val rejected = mask<exn>{
+      error/try(fn() open-provision(root))
+    }.is-error
     val stop = create-effect(root,fn() (),fn(_) emit(events,"committed"))
-    (outer,joined)
+    (outer,rejected)
 
-  internal/abort-structural-transaction(joined)
-  pretend-no-div{ internal/drain-structural-transaction(outer) }
-  pretend-no-div{ internal/commit-structural-transaction(outer) }
+  check(rejected,"a second owner cannot open while a provision is active")
+  pretend-no-div{ drain-provision(outer) }
+  pretend-no-div{ promote-provision(outer) }
   check(hidden-load(events) == ["committed"],
-        "only the outer lease owns commit or abort")
+        "a rejected second owner cannot disturb the outer lease")
   root.dispose()
 
 fun test_joined_outer_abort_retires_successful_prefix()
   val runs = hidden(0)
   val cleanups = hidden(0)
   val (root,outer) = create-root fn(root)
-    val outer = internal/open-structural-transaction(root)
+    val outer = open-provision(root)
     val bootstrap = create-effect(root,fn() (),fn(_)
-      val joined = internal/open-structural-transaction(root)
+      val joined = current-provision(root)
       val first = create-effect(root,fn() (),fn(_)
         increment(runs)
         on-cleanup(root,fn() increment(cleanups))
@@ -104,34 +109,34 @@ fun test_joined_outer_abort_retires_successful_prefix()
 
   val attempted : error<()> = mask<exn>{
     error/try fn()
-      pretend-no-div{ internal/drain-structural-transaction(outer) }
+      pretend-no-div{ drain-provision(outer) }
   }
   check(attempted.is-error,
         "a later joined child failure rejects the outer drain")
-  internal/abort-structural-transaction(outer)
+  discard-provision(outer)
   check(hidden-load(runs) == 1,
         "the successful joined child ran before the later failure")
   check(hidden-load(cleanups) == 1,
         "outer abort retires the successful joined child without leaking")
   root.dispose()
 
-fun test-terminal-transaction-rejects-commit()
-  val (root,transaction) = create-root fn(root)
-    internal/open-structural-transaction(root)
+fun test-discarded-provision-rejects-promotion()
+  val (root,lease) = create-root fn(root)
+    open-provision(root)
 
-  internal/abort-structural-transaction(transaction)
+  discard-provision(lease)
   val attempted : error<()> = mask<exn>{
     error/try fn()
-      pretend-no-div{ internal/commit-structural-transaction(transaction) }
+      pretend-no-div{ promote-provision(lease) }
   }
 
-  check(attempted.is-error,"a terminal transaction rejects commit")
+  check(attempted.is-error,"a discarded provision rejects promotion")
   root.dispose()
 
 pub fun main()
   test-stable-owner-uses-independent-lifetime()
-  test-nested-transaction-borrows_the_outer_fifo()
-  test_joined_abort_does_not_steal_the_outer_lease()
+  test-current-provision-borrows_the_outer_fifo()
+  test-second-open-cannot-steal_the_outer_lease()
   test_joined_outer_abort_retires_successful_prefix()
-  test-terminal-transaction-rejects-commit()
-  println("structural transactions: lifetime and joined-drain contracts passed")
+  test-discarded-provision-rejects-promotion()
+  println("integration boundaries: lifetime and provision contracts passed")

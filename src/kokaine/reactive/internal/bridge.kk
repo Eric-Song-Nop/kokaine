@@ -103,23 +103,3 @@ pub fun runtime-with-structural-owner(root : root<r>,
 pub fun runtime-dispose-structural-owner(owner : structural-owner<e>)
                                         : <exn|e> ()
   dispose-structural-owner(owner)
-
-pub fun runtime-open-structural-transaction(root : root<e>)
-                                           : exn structural-transaction<e>
-  open-structural-transaction(root)
-
-pub fun runtime-drain-structural-transaction(
-    transaction : structural-transaction<e>) : <div,exn|e> ()
-  drain-structural-transaction(transaction)
-
-pub fun runtime-structural-transaction-owned(
-    transaction : structural-transaction<e>) : bool
-  transaction.owns-transaction
-
-pub fun runtime-commit-structural-transaction(
-    transaction : structural-transaction<e>) : <div,exn|e> ()
-  commit-structural-transaction(transaction)
-
-pub fun runtime-abort-structural-transaction(
-    transaction : structural-transaction<e>) : <exn|e> ()
-  abort-structural-transaction(transaction)

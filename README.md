@@ -648,6 +648,7 @@ examples/counter/probe.kk                   dynamic region and re-entry lifetime
 examples/counter/app.kk                     page composition
 src/kokaine/reactive.kk                    opaque public facade
 src/kokaine/reactive/effects.kk            signal read/write effect operations
+src/kokaine/reactive/integration.kk        borrowed provisions and owner leases
 src/kokaine/reactive/internal/model.kk     traces, planes, scopes, and capabilities
 src/kokaine/reactive/internal/capture.kk   exact read-suffix reification
 src/kokaine/internal/registry.kk           removable O(1) lifetime registrations
@@ -655,7 +656,7 @@ src/kokaine/reactive/internal/lifetime.kk  detached two-phase retirement
 src/kokaine/reactive/internal/resource.kk  opaque parked resource continuations
 src/kokaine/reactive/internal/work-transaction.kk deque and local work groups
 src/kokaine/reactive/internal/scheduler.kk invalidation, queues, targeted settle
-src/kokaine/reactive/internal/structural.kk retained owners and transaction leases
+src/kokaine/reactive/internal/structural.kk retained integration lifetimes
 src/kokaine/reactive/internal/handlers.kk  signal interpreters and dispatch
 src/kokaine/reactive/internal/reentry.kk   batched structural host re-entry
 src/kokaine/reactive/async.kk             generation-owned Async integration
@@ -690,7 +691,7 @@ test/continuation-reentry.kk               callback-created ownership and stalen
 test/reactive*.kk                          compatibility, advanced, and stress suites
 test/control-flow.kk                       branch/when/For snapshots and duplicate keys
 test/key-index.kk                          balanced-index correctness and growth bound
-test/structural-transactions.kk            retained lifetime and joined-drain leases
+test/integration-boundaries.kk             retained lifetimes and provision leases
 test/html.kk                               builder, escaping, and validation checks
 test/dom-lifecycle.kk                      listener, region, and re-entry fixture
 test/dom-event-continuation.kk              nested synchronous event-K fixture

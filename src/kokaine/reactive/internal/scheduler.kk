@@ -416,77 +416,86 @@ pub fun run-next-pure(plane : plane<total>) : error<bool>
 
 
 // --------------------------------------------------------------------------
-// Isolated bootstrap transactions
+// Provisional bootstrap frontiers
 // --------------------------------------------------------------------------
 
-abstract type scheduler-transaction<e::E>
-  Scheduler-transaction(
-    transaction-root-key     : root-key,
-    transaction-derive-group : work-group<work<total>>,
-    transaction-effect-group : work-group<work<e>>
+abstract type provision<e::E>
+  Provision(
+    provision-root         : root<e>,
+    provision-derive-group : work-group<work<total>>,
+    provision-effect-group : work-group<work<e>>
   )
 
-pub noinline fun scheduler-transaction/state(
-    transaction : scheduler-transaction<e>) : work-transaction-state
-  transaction.transaction-derive-group.state
+abstract type provision-lease<e::E>
+  Provision-lease(
+    lease-provision : provision<e>
+  )
+
+pub fun provision-lease/provision(lease : provision-lease<e>) : provision<e>
+  lease.lease-provision
+
+pub fun provision/same(left : provision<e>, right : provision<e>) : bool
+  same-root(left.provision-root.root-key,right.provision-root.root-key) &&
+  left.provision-derive-group.same-transaction(
+    right.provision-derive-group) &&
+  left.provision-effect-group.same-transaction(
+    right.provision-effect-group)
+
+pub noinline fun provision-lease/state(
+    lease : provision-lease<e>) : work-transaction-state
+  lease.lease-provision.provision-derive-group.state
 
 fun plane-has-group(plane : plane<e>, expected : work-group<work<e>>) : bool
   match load(plane.plane-work-group)
     Nothing -> False
     Just(actual) -> actual.same-transaction(expected)
 
-fun check-transaction-root(root : root<e>,
-                           transaction : scheduler-transaction<e>) : exn ()
-  if same-root(root.root-key,transaction.transaction-root-key) &&
-     !load(root.root-disposed) && !load(root.root-disposing)
+fun check-provision-root(current : provision<e>) : exn ()
+  val root = current.provision-root
+  if !load(root.root-disposed) && !load(root.root-disposing)
   then ()
-  else throw("scheduler transaction used outside its live reactive root")
+  else throw("provisional frontier belongs to a retired reactive root")
 
-fun check-active-transaction(root : root<e>,
-                             transaction : scheduler-transaction<e>) : exn ()
-  check-transaction-root(root,transaction)
+fun check-active-provision(current : provision<e>) : exn ()
+  check-provision-root(current)
+  val root = current.provision-root
   if root.root-derive-plane.plane-has-group(
-       transaction.transaction-derive-group) &&
+       current.provision-derive-group) &&
      root.root-effect-plane.plane-has-group(
-       transaction.transaction-effect-group)
+       current.provision-effect-group)
   then ()
-  else throw("scheduler transaction is not active on this root")
+  else throw("provisional frontier is not active on its reactive root")
 
-pub fun open-work-transaction(root : root<e>) : exn scheduler-transaction<e>
+pub fun open-provision(root : root<e>) : exn provision-lease<e>
   check-registration(root)
   if load(root.root-derive-plane.plane-work-group).is-just ||
      load(root.root-effect-plane.plane-work-group).is-just
-  then throw("a scheduler transaction is already active on this root")
+  then throw("a provision is already active on this root")
   else lift-exn(fn(){
     val state = new-work-transaction-state()
     val derive-group : work-group<work<total>> = new-work-group(state)
     val effect-group : work-group<work<e>> = new-work-group(state)
     store(root.root-derive-plane.plane-work-group,Just(derive-group))
     store(root.root-effect-plane.plane-work-group,Just(effect-group))
-    Scheduler-transaction(root.root-key,derive-group,effect-group)
+    Provision-lease(Provision(root,derive-group,effect-group))
   })
 
-// Structural adapters can be invoked recursively while an outer bootstrap is
-// draining. They must join that exact transaction instead of opening a second
-// pair of local groups or scanning the global frontier. The returned value is
-// only a borrowed capability; ownership remains with the caller which opened
-// the transaction.
-pub fun current-work-transaction(root : root<e>)
-                                 : exn maybe<scheduler-transaction<e>>
+// Integrations inspect the active frontier to decide whether they own a new
+// boundary or join work already being drained. Core exposes mechanism only;
+// the integration retains authority policy.
+pub fun current-provision(root : root<e>) : exn maybe<provision<e>>
   check-registration(root)
   match (load(root.root-derive-plane.plane-work-group),
          load(root.root-effect-plane.plane-work-group))
     (Nothing,Nothing) -> Nothing
     (Just(derive-group),Just(effect-group)) ->
       if !derive-group.same-transaction(effect-group)
-      then throw("reactive planes disagree about the active transaction")
+      then throw("reactive planes disagree about the active provision")
       else match derive-group.state
-        Work-open -> Just(Scheduler-transaction(
-          root.root-key,derive-group,effect-group))
-        Work-draining -> Just(Scheduler-transaction(
-          root.root-key,derive-group,effect-group))
-        _ -> throw("cannot join a terminal scheduler transaction")
-    _ -> throw("reactive root has a partially attached transaction")
+        Work-open -> Just(Provision(root,derive-group,effect-group))
+        Work-draining -> Just(Provision(root,derive-group,effect-group))
+        _ -> throw("cannot join a terminal provision")
+    _ -> throw("reactive root has a partially attached provision")
 
 tail fun restore-group-skipped(group : work-group<work<e>>,
                                skipped : list<work<e>>) : <div> ()
@@ -553,28 +562,26 @@ fun run-next-effect-group(plane : plane<e>, group : work-group<work<e>>)
         Error(failure) -> Error(failure)
         Ok(_) -> Ok(True)
 
-fun drain-work-transaction-loop(root : root<e>,
-                                transaction : scheduler-transaction<e>)
-                               : <div|e> error<()>
+fun drain-provision-loop(current : provision<e>) : <div|e> error<()>
+  val root = current.provision-root
   match run-next-derived-group(
-          root.root-derive-plane,transaction.transaction-derive-group)
+          root.root-derive-plane,current.provision-derive-group)
     Error(failure) -> Error(failure)
-    Ok(True) -> drain-work-transaction-loop(root,transaction)
+    Ok(True) -> drain-provision-loop(current)
     Ok(False) ->
       match run-next-effect-group(
-              root.root-effect-plane,transaction.transaction-effect-group)
+              root.root-effect-plane,current.provision-effect-group)
         Error(failure) -> Error(failure)
-        Ok(True) -> drain-work-transaction-loop(root,transaction)
+        Ok(True) -> drain-provision-loop(current)
         Ok(False) -> Ok(())
 
-pub fun drain-work-transaction(root : root<e>,
-                               transaction : scheduler-transaction<e>)
-                              : <div,exn|e> ()
-  check-active-transaction(root,transaction)
-  val derive-group = transaction.transaction-derive-group
+pub fun drain-provision(lease : provision-lease<e>) : <div,exn|e> ()
+  val current = lease.provision
+  check-active-provision(current)
+  val derive-group = current.provision-derive-group
   if !derive-group.begin-drain
   then lift-div(fn(){
-    throw("scheduler transaction can only be drained while open")
+    throw("provision can only be drained while open")
   })
   else
     val completed = cell(False)
@@ -587,12 +594,12 @@ pub fun drain-work-transaction(root : root<e>,
             // returns to the host, just as abandoned continuation drafts roll
             // back from their surrounding `finally`.
             val _ = capture-error(fn(){
-              abort-work-transaction(root,transaction)
+              discard-provision(lease)
             })
             ()
         }),
         fn()
-          val result = drain-work-transaction-loop(root,transaction)
+          val result = drain-provision-loop(current)
           val transitioned = match result
             Error(failure) -> derive-group.mark-failed(failure)
             Ok(_) -> derive-group.mark-ready
@@ -605,7 +612,7 @@ pub fun drain-work-transaction(root : root<e>,
       )
     )
     if !transitioned
-    then throw("scheduler transaction could not enter a terminal drain state")
+    then throw("provision could not enter a terminal drain state")
     else result.untry
 
 fun detach-matching-group(plane : plane<e>,
@@ -617,13 +624,13 @@ fun detach-matching-group(plane : plane<e>,
       then store(plane.plane-work-group,Nothing)
       else ()
 
-pub fun commit-work-transaction(root : root<e>,
-                                transaction : scheduler-transaction<e>)
-                               : <div,exn|e> ()
+pub fun promote-provision(lease : provision-lease<e>) : <div,exn|e> ()
   lift-div(fn()
-    check-active-transaction(root,transaction)
-    val derive-group = transaction.transaction-derive-group
-    val effect-group = transaction.transaction-effect-group
+    val current = lease.provision
+    check-active-provision(current)
+    val root = current.provision-root
+    val derive-group = current.provision-derive-group
+    val effect-group = current.provision-effect-group
     match derive-group.state
       Work-ready ->
         val derive-residual = derive-group.take-all
@@ -635,8 +642,8 @@ pub fun commit-work-transaction(root : root<e>,
         if derive-group.mark-committed then
           derive-group.release-rollback
           effect-group.release-rollback
-        else throw("scheduler transaction commit lost its ready state")
-      _ -> throw("scheduler transaction must drain successfully before commit")
+        else throw("provision promotion lost its ready state")
+      _ -> throw("provision must drain successfully before promotion")
   )
 
 tail fun prepend-bootstrap-retirements(
@@ -666,7 +673,7 @@ tail fun prepend-pure-bootstrap-retirements(
             rest,Cons(structural,collected))
         Resume-work(_) -> prepend-pure-bootstrap-retirements(rest,collected)
 
-fun retire-transaction-bootstraps(
+fun retire-provision-bootstraps(
     root : root<e>,
     derive-owned : list<work<total>>, effect-owned : list<work<e>>)
     : <div,exn|e> ()
@@ -674,42 +681,41 @@ fun retire-transaction-bootstraps(
     effect-owned,[])
   val structural = prepend-pure-bootstrap-retirements(
     derive-owned,effect-structural)
-  // Expand every transaction-owned scope first. All bootstrap slots are
+  // Expand every provision-owned scope first. All bootstrap slots are
   // cleared, scopes are dead, and owner registrations are unlinked before
   // cleanup can run, including scopes which already drained successfully.
   val finalizers = collect-retirement-work(structural)
   run-finalizers(root.root-lifetime.lifetime-retirement,finalizers)
 
-pub fun abort-work-transaction(root : root<e>,
-                               transaction : scheduler-transaction<e>)
-                              : <exn|e> ()
+pub fun discard-provision(lease : provision-lease<e>) : <exn|e> ()
   pretend-no-div{
-    if !same-root(root.root-key,transaction.transaction-root-key) then () else
-      val derive-group = transaction.transaction-derive-group
-      val effect-group = transaction.transaction-effect-group
-      match derive-group.state
-        Work-committed -> ()
-        Work-aborted ->
-          // Keep repeated abort idempotent even if the first call was itself
-          // left through final control while running retirement finalizers.
-          root.root-derive-plane.detach-matching-group(derive-group)
-          root.root-effect-plane.detach-matching-group(effect-group)
-          derive-group.clear
-          effect-group.clear
-        _ ->
-          // Claim the complete rollback ledgers before clearing runnable queues.
-          // A successful drain has already discarded its stale queue ticket but
-          // remains transaction-owned until this claim or an explicit commit.
-          val derive-owned = derive-group.take-rollback
-          val effect-owned = effect-group.take-rollback
-          root.root-derive-plane.detach-matching-group(derive-group)
-          root.root-effect-plane.detach-matching-group(effect-group)
-          val claimed = derive-group.mark-aborted
-          effect-group.clear
-          if !claimed
-          then throw("scheduler transaction abort lost its active state")
-          else retire-transaction-bootstraps(
-            root,derive-owned,effect-owned)
+    val current = lease.provision
+    val root = current.provision-root
+    val derive-group = current.provision-derive-group
+    val effect-group = current.provision-effect-group
+    match derive-group.state
+      Work-committed -> ()
+      Work-aborted ->
+        // Keep repeated discard idempotent even if the first call was itself
+        // left through final control while running retirement finalizers.
+        root.root-derive-plane.detach-matching-group(derive-group)
+        root.root-effect-plane.detach-matching-group(effect-group)
+        derive-group.clear
+        effect-group.clear
+      _ ->
+        // Claim the complete rollback ledgers before clearing runnable queues.
+        // A successful drain has already discarded its stale queue ticket but
+        // remains provision-owned until this claim or an explicit promotion.
+        val derive-owned = derive-group.take-rollback
+        val effect-owned = effect-group.take-rollback
+        root.root-derive-plane.detach-matching-group(derive-group)
+        root.root-effect-plane.detach-matching-group(effect-group)
+        val claimed = derive-group.mark-aborted
+        effect-group.clear
+        if !claimed
+        then throw("provision discard lost its active state")
+        else retire-provision-bootstraps(
+          root,derive-owned,effect-owned)
   }
 
 pub fun settle-failure(message : string) : settle-result

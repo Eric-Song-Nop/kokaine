@@ -36,10 +36,9 @@ fun hidden-store(target : ref<global,a>, value : a) : ()
 fun emit(events : ref<global,list<string>>, event : string) : ()
   hidden-store(events,hidden-load(events) ++ [event])
 
-fun abort-quietly(root : root<total>,
-                  transaction : scheduler-transaction<total>) : ()
+fun discard-quietly(lease : provision-lease<total>) : ()
   with catch fn(_) ()
-  abort-work-transaction(root,transaction)
+  discard-provision(lease)
 
 tail fun append-range(queue : work-queue<int>, current : int,
                       limit : int) : <div> ()
@@ -92,9 +91,9 @@ fun test-bootstrap-routing-follows-the-transaction-state()
 
 fun test-scheduler-drains_only_the_local_bootstrap_group()
   val events = hidden([])
-  val (root,transaction) : (root<total>,scheduler-transaction<total>) =
+  val (root,transaction) : (root<total>,provision-lease<total>) =
     create-root fn(root)
-      val transaction = open-work-transaction(root)
+      val transaction = open-provision(root)
       val outer = create-effect(root,fn() 1,fn(_)
         emit(events,"outer")
         val inner = create-effect(root,fn() 2,fn(_)
@@ -106,13 +105,13 @@ fun test-scheduler-drains_only_the_local_bootstrap_group()
 
   check(hidden-load(events).is-nil,
         "global flushing cannot consume an open transaction")
-  pretend-no-div{ drain-work-transaction(root,transaction) }
+  pretend-no-div{ drain-provision(transaction) }
   check(hidden-load(events) == ["outer","inner"],
         "local draining includes nested bootstrap work in FIFO order")
   match transaction.state
     Work-ready -> ()
     _ -> throw("work transaction: a successful local drain must be ready")
-  pretend-no-div{ commit-work-transaction(root,transaction) }
+  pretend-no-div{ promote-provision(transaction) }
   match transaction.state
     Work-committed -> ()
     _ -> throw("work transaction: a ready group must commit exactly once")
@@ -125,11 +124,11 @@ fun test-resume_is_global_and_abort_discards_bootstrap_work()
     val stop = create-effect(root,fn() source.get,
       fn(value) emit(seen,value.show))
     (source,stop)
-  val transaction = open-work-transaction(root)
+  val transaction = open-provision(root)
   update(root){ source.set(1) }
   check(hidden-load(seen) == ["0","1"],
         "a live resumption never waits in the bootstrap transaction")
-  abort-work-transaction(root,transaction)
+  discard-provision(transaction)
   match transaction.state
     Work-aborted -> ()
     _ -> throw("work transaction: abort must be terminal")
@@ -137,23 +136,23 @@ fun test-resume_is_global_and_abort_discards_bootstrap_work()
   root.dispose()
 
   val abandoned = hidden(False)
-  val (other,pending) : (root<total>,scheduler-transaction<total>) =
+  val (other,pending) : (root<total>,provision-lease<total>) =
     create-root fn(other-root)
-      val pending = open-work-transaction(other-root)
+      val pending = open-provision(other-root)
       val pending-effect = create-effect(other-root,fn() (),fn(_)
         hidden-store(abandoned,True)
       )
       pending
-  abort-work-transaction(other,pending)
+  discard-provision(pending)
   check(!hidden-load(abandoned),"abort drops an unstarted local bootstrap")
   other.dispose()
 
 fun test-abort-retires-an-unstarted-derived-scope()
   val runs = hidden(0)
   val (root,(transaction,value))
-      : (root<total>,(scheduler-transaction<total>,memo<int>)) =
+      : (root<total>,(provision-lease<total>,memo<int>)) =
     create-root fn(root)
-      val transaction = open-work-transaction(root)
+      val transaction = open-provision(root)
       val value = derive(root,0,fn()
         hidden-store(runs,hidden-load(runs) + 1)
         42
@@ -162,7 +161,7 @@ fun test-abort-retires-an-unstarted-derived-scope()
 
   check(hidden-load(runs) == 0,
         "an open transaction keeps the derived bootstrap local")
-  abort-work-transaction(root,transaction)
+  discard-provision(transaction)
   val pulled : error<int> = mask<exn>{
     error/try(fn() sample(root){ value.get })
   }
@@ -176,18 +175,18 @@ fun test-abort-retires-successfully-drained-scopes()
   val events = hidden([])
   val (root,(source,transaction)) = create-root fn(root)
     val source = signal(root,0)
-    val transaction = open-work-transaction(root)
+    val transaction = open-provision(root)
     val stop = create-effect(root,fn() source.get,fn(value)
       emit(events,"run:" ++ value.show)
       on-cleanup(root,fn() emit(events,"clean:" ++ value.show))
     )
     (source,transaction)
 
-  pretend-no-div{ drain-work-transaction(root,transaction) }
+  pretend-no-div{ drain-provision(transaction) }
   check(hidden-load(events) == ["run:0"],
         "the ready transaction publishes its local scope once")
 
-  abort-work-transaction(root,transaction)
+  discard-provision(transaction)
   check(hidden-load(events) == ["run:0","clean:0"],
         "aborting ready work retires every successfully drained scope")
 
@@ -198,9 +197,9 @@ fun test-abort-retires-successfully-drained-scopes()
 
 fun test-failed-transaction-abort-retires-successful-prefix()
   val events = hidden([])
-  val (root,transaction) : (root<total>,scheduler-transaction<total>) =
+  val (root,transaction) : (root<total>,provision-lease<total>) =
     create-root fn(root)
-      val transaction = open-work-transaction(root)
+      val transaction = open-provision(root)
       val first = create-effect(root,fn() (),fn(_)
         emit(events,"first-run")
         on-cleanup(root,fn() emit(events,"first-clean"))
@@ -213,7 +212,7 @@ fun test-failed-transaction-abort-retires-successful-prefix()
 
   val drained : error<()> = mask<exn>{
     error/try(fn() pretend-no-div{
-      drain-work-transaction(root,transaction)
+      drain-provision(transaction)
     })
   }
   check(drained.is-error,"the failing local bootstrap escapes the drain")
@@ -221,7 +220,7 @@ fun test-failed-transaction-abort-retires-successful-prefix()
     Work-failed(_) -> ()
     _ -> throw("work transaction: a failed drain must retain failure state")
 
-  abort-work-transaction(root,transaction)
+  discard-provision(transaction)
   check(hidden-load(events) ==
           ["first-run","second-fails","first-clean"],
         "aborting failed work retires its successful prefix")
@@ -232,7 +231,7 @@ fun test-final-control-aborts_and_detaches_the_active_transaction()
   val prefix-cleanups = hidden(0)
   val built = require-transaction fn()
     create-root fn(root)
-      val transaction = open-work-transaction(root)
+      val transaction = open-provision(root)
       val prefix-stop = create-effect(root,fn() (),fn(_)
         on-cleanup(root,fn()
           hidden-store(prefix-cleanups,hidden-load(prefix-cleanups) + 1)
@@ -246,7 +245,7 @@ fun test-final-control-aborts_and_detaches_the_active_transaction()
   val (root,transaction) = built
 
   val completed = completes-transaction fn()
-    pretend-no-div{ drain-work-transaction(root,transaction) }
+    pretend-no-div{ drain-provision(transaction) }
     True
   check(!completed,"final control abandons the local bootstrap turn")
   check(hidden-load(abandoned-runs) == 1,
@@ -258,7 +257,7 @@ fun test-final-control-aborts_and_detaches_the_active_transaction()
     _ -> throw("work transaction: final control must abort the transaction")
 
   val recovery-runs = hidden(0)
-  val recovery = open-work-transaction(root)
+  val recovery = open-provision(root)
   val recovery-stop = require-transaction fn()
     update(root){
       create-effect(root,fn() (),fn(_)
@@ -266,9 +265,9 @@ fun test-final-control-aborts_and_detaches_the_active_transaction()
       )
   }
   require-transaction fn()
-    pretend-no-div{ drain-work-transaction(root,recovery) }
+    pretend-no-div{ drain-provision(recovery) }
   require-transaction fn()
-    pretend-no-div{ commit-work-transaction(root,recovery) }
+    pretend-no-div{ promote-provision(recovery) }
   check(hidden-load(recovery-runs) == 1,
         "a fresh transaction opens and drains after dynamic rollback")
   require-transaction fn()
@@ -276,10 +275,10 @@ fun test-final-control-aborts_and_detaches_the_active_transaction()
     root.dispose()
 
 fun test-root-retirement-claims-active-transaction-before-cleanup-reentry()
-  val (root,transaction) : (root<total>,scheduler-transaction<total>) =
+  val (root,transaction) : (root<total>,provision-lease<total>) =
     create-root fn(root)
-      val transaction = open-work-transaction(root)
-      on-cleanup(root,fn() abort-quietly(root,transaction))
+      val transaction = open-provision(root)
+      on-cleanup(root,fn() discard-quietly(transaction))
       transaction
 
   root.dispose()

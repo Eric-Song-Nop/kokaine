@@ -1,10 +1,8 @@
 /*--------------------------------------------------------------------------
-  Stable structural lifetimes and adapter-owned scheduler transaction leases.
+  Stable structural lifetimes for integration-owned UI regions.
 
   A structural owner is only a lifetime/frame registered under the currently
   active frame. It has no queue, target mark, or retained ownership ledger.
-  Structural transactions own the local bootstrap groups only at the outermost
-  adapter boundary; recursive adapters borrow the already active drain.
 --------------------------------------------------------------------------*/
 module kokaine/reactive/internal/structural
 
@@ -21,17 +19,6 @@ pub type structural-owner<e::E>
     structural-checkpoint   : maybe<continuation-gate>,
     structural-frame        : frame<e>,
     structural-registration : registry-registration<retirement-work<e>>
-  )
-
-pub type structural-authority
-  Structural-owned
-  Structural-joined
-
-pub type structural-transaction<e::E>
-  Structural-transaction(
-    structural-transaction-root  : root<e>,
-    structural-scheduler         : scheduler-transaction<e>,
-    structural-authority         : structural-authority
   )
 
 pub fun open-structural-owner(root : root<e>) : exn structural-owner<e>
@@ -76,38 +63,3 @@ pub fun dispose-structural-owner(owner : structural-owner<e>)
   pretend-no-div{
     retire-lifetime(owner.structural-frame.frame-lifetime)
   }
-
-pub fun open-structural-transaction(root : root<e>)
-                                      : exn structural-transaction<e>
-  check-not-pure-plane("structural transaction creation")
-  match current-work-transaction(root)
-    Nothing -> Structural-transaction(
-      root,open-work-transaction(root),Structural-owned)
-    Just(active) -> Structural-transaction(root,active,Structural-joined)
-
-pub fun drain-structural-transaction(
-    transaction : structural-transaction<e>) : <div,exn|e> ()
-  match transaction
-    Structural-transaction(root,current,Structural-owned) ->
-      drain-work-transaction(root,current)
-    Structural-transaction(_,_,Structural-joined) -> ()
-
-pub fun structural-transaction/owns-transaction(
-    transaction : structural-transaction<e>) : bool
-  match transaction
-    Structural-transaction(_,_,Structural-owned) -> True
-    Structural-transaction(_,_,Structural-joined) -> False
-
-pub fun commit-structural-transaction(
-    transaction : structural-transaction<e>) : <div,exn|e> ()
-  match transaction
-    Structural-transaction(root,current,Structural-owned) ->
-      commit-work-transaction(root,current)
-    Structural-transaction(_,_,Structural-joined) -> ()
-
-pub fun abort-structural-transaction(
-    transaction : structural-transaction<e>) : <exn|e> ()
-  match transaction
-    Structural-transaction(root,current,Structural-owned) ->
-      abort-work-transaction(root,current)
-    Structural-transaction(_,_,Structural-joined) -> ()

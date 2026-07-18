@@ -8,6 +8,7 @@
 module kokaine/dom
 
 import kokaine/reactive
+import kokaine/reactive/integration
 import kokaine/reactive/async
 import kokaine/html
 import kokaine/internal/event-runtime
@@ -89,6 +90,65 @@ type keyed-table<e::E,a,k>
     table-order : list<keyed-row<e,a,k>>,
     table-retirements : list<keyed-retirement<e,a,k>>
   )
+
+// The renderer, not Reactive, decides whether this reconciliation owns a new
+// provision or joins the journal already draining on this mount. A joiner has
+// no lease and therefore cannot drain, promote, or discard outer work.
+type keyed-participation
+  Keyed-owned(
+    keyed-provision : provision<<ui>>,
+    keyed-lease     : provision-lease<<ui>>,
+    keyed-journal   : keyed-transaction
+  )
+  Keyed-joined(
+    keyed-provision : provision<<ui>>,
+    keyed-journal   : keyed-transaction
+  )
+
+fun keyed-participation/journal(current : keyed-participation)
+                                : keyed-transaction
+  match current
+    Keyed-owned(_,_,journal) -> journal
+    Keyed-joined(_,journal) -> journal
+
+fun keyed-participation/is-owned(current : keyed-participation) : bool
+  match current
+    Keyed-owned(_,_,_) -> True
+    Keyed-joined(_,_) -> False
+
+fun open-keyed-participation(renderer : keyed-context,
+                             root : root<<ui>>)
+                            : exn keyed-participation
+  match current-provision(root)
+    Nothing ->
+      val lease = open-provision(root)
+      val current = lease.provision
+      Keyed-owned(current,lease,new-keyed-transaction())
+    Just(current) -> Keyed-joined(
+      current,current-keyed-transaction(renderer,current))
+
+fun drain-keyed-participation(renderer : keyed-context,
+                              current : keyed-participation)
+                             : <div,ui,exn> ()
+  match current
+    Keyed-owned(provision,lease,journal) ->
+      with-keyed-transaction(
+        renderer,provision,journal,fn() drain-provision(lease))
+    Keyed-joined(_,_) -> ()
+
+fun promote-keyed-participation(current : keyed-participation)
+                                : <div,ui,exn> ()
+  match current
+    Keyed-owned(_,lease,_) -> promote-provision(lease)
+    Keyed-joined(_,_) -> ()
+
+fun discard-keyed-participation(current : keyed-participation)
+                                : <ui,exn> ()
+  match current
+    Keyed-owned(_,lease,journal) -> finally(
+      fn() abort-keyed-transaction(journal),
+      fn() discard-provision(lease))
+    Keyed-joined(_,_) -> ()
 
 // Transaction state must survive abortive control while mount bootstraps are
 // flushing. Keep this adapter-local and inaccessible to user code.
@@ -1046,17 +1106,14 @@ fun reconcile-keyed<a,k,e::E>(
   reactive-ui-exn-open{ drain-keyed-retirements(table) }
   match transaction-load(table)
     Keyed-table(old-index,old-order,_) ->
-      // The outermost reconciler owns a local bootstrap transaction. A keyed
-      // adapter reached recursively during that drain borrows the same groups;
-      // only the outer lease can commit or abort them.
-      val transaction = reactive-structural{
-        internal/open-structural-transaction(root)
+      // The outermost reconciler opens a local bootstrap provision. A nested
+      // keyed adapter resolves the matching renderer journal but receives no
+      // lease, so only the outer participation can terminate reactive work.
+      val participation = reactive-structural{
+        open-keyed-participation(renderer,root)
       }
-      val owns-transaction =
-        internal/structural-transaction-owned(transaction)
-      val publication-transaction =
-        if owns-transaction then new-keyed-transaction()
-        else current-keyed-transaction(renderer)
+      val owns-provision = participation.is-owned
+      val publication-transaction = participation.journal
       val next-index = transaction-cell(
         kokaine/internal/key-index/empty())
       val updates = transaction-cell([])
@@ -1070,7 +1127,7 @@ fun reconcile-keyed<a,k,e::E>(
         fn() {
           if transaction-load(committed) || transaction-load(enlisted)
           then () else
-            // Claim every transaction-owned bootstrap before user cleanup can
+            // Claim every provision-owned bootstrap before user cleanup can
             // re-enter. Draft owners and DOM order are then retired/restored
             // exhaustively even if one cleanup fails.
             reactive-ui-exn-open{
@@ -1088,14 +1145,7 @@ fun reconcile-keyed<a,k,e::E>(
                       dispose-keyed-rows(transaction-load(drafts))
                     },
                     fn()
-                      finally(
-                        fn() {
-                          if owns-transaction
-                          then abort-keyed-transaction(publication-transaction)
-                          else ()
-                        },
-                        fn() internal/abort-structural-transaction(transaction)
-                      )
+                      discard-keyed-participation(participation)
                   )
               )
             }
@@ -1157,16 +1207,13 @@ fun reconcile-keyed<a,k,e::E>(
           val stale = collect-stale-rows(old-order,final-index,compare)
           val final-order = final-updates.map(fn(update) update.update-row)
 
-          if owns-transaction then
+          if owns-provision then
             // Every draft is now rollback-reachable and all comparator work has
-            // succeeded. Drain only this transaction's bootstrap FIFO; resume
+            // succeeded. Drain only this provision's bootstrap FIFO; resume
             // work remains on the root's global frontier.
-            with-keyed-transaction(
-              renderer,publication-transaction,
-              fn() reactive-structural{
-                internal/drain-structural-transaction(transaction)
-              }
-            )
+            reactive-structural{
+              drain-keyed-participation(renderer,participation)
+            }
 
             // Fail closed before the first physical move if a retained custom
             // or stale element would receive synchronous disconnect/reconnect
@@ -1200,14 +1247,14 @@ fun reconcile-keyed<a,k,e::E>(
             transaction-store(staged-retirements,retirements)
 
             // The renderer prepares every nested DOM participant before the
-            // reactive bootstrap lease is committed. Publication is then a
+            // reactive provision lease is promoted. Publication is then a
             // total renderer-owned suffix; the scheduler never stores DOM
             // callbacks.
             reactive-structural{
               prepare-keyed-transaction(publication-transaction)
             }
             reactive-structural{
-              internal/commit-structural-transaction(transaction)
+              promote-keyed-participation(participation)
             }
             reactive-structural{
               publish-keyed-transaction(publication-transaction)

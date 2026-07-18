@@ -372,18 +372,21 @@ commit.
 
 Reconciliation uses a persistent AVL key index. One sequential source walk
 constructs the desired table and update list with `O(log n)` lookup/insertion,
-so table construction is `O(n log n)`. Draft bootstrap uses the scheduler's
-deque-backed local work transaction rather than scanning the global frontier.
+so table construction is `O(n log n)`. Draft bootstrap uses a deque-backed
+provision rather than scanning the global frontier. `provision` is a borrowed
+identity; only its `provision-lease` can drain, promote, or discard the local
+work. This lets integrations decide participation without giving a nested
+joiner authority over its owner.
 Inserting a duplicate key fails the draft. DOM ordering is then a four-part
 transaction:
 
 1. build draft rows and validate keys/equality without publishing the new table
    or any retained-row source updates;
-2. drain only the transaction-local bootstrap FIFO while resumptions remain on
+2. drain only the provision-local bootstrap FIFO while resumptions remain on
    the global frontier; nested keyed construction enlists a two-phase
    prepare/publish participant in the mount's renderer-owned journal;
-3. prepare and revalidate every enlisted DOM change, commit the independent
-   bootstrap lease, and only then publish the renderer journal plus the outer
+3. prepare and revalidate every enlisted DOM change, promote the independent
+   provision lease, and only then publish the renderer journal plus the outer
    keyed table; and
 4. retire stale rows through an explicit pending-retirement ledger which keeps
    a failed host cleanup retryable without making unmanaged DOM invisible to
@@ -393,11 +396,12 @@ On bootstrap failure or abortive final control, reconciliation aborts and
 detaches the local work groups before cleanup can re-enter, then disposes every
 rollback-reachable draft and rolls back every enlisted publication. On a move
 or participant-prepare failure, it restores the previous row order and disposes
-draft owners before rethrowing. A joined nested lease cannot steal commit or
-abort authority from its outer owner, and cannot publish merely because its own
-adapter call returned. The mount-level keyed context owns that journal; the
-reactive structural lease supplies only bootstrap isolation and the
-`Owned`/`Joined` decision.
+draft owners before rethrowing. A nested adapter receives only a borrowed
+`provision`, so it cannot steal promote/discard authority from its outer owner
+or publish merely because its own call returned. The mount-level keyed context
+maps that exact provision identity to the renderer journal. If an active
+provision belongs to another integration, keyed reconciliation fails closed;
+Reactive neither stores the journal nor decides renderer ownership.
 Joined keyed reconciliation is intentionally initial-only: updating retained
 rows would require signal writes in the journal's total publication suffix, so
 that case fails closed instead of weakening the two-phase contract.
@@ -605,10 +609,10 @@ complete rollback snapshot, and stale handles no longer retain sibling values.
 - `stateful-entry-gates.kk`, `entry-targeted-settle.kk`, and
   `entry-structural.kk` check state-entry routing and ownership.
 - `structural-scopes.kk` checks replacement cleanup and stale-frame rejection.
-- `structural-transactions.kk` checks persistent row ownership, parent/root
-  retirement, stale-owner rejection, outer-versus-joined bootstrap leases, and
-  failed-prefix cleanup. Renderer journal ordering is guarded separately by
-  `keyed_transaction_boundary.py` and the keyed browser fixture.
+- `integration-boundaries.kk` checks persistent row ownership, exact borrowed
+  provision identity, exclusive leases, and failed-prefix cleanup. Renderer
+  journal ordering is guarded separately by `keyed_transaction_boundary.py`
+  and the keyed browser fixture.
 - `control-flow.kk` checks conditional/list/vector snapshots and duplicate-key
   parity; `key-index.kk` checks balanced lookup under adversarial insertion.
 - `final-control-rollback.kk` checks abandoned drafts and exact-K retry.

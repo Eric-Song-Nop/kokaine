@@ -6,6 +6,7 @@
 --------------------------------------------------------------------------*/
 module kokaine/dom/internal/keyed-transaction
 
+import kokaine/reactive/integration
 import std/core/unsafe
 import std/core/undiv
 
@@ -39,9 +40,15 @@ abstract type keyed-transaction
     transaction-publications : ref<global,list<keyed-publication>>
   )
 
+type keyed-entry
+  Keyed-entry(
+    entry-provision   : provision<<ui>>,
+    entry-transaction : keyed-transaction
+  )
+
 abstract type keyed-context
   Keyed-context(
-    context-active : ref<global,list<keyed-transaction>>
+    context-active : ref<global,list<keyed-entry>>
   )
 
 pub fun new-keyed-context() : keyed-context
@@ -50,15 +57,26 @@ pub fun new-keyed-context() : keyed-context
 pub fun new-keyed-transaction() : keyed-transaction
   Keyed-transaction(cell(Keyed-open),cell([]))
 
-pub fun current-keyed-transaction(renderer : keyed-context)
+tail fun find-keyed-transaction(values : list<keyed-entry>,
+                                expected : provision<<ui>>)
+                               : exn keyed-transaction
+  match values
+    Nil -> throw(
+      "active provision does not belong to this renderer transaction")
+    Cons(current,rest) ->
+      if current.entry-provision.same(expected)
+      then current.entry-transaction
+      else find-keyed-transaction(rest,expected)
+
+pub fun current-keyed-transaction(renderer : keyed-context,
+                                  expected : provision<<ui>>)
                                   : exn keyed-transaction
   match renderer
-    Keyed-context(active) -> match load(active)
-      Cons(current,_) -> current
-      Nil -> throw("joined keyed reconciliation has no renderer transaction")
+    Keyed-context(active) -> find-keyed-transaction(load(active),expected)
 
 pub fun with-keyed-transaction(
-    renderer : keyed-context, transaction : keyed-transaction,
+    renderer : keyed-context, current : provision<<ui>>,
+    transaction : keyed-transaction,
     action : () -> <div,exn|e> a) : <div,exn|e> a
   match renderer
     Keyed-context(active) ->
@@ -66,7 +84,7 @@ pub fun with-keyed-transaction(
       finally(
         fn() store(active,previous),
         fn()
-          store(active,Cons(transaction,previous))
+          store(active,Cons(Keyed-entry(current,transaction),previous))
           action()
       )
 

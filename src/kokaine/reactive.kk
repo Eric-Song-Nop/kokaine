@@ -29,11 +29,6 @@ abstract value type structural-owner<e::E>
     internal-structural-owner : kokaine/reactive/internal/structural/structural-owner<e>
   )
 
-abstract value type structural-transaction<e::E>
-  Public-structural-transaction(
-    internal-structural-transaction : kokaine/reactive/internal/structural/structural-transaction<e>
-  )
-
 pub alias disposer<e> = kokaine/reactive/internal/model/disposer<e>
 
 fun unwrap-root(value : root<e>) : kokaine/reactive/internal/model/root<e>
@@ -64,11 +59,6 @@ fun unwrap-structural-owner(value : structural-owner<e>)
     : kokaine/reactive/internal/structural/structural-owner<e>
   match value
     Public-structural-owner(inner) -> inner
-
-fun unwrap-structural-transaction(value : structural-transaction<e>)
-    : kokaine/reactive/internal/structural/structural-transaction<e>
-  match value
-    Public-structural-transaction(inner) -> inner
 
 pub fun dispatch(root : root<e>,
                  action : () -> <signal-read,signal-write,pure|e> a)
@@ -202,28 +192,3 @@ pub fun internal/with-structural-owner(
 pub fun internal/dispose-structural-owner(owner : structural-owner<e>)
                                          : <exn|e> ()
   runtime-dispose-structural-owner(owner.unwrap-structural-owner)
-
-pub fun internal/open-structural-transaction(root : root<e>)
-                                            : exn structural-transaction<e>
-  Public-structural-transaction(
-    runtime-open-structural-transaction(root.unwrap-root))
-
-pub fun internal/drain-structural-transaction(
-    transaction : structural-transaction<e>) : <div,exn|e> ()
-  runtime-drain-structural-transaction(
-    transaction.unwrap-structural-transaction)
-
-pub fun internal/structural-transaction-owned(
-    transaction : structural-transaction<e>) : bool
-  runtime-structural-transaction-owned(
-    transaction.unwrap-structural-transaction)
-
-pub fun internal/commit-structural-transaction(
-    transaction : structural-transaction<e>) : <div,exn|e> ()
-  runtime-commit-structural-transaction(
-    transaction.unwrap-structural-transaction)
-
-pub fun internal/abort-structural-transaction(
-    transaction : structural-transaction<e>) : <exn|e> ()
-  runtime-abort-structural-transaction(
-    transaction.unwrap-structural-transaction)

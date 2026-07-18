@@ -6,11 +6,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "src/kokaine/dom.kk"
 text = SOURCE.read_text()
+keyed_context = (ROOT / "src/kokaine/dom/internal/keyed-transaction.kk").read_text()
 start = text.index("fun reconcile-keyed")
 end = text.index("fun mount-keyed-fields", start)
 reconcile = text[start:end]
 
-commit = reconcile.index("internal/commit-structural-transaction(transaction)")
+promote = reconcile.index("promote-keyed-participation(participation)")
 prepare_joined = reconcile.index(
     "prepare-keyed-transaction(publication-transaction)"
 )
@@ -32,7 +33,7 @@ drain_retirements = reconcile.index(
 assert (
     stage_retirements
     < prepare_joined
-    < commit
+    < promote
     < publish_joined
     < publish_sources
     < publish_table
@@ -47,6 +48,10 @@ assert mark_committed < drain_retirements, (
 assert "stage-keyed-publication(" in reconcile
 assert "internal/stage-structural-publication(" not in reconcile
 assert "joined keyed reconciliation must be initial construction" in reconcile
+assert "current-provision(root)" in text
+assert "open-provision(root)" in text
+assert "entry-provision.same(expected)" in keyed_context
+assert "active provision does not belong to this renderer transaction" in keyed_context
 
 reactive_sources = "\n".join(
     path.read_text()
@@ -57,7 +62,8 @@ for forbidden in (
     "root-work-publications",
     "stage-structural-publication",
     "stage-work-publication",
+    "structural-transaction",
 ):
     assert forbidden not in reactive_sources, (
-        f"renderer publication concern leaked into reactive core: {forbidden}"
+        f"obsolete host coordination leaked into reactive core: {forbidden}"
     )
