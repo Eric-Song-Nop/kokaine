@@ -11,6 +11,7 @@ import kokaine/reactive
 import kokaine/html
 import kokaine/internal/event-runtime
 import kokaine/internal/key-index
+import kokaine/internal/compat
 import std/core/unsafe
 import std/core/undiv
 
@@ -797,7 +798,7 @@ fun run-keyed-row-actions<a,k,rowe::E,p::E>(
       finally(
         fn() {
           if transaction-load(completed) then () else
-            // A final control operation never returns through `error/try`.
+            // A final control operation never returns through `capture-error`.
             // Finish the remaining actions in its dynamic cleanup, and let a
             // later modeled exception override that control just as nested
             // `finally` did before this loop became stack-safe.
@@ -810,7 +811,7 @@ fun run-keyed-row-actions<a,k,rowe::E,p::E>(
           // an older exception must not spuriously replace that control.
           val previous = transaction-load(failure)
           transaction-store(failure,Ok(()))
-          match error/try(fn() action(row))
+          match capture-error(fn() action(row))
             Error(problem) -> transaction-store(failure,Error(problem))
             Ok(_) -> transaction-store(failure,previous)
           transaction-store(completed,True)

@@ -1,0 +1,125 @@
+/*--------------------------------------------------------------------------
+  Nominal effects used by the public reactive API and internal interpreters.
+--------------------------------------------------------------------------*/
+module interface kokaine/reactive/effects
+ 
+//------------------------------
+//#kki: import declarations
+ 
+import std/core/types = std/core/types pub = "";
+import std/core/hnd = std/core/hnd pub = "";
+import std/core/exn = std/core/exn pub = "";
+import std/core/bool = std/core/bool pub = "";
+import std/core/order = std/core/order pub = "";
+import std/core/char = std/core/char pub = "";
+import std/core/int = std/core/int pub = "";
+import std/core/vector = std/core/vector pub = "";
+import std/core/string = std/core/string pub = "";
+import std/core/sslice = std/core/sslice pub = "";
+import std/core/list = std/core/list pub = "";
+import std/core/maybe = std/core/maybe pub = "";
+import std/core/maybe2 = std/core/maybe2 pub = "";
+import std/core/either = std/core/either pub = "";
+import std/core/result = std/core/result pub = "";
+import std/core/tuple = std/core/tuple pub = "";
+import std/core/lazy = std/core/lazy pub = "";
+import std/core/show = std/core/show pub = "";
+import std/core/debug = std/core/debug pub = "";
+import std/core/delayed = std/core/delayed pub = "";
+import std/core/console = std/core/console pub = "";
+import std/core = std/core = "";
+import kokaine/reactive/internal/model = kokaine/reactive/internal/model = "";
+ 
+//------------------------------
+//#kki: external imports
+ 
+ 
+//------------------------------
+//#kki: fixity declarations
+ 
+ 
+//------------------------------
+//#kki: local imported aliases
+ 
+ 
+//------------------------------
+//#kki: type declarations
+ 
+pub recursive effect type signal-read[8,1,14,7] <(e :: E),a> :: (E, V) -> V {
+  pub con @Hnd-signal-read[8,1,8,22](@cfc: std/core/types/int, @ctl-read-source: forall<b> (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<((kokaine/reactive/internal/model/source :: V -> V)<b>, kokaine/reactive/internal/model/read-mode, (std/core/types/maybe :: V -> V)<kokaine/reactive/internal/model/derive-producer>),b,(signal-read :: (E, V) -> V),(e :: E),a>, @fun-validate-derived: (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<kokaine/reactive/internal/model/derive-producer,(),(signal-read :: (E, V) -> V),(e :: E),a>){0,3,8} : forall<(e :: E),a> (std/core/types/int, forall<b> (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<((kokaine/reactive/internal/model/source :: V -> V)<b>, kokaine/reactive/internal/model/read-mode, (std/core/types/maybe :: V -> V)<kokaine/reactive/internal/model/derive-producer>),b,(signal-read :: (E, V) -> V),(e :: E),a>, (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<kokaine/reactive/internal/model/derive-producer,(),(signal-read :: (E, V) -> V),(e :: E),a>) -> (signal-read :: (E, V) -> V)<(e :: E),a> = 1;
+};
+pub recursive effect type signal-write[16,1,21,40] <(e :: E),a> :: (E, V) -> V {
+  pub con @Hnd-signal-write[16,1,16,23](@cfc: std/core/types/int, @fun-enter-batch: (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<kokaine/reactive/internal/model/root-key,(),(signal-write :: (E, V) -> V),(e :: E),a>, @fun-leave-batch: (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<kokaine/reactive/internal/model/root-key,(),(signal-write :: (E, V) -> V),(e :: E),a>, @fun-modify-source: forall<b> (std/core/hnd/clause2 :: (V, V, V, (E, V) -> V, E, V) -> V)<(kokaine/reactive/internal/model/source :: V -> V)<b>,(b) -> b,(),(signal-write :: (E, V) -> V),(e :: E),a>, @fun-request-flush: (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<kokaine/reactive/internal/model/root-key,(),(signal-write :: (E, V) -> V),(e :: E),a>, @fun-write-source: forall<b> (std/core/hnd/clause2 :: (V, V, V, (E, V) -> V, E, V) -> V)<(kokaine/reactive/internal/model/source :: V -> V)<b>,b,(),(signal-write :: (E, V) -> V),(e :: E),a>){0,6,8} : forall<(e :: E),a> (std/core/types/int, (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<kokaine/reactive/internal/model/root-key,(),(signal-write :: (E, V) -> V),(e :: E),a>, (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<kokaine/reactive/internal/model/root-key,(),(signal-write :: (E, V) -> V),(e :: E),a>, forall<b> (std/core/hnd/clause2 :: (V, V, V, (E, V) -> V, E, V) -> V)<(kokaine/reactive/internal/model/source :: V -> V)<b>,(b) -> b,(),(signal-write :: (E, V) -> V),(e :: E),a>, (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<kokaine/reactive/internal/model/root-key,(),(signal-write :: (E, V) -> V),(e :: E),a>, forall<b> (std/core/hnd/clause2 :: (V, V, V, (E, V) -> V, E, V) -> V)<(kokaine/reactive/internal/model/source :: V -> V)<b>,b,(),(signal-write :: (E, V) -> V),(e :: E),a>) -> (signal-write :: (E, V) -> V)<(e :: E),a> = 1;
+};
+pub alias reactive[23,1,23,47] :: E = <(std/core/types/handled :: ((E, V) -> V) -> X)<(signal-read :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(signal-write :: (E, V) -> V)>> = 1;
+ 
+//------------------------------
+//#kki: declarations
+ 
+// Automatically generated. Retrieves the `@cfc` constructor field of the `:signal-read` type.
+fun signal-read/@cfc[8,1,8,22] : forall<(e :: E),a> (^ @this : (signal-read :: (E, V) -> V)<(e :: E),a>) -> std/core/types/int;
+// runtime tag for the effect `:signal-read`
+pub val signal-read/@tag[8,1,8,22] : (std/core/hnd/htag :: ((E, V) -> V) -> V)<(signal-read :: (E, V) -> V)>;
+// handler for the effect `:signal-read`
+pub fun signal-read/@handle[8,12,8,22] : forall<a,(e :: E),b> (hnd : (signal-read :: (E, V) -> V)<(e :: E),b>, ret : (res : a) -> (e :: E) b, action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(signal-read :: (E, V) -> V)>|(e :: E)> a) -> (e :: E) b;
+// Automatically generated. Retrieves the `@fun-validate-derived` constructor field of the `:signal-read` type.
+fun signal-read/@fun-validate-derived[9,7,9,55] : forall<(e :: E),a> (^ @this : (signal-read :: (E, V) -> V)<(e :: E),a>) -> (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<kokaine/reactive/internal/model/derive-producer,(),(signal-read :: (E, V) -> V),(e :: E),a>;
+// select `validate-derived` operation out of effect `:signal-read`
+pub fun validate-derived/@select[9,7,9,55] : forall<(e :: E),a> (^ hnd : (signal-read :: (E, V) -> V)<(e :: E),a>) -> (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<kokaine/reactive/internal/model/derive-producer,(),(signal-read :: (E, V) -> V),(e :: E),a>;
+// Call the `fun validate-derived` operation of the effect `:signal-read`
+pub fun validate-derived[9,7,9,22] : (producer : kokaine/reactive/internal/model/derive-producer) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(signal-read :: (E, V) -> V)>> ();
+// Automatically generated. Retrieves the `@ctl-read-source` constructor field of the `:signal-read` type.
+fun signal-read/@ctl-read-source[10,7,14,7] : forall<(e :: E),a,b> (^ @this : (signal-read :: (E, V) -> V)<(e :: E),a>) -> (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<((kokaine/reactive/internal/model/source :: V -> V)<b>, kokaine/reactive/internal/model/read-mode, (std/core/types/maybe :: V -> V)<kokaine/reactive/internal/model/derive-producer>),b,(signal-read :: (E, V) -> V),(e :: E),a>;
+// select `read-source` operation out of effect `:signal-read`
+pub fun read-source/@select[10,7,14,7] : forall<a,(e :: E),b> (^ hnd : (signal-read :: (E, V) -> V)<(e :: E),b>) -> (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<((kokaine/reactive/internal/model/source :: V -> V)<a>, kokaine/reactive/internal/model/read-mode, (std/core/types/maybe :: V -> V)<kokaine/reactive/internal/model/derive-producer>),a,(signal-read :: (E, V) -> V),(e :: E),b>;
+// Call the `ctl read-source` operation of the effect `:signal-read`
+pub fun read-source[10,7,10,17] : forall<a> (source : (kokaine/reactive/internal/model/source :: V -> V)<a>, mode : kokaine/reactive/internal/model/read-mode, producer : (std/core/types/maybe :: V -> V)<kokaine/reactive/internal/model/derive-producer>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(signal-read :: (E, V) -> V)>> a;
+// Automatically generated. Retrieves the `@cfc` constructor field of the `:signal-write` type.
+fun signal-write/@cfc[16,1,16,23] : forall<(e :: E),a> (^ @this : (signal-write :: (E, V) -> V)<(e :: E),a>) -> std/core/types/int;
+// runtime tag for the effect `:signal-write`
+pub val signal-write/@tag[16,1,16,23] : (std/core/hnd/htag :: ((E, V) -> V) -> V)<(signal-write :: (E, V) -> V)>;
+// handler for the effect `:signal-write`
+pub fun signal-write/@handle[16,12,16,23] : forall<a,(e :: E),b> (hnd : (signal-write :: (E, V) -> V)<(e :: E),b>, ret : (res : a) -> (e :: E) b, action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(signal-write :: (E, V) -> V)>|(e :: E)> a) -> (e :: E) b;
+// Automatically generated. Retrieves the `@fun-write-source` constructor field of the `:signal-write` type.
+fun signal-write/@fun-write-source[17,7,17,54] : forall<(e :: E),a,b> (^ @this : (signal-write :: (E, V) -> V)<(e :: E),a>) -> (std/core/hnd/clause2 :: (V, V, V, (E, V) -> V, E, V) -> V)<(kokaine/reactive/internal/model/source :: V -> V)<b>,b,(),(signal-write :: (E, V) -> V),(e :: E),a>;
+// select `write-source` operation out of effect `:signal-write`
+pub fun write-source/@select[17,7,17,54] : forall<a,(e :: E),b> (^ hnd : (signal-write :: (E, V) -> V)<(e :: E),b>) -> (std/core/hnd/clause2 :: (V, V, V, (E, V) -> V, E, V) -> V)<(kokaine/reactive/internal/model/source :: V -> V)<a>,a,(),(signal-write :: (E, V) -> V),(e :: E),b>;
+// Call the `fun write-source` operation of the effect `:signal-write`
+pub fun write-source[17,7,17,18] : forall<a> (source : (kokaine/reactive/internal/model/source :: V -> V)<a>, value : a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(signal-write :: (E, V) -> V)>> ();
+// Automatically generated. Retrieves the `@fun-modify-source` constructor field of the `:signal-write` type.
+fun signal-write/@fun-modify-source[18,7,18,61] : forall<(e :: E),a,b> (^ @this : (signal-write :: (E, V) -> V)<(e :: E),a>) -> (std/core/hnd/clause2 :: (V, V, V, (E, V) -> V, E, V) -> V)<(kokaine/reactive/internal/model/source :: V -> V)<b>,(b) -> b,(),(signal-write :: (E, V) -> V),(e :: E),a>;
+// select `modify-source` operation out of effect `:signal-write`
+pub fun modify-source/@select[18,7,18,61] : forall<a,(e :: E),b> (^ hnd : (signal-write :: (E, V) -> V)<(e :: E),b>) -> (std/core/hnd/clause2 :: (V, V, V, (E, V) -> V, E, V) -> V)<(kokaine/reactive/internal/model/source :: V -> V)<a>,(a) -> a,(),(signal-write :: (E, V) -> V),(e :: E),b>;
+// Call the `fun modify-source` operation of the effect `:signal-write`
+pub fun modify-source[18,7,18,19] : forall<a> (source : (kokaine/reactive/internal/model/source :: V -> V)<a>, update : (a) -> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(signal-write :: (E, V) -> V)>> ();
+// Automatically generated. Retrieves the `@fun-enter-batch` constructor field of the `:signal-write` type.
+fun signal-write/@fun-enter-batch[19,7,19,38] : forall<(e :: E),a> (^ @this : (signal-write :: (E, V) -> V)<(e :: E),a>) -> (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<kokaine/reactive/internal/model/root-key,(),(signal-write :: (E, V) -> V),(e :: E),a>;
+// select `enter-batch` operation out of effect `:signal-write`
+pub fun enter-batch/@select[19,7,19,38] : forall<(e :: E),a> (^ hnd : (signal-write :: (E, V) -> V)<(e :: E),a>) -> (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<kokaine/reactive/internal/model/root-key,(),(signal-write :: (E, V) -> V),(e :: E),a>;
+// Call the `fun enter-batch` operation of the effect `:signal-write`
+pub fun enter-batch[19,7,19,17] : (key : kokaine/reactive/internal/model/root-key) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(signal-write :: (E, V) -> V)>> ();
+// Automatically generated. Retrieves the `@fun-leave-batch` constructor field of the `:signal-write` type.
+fun signal-write/@fun-leave-batch[20,7,20,38] : forall<(e :: E),a> (^ @this : (signal-write :: (E, V) -> V)<(e :: E),a>) -> (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<kokaine/reactive/internal/model/root-key,(),(signal-write :: (E, V) -> V),(e :: E),a>;
+// select `leave-batch` operation out of effect `:signal-write`
+pub fun leave-batch/@select[20,7,20,38] : forall<(e :: E),a> (^ hnd : (signal-write :: (E, V) -> V)<(e :: E),a>) -> (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<kokaine/reactive/internal/model/root-key,(),(signal-write :: (E, V) -> V),(e :: E),a>;
+// Call the `fun leave-batch` operation of the effect `:signal-write`
+pub fun leave-batch[20,7,20,17] : (key : kokaine/reactive/internal/model/root-key) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(signal-write :: (E, V) -> V)>> ();
+// Automatically generated. Retrieves the `@fun-request-flush` constructor field of the `:signal-write` type.
+fun signal-write/@fun-request-flush[21,7,21,40] : forall<(e :: E),a> (^ @this : (signal-write :: (E, V) -> V)<(e :: E),a>) -> (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<kokaine/reactive/internal/model/root-key,(),(signal-write :: (E, V) -> V),(e :: E),a>;
+// select `request-flush` operation out of effect `:signal-write`
+pub fun request-flush/@select[21,7,21,40] : forall<(e :: E),a> (^ hnd : (signal-write :: (E, V) -> V)<(e :: E),a>) -> (std/core/hnd/clause1 :: (V, V, (E, V) -> V, E, V) -> V)<kokaine/reactive/internal/model/root-key,(),(signal-write :: (E, V) -> V),(e :: E),a>;
+// Call the `fun request-flush` operation of the effect `:signal-write`
+pub fun request-flush[21,7,21,19] : (key : kokaine/reactive/internal/model/root-key) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(signal-write :: (E, V) -> V)>> ();
+ 
+fun @kokaine-cache-phase[1,0,1,0] : () -> std/core/types/int;
+ 
+//------------------------------
+//#kki: external declarations
+ 
+ 
+//------------------------------
+//#kki: inline definitions
+ 
+//.inline-section
+fun @kokaine-cache-phase // inline size: 1
+  = fn(){ 0; };

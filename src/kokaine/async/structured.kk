@@ -9,6 +9,7 @@ module kokaine/async/structured
 
 import kokaine/async/effects
 import kokaine/async/channel
+import kokaine/internal/compat
 import kokaine/internal/registry
 import std/core/unsafe
 import std/core/undiv
@@ -321,7 +322,7 @@ fun run-strand(
         val outcome =
           with unsafe-try-finalize
           with unsafe-uncancel
-          error/try(fn() action())
+          capture-error(fn() action())
         match outcome
           Right(Just(Ok(value))) ->
             group.finish(index,Strand-value(value))

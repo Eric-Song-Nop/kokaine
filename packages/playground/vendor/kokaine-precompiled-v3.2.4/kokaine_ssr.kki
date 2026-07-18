@@ -1,0 +1,142 @@
+/*--------------------------------------------------------------------------
+  Deterministic string rendering for tests, snapshots, and server output.
+
+  Ordinary text and attribute values are escaped. Raw markup can only enter
+  through `unsafe-trusted-html`, making the trust boundary explicit.
+--------------------------------------------------------------------------*/
+module interface kokaine/ssr
+ 
+//------------------------------
+//#kki: import declarations
+ 
+import std/core/types = std/core/types pub = "";
+import std/core/hnd = std/core/hnd pub = "";
+import std/core/exn = std/core/exn pub = "";
+import std/core/bool = std/core/bool pub = "";
+import std/core/order = std/core/order pub = "";
+import std/core/char = std/core/char pub = "";
+import std/core/int = std/core/int pub = "";
+import std/core/vector = std/core/vector pub = "";
+import std/core/string = std/core/string pub = "";
+import std/core/sslice = std/core/sslice pub = "";
+import std/core/list = std/core/list pub = "";
+import std/core/maybe = std/core/maybe pub = "";
+import std/core/maybe2 = std/core/maybe2 pub = "";
+import std/core/either = std/core/either pub = "";
+import std/core/result = std/core/result pub = "";
+import std/core/tuple = std/core/tuple pub = "";
+import std/core/lazy = std/core/lazy pub = "";
+import std/core/show = std/core/show pub = "";
+import std/core/debug = std/core/debug pub = "";
+import std/core/delayed = std/core/delayed pub = "";
+import std/core/console = std/core/console pub = "";
+import kokaine/reactive/effects = kokaine/reactive/effects pub = "";
+import std/core = std/core = "";
+import kokaine/reactive = kokaine/reactive = "";
+import kokaine/html = kokaine/html = "";
+import kokaine/internal/key-index = kokaine/internal/key-index = "";
+import std/core/unsafe = std/core/unsafe = "";
+import kokaine/async/effects = kokaine/async/effects inline = "";
+ 
+//------------------------------
+//#kki: external imports
+ 
+ 
+//------------------------------
+//#kki: fixity declarations
+ 
+ 
+//------------------------------
+//#kki: local imported aliases
+ 
+// A For plan existentially packages both the source collection type and the
+// application item/key types.  Backends receive only a sequential walker; the
+// DOM reconciler therefore cannot accidentally depend on random access and the
+// list entry point never detours through a vector.
+local alias kokaine/html/accessor[146,1,146,43]<a> :: V -> V = () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> a = 1;
+// An alias for pure effects: a pure function always returns the same result
+// when called with the same arguments but may not terminate or raise an exception.
+local alias std/core/pure[55,1,55,26] :: E = <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/div :: X)> = 1;
+ 
+//------------------------------
+//#kki: type declarations
+ 
+ 
+//------------------------------
+//#kki: declarations
+ 
+fun render-cell[15,5,15,15] : forall<a> (value : a) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>;
+fun render-load[18,5,18,15] : forall<a> (value : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>) -> a;
+fun render-store[21,5,21,16] : forall<a> (target : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>, value : a) -> ();
+fun escape-text[25,5,25,15] : (value : std/core/types/string) -> std/core/types/string;
+fun escape-attribute[31,5,31,20] : (value : std/core/types/string) -> std/core/types/string;
+fun checked-element-name[36,5,36,24] : (name : std/core/types/string) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> std/core/types/string;
+fun checked-attribute-name[40,5,40,26] : (name : std/core/types/string) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> std/core/types/string;
+fun checked-event-name[44,5,44,22] : (name : std/core/types/string) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> std/core/types/string;
+fun checked-property-name[48,5,48,25] : (name : std/core/types/string) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> std/core/types/string;
+// monadic lift
+fun @mlift-string-attribute@10142[1,0,1,0] : (value : std/core/types/string, @y-x10025 : std/core/types/string) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> std/core/types/string;
+fun string-attribute[52,5,52,20] : (name : std/core/types/string, value : std/core/types/string) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> std/core/types/string;
+// monadic lift
+fun @mlift-boolean-attribute@10143[1,0,1,0] : (@y-x10026 : std/core/types/string) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> std/core/types/string;
+fun boolean-attribute[56,5,56,21] : (name : std/core/types/string, enabled : std/core/types/bool) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> std/core/types/string;
+// monadic lift
+fun @mlift-property-attribute@10144[1,0,1,0] : (@y-x10030 : std/core/types/string) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> std/core/types/string;
+// monadic lift
+fun @mlift-property-attribute@10145[1,0,1,0] : (value : kokaine/html/property-value, safe-name : std/core/types/string) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> std/core/types/string;
+fun property-attribute[59,5,59,22] : (name : std/core/types/string, value : kokaine/html/property-value) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> std/core/types/string;
+// monadic lift
+fun @mlift-render-attribute@10146[1,0,1,0] : (@y-x10035 : std/core/types/string) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> std/core/types/string;
+// monadic lift
+fun @mlift-render-attribute@10147[1,0,1,0] : (name@2 : std/core/types/string, @y-x10039 : (std/core/types/maybe :: V -> V)<std/core/types/string>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/div :: X)> std/core/types/string;
+// monadic lift
+fun @mlift-render-attribute@10148[1,0,1,0] : (name@3 : std/core/types/string, @y-x10042 : kokaine/html/property-value) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/div :: X)> std/core/types/string;
+// monadic lift
+fun @mlift-render-attribute@10149[1,0,1,0] : (wild_ : std/core/types/string) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/types/div :: X)> std/core/types/string;
+fun render-attribute[66,5,66,20] : forall<(e :: E)> (attribute : (kokaine/html/attribute :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/pure :: E)> std/core/types/string;
+// monadic lift
+fun @mlift-render-attributes@10150[1,0,1,0] : (@y-x10046 : (std/core/types/list :: V -> V)<std/core/types/string>) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> std/core/types/string;
+fun render-attributes[82,5,82,21] : forall<(e :: E)> (attributes : (std/core/types/list :: V -> V)<(kokaine/html/attribute :: E -> V)<(e :: E)>>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/pure :: E)> std/core/types/string;
+fun is-void-element[86,5,86,19] : (name : std/core/types/string) -> std/core/types/bool;
+// monadic lift
+fun @mlift-render-children@10151[1,0,1,0] : (@y-x10047 : (std/core/types/list :: V -> V)<std/core/types/string>) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> std/core/types/string;
+// monadic lift
+fun @mlift-render-view@10152[1,0,1,0] : (@y-x10048 : std/core/types/string) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> std/core/types/string;
+// monadic lift
+fun @mlift-render-view@10153[1,0,1,0] : forall<(e :: E)> (@y-x10050 : (kokaine/html/view :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> std/core/types/string;
+// monadic lift
+fun @mlift-render-view@10154[1,0,1,0] : (opening : std/core/types/string, safe-name : std/core/types/string, @y-x10055 : std/core/types/string) -> <(std/core/pure :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> std/core/types/string;
+// monadic lift
+fun @mlift-render-view@10155[1,0,1,0] : forall<(e :: E)> (children@0@0 : (std/core/types/list :: V -> V)<(kokaine/html/view :: E -> V)<(e :: E)>>, safe-name : std/core/types/string, @y-x10054 : (std/core/types/list :: V -> V)<std/core/types/string>) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> std/core/types/string;
+// monadic lift
+fun @mlift-render-view@10156[1,0,1,0] : forall<(e :: E)> (attributes : (std/core/types/list :: V -> V)<(kokaine/html/attribute :: E -> V)<(e :: E)>>, children@0@0 : (std/core/types/list :: V -> V)<(kokaine/html/view :: E -> V)<(e :: E)>>, safe-name : std/core/types/string) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> std/core/types/string;
+// monadic lift
+fun @mlift-render-keyed-fields@10157[1,0,1,0] : forall<(_e :: E),(_e1 :: E)> (output : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/list :: V -> V)<std/core/types/string>>, @y-x10064 : std/core/types/string) -> <(std/core/pure :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> ();
+// monadic lift
+fun @mlift-render-keyed-fields@10158[1,0,1,0] : forall<(_e :: E),(_e1 :: E),(e2 :: E)> (output : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/list :: V -> V)<std/core/types/string>>, @c-x10063 : (kokaine/html/view :: E -> V)<(e2 :: E)>) -> ();
+// monadic lift
+fun @mlift-render-keyed-fields@10159[1,0,1,0] : forall<(_e :: E),(_e1 :: E),(e2 :: E)> (output : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/list :: V -> V)<std/core/types/string>>, @y-x10062 : (std/core/types/list :: V -> V)<(kokaine/html/view :: E -> V)<(e2 :: E)>>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
+// monadic lift
+fun @mlift-render-keyed-fields@10160[1,0,1,0] : forall<(_e :: E),(_e1 :: E),a,(e2 :: E)> (children@1 : ((kokaine/html/accessor :: V -> V)<a>, (kokaine/html/accessor :: V -> V)<std/core/types/int>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e2 :: E)>>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> (), item : a, output : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/list :: V -> V)<std/core/types/string>>, position : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>, @c-x10060 : ()) -> ();
+// monadic lift
+fun @mlift-render-keyed-fields@10161[1,0,1,0] : forall<(_e :: E)> (output : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/list :: V -> V)<std/core/types/string>>, wild_@1 : ()) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> std/core/types/string;
+// monadic lift
+fun @mlift-render-keyed-fields@10162[1,0,1,0] : forall<(_e :: E),(_e1 :: E),a,b,c,(e2 :: E)> (children@1 : ((kokaine/html/accessor :: V -> V)<b>, (kokaine/html/accessor :: V -> V)<std/core/types/int>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e2 :: E)>>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> (), compare : (c, c) -> std/core/types/order, key : (b) -> c, keys : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(kokaine/internal/key-index/key-index :: (V, V) -> V)<c,()>>, output : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/list :: V -> V)<std/core/types/string>>, position : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>, walk : forall<(e3 :: E)> (a, (b) -> (e3 :: E) ()) -> (e3 :: E) (), snapshot : a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> std/core/types/string;
+fun render-children[104,5,104,19] : forall<(e :: E)> (children : (std/core/types/list :: V -> V)<(kokaine/html/view :: E -> V)<(e :: E)>>) -> <(std/core/pure :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> std/core/types/string;
+fun render-view[137,5,137,15] : forall<(e :: E)> (node : (kokaine/html/view :: E -> V)<(e :: E)>) -> <(std/core/pure :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> std/core/types/string;
+fun render-keyed-fields[107,5,107,23] : forall<a,b,c,(e :: E)> (read : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> a, walk : forall<(e1 :: E)> (a, (b) -> (e1 :: E) ()) -> (e1 :: E) (), key : (b) -> c, compare : (c, c) -> std/core/types/order, children : ((kokaine/html/accessor :: V -> V)<b>, (kokaine/html/accessor :: V -> V)<std/core/types/int>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e :: E)>>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> ()) -> <(std/core/pure :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> std/core/types/string;
+fun render-keyed[130,5,130,16] : forall<(e :: E)> (plan : (kokaine/html/keyed-plan :: E -> V)<(e :: E)>) -> <(std/core/pure :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> std/core/types/string;
+pub fun render[152,9,152,14] : forall<(e :: E)> (root : (kokaine/reactive/root :: E -> V)<(e :: E)>, node : (kokaine/html/view :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> std/core/types/string;
+ 
+fun @kokaine-cache-phase[1,0,1,0] : () -> std/core/types/int;
+ 
+//------------------------------
+//#kki: external declarations
+ 
+ 
+//------------------------------
+//#kki: inline definitions
+ 
+//.inline-section
+fun @kokaine-cache-phase // inline size: 1
+  = fn(){ 0; };
