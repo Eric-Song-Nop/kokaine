@@ -48,6 +48,12 @@ with sync_playwright() as playwright:
     ))
 
     page.goto(URL, wait_until="domcontentloaded")
+    repository_link = page.get_by_role("link", name="Kokaine on GitHub")
+    expect(repository_link).to_have_attribute(
+        "href", "https://github.com/Eric-Song-Nop/kokaine"
+    )
+    assert repository_link.locator("svg").count() == 1
+    step("GitHub repository link ready")
     page.wait_for_function(
         "() => globalThis.crossOriginIsolated === true "
         "&& typeof globalThis.SharedArrayBuffer === 'function'"
@@ -103,7 +109,11 @@ with sync_playwright() as playwright:
     assert counter.inner_text().strip() == "0"
     preview.get_by_role("button", name="Increment").click()
     expect(counter).to_have_text("1")
-    step("preview interaction ready")
+    preview.get_by_role("button", name="Decrement").click()
+    expect(counter).to_have_text("0")
+    preview.get_by_role("button", name="Increment").click()
+    expect(counter).to_have_text("1")
+    step("preview increment and decrement ready")
 
     page.get_by_role("tab", name=re.compile(r"^Output")).click()
     generated = page.locator(".code-output code")
