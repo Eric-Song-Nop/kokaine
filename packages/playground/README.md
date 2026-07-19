@@ -81,9 +81,9 @@ Active compilation has a source-size limit and a timeout. Cancellation,
 timeout, or a compiler crash terminates and recreates the compiler Worker, so
 compiler state is not shared between abandoned runs.
 
-Issue #11 can extend the virtual filesystem/package-resolution step with
-`@kokaine/cli` and npm package contents. It does not need to restore a server
-or native compiler path.
+The published `@kokaine/cli` package-resolution model can later extend the
+virtual filesystem with installed npm package contents without restoring a
+server or native compiler path.
 
 ## Pinned assets
 

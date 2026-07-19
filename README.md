@@ -49,12 +49,18 @@ examples and test commands described in
 
 ### Standalone applications
 
-The repository contains the `create-kokaine`, `@kokaine/core`, and
-`@kokaine/cli` packages, but they have not been published to npm yet. Therefore
-`npm create kokaine` is **not currently a public installation path**. The online
-Playground is the supported zero-install entry point until the first npm release;
-the package and editor contracts are documented in
-[npm packages and workspaces](docs/npm-packages.md).
+Create a Kokaine application with the scoped npm initializer:
+
+```sh
+npm create @kokaine my-app
+cd my-app
+npm install
+npm run dev
+```
+
+The package and editor contracts are documented in
+[npm packages and workspaces](docs/npm-packages.md). The online Playground
+remains the zero-install entry point.
 
 ## Interactive report
 
@@ -211,10 +217,9 @@ attempts.
 
 Kokaine applications use npm package resolution and the project's existing
 `package.json` and lockfile for both Koka source libraries and JavaScript
-packages. No separate Kokaine registry, solver, or lockfile is involved. These
-packages are currently exercised as repository workspaces and are not yet
-available from the public npm registry; see [Start here](#start-here) for the
-paths that work today.
+packages. No separate Kokaine registry, solver, or lockfile is involved. Start
+a standalone application with `npm create @kokaine`; see
+[Start here](#start-here) for the complete quick start.
 
 The generated project pins Koka 3.2.3 in its `kokaine` manifest. The
 `@kokaine/cli` downloads the matching official compiler into a checksummed,
@@ -280,8 +285,9 @@ compiler and real Koka LSP both run as WebAssembly in browser Workers against
 an in-memory filesystem containing the Koka standard library and this
 checkout's Kokaine sources. It includes Monaco syntax highlighting, a
 sandboxed live preview, generated/build/runtime output, and self-hosted
-Chromium DevTools. `@kokaine/cli` from issue #11 can extend the browser VFS and
-package-resolution layer without introducing a compiler server.
+Chromium DevTools. The published `@kokaine/cli` package-resolution model can
+later extend the browser VFS with installed npm package contents without
+introducing a compiler server.
 
 The app is fully static and deploys to Cloudflare Pages without a container,
 Cloudflare Worker, or Pages Function. Vite and `public/_headers` provide the
