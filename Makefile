@@ -5,6 +5,7 @@ UV ?= uv
 NPM ?= npm
 WRANGLER ?= npx wrangler
 PLAYGROUND_PAGES_PROJECT ?= kokaine-playground
+PLAYGROUND_PAGES_BRANCH ?= main
 
 PROJECT_ROOT := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 RUN_LOCKED := $(PROJECT_ROOT)/support/run_locked.py
@@ -13,7 +14,7 @@ DIST_KOKA = $(PYTHON) "$(RUN_LOCKED)" dist/.koka-build.lock \
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist
 
 .PHONY: test test-native test-tooling test-all test-wasm test-report build-counter build-top-layer build-keyed build-report build-window-fixture build-browser-fixtures browser-install test-browser serve serve-top-layer serve-keyed serve-report
-.PHONY: playground-install playground-sync-assets playground-build playground-preview playground-deploy serve-playground
+.PHONY: playground-install playground-precompile playground-sync-assets playground-build playground-preview playground-release playground-deploy serve-playground
 
 test: test-native
 
@@ -22,6 +23,9 @@ test-tooling:
 
 playground-install:
 	$(NPM) install --workspace @kokaine/playground
+
+playground-precompile: playground-install
+	$(NPM) run precompile:kokaine --workspace @kokaine/playground
 
 playground-sync-assets: playground-install
 	$(NPM) run assets:koka --workspace @kokaine/playground
@@ -34,8 +38,14 @@ playground-preview: playground-build
 	@echo "Static browser-only playground: http://127.0.0.1:4173/ (COOP/COEP enabled)"
 	$(NPM) run preview --workspace @kokaine/playground
 
-playground-deploy: playground-build
-	$(WRANGLER) pages deploy packages/playground/dist --project-name=$(PLAYGROUND_PAGES_PROJECT)
+playground-release: playground-precompile
+	$(NPM) run test:wasm --workspace @kokaine/playground
+	$(NPM) run build --workspace @kokaine/playground
+
+playground-deploy: playground-release
+	$(WRANGLER) pages deploy "packages/playground/dist" \
+		--project-name="$(PLAYGROUND_PAGES_PROJECT)" \
+		--branch="$(PLAYGROUND_PAGES_BRANCH)"
 
 serve-playground: playground-install
 	@echo "Koka compiler and LSP run as browser WASM Workers; no native Koka, server, or container."

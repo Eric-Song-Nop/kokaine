@@ -5,12 +5,14 @@
   "type": "module",
   "scripts": {
     "assets:koka": "node scripts/sync-koka-assets.mjs",
+    "assets:release": "node scripts/stage-runtime-release.mjs",
     "precompile:kokaine": "node scripts/smoke-wasm.mjs --update-kokaine-cache && npm run assets:koka",
     "assets:devtools": "node scripts/sync-devtools-assets.mjs",
-    "predev": "npm run assets:devtools",
+    "predev": "npm run assets:devtools && npm run assets:release",
     "dev": "vite --host 127.0.0.1",
-    "prebuild": "npm run assets:devtools",
+    "prebuild": "npm run assets:devtools && npm run assets:release",
     "build": "tsc --noEmit && vite build",
+    "postbuild": "node scripts/prune-stable-runtime.mjs",
     "preview": "vite preview --host 127.0.0.1",
     "test:wasm": "node scripts/smoke-wasm.mjs",
     "typecheck": "tsc --noEmit"
@@ -38,6 +40,6 @@
     "vite-plugin-solid": "2.11.12"
   },
   "engines": {
-    "node": ">=20.19"
+    "node": "^20.19.0 || >=22.12.0"
   }
 }

@@ -348,7 +348,10 @@ const PREVIEW_BOOT_SOURCE = String.raw`
       throw new Error('The compiler generated too many JavaScript modules.');
     }
 
-    const baseUrl = new URL(payload.precompiledBaseUrl || '/koka/precompiled/', CONFIG.appOrigin + '/');
+    if (typeof payload.precompiledBaseUrl !== 'string') {
+      throw new Error('The module bundle has no precompiled runtime release.');
+    }
+    const baseUrl = new URL(payload.precompiledBaseUrl, CONFIG.appOrigin + '/');
     if (baseUrl.origin !== CONFIG.appOrigin) {
       throw new Error('Precompiled modules must be served from the playground origin.');
     }

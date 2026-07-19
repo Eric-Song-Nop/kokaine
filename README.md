@@ -7,10 +7,54 @@ captured continuations, while continuation frames record reactive lifetime.
 The browser layer uses an effect-handled Koka DSL instead of JSX or a virtual
 DOM.
 
-The implementation targets Koka 3.2.3. Its source-local continuation index,
-two-plane scheduler, and HTML vocabulary are backend-neutral. The complete
-browser renderer targets `jsweb`; a smaller `wasmweb` proof separately verifies
-the retained-callback ABI used to cross an asynchronous host boundary.
+The core package supports Koka 3.2.x (`>=3.2.3 <3.3.0`). Generated applications
+currently pin Koka 3.2.3, while the browser Playground ships Koka 3.2.4. The
+source-local continuation index, two-plane scheduler, and HTML vocabulary are
+backend-neutral. The complete browser renderer targets `jsweb`; a smaller
+`wasmweb` proof separately verifies the retained-callback ABI used to cross an
+asynchronous host boundary.
+
+## Start here
+
+### Try Kokaine online
+
+[Open the Kokaine Playground](https://kokaine-playground.pages.dev/). It runs
+the Koka compiler, language server, and Kokaine entirely in browser Workers;
+there is nothing to install and no compiler service behind it. Edit the starter
+and press **Command/Control+Enter** to compile and run it.
+
+The first three reactive concepts are deliberately small:
+
+- `signal` stores explicit mutable state;
+- `derive` creates a stateless, read-only value from current inputs;
+- `create-effect(root, track, apply)` separates tracked reads from writes and
+  host effects. Historical or accumulated values remain explicit state updated
+  from `apply`.
+
+### Run the Playground locally
+
+This path requires Node.js `^20.19.0` or `>=22.12.0`, but does not require
+native Koka:
+
+```sh
+git clone https://github.com/Eric-Song-Nop/kokaine.git
+cd kokaine
+npm install
+npm run dev --workspace @kokaine/playground
+```
+
+Open the URL printed by Vite. Framework contributors can use the repository
+examples and test commands described in
+[Repository development](#repository-development).
+
+### Standalone applications
+
+The repository contains the `create-kokaine`, `@kokaine/core`, and
+`@kokaine/cli` packages, but they have not been published to npm yet. Therefore
+`npm create kokaine` is **not currently a public installation path**. The online
+Playground is the supported zero-install entry point until the first npm release;
+the package and editor contracts are documented in
+[npm packages and workspaces](docs/npm-packages.md).
 
 ## Interactive report
 
@@ -163,18 +207,14 @@ attempts.
   walks the same backend-neutral plan as one deterministic snapshot. Duplicate
   keys fail before publication in both backends.
 
-## npm application quick start
+## npm application tooling
 
 Kokaine applications use npm package resolution and the project's existing
 `package.json` and lockfile for both Koka source libraries and JavaScript
-packages. No separate Kokaine registry, solver, or lockfile is involved.
-
-```sh
-pnpm create kokaine
-cd kokaine-app
-pnpm install
-pnpm dev
-```
+packages. No separate Kokaine registry, solver, or lockfile is involved. These
+packages are currently exercised as repository workspaces and are not yet
+available from the public npm registry; see [Start here](#start-here) for the
+paths that work today.
 
 The generated project pins Koka 3.2.3 in its `kokaine` manifest. The
 `@kokaine/cli` downloads the matching official compiler into a checksummed,
@@ -228,8 +268,8 @@ when the Python 3 executable is not named `python3`. The browser checks
 additionally use [`uv`](https://docs.astral.sh/uv/) to run Playwright without
 adding project dependencies.
 
-To open the single-file Koka + Kokaine playground, also install Node.js 20.19
-or newer and run:
+To open the single-file Koka + Kokaine playground, also install Node.js
+`^20.19.0` or `>=22.12.0` and run:
 
 ```sh
 make serve-playground
@@ -248,10 +288,10 @@ Cloudflare Worker, or Pages Function. Vite and `public/_headers` provide the
 COOP/COEP headers required by the WASM LSP's `SharedArrayBuffer` transport:
 
 ```sh
-make playground-sync-assets  # only when intentionally updating pinned assets
+make playground-precompile   # after changing src/kokaine/**
 make playground-build
 make playground-preview
-make playground-deploy       # Wrangler Direct Upload
+make playground-deploy       # precompile, smoke-test, build, then production upload
 ```
 
 See [`packages/playground/README.md`](packages/playground/README.md) for the

@@ -5,11 +5,9 @@ import kokaine/html
 import kokaine/dom
 
 pub fun main()
-  // create-root 创建整个应用的响应式运行域。
-  val (root,_) = create-root fn(_) ()
-
-  // signal 必须显式归属于某个 root。
-  val count = signal(root,0)
+  // create-root 创建整个应用的响应式运行域；signal 显式归属于该 root。
+  val (root,count) = create-root fn(root)
+    signal(root,0)
 
   // view 是 Kokaine 的 effect-handled HTML builder。
   // 下面的缩进块是普通的 Koka trailing-lambda 语法，
@@ -106,7 +104,7 @@ pub fun main()
   ()
 `;
 
-export const STORAGE_KEY = 'kokaine-playground/source/v1';
+export const STORAGE_KEY = 'kokaine-playground/source/v2';
 
 export const SPLIT_KEY = 'kokaine-playground/split/v1';
 

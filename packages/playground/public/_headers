@@ -5,20 +5,24 @@
   Referrer-Policy: no-referrer
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
 
-/koka/precompiled/*
+/koka/releases/*
   Access-Control-Allow-Origin: *
   Cross-Origin-Resource-Policy: cross-origin
   Cache-Control: public, max-age=31536000, immutable
+
+/koka/releases/:release/koka-playground.wasm
+  Content-Type: application/wasm
+
+/koka/releases/:release/koka-lsp.wasm
+  Content-Type: application/wasm
+
+/koka/releases/:release/koka-runtime.json.gz
+  Content-Type: application/gzip
 
 /devtools/*
   Access-Control-Allow-Origin: *
   Cross-Origin-Resource-Policy: cross-origin
-  Cache-Control: public, max-age=31536000, immutable
+  Cache-Control: public, max-age=0, must-revalidate
 
-/koka/*.wasm
-  Content-Type: application/wasm
-  Cache-Control: public, max-age=31536000, immutable
-
-/koka/koka-runtime.json.gz
-  Content-Type: application/gzip
-  Cache-Control: public, max-age=31536000, immutable
+/koka/assets.json
+  Cache-Control: public, max-age=0, must-revalidate

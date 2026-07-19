@@ -9,7 +9,11 @@ import {
   type MessageWriter,
 } from 'vscode-jsonrpc/browser.js';
 
-import { loadRuntimeAssets, resolvePublicAssetUrl } from '../wasm/assets';
+import {
+  DEFAULT_LSP_WASM_PATH,
+  loadRuntimeAssets,
+  resolvePublicAssetUrl,
+} from '../wasm/assets';
 import { DEFAULT_COMPILER_FLAGS } from '../wasm/runtime';
 
 export type KokaEditorTheme = 'dark' | 'light';
@@ -101,7 +105,6 @@ type LspWorkerMessage =
   | WorkerFatalMessage
   | WorkerResponseMessage;
 
-const DEFAULT_LSP_WASM_PATH = 'koka/koka-lsp.wasm';
 const DEFAULT_MAX_MESSAGE_BYTES = 2 * 1024 * 1024;
 const MIN_MESSAGE_BYTES = 64 * 1024;
 const MAX_MESSAGE_BYTES = 8 * 1024 * 1024;

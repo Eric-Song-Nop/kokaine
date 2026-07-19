@@ -6,3 +6,5 @@ node_modules/
 .kokaine/
 coverage/
 packages/create-kokaine/template/package-lock.json
+packages/playground/public/koka/releases/
+packages/playground/public/koka/release.json
