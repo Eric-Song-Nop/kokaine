@@ -1,10 +1,16 @@
 # npm packages and workspaces
 
-> **Prerelease status:** `create-kokaine`, `@kokaine/core`, and
-> `@kokaine/cli` are repository workspaces and have not been published to npm.
-> The manifests below define the intended package contract; they are not yet
-> public installation instructions. Use the
-> [online Playground](https://kokaine-playground.pages.dev/) today.
+Create a standalone application from the public `@kokaine` packages:
+
+```sh
+npm create @kokaine my-app
+cd my-app
+npm install
+npm run dev
+```
+
+The [online Playground](https://kokaine-playground.pages.dev/) remains the
+zero-install path.
 
 Kokaine uses npm package identity and Node's installed dependency layout as its
 only package-management layer. npm, pnpm, and Yarn installations that expose a

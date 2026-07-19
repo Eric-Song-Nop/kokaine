@@ -5,6 +5,12 @@ applications. It resolves installed npm dependencies from each parent package,
 discovers packages with `koka.sources`, validates Koka's single global module
 space, selects the exact configured compiler, and invokes Koka without a shell.
 
+Install it in a Kokaine application:
+
+```sh
+npm install --save-dev @kokaine/cli
+```
+
 ```sh
 kokaine doctor [--json]
 kokaine check

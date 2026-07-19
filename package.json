@@ -3,6 +3,17 @@
   "version": "0.1.0",
   "description": "A fine-grained Web UI runtime for Koka",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Eric-Song-Nop/kokaine.git"
+  },
+  "homepage": "https://github.com/Eric-Song-Nop/kokaine#readme",
+  "bugs": {
+    "url": "https://github.com/Eric-Song-Nop/kokaine/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "files": [
     "src",
@@ -23,7 +34,7 @@
     "packages/*"
   ],
   "scripts": {
-    "test:cli": "npm test --workspace @kokaine/cli && npm test --workspace create-kokaine",
+    "test:cli": "npm test --workspace @kokaine/cli && npm test --workspace @kokaine/create",
     "test": "npm run test:cli"
   },
   "engines": {
