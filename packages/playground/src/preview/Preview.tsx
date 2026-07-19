@@ -1,6 +1,7 @@
 import { RotateCw } from 'lucide-solid';
 import { For, createEffect, createMemo, createSignal, onCleanup, type Component } from 'solid-js';
 import { DragResizer } from './DragResizer';
+import { DEFAULT_PRECOMPILED_BASE_URL } from '../wasm/assets';
 import {
   MAX_CDP_MESSAGE_BYTES,
   PREVIEW_CHANNEL,
@@ -90,7 +91,6 @@ interface PreviewSession {
 }
 
 const DEVICE_PRESETS = [390, 768, 1024] as const;
-const DEFAULT_PRECOMPILED_BASE_URL = '/koka/precompiled/';
 const DEFAULT_CHOBITSU_URL = '/devtools/chobitsu.min.js';
 const DEFAULT_CUSTOM_ELEMENTS_URL = '/devtools/custom-elements.js';
 const DEFAULT_CHII_URL = '/devtools/chii/entrypoints/chii_app/chii_app.js';

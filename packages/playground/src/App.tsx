@@ -36,6 +36,7 @@ import type {
   RuntimeLog,
   WorkspaceView,
 } from './types';
+import { DEFAULT_PRECOMPILED_BASE_URL } from './wasm/assets';
 import { createBrowserCompiler, type BrowserCompiler } from './wasm/runtime';
 
 const initialSource = loadInitialSource().source;
@@ -197,7 +198,7 @@ export function App() {
           setPreviewBundle({
             entryPath: result.entryPath,
             modules: result.modules,
-            precompiledBaseUrl: '/koka/precompiled/',
+            precompiledBaseUrl: DEFAULT_PRECOMPILED_BASE_URL,
           });
           setPreviewRevision(result.revision);
           setPreviewReload((value) => value + 1);

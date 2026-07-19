@@ -12,6 +12,7 @@ export {
 
 export {
   DEFAULT_COMPILER_WASM_PATH,
+  DEFAULT_LSP_WASM_PATH,
   DEFAULT_RUNTIME_BUNDLE_PATH,
   type KokaRuntimeBundle,
 } from './assets';
