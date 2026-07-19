@@ -285,8 +285,9 @@ compiler and real Koka LSP both run as WebAssembly in browser Workers against
 an in-memory filesystem containing the Koka standard library and this
 checkout's Kokaine sources. It includes Monaco syntax highlighting, a
 sandboxed live preview, generated/build/runtime output, and self-hosted
-Chromium DevTools. `@kokaine/cli` from issue #11 can extend the browser VFS and
-package-resolution layer without introducing a compiler server.
+Chromium DevTools. The published `@kokaine/cli` package-resolution model can
+later extend the browser VFS with installed npm package contents without
+introducing a compiler server.
 
 The app is fully static and deploys to Cloudflare Pages without a container,
 Cloudflare Worker, or Pages Function. Vite and `public/_headers` provide the
