@@ -1,0 +1,102 @@
+/*--------------------------------------------------------------------------
+  Persistent lifetimes for integration-owned regions.
+
+  A lifetime scope is a frame registered beneath the active frame. It keeps
+  no scheduler queue or host ownership ledger; entering it only restores the
+  continuation checkpoint and frame captured when it was opened.
+--------------------------------------------------------------------------*/
+module interface kokaine/reactive/integration/internal/lifetime-scope
+ 
+//------------------------------
+//#kki: import declarations
+ 
+import std/core/types = std/core/types pub = "";
+import std/core/hnd = std/core/hnd pub = "";
+import std/core/exn = std/core/exn pub = "";
+import std/core/bool = std/core/bool pub = "";
+import std/core/order = std/core/order pub = "";
+import std/core/char = std/core/char pub = "";
+import std/core/int = std/core/int pub = "";
+import std/core/vector = std/core/vector pub = "";
+import std/core/string = std/core/string pub = "";
+import std/core/sslice = std/core/sslice pub = "";
+import std/core/list = std/core/list pub = "";
+import std/core/maybe = std/core/maybe pub = "";
+import std/core/maybe2 = std/core/maybe2 pub = "";
+import std/core/either = std/core/either pub = "";
+import std/core/result = std/core/result pub = "";
+import std/core/tuple = std/core/tuple pub = "";
+import std/core/lazy = std/core/lazy pub = "";
+import std/core/show = std/core/show pub = "";
+import std/core/debug = std/core/debug pub = "";
+import std/core/delayed = std/core/delayed pub = "";
+import std/core/console = std/core/console pub = "";
+import std/core = std/core = "";
+import kokaine/reactive/internal/model = kokaine/reactive/internal/model = "";
+import kokaine/reactive/internal/lifetime = kokaine/reactive/internal/lifetime = "";
+import kokaine/internal/registry = kokaine/internal/registry = "";
+import kokaine/reactive/internal/scheduler = kokaine/reactive/internal/scheduler = "";
+import std/core/undiv = std/core/undiv = "";
+import kokaine/reactive/internal/work-transaction = kokaine/reactive/internal/work-transaction inline = "";
+ 
+//------------------------------
+//#kki: external imports
+ 
+ 
+//------------------------------
+//#kki: fixity declarations
+ 
+ 
+//------------------------------
+//#kki: local imported aliases
+ 
+ 
+//------------------------------
+//#kki: type declarations
+ 
+pub type lifetime-scope[17,1,23,3] <(e :: E)> :: E -> V {
+  pub con Lifetime-scope[18,3,18,16](scope-root: kokaine/reactive/internal/model/root-key, scope-checkpoint: (std/core/types/maybe :: V -> V)<kokaine/reactive/internal/model/continuation-gate>, scope-frame: (kokaine/reactive/internal/model/frame :: E -> V)<(e :: E)>, scope-registration: (kokaine/internal/registry/registry-registration :: V -> V)<(kokaine/reactive/internal/model/retirement-work :: E -> V)<(e :: E)>>){0,8,8} : forall<(e :: E)> (scope-root : kokaine/reactive/internal/model/root-key, scope-checkpoint : (std/core/types/maybe :: V -> V)<kokaine/reactive/internal/model/continuation-gate>, scope-frame : (kokaine/reactive/internal/model/frame :: E -> V)<(e :: E)>, scope-registration : (kokaine/internal/registry/registry-registration :: V -> V)<(kokaine/reactive/internal/model/retirement-work :: E -> V)<(e :: E)>>) -> (lifetime-scope :: E -> V)<(e :: E)> = 1;
+};
+ 
+//------------------------------
+//#kki: declarations
+ 
+// Automatically generated. Retrieves the `scope-root` constructor field of the `:lifetime-scope` type.
+pub fun lifetime-scope/scope-root[19,5,19,14] : forall<(e :: E)> (^ @this : (lifetime-scope :: E -> V)<(e :: E)>) -> kokaine/reactive/internal/model/root-key;
+// Automatically generated. Retrieves the `scope-checkpoint` constructor field of the `:lifetime-scope` type.
+pub fun lifetime-scope/scope-checkpoint[20,5,20,20] : forall<(e :: E)> (^ @this : (lifetime-scope :: E -> V)<(e :: E)>) -> (std/core/types/maybe :: V -> V)<kokaine/reactive/internal/model/continuation-gate>;
+// Automatically generated. Retrieves the `scope-frame` constructor field of the `:lifetime-scope` type.
+pub fun lifetime-scope/scope-frame[21,5,21,15] : forall<(e :: E)> (^ @this : (lifetime-scope :: E -> V)<(e :: E)>) -> (kokaine/reactive/internal/model/frame :: E -> V)<(e :: E)>;
+// Automatically generated. Retrieves the `scope-registration` constructor field of the `:lifetime-scope` type.
+pub fun lifetime-scope/scope-registration[22,5,22,22] : forall<(e :: E)> (^ @this : (lifetime-scope :: E -> V)<(e :: E)>) -> (kokaine/internal/registry/registry-registration :: V -> V)<(kokaine/reactive/internal/model/retirement-work :: E -> V)<(e :: E)>>;
+pub fun lifetime-scope/@copy[18,3,18,16] : forall<(e :: E)> (@this : (lifetime-scope :: E -> V)<(e :: E)>, scope-root : (std/core/types/@optional :: V -> V)<kokaine/reactive/internal/model/root-key>, scope-checkpoint : (std/core/types/@optional :: V -> V)<(std/core/types/maybe :: V -> V)<kokaine/reactive/internal/model/continuation-gate>>, scope-frame : (std/core/types/@optional :: V -> V)<(kokaine/reactive/internal/model/frame :: E -> V)<(e :: E)>>, scope-registration : (std/core/types/@optional :: V -> V)<(kokaine/internal/registry/registry-registration :: V -> V)<(kokaine/reactive/internal/model/retirement-work :: E -> V)<(e :: E)>>>) -> (lifetime-scope :: E -> V)<(e :: E)>;
+// monadic lift
+fun @mlift-open-lifetime-scope@10063[1,0,1,0] : forall<(_e :: E),(e1 :: E)> (lifetime : (kokaine/reactive/internal/model/lifetime-owner :: E -> V)<(e1 :: E)>, plane : (kokaine/reactive/internal/model/plane :: E -> V)<(e1 :: E)>, root : (kokaine/reactive/internal/model/root :: E -> V)<(e1 :: E)>, registration : (kokaine/internal/registry/registry-registration :: V -> V)<(kokaine/reactive/internal/model/retirement-work :: E -> V)<(e1 :: E)>>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (lifetime-scope :: E -> V)<(e1 :: E)>;
+// monadic lift
+fun @mlift-open-lifetime-scope@10064[1,0,1,0] : forall<(_e :: E),(e1 :: E)> (parent : (kokaine/reactive/internal/model/frame :: E -> V)<(e1 :: E)>, plane : (kokaine/reactive/internal/model/plane :: E -> V)<(e1 :: E)>, root : (kokaine/reactive/internal/model/root :: E -> V)<(e1 :: E)>, wild_@0 : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (lifetime-scope :: E -> V)<(e1 :: E)>;
+// monadic lift
+fun @mlift-open-lifetime-scope@10065[1,0,1,0] : forall<(_e :: E),(e1 :: E)> (root : (kokaine/reactive/internal/model/root :: E -> V)<(e1 :: E)>, wild_ : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (lifetime-scope :: E -> V)<(e1 :: E)>;
+pub fun open-lifetime-scope[25,9,25,27] : forall<(e :: E)> (root : (kokaine/reactive/internal/model/root :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (lifetime-scope :: E -> V)<(e :: E)>;
+// monadic lift
+fun @mlift-with-lifetime-scope@10066[1,0,1,0] : forall<a,(e :: E),(e1 :: E)> (action : () -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a, root : (kokaine/reactive/internal/model/root :: E -> V)<(e1 :: E)>, scope : (lifetime-scope :: E -> V)<(e1 :: E)>, wild_@1 : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/div :: X)|(e :: E)> a;
+// monadic lift
+fun @mlift-with-lifetime-scope@10067[1,0,1,0] : forall<a,(e :: E),(e1 :: E)> (action : () -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a, root : (kokaine/reactive/internal/model/root :: E -> V)<(e1 :: E)>, scope : (lifetime-scope :: E -> V)<(e1 :: E)>, wild_@0 : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/div :: X)|(e :: E)> a;
+// monadic lift
+fun @mlift-with-lifetime-scope@10068[1,0,1,0] : forall<a,(e :: E),(e1 :: E)> (action : () -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a, root : (kokaine/reactive/internal/model/root :: E -> V)<(e1 :: E)>, scope : (lifetime-scope :: E -> V)<(e1 :: E)>, wild_ : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/div :: X)|(e :: E)> a;
+pub fun with-lifetime-scope[37,9,37,27] : forall<a,(e :: E),(e1 :: E)> (root : (kokaine/reactive/internal/model/root :: E -> V)<(e1 :: E)>, scope : (lifetime-scope :: E -> V)<(e1 :: E)>, action : () -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a;
+// monadic lift
+fun lifetime-scope/@mlift-dispose@10069[1,0,1,0] : forall<(e :: E)> (scope : (lifetime-scope :: E -> V)<(e :: E)>, wild_ : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+pub fun lifetime-scope/dispose[46,9,46,30] : forall<(e :: E)> (scope : (lifetime-scope :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+ 
+fun @kokaine-cache-phase[1,0,1,0] : () -> std/core/types/int;
+ 
+//------------------------------
+//#kki: external declarations
+ 
+ 
+//------------------------------
+//#kki: inline definitions
+ 
+//.inline-section
+fun @kokaine-cache-phase // inline size: 1
+  = fn(){ 0; };

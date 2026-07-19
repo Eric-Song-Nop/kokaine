@@ -61,7 +61,7 @@ fun test-signals-and-memos()
 
   val (root,(count,parity)) = create-root fn(root)
     val count = signal(root,1)
-    val parity = memo(root,0,fn(_)
+    val parity = derive(root,0,fn()
       count.get % 2
     )
     val dispose = create-effect(root,fn() parity.get,fn(value)
@@ -104,7 +104,7 @@ fun test-dynamic-dependencies()
     val choose = signal(root,True)
     val left = signal(root,1)
     val right = signal(root,10)
-    val selected = memo(root,0,fn(_)
+    val selected = derive(root,0,fn()
       if choose.get then left.get else right.get
     )
     val dispose = create-effect(root,fn() selected.get,fn(value)
@@ -222,9 +222,9 @@ fun test-diamond()
   val (root,source) = create-root fn(root)
     val source = signal(root,0)
     // Deliberately construct the branches in the opposite order of their use.
-    val right = memo(root,0,fn(_) source.get * 100)
-    val left = memo(root,0,fn(_) source.get * 10)
-    val joined = memo(root,0,fn(_) left.get + right.get)
+    val right = derive(root,0,fn() source.get * 100)
+    val left = derive(root,0,fn() source.get * 10)
+    val joined = derive(root,0,fn() left.get + right.get)
     val dispose = create-effect(root,fn() joined.get,fn(value)
       seen.push(value)
     )
@@ -490,8 +490,8 @@ fun test-exact-value-update-retries-pending-work()
 fun test-transitive-batch-freshness()
   val (root,(source,leaf)) = create-root fn(root)
     val source = signal(root,1)
-    val mid = memo(root,0,fn(_) source.get * 2)
-    val leaf = memo(root,0,fn(_) mid.get * 2)
+    val mid = derive(root,0,fn() source.get * 2)
+    val leaf = derive(root,0,fn() mid.get * 2)
     (source,leaf)
 
   val observed = dispatch(root)
@@ -505,10 +505,10 @@ fun test-dynamic-depth-atomicity()
   val (root,(source,toggle,consumer)) = create-root fn(root)
     val source = signal(root,1)
     val toggle = signal(root,0)
-    val mid = memo(root,0,fn(_) source.get * 2)
-    val leaf = memo(root,0,fn(_) mid.get)
-    val consumer = memo(root,0,fn(previous)
-      if toggle.get == 0 then 0 else previous + leaf.get
+    val mid = derive(root,0,fn() source.get * 2)
+    val leaf = derive(root,0,fn() mid.get)
+    val consumer = derive(root,0,fn()
+      if toggle.get == 0 then 0 else leaf.get
     )
     (source,toggle,consumer)
 
@@ -516,7 +516,7 @@ fun test-dynamic-depth-atomicity()
     batch(root)
       // The consumer was previously independent from the deep chain and can be
       // selected before it. Pull settlement must discover the new dependency
-      // before committing `previous + leaf`.
+      // before committing the newly selected leaf.
       toggle.set(1)
       source.set(2)
   sample(root){ consumer.get }.check-int(4,
@@ -528,11 +528,11 @@ fun test-targeted-producer-pull()
     val x = signal(root,0)
     val y = signal(root,0)
     val toggle = signal(root,False)
-    val branch = memo(root,0,fn(_) x.get)
-    val selected = memo(root,0,fn(_)
+    val branch = derive(root,0,fn() x.get)
+    val selected = derive(root,0,fn()
       if toggle.get then branch.get else 0
     )
-    val combined = memo(root,0,fn(_) selected.get + y.get)
+    val combined = derive(root,0,fn() selected.get + y.get)
     (x,y,toggle,combined)
 
   update(root)
@@ -551,11 +551,11 @@ fun test-generation-checkpoint-equality()
   val downstream-runs = hidden-cell(0)
   val (root,(count,accumulated)) = create-root fn(root)
     val count = signal(root,1)
-    val parity = memo(root,0,fn(_) count.get % 2)
-    val accumulated = memo(root,0,fn(previous)
+    val parity = derive(root,0,fn() count.get % 2)
+    val accumulated = derive(root,0,fn()
       val current = parity.get
       hidden-store(downstream-runs,hidden-load(downstream-runs) + 1)
-      previous + current
+      current
     )
     (count,accumulated)
 
@@ -568,21 +568,21 @@ fun test-generation-checkpoint-equality()
   observed.check-int(1,
     "checkpoint validation returns the cached value after equal commit")
   hidden-load(downstream-runs).check-int(1,
-    "equal upstream memo does not execute a stateful downstream memo")
+    "equal upstream memo does not execute its downstream derived value")
   root.dispose()
 
 fun test-clean-read-failure-isolation()
   val failing-runs = hidden-cell(0)
   val (root,(trigger,stable)) = create-root fn(root)
     val trigger = signal(root,0)
-    val failing = memo(root,0,fn(_)
-      hidden-store(failing-runs,hidden-load(failing-runs) + 1)
+    val failing = derive(root,0,fn()
       val value = trigger.get
+      hidden-store(failing-runs,hidden-load(failing-runs) + 1)
       if value == 1 then throw("intentional unrelated memo failure")
       else value
     )
     val stable-source = signal(root,7)
-    val stable = memo(root,0,fn(_) stable-source.get * 2)
+    val stable = derive(root,0,fn() stable-source.get * 2)
     (trigger,stable)
 
   val failed : error<()> = mask<exn>{
@@ -608,7 +608,7 @@ fun test-late-registration()
 
   val (double,stop-double) = update(root)
     batch(root)
-      val double = memo(root,0,fn(_) source.get * 2)
+      val double = derive(root,0,fn() source.get * 2)
       val stop-double = create-effect(root,fn() double.get,
         fn(value) seen-double := value)
       (double,stop-double)
@@ -693,7 +693,7 @@ fun test-cleanup-failure-recovery()
 fun test-memo-error-state()
   val (root,(source,broken)) = create-root fn(root)
     val source = signal(root,0)
-    val broken = memo(root,42,fn(_)
+    val broken = derive(root,42,fn()
       val value = source.get
       if value == 1 then throw("memo failed")
       elif value == 0 then 42
@@ -740,7 +740,7 @@ fun churn(source : signal<int>, derived : memo<int>, count : int)
 fun test-continuation-churn-coherence()
   val (root,(source,derived)) = create-root fn(root)
     val source = signal(root,0)
-    val derived = memo(root,0,fn(_) source.get)
+    val derived = derive(root,0,fn() source.get)
     (source,derived)
   dispatch(root)
     batch(root)

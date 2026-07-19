@@ -23,7 +23,7 @@ fun code-tab-id(index : int) : string
   match index
     0 -> "code-tab-signal"
     1 -> "code-tab-effect"
-    2 -> "code-tab-batch"
+    2 -> "code-tab-state"
     _ -> "code-tab-view"
 
 fun code-tab-key-target(current : int, key : string) : maybe<int>
@@ -90,17 +90,20 @@ fun effect-code() : string
   "  current.child := nested.built-root\n" ++
   "  Built-trace(current,nested.built-publish)"
 
-fun memo-code() : string
-  "val changes = memo(root,0,fn(previous)\n" ++
-  "  val value = count.get\n" ++
-  "  previous + 1\n" ++
+fun state-code() : string
+  "// 派生值只描述输入到输出的纯关系。\n" ++
+  "val square = derive(root,4,fn()\n" ++
+  "  val current = count.get\n" ++
+  "  current * current\n" ++
   ")\n\n" ++
-  "// 内部入口，不把 memo 订阅回自己的 source：\n" ++
-  "val track = fn() calculate(\n" ++
-  "  read-source(output,State-entry-read,Nothing))\n\n" ++
-  "// State-entry-read 捕获 Trace-entry。\n" ++
-  "// 每次恢复都注入最近一次成功提交的 previous；\n" ++
-  "// 失败的 Draft 不会污染下一次 previous。"
+  "// 跨更新累积的值是独立状态，由 effect 显式推进。\n" ++
+  "val revision = signal(root,0)\n" ++
+  "val dispose = create-effect(root,\n" ++
+  "  fn() count.get,\n" ++
+  "  fn(_) revision.modify(fn(value) value + 1)\n" ++
+  ")\n\n" ++
+  "// track 声明依赖；apply 声明写入；dispose 绑定生命周期。\n" ++
+  "// batch 中 count 最终只结算一次，因此 revision 只前进一步。"
 
 fun view-code() : string
   "// 阶段 1：trailing lambda 直接形成 tag block；attrs 默认 []\n" ++
@@ -161,7 +164,7 @@ pub fun render-code-tabs(model : code-tabs-model)
                  aria("label","选择 Koka 代码示例")])
         code-tab(model,0,"code-tab-signal","code-panel-signal","精确后缀")
         code-tab(model,1,"code-tab-effect","code-panel-effect","capture handler")
-        code-tab(model,2,"code-tab-batch","code-panel-batch","memo(previous)")
+        code-tab(model,2,"code-tab-state","code-panel-state","显式累积状态")
         code-tab(model,3,"code-tab-view","code-panel-view","HTML 到 DOM")
 
       code-panel(
@@ -174,16 +177,16 @@ pub fun render-code-tabs(model : code-tabs-model)
       code-panel(
         model,1,"code-panel-effect","code-tab-effect",effect-code(),
         "handler 与 K 分工",
-        ["handler 选择 Track / Sample / State-entry 解释",
+        ["handler 选择 Track / Sample 解释",
          "raw ctl 提供实际同步后缀",
          "source 保存 rank-2 packed capture，不保存 callback 或 action"]
       )
       code-panel(
-        model,2,"code-panel-batch","code-tab-batch",memo-code(),
-        "Trace-entry 解决什么",
-        ["保存的是 entry continuation，不是 calculate 闭包",
-         "entry target 在 input 与 child settle 前后都会复查",
-         "状态只在成功 publish 后前进"]
+        model,2,"code-panel-state","code-tab-state",state-code(),
+        "状态边界是显式的",
+        ["derive 只表达可由当前输入重新计算的值",
+         "signal 保存跨更新累积的数据",
+         "create-effect 把依赖读取、状态写入和生命周期分开"]
       )
       code-panel(
         model,3,"code-panel-view","code-tab-view",view-code(),

@@ -4,7 +4,6 @@
 module kokaine/reactive/internal/lifetime
 
 import kokaine/reactive/internal/model
-import kokaine/reactive/internal/resource
 import kokaine/internal/compat
 import kokaine/internal/registry
 import std/core/undiv
@@ -16,14 +15,12 @@ import std/core/undiv
 pub fun trace-state-of(current : trace<e>) : capture-state
   match current
     Trace-end -> Capture-dead
-    Trace-read(gate,_,_,_,_,_,_,_,_) -> load(gate.gate-state)
-    Trace-entry(gate,_,_,_,_,_) -> load(gate.gate-state)
+    Trace-read(gate,_,_,_,_,_,_,_) -> load(gate.gate-state)
 
 pub fun trace-gate-of(current : trace<e>) : maybe<continuation-gate>
   match current
     Trace-end -> Nothing
-    Trace-read(gate,_,_,_,_,_,_,_,_) -> Just(gate)
-    Trace-entry(gate,_,_,_,_,_) -> Just(gate)
+    Trace-read(gate,_,_,_,_,_,_,_) -> Just(gate)
 
 pub fun trace-parent-of(current : trace<e>) : maybe<continuation-gate>
   match current.trace-gate-of
@@ -122,7 +119,7 @@ fun trace-retirement-expand(current : trace<e>)
                        : <div> list<retirement-work<e>>
   match current
     Trace-end -> []
-    Trace-read(gate,_,_,child,current-frame-slot,_,finalize,unlink,_) ->
+    Trace-read(gate,_,child,current-frame-slot,_,finalize,unlink,_) ->
       val state = gate.gate-state
       match load(state)
         Capture-dead -> []
@@ -132,20 +129,6 @@ fun trace-retirement-expand(current : trace<e>)
           store(state,Capture-dead)
           store(lifetime.lifetime-token,Scope-branch-dead)
           unlink()
-          val nested = load(child)
-          store(child,Trace-end)
-          [trace-retirement-work(nested),
-           lifetime-retirement-work(lifetime),
-           Retirement-finalizer(finalize)]
-    Trace-entry(gate,_,child,current-frame-slot,_,finalize) ->
-      val state = gate.gate-state
-      match load(state)
-        Capture-dead -> []
-        _ ->
-          val current-frame = load(current-frame-slot)
-          val lifetime = current-frame.frame-lifetime
-          store(state,Capture-dead)
-          store(lifetime.lifetime-token,Scope-branch-dead)
           val nested = load(child)
           store(child,Trace-end)
           [trace-retirement-work(nested),
@@ -189,10 +172,6 @@ tail fun collect-retirement-loop(pending : list<retirement-work<e>>,
 pub fun collect-retirement-work(values : list<retirement-work<e>>)
                            : <div> list<retirement-work<e>>
   collect-retirement-loop(values,[])
-
-pub fun collect-retirement(current : trace<e>)
-                      : <div> list<retirement<e>>
-  collect-retirement-work([trace-retirement-work(current)])
 
 pub fun collect-scope(current : continuation-scope<e>)
                  : <div> list<retirement<e>>
@@ -262,9 +241,7 @@ fun trace-retirement-coordinator(current : trace<e>)
                             : maybe<retirement-coordinator<e>>
   match current
     Trace-end -> Nothing
-    Trace-read(_,_,_,_,frame,_,_,_,_) ->
-      Just(load(frame).frame-lifetime.lifetime-retirement)
-    Trace-entry(_,_,_,frame,_,_) ->
+    Trace-read(_,_,_,frame,_,_,_,_) ->
       Just(load(frame).frame-lifetime.lifetime-retirement)
 
 tail fun traces-retirement-coordinator(values : list<trace<e>>)
@@ -275,13 +252,6 @@ tail fun traces-retirement-coordinator(values : list<trace<e>>)
       match trace-retirement-coordinator(current)
         Nothing -> traces-retirement-coordinator(rest)
         found -> found
-
-pub fun retire-trace(current : trace<e>) : <div,exn|e> ()
-  match trace-retirement-coordinator(current)
-    Nothing -> ()
-    Just(coordinator) ->
-      val finalizers = pretend-no-div{ collect-retirement(current) }
-      run-finalizers(coordinator,finalizers)
 
 pub fun retire-lifetime(owner : lifetime-owner<e>) : <div,exn|e> ()
   val finalizers = pretend-no-div{ collect-lifetime(owner) }
@@ -334,12 +304,6 @@ pub fun retire-drafts(values : list<trace<e>>) : <div,exn|e> ()
 pub fun retire-drafts-now(values : list<trace<e>>) : <exn|e> ()
   pretend-no-div{ retire-drafts(values) }
 
-pub fun try-retire-lifetime(owner : lifetime-owner<e>) : e error<()>
-  capture-error(fn() pretend-no-div{ retire-lifetime(owner) })
-
-pub fun try-retire-drafts(values : list<trace<e>>) : e error<()>
-  capture-error(fn() retire-drafts-now(values))
-
 pub fun try-retire-scope-drafts(current : continuation-scope<e>,
                                 values : list<trace<e>>) : e error<()>
   capture-error(fn() pretend-no-div{ retire-scope-drafts(current,values) })
@@ -365,7 +329,7 @@ pub fun attempt-build(plane : plane<e>,
       capture-error(action)
   )
 
-pub fun with-frame(plane : plane<e>, current : frame<e>,
+pub fun with-frame(plane : plane<r>, current : frame<r>,
                action : () -> <div,exn|e> a) : <div,exn|e> a
   val previous = load(plane.plane-current-frame)
   finally(
@@ -381,8 +345,8 @@ pub fun with-current(plane : plane<e>, current : trace<e>, current-frame : frame
     Nothing -> with-context(plane,Nothing,current-frame,action)
     Just(gate) -> with-context(plane,Just(gate),current-frame,action)
 
-pub fun with-context(plane : plane<e>, current : maybe<continuation-gate>,
-                 current-frame : frame<e>,
+pub fun with-context(plane : plane<r>, current : maybe<continuation-gate>,
+                 current-frame : frame<r>,
                  action : () -> <div,exn|e> a) : <div,exn|e> a
   val previous = load(plane.plane-current)
   finally(
@@ -390,17 +354,4 @@ pub fun with-context(plane : plane<e>, current : maybe<continuation-gate>,
     fn()
       store(plane.plane-current,current)
       with-frame(plane,current-frame,action)
-  )
-
-// Entry targeting is a dynamic capability, deliberately separate from the
-// structural gate parent. Structural scopes inherit `plane-current` for
-// lifetime gating, but never inherit a surrounding state entry target.
-pub fun with-entry(plane : plane<e>, current : maybe<trace<e>>,
-               action : () -> <div,exn|e> a) : <div,exn|e> a
-  val previous = load(plane.plane-current-entry)
-  finally(
-    fn() store(plane.plane-current-entry,previous),
-    fn()
-      store(plane.plane-current-entry,current)
-      action()
   )

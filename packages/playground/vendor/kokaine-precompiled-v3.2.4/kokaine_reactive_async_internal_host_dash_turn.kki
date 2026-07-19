@@ -1,0 +1,78 @@
+/*--------------------------------------------------------------------------
+  Rank-2 effect-row closure for retained browser turns.
+
+  The runner carries no callback payload. Async invokes it around each
+  complete completion or cancellation turn so a generic family row is closed
+  before the action becomes a `ui`-only host callback.
+--------------------------------------------------------------------------*/
+module interface kokaine/reactive/async/internal/host-turn
+ 
+//------------------------------
+//#kki: import declarations
+ 
+import std/core/types = std/core/types pub = "";
+import std/core/hnd = std/core/hnd pub = "";
+import std/core/exn = std/core/exn pub = "";
+import std/core/bool = std/core/bool pub = "";
+import std/core/order = std/core/order pub = "";
+import std/core/char = std/core/char pub = "";
+import std/core/int = std/core/int pub = "";
+import std/core/vector = std/core/vector pub = "";
+import std/core/string = std/core/string pub = "";
+import std/core/sslice = std/core/sslice pub = "";
+import std/core/list = std/core/list pub = "";
+import std/core/maybe = std/core/maybe pub = "";
+import std/core/maybe2 = std/core/maybe2 pub = "";
+import std/core/either = std/core/either pub = "";
+import std/core/result = std/core/result pub = "";
+import std/core/tuple = std/core/tuple pub = "";
+import std/core/lazy = std/core/lazy pub = "";
+import std/core/show = std/core/show pub = "";
+import std/core/debug = std/core/debug pub = "";
+import std/core/delayed = std/core/delayed pub = "";
+import std/core/console = std/core/console pub = "";
+import std/core = std/core = "";
+ 
+//------------------------------
+//#kki: external imports
+ 
+ 
+//------------------------------
+//#kki: fixity declarations
+ 
+ 
+//------------------------------
+//#kki: local imported aliases
+ 
+ 
+//------------------------------
+//#kki: type declarations
+ 
+pub value{0,1,8} type host-turn-runner[11,1,14,3] <(e :: E),(e1 :: E)> :: (E, E) -> V {
+  pub con Host-turn-runner[12,3,12,18](run-host-turn: forall<a> (() -> (e :: E) a) -> (e1 :: E) a){0,1,8} : forall<(e :: E),(e1 :: E)> (run-host-turn : forall<a> (() -> (e :: E) a) -> (e1 :: E) a) -> (host-turn-runner :: (E, E) -> V)<(e :: E),(e1 :: E)> = 1;
+};
+ 
+//------------------------------
+//#kki: declarations
+ 
+// Automatically generated. Retrieves the `run-host-turn` constructor field of the `:host-turn-runner` type.
+pub fun host-turn-runner/run-host-turn[13,5,13,17] : forall<(e :: E),(e1 :: E),a> (^ @this : (host-turn-runner :: (E, E) -> V)<(e :: E),(e1 :: E)>) -> ((() -> (e :: E) a) -> (e1 :: E) a);
+// monadic lift
+fun host-turn-runner/@mlift-copy@10006[1,0,1,0] : forall<a,(e :: E),(e1 :: E)> (@c-x10002 : (() -> (e :: E) a) -> (e1 :: E) a) -> (forall<a> (() -> (e :: E) a) -> (e1 :: E) a);
+// monadic lift
+fun host-turn-runner/@mlift-copy@10007[1,0,1,0] : forall<(e :: E),(e1 :: E)> (@c-x10003 : forall<a> (() -> (e :: E) a) -> (e1 :: E) a) -> (host-turn-runner :: (E, E) -> V)<(e :: E),(e1 :: E)>;
+pub fun host-turn-runner/@copy[12,3,12,18] : forall<(e :: E),(e1 :: E)> (@this : (host-turn-runner :: (E, E) -> V)<(e :: E),(e1 :: E)>, run-host-turn : (std/core/types/@optional :: V -> V)<forall<a> (() -> (e :: E) a) -> (e1 :: E) a>) -> (host-turn-runner :: (E, E) -> V)<(e :: E),(e1 :: E)>;
+pub fun host-turn-runner/run[16,18,16,37] : forall<a,(e :: E),(e1 :: E)> (runner : (host-turn-runner :: (E, E) -> V)<(e :: E),(e1 :: E)>, action : () -> (e :: E) a) -> (e1 :: E) a;
+ 
+fun @kokaine-cache-phase[1,0,1,0] : () -> std/core/types/int;
+ 
+//------------------------------
+//#kki: external declarations
+ 
+ 
+//------------------------------
+//#kki: inline definitions
+ 
+//.inline-section
+fun @kokaine-cache-phase // inline size: 1
+  = fn(){ 0; };

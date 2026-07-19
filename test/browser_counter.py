@@ -1,8 +1,8 @@
 """End-to-end checks for the jsweb Continuation Lab example.
 
 The public example exercises dynamic tracked suffixes, equality publication
-boundaries, stateful memo entries, untracked sampling, explicit batching,
-host re-entry, and structural cleanup. The separate lifecycle fixture keeps
+boundaries, explicit accumulated state, untracked sampling, explicit batching,
+host re-entry, and lifetime cleanup. The separate lifecycle fixture keeps
 the lower-level disposal and stale-listener stress checks.
 """
 
@@ -776,7 +776,7 @@ with serve_project() as origin:
         expect(desktop.locator("#sampled-operator")).to_have_text(unsafe_name)
         expect(desktop.locator("#peak-value")).to_have_text("13")
 
-        # A same-value signal still resumes its downstream state entry.
+        # signal-always still schedules the explicit accumulation effect.
         effect_before_pulses = read_int(desktop, "#effect-runs")
         desktop.locator("#pulse-heartbeat").click()
         desktop.locator("#pulse-heartbeat").click()
@@ -830,7 +830,7 @@ with serve_project() as origin:
         )
         expect(desktop.locator("#peak-value")).to_have_text("13")
 
-        # Cross equality bands and verify previous state advances only there.
+        # Cross equality bands and verify revision state advances only there.
         zero = desktop.get_by_role("button", name="ZERO")
         zero.click()
         assert_active_state(desktop, 0)

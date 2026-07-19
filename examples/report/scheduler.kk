@@ -393,4 +393,4 @@ pub fun render-scheduler(root : root<<ui>>, model : scheduler-model)
         p
           text("frontier 选择 Pending 且没有 Pending/Running ancestor 的工作；已退休的 stale ticket 可以暂留队列，取工作时再丢弃。同步 ")
           element("code","memo.get")
-          text(" 只沿目标 producer 的 gate、input producer、entry target 与 child trace 定向 settle，不会顺带清空无关 pure work，更不会执行 effect plane。只有 derive 发布不相等的新值时，输出 source 才增加版本并触发下游 capture。")
+          text(" 只沿目标 producer 的 parent gate、input producer 与 child trace 定向 settle，不会顺带清空无关 pure work，更不会执行 effect plane。只有 derive 发布不相等的新值时，输出 source 才增加版本并触发下游 capture。")

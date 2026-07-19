@@ -1,0 +1,155 @@
+/*--------------------------------------------------------------------------
+  Provisional bootstrap frontiers owned by reactive integrations.
+
+  A provision isolates bootstrap work until its integration explicitly
+  drains and promotes it. The core scheduler supplies only generic work and
+  settle primitives; this module owns the lease state machine, local drain,
+  and rollback retirement policy.
+--------------------------------------------------------------------------*/
+module interface kokaine/reactive/integration/internal/provision
+ 
+//------------------------------
+//#kki: import declarations
+ 
+import std/core/types = std/core/types pub = "";
+import std/core/hnd = std/core/hnd pub = "";
+import std/core/exn = std/core/exn pub = "";
+import std/core/bool = std/core/bool pub = "";
+import std/core/order = std/core/order pub = "";
+import std/core/char = std/core/char pub = "";
+import std/core/int = std/core/int pub = "";
+import std/core/vector = std/core/vector pub = "";
+import std/core/string = std/core/string pub = "";
+import std/core/sslice = std/core/sslice pub = "";
+import std/core/list = std/core/list pub = "";
+import std/core/maybe = std/core/maybe pub = "";
+import std/core/maybe2 = std/core/maybe2 pub = "";
+import std/core/either = std/core/either pub = "";
+import std/core/result = std/core/result pub = "";
+import std/core/tuple = std/core/tuple pub = "";
+import std/core/lazy = std/core/lazy pub = "";
+import std/core/show = std/core/show pub = "";
+import std/core/debug = std/core/debug pub = "";
+import std/core/delayed = std/core/delayed pub = "";
+import std/core/console = std/core/console pub = "";
+import std/core = std/core = "";
+import kokaine/reactive/internal/model = kokaine/reactive/internal/model = "";
+import kokaine/reactive/internal/scheduler = kokaine/reactive/internal/scheduler = "";
+import kokaine/reactive/internal/lifetime = kokaine/reactive/internal/lifetime = "";
+import kokaine/reactive/internal/work-transaction = kokaine/reactive/internal/work-transaction = "";
+import kokaine/internal/compat = kokaine/internal/compat = "";
+import std/core/undiv = std/core/undiv = "";
+import kokaine/internal/registry = kokaine/internal/registry inline = "";
+import std/core/unsafe = std/core/unsafe inline = "";
+ 
+//------------------------------
+//#kki: external imports
+ 
+ 
+//------------------------------
+//#kki: fixity declarations
+ 
+ 
+//------------------------------
+//#kki: local imported aliases
+ 
+// An `:error<a>` type represents a first-class exception result as a `:result<a,exception>`.
+local alias std/core/exn/error[65,1,65,40]<a> :: V -> V = (std/core/types/result :: (V, V) -> V)<a,std/core/exn/exception> = 1;
+// Index into an evidence vector
+local alias std/core/hnd/ev-index[138,1,138,28] = std/core/types/ssize_t = 1;
+ 
+//------------------------------
+//#kki: type declarations
+ 
+pub type provision[19,1,24,3] <(e :: E)> :: E -> V {
+  con Provision[20,3,20,11](provision-root: (kokaine/reactive/internal/model/root :: E -> V)<(e :: E)>, provision-derive-group: (kokaine/reactive/internal/work-transaction/work-group :: V -> V)<(kokaine/reactive/internal/model/work :: E -> V)<(std/core/types/total :: E)>>, provision-effect-group: (kokaine/reactive/internal/work-transaction/work-group :: V -> V)<(kokaine/reactive/internal/model/work :: E -> V)<(e :: E)>>){0,3,8} : forall<(e :: E)> (provision-root : (kokaine/reactive/internal/model/root :: E -> V)<(e :: E)>, provision-derive-group : (kokaine/reactive/internal/work-transaction/work-group :: V -> V)<(kokaine/reactive/internal/model/work :: E -> V)<(std/core/types/total :: E)>>, provision-effect-group : (kokaine/reactive/internal/work-transaction/work-group :: V -> V)<(kokaine/reactive/internal/model/work :: E -> V)<(e :: E)>>) -> (provision :: E -> V)<(e :: E)> = 1;
+};
+pub value{0,1,8} type provision-lease[26,1,29,3] <(e :: E)> :: E -> V {
+  con Provision-lease[27,3,27,17](lease-provision: (provision :: E -> V)<(e :: E)>){0,1,8} : forall<(e :: E)> (lease-provision : (provision :: E -> V)<(e :: E)>) -> (provision-lease :: E -> V)<(e :: E)> = 1;
+};
+ 
+//------------------------------
+//#kki: declarations
+ 
+// Automatically generated. Retrieves the `provision-root` constructor field of the `:provision` type.
+fun provision/provision-root[21,5,21,18] : forall<(e :: E)> (^ provision : (provision :: E -> V)<(e :: E)>) -> (kokaine/reactive/internal/model/root :: E -> V)<(e :: E)>;
+// Automatically generated. Retrieves the `provision-derive-group` constructor field of the `:provision` type.
+fun provision/provision-derive-group[22,5,22,26] : forall<(e :: E)> (^ provision : (provision :: E -> V)<(e :: E)>) -> (kokaine/reactive/internal/work-transaction/work-group :: V -> V)<(kokaine/reactive/internal/model/work :: E -> V)<(std/core/types/total :: E)>>;
+// Automatically generated. Retrieves the `provision-effect-group` constructor field of the `:provision` type.
+fun provision/provision-effect-group[23,5,23,26] : forall<(e :: E)> (^ provision : (provision :: E -> V)<(e :: E)>) -> (kokaine/reactive/internal/work-transaction/work-group :: V -> V)<(kokaine/reactive/internal/model/work :: E -> V)<(e :: E)>>;
+pub fun provision/@copy[20,3,20,11] : forall<(e :: E)> (@this : (provision :: E -> V)<(e :: E)>, provision-root : (std/core/types/@optional :: V -> V)<(kokaine/reactive/internal/model/root :: E -> V)<(e :: E)>>, provision-derive-group : (std/core/types/@optional :: V -> V)<(kokaine/reactive/internal/work-transaction/work-group :: V -> V)<(kokaine/reactive/internal/model/work :: E -> V)<(std/core/types/total :: E)>>>, provision-effect-group : (std/core/types/@optional :: V -> V)<(kokaine/reactive/internal/work-transaction/work-group :: V -> V)<(kokaine/reactive/internal/model/work :: E -> V)<(e :: E)>>>) -> (provision :: E -> V)<(e :: E)>;
+// Automatically generated. Retrieves the `lease-provision` constructor field of the `:provision-lease` type.
+fun provision-lease/lease-provision[28,5,28,19] : forall<(e :: E)> (^ @this : (provision-lease :: E -> V)<(e :: E)>) -> (provision :: E -> V)<(e :: E)>;
+pub fun provision-lease/@copy[27,3,27,17] : forall<(e :: E)> (@this : (provision-lease :: E -> V)<(e :: E)>, lease-provision : (std/core/types/@optional :: V -> V)<(provision :: E -> V)<(e :: E)>>) -> (provision-lease :: E -> V)<(e :: E)>;
+pub fun provision-lease/provision[31,9,31,33] : forall<(e :: E)> (lease : (provision-lease :: E -> V)<(e :: E)>) -> (provision :: E -> V)<(e :: E)>;
+pub fun provision/same[34,9,34,22] : forall<(e :: E)> (left : (provision :: E -> V)<(e :: E)>, right : (provision :: E -> V)<(e :: E)>) -> std/core/types/bool;
+pub fun provision-lease/state[41,18,41,38] : forall<(e :: E)> (lease : (provision-lease :: E -> V)<(e :: E)>) -> kokaine/reactive/internal/work-transaction/work-transaction-state;
+fun plane-has-group[45,5,45,19] : forall<(e :: E)> (plane : (kokaine/reactive/internal/model/plane :: E -> V)<(e :: E)>, expected : (kokaine/reactive/internal/work-transaction/work-group :: V -> V)<(kokaine/reactive/internal/model/work :: E -> V)<(e :: E)>>) -> std/core/types/bool;
+fun check-provision-root[50,5,50,24] : forall<(e :: E)> (current : (provision :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
+// monadic lift
+fun @mlift-check-active-provision@10352[1,0,1,0] : forall<(_e :: E),(e1 :: E)> (current : (provision :: E -> V)<(e1 :: E)>, wild_ : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
+fun check-active-provision[56,5,56,26] : forall<(e :: E)> (current : (provision :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
+// monadic lift
+fun @mlift-open-provision@10353[1,0,1,0] : forall<(_e :: E),(_e1 :: E),(_e2 :: E),(e3 :: E)> (root : (kokaine/reactive/internal/model/root :: E -> V)<(e3 :: E)>, @y-x10087 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (provision-lease :: E -> V)<(e3 :: E)>;
+// monadic lift
+fun @mlift-open-provision@10354[1,0,1,0] : forall<(_e :: E),(_e1 :: E),(_e2 :: E),(_e3 :: E),(e4 :: E)> (root : (kokaine/reactive/internal/model/root :: E -> V)<(e4 :: E)>, wild_ : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (provision-lease :: E -> V)<(e4 :: E)>;
+pub fun open-provision[66,9,66,22] : forall<(e :: E)> (root : (kokaine/reactive/internal/model/root :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (provision-lease :: E -> V)<(e :: E)>;
+// monadic lift
+fun @mlift-current-provision@10355[1,0,1,0] : forall<(_e :: E),(e1 :: E)> (root : (kokaine/reactive/internal/model/root :: E -> V)<(e1 :: E)>, wild_ : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (std/core/types/maybe :: V -> V)<(provision :: E -> V)<(e1 :: E)>>;
+// Integrations inspect the active frontier to decide whether they own a new
+// boundary or join work already being drained.
+pub fun current-provision[82,9,82,25] : forall<(e :: E)> (root : (kokaine/reactive/internal/model/root :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (std/core/types/maybe :: V -> V)<(provision :: E -> V)<(e :: E)>>;
+tail fun restore-group-skipped[96,10,96,30] : forall<(e :: E)> (group : (kokaine/reactive/internal/work-transaction/work-group :: V -> V)<(kokaine/reactive/internal/model/work :: E -> V)<(e :: E)>>, skipped : (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/work :: E -> V)<(e :: E)>>) -> <(std/core/types/div :: X)> ();
+tail fun take-group-work-loop[104,10,104,29] : forall<(e :: E)> (group : (kokaine/reactive/internal/work-transaction/work-group :: V -> V)<(kokaine/reactive/internal/model/work :: E -> V)<(e :: E)>>, skipped : (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/work :: E -> V)<(e :: E)>>) -> <(std/core/types/div :: X)> (std/core/types/maybe :: V -> V)<(kokaine/reactive/internal/model/work :: E -> V)<(e :: E)>>;
+fun take-group-work[118,5,118,19] : forall<(e :: E)> (group : (kokaine/reactive/internal/work-transaction/work-group :: V -> V)<(kokaine/reactive/internal/model/work :: E -> V)<(e :: E)>>) -> (std/core/types/maybe :: V -> V)<(kokaine/reactive/internal/model/work :: E -> V)<(e :: E)>>;
+fun restore-group-deferred[121,5,121,26] : (group : (kokaine/reactive/internal/work-transaction/work-group :: V -> V)<(kokaine/reactive/internal/model/work :: E -> V)<(std/core/types/total :: E)>>, deferred : (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/work :: E -> V)<(std/core/types/total :: E)>>) -> ();
+fun run-next-derived-group-loop[125,5,125,31] : (plane : (kokaine/reactive/internal/model/plane :: E -> V)<(std/core/types/total :: E)>, group : (kokaine/reactive/internal/work-transaction/work-group :: V -> V)<(kokaine/reactive/internal/model/work :: E -> V)<(std/core/types/total :: E)>>, deferred : (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/work :: E -> V)<(std/core/types/total :: E)>>) -> <(std/core/types/div :: X)> (std/core/exn/error :: V -> V)<std/core/types/bool>;
+fun run-next-derived-group[146,5,146,26] : (plane : (kokaine/reactive/internal/model/plane :: E -> V)<(std/core/types/total :: E)>, group : (kokaine/reactive/internal/work-transaction/work-group :: V -> V)<(kokaine/reactive/internal/model/work :: E -> V)<(std/core/types/total :: E)>>) -> (std/core/exn/error :: V -> V)<std/core/types/bool>;
+// monadic lift
+fun @mlift-run-next-effect-group@10356[1,0,1,0] : forall<(e :: E)> (@y-x10102 : (std/core/exn/error :: V -> V)<()>) -> <(std/core/types/div :: X)|(e :: E)> (std/core/types/result :: (V, V) -> V)<std/core/types/bool,std/core/exn/exception>;
+fun run-next-effect-group[150,5,150,25] : forall<(e :: E)> (plane : (kokaine/reactive/internal/model/plane :: E -> V)<(e :: E)>, group : (kokaine/reactive/internal/work-transaction/work-group :: V -> V)<(kokaine/reactive/internal/model/work :: E -> V)<(e :: E)>>) -> <(std/core/types/div :: X)|(e :: E)> (std/core/exn/error :: V -> V)<std/core/types/bool>;
+// monadic lift
+fun @mlift-drain-provision-loop@10357[1,0,1,0] : forall<(e :: E)> (current : (provision :: E -> V)<(e :: E)>, @y-x10105 : (std/core/exn/error :: V -> V)<std/core/types/bool>) -> <(std/core/types/div :: X)|(e :: E)> (std/core/types/result :: (V, V) -> V)<(),std/core/exn/exception>;
+fun drain-provision-loop[161,5,161,24] : forall<(e :: E)> (current : (provision :: E -> V)<(e :: E)>) -> <(std/core/types/div :: X)|(e :: E)> (std/core/exn/error :: V -> V)<()>;
+fun detach-matching-group[214,5,214,25] : forall<(e :: E)> (plane : (kokaine/reactive/internal/model/plane :: E -> V)<(e :: E)>, expected : (kokaine/reactive/internal/work-transaction/work-group :: V -> V)<(kokaine/reactive/internal/model/work :: E -> V)<(e :: E)>>) -> ();
+tail fun prepend-bootstrap-retirements[245,10,245,38] : forall<(e :: E)> (values : (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/work :: E -> V)<(e :: E)>>, collected : (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/retirement-work :: E -> V)<(e :: E)>>) -> <(std/core/types/div :: X)> (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/retirement-work :: E -> V)<(e :: E)>>;
+tail fun prepend-pure-bootstrap-retirements[258,10,258,43] : forall<(e :: E)> (values : (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/work :: E -> V)<(std/core/types/total :: E)>>, collected : (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/retirement-work :: E -> V)<(e :: E)>>) -> <(std/core/types/div :: X)> (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/retirement-work :: E -> V)<(e :: E)>>;
+// monadic lift
+fun @mlift-retire-provision-bootstraps@10358[1,0,1,0] : forall<(e :: E)> (root : (kokaine/reactive/internal/model/root :: E -> V)<(e :: E)>, finalizers : (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/retirement-work :: E -> V)<(e :: E)>>) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+// monadic lift
+fun @mlift-retire-provision-bootstraps@10359[1,0,1,0] : forall<(e :: E)> (root : (kokaine/reactive/internal/model/root :: E -> V)<(e :: E)>, structural : (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/retirement-work :: E -> V)<(e :: E)>>) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+// monadic lift
+fun @mlift-retire-provision-bootstraps@10360[1,0,1,0] : forall<(e :: E)> (derive-owned : (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/work :: E -> V)<(std/core/types/total :: E)>>, root : (kokaine/reactive/internal/model/root :: E -> V)<(e :: E)>, effect-structural : (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/retirement-work :: E -> V)<(e :: E)>>) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+fun retire-provision-bootstraps[272,5,272,31] : forall<(e :: E)> (root : (kokaine/reactive/internal/model/root :: E -> V)<(e :: E)>, derive-owned : (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/work :: E -> V)<(std/core/types/total :: E)>>, effect-owned : (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/work :: E -> V)<(e :: E)>>) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+pub fun discard-provision[286,9,286,25] : forall<(e :: E)> (lease : (provision-lease :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+// monadic lift
+fun @mlift-drain-provision@10361[1,0,1,0] : forall<(e :: E)> (@pat@3@0 : (std/core/exn/error :: V -> V)<()>) -> (e :: E) ();
+// monadic lift
+fun @mlift-drain-provision@10362[1,0,1,0] : (@c-x10133 : std/core/types/bool, result : (std/core/exn/error :: V -> V)<()>, @c-x10134 : ()) -> ((std/core/exn/error :: V -> V)<()>, std/core/types/bool);
+// monadic lift
+fun @mlift-drain-provision@10363[1,0,1,0] : forall<(_e :: E)> (completed : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>, result : (std/core/exn/error :: V -> V)<()>, @c-x10133 : std/core/types/bool) -> ((std/core/exn/error :: V -> V)<()>, std/core/types/bool);
+// monadic lift
+fun @mlift-drain-provision@10364[1,0,1,0] : forall<(_e :: E),(e1 :: E)> (completed : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>, derive-group : (kokaine/reactive/internal/work-transaction/work-group :: V -> V)<(kokaine/reactive/internal/model/work :: E -> V)<(std/core/types/total :: E)>>, result : (std/core/exn/error :: V -> V)<()>) -> <(std/core/types/div :: X)|(e1 :: E)> ((std/core/exn/error :: V -> V)<()>, std/core/types/bool);
+// monadic lift
+fun @mlift-drain-provision@10365[1,0,1,0] : forall<(e :: E)> (@y-x10136 : ((std/core/exn/error :: V -> V)<()>, std/core/types/bool)) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/div :: X)|(e :: E)> ();
+// monadic lift
+fun @mlift-drain-provision@10366[1,0,1,0] : forall<(_e :: E),(_e1 :: E),(e2 :: E)> (completed : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>, current : (provision :: E -> V)<(e2 :: E)>, derive-group : (kokaine/reactive/internal/work-transaction/work-group :: V -> V)<(kokaine/reactive/internal/model/work :: E -> V)<(std/core/types/total :: E)>>, lease : (provision-lease :: E -> V)<(e2 :: E)>, @y-x10127 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/div :: X)|(e2 :: E)> ();
+// monadic lift
+fun @mlift-drain-provision@10367[1,0,1,0] : forall<(_e :: E),(_e1 :: E),(_e2 :: E),(e3 :: E)> (current : (provision :: E -> V)<(e3 :: E)>, lease : (provision-lease :: E -> V)<(e3 :: E)>, wild_ : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/div :: X)|(e3 :: E)> ();
+pub fun drain-provision[174,9,174,23] : forall<(e :: E)> (lease : (provision-lease :: E -> V)<(e :: E)>) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+// monadic lift
+fun @mlift-promote-provision@10368[1,0,1,0] : forall<(e :: E)> (current : (provision :: E -> V)<(e :: E)>, wild_ : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+pub fun promote-provision[223,9,223,25] : forall<(e :: E)> (lease : (provision-lease :: E -> V)<(e :: E)>) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+ 
+fun @kokaine-cache-phase[1,0,1,0] : () -> std/core/types/int;
+ 
+//------------------------------
+//#kki: external declarations
+ 
+ 
+//------------------------------
+//#kki: inline definitions
+ 
+//.inline-section
+fun @kokaine-cache-phase // inline size: 1
+  = fn(){ 0; };

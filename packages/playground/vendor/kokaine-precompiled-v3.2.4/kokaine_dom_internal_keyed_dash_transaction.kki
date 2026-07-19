@@ -1,0 +1,143 @@
+/*--------------------------------------------------------------------------
+  Renderer-owned publication journal for nested keyed reconciliation.
+
+  Reactive bootstrap isolation is a separate capability. This module owns
+  only DOM preparation, authoritative publication, and rollback callbacks.
+--------------------------------------------------------------------------*/
+module interface kokaine/dom/internal/keyed-transaction
+ 
+//------------------------------
+//#kki: import declarations
+ 
+import std/core/types = std/core/types pub = "";
+import std/core/hnd = std/core/hnd pub = "";
+import std/core/exn = std/core/exn pub = "";
+import std/core/bool = std/core/bool pub = "";
+import std/core/order = std/core/order pub = "";
+import std/core/char = std/core/char pub = "";
+import std/core/int = std/core/int pub = "";
+import std/core/vector = std/core/vector pub = "";
+import std/core/string = std/core/string pub = "";
+import std/core/sslice = std/core/sslice pub = "";
+import std/core/list = std/core/list pub = "";
+import std/core/maybe = std/core/maybe pub = "";
+import std/core/maybe2 = std/core/maybe2 pub = "";
+import std/core/either = std/core/either pub = "";
+import std/core/result = std/core/result pub = "";
+import std/core/tuple = std/core/tuple pub = "";
+import std/core/lazy = std/core/lazy pub = "";
+import std/core/show = std/core/show pub = "";
+import std/core/debug = std/core/debug pub = "";
+import std/core/delayed = std/core/delayed pub = "";
+import std/core/console = std/core/console pub = "";
+import std/core = std/core = "";
+import kokaine/reactive/integration = kokaine/reactive/integration = "";
+import std/core/unsafe = std/core/unsafe = "";
+import std/core/undiv = std/core/undiv = "";
+import kokaine/reactive/integration/internal/provision = kokaine/reactive/integration/internal/provision inline = "";
+ 
+//------------------------------
+//#kki: external imports
+ 
+ 
+//------------------------------
+//#kki: fixity declarations
+ 
+ 
+//------------------------------
+//#kki: local imported aliases
+ 
+ 
+//------------------------------
+//#kki: type declarations
+ 
+type keyed-publication[24,1,29,3] {
+  con Keyed-publication[25,3,25,19](publication-prepare: () -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (), publication-publish: () -> (), publication-rollback: () -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ()){0,3,8} : (publication-prepare : () -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (), publication-publish : () -> (), publication-rollback : () -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ()) -> keyed-publication = 1;
+};
+value{1,0,1} type keyed-transaction-state[31,1,35,15] {
+  con Keyed-open[32,3,32,12]{0,0,0} : keyed-transaction-state = 1;
+  con Keyed-prepared[33,3,33,16]{0,0,0} : keyed-transaction-state = 2;
+  con Keyed-committed[34,3,34,17]{0,0,0} : keyed-transaction-state = 3;
+  con Keyed-aborted[35,3,35,15]{0,0,0} : keyed-transaction-state = 4;
+};
+pub type keyed-transaction[37,1,41,3] {
+  con Keyed-transaction[38,3,38,19](transaction-state: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),keyed-transaction-state>, transaction-publications: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/list :: V -> V)<keyed-publication>>){0,2,8} : (transaction-state : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),keyed-transaction-state>, transaction-publications : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/list :: V -> V)<keyed-publication>>) -> keyed-transaction = 1;
+};
+type keyed-entry[43,1,47,3] {
+  con Keyed-entry[44,3,44,13](entry-provision: (kokaine/reactive/integration/provision :: E -> V)<<(std/core/ui :: X)>>, entry-transaction: keyed-transaction){0,2,8} : (entry-provision : (kokaine/reactive/integration/provision :: E -> V)<<(std/core/ui :: X)>>, entry-transaction : keyed-transaction) -> keyed-entry = 1;
+};
+pub value{0,1,8} type keyed-context[49,1,52,3] {
+  con Keyed-context[50,3,50,15](context-active: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/list :: V -> V)<keyed-entry>>){0,1,8} : (context-active : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/list :: V -> V)<keyed-entry>>) -> keyed-context = 1;
+};
+ 
+//------------------------------
+//#kki: declarations
+ 
+fun cell[14,5,14,8] : forall<a> (value : a) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>;
+fun load[17,5,17,8] : forall<a> (value : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>) -> a;
+fun store[20,5,20,9] : forall<a> (target : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>, value : a) -> ();
+// Automatically generated. Retrieves the `publication-prepare` constructor field of the `:keyed-publication` type.
+fun keyed-publication/publication-prepare[26,5,26,23] : (^ @this : keyed-publication) -> (() -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ());
+// Automatically generated. Retrieves the `publication-publish` constructor field of the `:keyed-publication` type.
+fun keyed-publication/publication-publish[27,5,27,23] : (^ @this : keyed-publication) -> (() -> ());
+// Automatically generated. Retrieves the `publication-rollback` constructor field of the `:keyed-publication` type.
+fun keyed-publication/publication-rollback[28,5,28,24] : (^ @this : keyed-publication) -> (() -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ());
+// monadic lift
+fun keyed-publication/@mlift-copy@10116[1,0,1,0] : (@c-x10040 : () -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (), @this : keyed-publication, publication-publish : (std/core/types/@optional :: V -> V)<() -> ()>, @c-x10042 : () -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ()) -> keyed-publication;
+// monadic lift
+fun keyed-publication/@mlift-copy@10117[1,0,1,0] : (@this : keyed-publication, publication-publish : (std/core/types/@optional :: V -> V)<() -> ()>, publication-rollback : (std/core/types/@optional :: V -> V)<() -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ()>, @c-x10040 : () -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ()) -> keyed-publication;
+fun keyed-publication/@copy[25,3,25,19] : (@this : keyed-publication, publication-prepare : (std/core/types/@optional :: V -> V)<() -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ()>, publication-publish : (std/core/types/@optional :: V -> V)<() -> ()>, publication-rollback : (std/core/types/@optional :: V -> V)<() -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ()>) -> keyed-publication;
+// Automatically generated. Tests for the `Keyed-open` constructor of the `:keyed-transaction-state` type.
+fip fun is-keyed-open[32,3,32,12] : (^ keyed-transaction-state : keyed-transaction-state) -> std/core/types/bool;
+// Automatically generated. Tests for the `Keyed-prepared` constructor of the `:keyed-transaction-state` type.
+fip fun is-keyed-prepared[33,3,33,16] : (^ keyed-transaction-state : keyed-transaction-state) -> std/core/types/bool;
+// Automatically generated. Tests for the `Keyed-committed` constructor of the `:keyed-transaction-state` type.
+fip fun is-keyed-committed[34,3,34,17] : (^ keyed-transaction-state : keyed-transaction-state) -> std/core/types/bool;
+// Automatically generated. Tests for the `Keyed-aborted` constructor of the `:keyed-transaction-state` type.
+fip fun is-keyed-aborted[35,3,35,15] : (^ keyed-transaction-state : keyed-transaction-state) -> std/core/types/bool;
+// Automatically generated. Retrieves the `transaction-state` constructor field of the `:keyed-transaction` type.
+fun keyed-transaction/transaction-state[39,5,39,21] : (^ @this : keyed-transaction) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),keyed-transaction-state>;
+// Automatically generated. Retrieves the `transaction-publications` constructor field of the `:keyed-transaction` type.
+fun keyed-transaction/transaction-publications[40,5,40,28] : (^ @this : keyed-transaction) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/list :: V -> V)<keyed-publication>>;
+pub fun keyed-transaction/@copy[38,3,38,19] : (@this : keyed-transaction, transaction-state : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),keyed-transaction-state>>, transaction-publications : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/list :: V -> V)<keyed-publication>>>) -> keyed-transaction;
+// Automatically generated. Retrieves the `entry-provision` constructor field of the `:keyed-entry` type.
+fun keyed-entry/entry-provision[45,5,45,19] : (^ @this : keyed-entry) -> (kokaine/reactive/integration/provision :: E -> V)<<(std/core/ui :: X)>>;
+// Automatically generated. Retrieves the `entry-transaction` constructor field of the `:keyed-entry` type.
+fun keyed-entry/entry-transaction[46,5,46,21] : (^ @this : keyed-entry) -> keyed-transaction;
+fun keyed-entry/@copy[44,3,44,13] : (@this : keyed-entry, entry-provision : (std/core/types/@optional :: V -> V)<(kokaine/reactive/integration/provision :: E -> V)<<(std/core/ui :: X)>>>, entry-transaction : (std/core/types/@optional :: V -> V)<keyed-transaction>) -> keyed-entry;
+// Automatically generated. Retrieves the `context-active` constructor field of the `:keyed-context` type.
+fun keyed-context/context-active[51,5,51,18] : (^ @this : keyed-context) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/list :: V -> V)<keyed-entry>>;
+pub fun keyed-context/@copy[50,3,50,15] : (@this : keyed-context, context-active : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/list :: V -> V)<keyed-entry>>>) -> keyed-context;
+pub fun new-keyed-context[54,9,54,25] : () -> keyed-context;
+pub fun new-keyed-transaction[57,9,57,29] : () -> keyed-transaction;
+tail fun find-keyed-transaction[60,10,60,31] : (values : (std/core/types/list :: V -> V)<keyed-entry>, expected : (kokaine/reactive/integration/provision :: E -> V)<<(std/core/ui :: X)>>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> keyed-transaction;
+pub fun current-keyed-transaction[71,9,71,33] : (renderer : keyed-context, expected : (kokaine/reactive/integration/provision :: E -> V)<<(std/core/ui :: X)>>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> keyed-transaction;
+pub fun with-keyed-transaction[77,9,77,30] : forall<a,(e :: E)> (renderer : keyed-context, current : (kokaine/reactive/integration/provision :: E -> V)<<(std/core/ui :: X)>>, transaction : keyed-transaction, action : () -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a;
+pub fun stage-keyed-publication[91,9,91,31] : (transaction : keyed-transaction, prepare : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> (), publish : () -> (), rollback : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
+// monadic lift
+fun @mlift-prepare-publications@10118[1,0,1,0] : (rest : (std/core/types/list :: V -> V)<keyed-publication>, @y-x10056 : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
+tail fun prepare-publications[101,10,101,29] : (values : (std/core/types/list :: V -> V)<keyed-publication>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
+tail fun publish-publications[110,10,110,29] : (values : (std/core/types/list :: V -> V)<keyed-publication>) -> ();
+fun rollback-publications[118,5,118,25] : (values : (std/core/types/list :: V -> V)<keyed-publication>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
+// monadic lift
+fun @mlift-prepare-keyed-transaction@10119[1,0,1,0] : forall<(_e :: E)> (state : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),keyed-transaction-state>, wild_ : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
+// monadic lift
+fun @mlift-prepare-keyed-transaction@10120[1,0,1,0] : forall<(_e :: E)> (state : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),keyed-transaction-state>, values : (std/core/types/list :: V -> V)<keyed-publication>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
+pub fun prepare-keyed-transaction[128,9,128,33] : (transaction : keyed-transaction) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
+// monadic lift
+fun @mlift-publish-keyed-transaction@10121[1,0,1,0] : forall<(_e :: E)> (publications : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/list :: V -> V)<keyed-publication>>, state : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),keyed-transaction-state>, values : (std/core/types/list :: V -> V)<keyed-publication>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
+pub fun publish-keyed-transaction[138,9,138,33] : (transaction : keyed-transaction) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
+pub fun abort-keyed-transaction[148,9,148,31] : (transaction : keyed-transaction) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
+ 
+fun @kokaine-cache-phase[1,0,1,0] : () -> std/core/types/int;
+ 
+//------------------------------
+//#kki: external declarations
+ 
+ 
+//------------------------------
+//#kki: inline definitions
+ 
+//.inline-section
+fun @kokaine-cache-phase // inline size: 1
+  = fn(){ 0; };

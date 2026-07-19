@@ -7,6 +7,7 @@ module run-async-root-effect-boundary-invalid
 
 import kokaine/async/effects
 import kokaine/reactive
+import kokaine/reactive/async
 
 effect audit-effect
   fun audit-ping() : ()

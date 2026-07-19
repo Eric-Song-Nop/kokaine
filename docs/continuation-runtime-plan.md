@@ -24,7 +24,7 @@ An effect row records operations left unhandled by a function. A local handler
 can discharge an operation before it reaches that boundary, so the design does
 not claim that types alone detect a hidden or "smuggled" write handler. The
 runtime closes that gap with a nested, runtime-wide pure phase around all
-derivation execution and targeted settlement. Framework mutation, ownership
+derivation execution and targeted settlement. Framework mutation, lifetime
 registration, disposal, and re-entry check that phase before changing state;
 behavioral canaries cover same-root and cross-root attempts.
 
@@ -125,8 +125,8 @@ The implementation is accepted only while all of the following remain true:
 
 1. A `Track-read` handled inside `reify-trace` captures the raw suffix at that
    synchronous read; sampled or ordinary dispatched reads leave no trace.
-2. A source entry contains an actual typed plane, target trace, and owning read
-   trace, not a wake callback.
+2. A source entry contains an actual typed plane and captured read trace, not a
+   wake callback.
 3. A resume ticket contains a trace. It never contains an observer plus action.
 4. `derive-producer` contains a pure plane, continuation scope, and cycle guard;
    it does not contain `calculate`.
@@ -140,10 +140,10 @@ The implementation is accepted only while all of the following remain true:
    without replaying the prefix before its read; an initial bootstrap failure
    instead retires its one-shot scope.
 9. Synchronous memo validation follows only typed pure-producer capabilities.
-10. Structural children belong to the continuation frame that created them and
+10. Lifetime children belong to the continuation frame that created them and
     cannot register from a retired frame.
-11. Re-entry restores a captured effect-plane gate and frame, resets the
-    state-entry target, and executes one batched turn.
+11. Re-entry restores a captured effect-plane gate and lifetime frame, then
+    executes one batched turn.
 12. A DOM callback snapshots the event and resumes `Event-live(K)` under that
     re-entry; retirement drops K before listener removal, and `Event-retired`
     rejects every later callback.
@@ -167,9 +167,8 @@ queues at all.
 ## Frontier scheduling and typed settlement
 
 An unequal source commit increments its version, walks the source-local packed
-captures, and queues `Resume-work(target)` for each newly pending target. The
-package also retains the owning read so dead generations can be ignored and a
-state-entry target can be distinguished from the read that indexed it. Equality
+captures, and queues `Resume-work(trace)` for each newly pending trace. The
+package retains the indexed read so dead generations can be ignored. Equality
 cuts propagation before this walk.
 
 The queue does not make every ticket immediately runnable. A pending trace whose
@@ -182,29 +181,28 @@ dirty/action pairs.
 Each root has a pure `plane<total>` for derivations and a `plane<e>` for user
 effects. Full flushes advance the runnable pure frontier before effect work.
 More importantly, a synchronous derived read calls `validate-derived` and
-settles only that producer's typed parent gates, input producers, entry target,
-and child trace. It cannot drain unrelated pure work or resume an effectful UI
+settles only that producer's typed parent gates, input producers, and child
+trace. It cannot drain unrelated pure work or resume an effectful UI
 continuation through an erased row. `ok`, `deferred`, and `failed` results plus
 a per-producer guard make dependency ordering and cycle behavior explicit.
 
-## Stateless and stateful derivations
+## Derived values and accumulated state
 
-`derive` is stateless. Its bootstrap invokes the calculator once, then retained
-read continuations calculate future values from current sources. Publication
-passes through the derived source's equality function, so equal results do not
-invalidate downstream traces.
+`derive`, `derive-by`, and `derive-always` are stateless. Their bootstrap invokes
+the calculator once, then retained read continuations calculate future values
+from current sources. Publication passes through the derived source's equality
+function, so equal results do not invalidate downstream traces. The public
+`memo<a>` type is the read-only result handle, not a stateful constructor.
 
-`memo(previous)` cannot subscribe to its own output and then behave like an
-ordinary acyclic memo. It instead captures a distinct state-entry continuation.
-Each entry resume injects the latest committed value. Reads under that entry
-target the entry K so a change restarts the correct stateful suffix. Targeted
-settlement checks the entry before and after nested work to discard obsolete
-branch failures and deferrals.
+Accumulated values use explicit state: a `signal` stores the current value and
+`create-effect` tracks inputs before modifying that signal from its untracked
+apply phase. The scheduler therefore has one continuation path for derived
+reads; history is ordinary reactive state on the write/effect plane.
 
 ## Frames and lifetime
 
-A trace is both an execution boundary and the parent of a structural
-generation. Each replacement resume runs in a draft frame that records child
+A trace is both an execution boundary and the parent of a lifetime generation.
+Each replacement resume runs in a draft frame that records child
 effects, derived scopes, and opaque parked resource continuations for listeners
 and region contents created by that suffix. The cleanup action lives in the
 resource K's `finally`; the owner ledger retains only its one-shot finalize
@@ -212,7 +210,7 @@ capability. Only a successful publication activates the draft. Replacement
 marks the previous frame subtree dead before finalizing its resources, so
 cleanup cannot register new work into a half-retired generation.
 
-This explicit owner ledger is necessary even though the Observer graph was
+This explicit lifetime ledger is necessary even though the Observer graph was
 removed. It answers "what must be finalized with this continuation generation,"
 not "which calculations should a source wake." Root disposal walks the same
 structure and is exhaustive and idempotent.
@@ -220,7 +218,7 @@ structure and is exhaustive and idempotent.
 ## Failure and final control
 
 A replacement attempt executes in a draft frame. Every raw continuation and
-structural child created during the attempt is recorded. On failure, or when a
+lifetime child created during the attempt is recorded. On failure, or when a
 final control operation abandons the dynamic call without returning an error,
 finalizers retire the draft synchronously.
 
@@ -238,6 +236,19 @@ keeps its initial batch unpublished until the action and first drain succeed;
 failure retires the candidate root instead of flushing queued work during
 unwind. DOM `mount` retains its outer disposer before flushing descendants and
 uses it to roll back the whole mount if a later child bootstrap fails.
+
+## Integration boundaries
+
+The reactive core owns traces, scheduling, generic lifetime registration, and
+provisional bootstrap work. `kokaine/reactive/integration` exposes a borrowed
+`provision`, the exclusive `provision-lease` which may drain, promote, or
+discard it, and persistent lifetime scopes for adapter-owned identities.
+
+Host publication is not a core concern. The DOM renderer associates an exact
+borrowed provision identity with its own keyed publication journal and owns the
+prepare/publish/rollback protocol. Generation-owned Web Async is likewise an
+integration in `kokaine/reactive/async`; the reactive core does not import its
+runtime or interpret the `async` effect.
 
 ## HTML and UI consequence
 
@@ -262,13 +273,13 @@ Browser listeners must outlive the lexical call to `mount`, but a normal host
 callback does not preserve Koka's dynamic handler stack. Listener installation
 therefore captures two separate capabilities:
 
-- `reentry<e>` stores the structural capability needed by the reactive runtime:
+- `reentry<e>` stores the lifetime capability needed by the reactive runtime:
   root, generation gate, and generation frame; and
 - `event-continuation` stores the user action after a handled
   `await-browser-event` operation as an opaque raw multi-shot resumption.
 
 On invocation the JavaScript callback snapshots the raw DOM event, reinstalls
-Kokaine's signal handlers and structural context, and synchronously resumes the
+Kokaine's signal handlers and lifetime context, and synchronously resumes the
 event continuation inside one batch. This both preserves native nested
 `dispatchEvent` ordering and makes event-created memos, effects, and cleanups
 retire with the listener's generation.
@@ -290,18 +301,19 @@ remains closed.
 - Invalidating a captured read does not replay code before that capture. Such a
   prefix can still lie inside an ancestor read's suffix and run when that
   ancestor is invalidated; tests assert each exact boundary.
-- Source invalidation is local, but source capture compaction and deep retirement
-  still have costs that should be measured under large traces.
-- The structural ownership ledger remains explicit because raw continuations,
+- Source invalidation is local, but high source fan-out and deep retirement still
+  have costs that should be measured under large traces.
+- The lifetime ownership ledger remains explicit because raw continuations,
   parked resource Ks, DOM ranges, and listeners require deterministic
   retirement. Resource cleanup is entered by `rcontext.finalize`, not by an
   owner-stored action closure.
 - JavaScript remains the event transport ABI, while the user action is entered
-  only by resuming the guarded event continuation under structural re-entry.
+  only by resuming the guarded event continuation under lifetime re-entry.
 - The public callback row is closed over the capabilities reinstalled by this
   boundary. Arbitrary application effects need a handler inside the callback;
-  otherwise type checking rejects the listener. A future host runner may widen
-  this contract explicitly.
+  otherwise type checking rejects the listener. A different public surface
+  could widen the row only through an explicit typed integration boundary; it
+  cannot recover an escaped dynamic handler stack.
 - Modeled Koka `exn` (included by `pure`) unwinds and closes the host batch. A
   raw JavaScript throw from an extern declared merely `ui` violates its FFI
   effect contract; adapters must translate such failures at the innermost host
@@ -320,7 +332,7 @@ The important tests are behavioral rather than source-string checks:
 - `targeted-settle-canary.kk` fails if a synchronous memo read skips producer
   validation.
 - `execution-planes.kk` exercises target isolation and pure/effect separation.
-- `entry-targeted-settle.kk` fails if state-entry routing is bypassed.
+- `derived-structural.kk` exercises derived replacement and owned cleanup.
 - `final-control-rollback.kk` proves abandoned drafts retry through the exact K.
 - `continuation-reentry.kk` fails if re-entry is changed to plain root dispatch.
 - `resource-finalization.kk` proves resource capture is parked, one-shot, LIFO,

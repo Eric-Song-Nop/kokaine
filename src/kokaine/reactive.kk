@@ -10,8 +10,6 @@ module kokaine/reactive
 import kokaine/reactive/internal/model
 pub import kokaine/reactive/effects
 import kokaine/reactive/internal/bridge
-import kokaine/reactive/internal/structural
-import kokaine/async/effects
 
 abstract value type root<e::E>
   Public-root(internal-root : kokaine/reactive/internal/model/root<e>)
@@ -22,24 +20,17 @@ abstract value type signal<a>
 abstract value type memo<a>
   Public-memo(internal-memo : kokaine/reactive/internal/model/memo<a>)
 
-abstract value type reentry<e::E>
-  Public-reentry(internal-reentry : kokaine/reactive/internal/model/reentry<e>)
-
-abstract value type structural-owner<e::E>
-  Public-structural-owner(
-    internal-structural-owner : kokaine/reactive/internal/structural/structural-owner<e>
-  )
-
-abstract value type structural-transaction<e::E>
-  Public-structural-transaction(
-    internal-structural-transaction : kokaine/reactive/internal/structural/structural-transaction<e>
-  )
-
 pub alias disposer<e> = kokaine/reactive/internal/model/disposer<e>
 
 fun unwrap-root(value : root<e>) : kokaine/reactive/internal/model/root<e>
   match value
     Public-root(inner) -> inner
+
+// Koka has no package-private exports. Integration modules use this qualified
+// capability to bind a public root without making the core depend on them.
+pub fun internal/root-handle(value : root<e>)
+    : kokaine/reactive/internal/model/root<e>
+  value.unwrap-root
 
 fun unwrap-signal(value : signal<a>)
                  : kokaine/reactive/internal/model/signal<a>
@@ -49,21 +40,6 @@ fun unwrap-signal(value : signal<a>)
 fun unwrap-memo(value : memo<a>) : kokaine/reactive/internal/model/memo<a>
   match value
     Public-memo(inner) -> inner
-
-fun unwrap-reentry(value : reentry<e>)
-                   : kokaine/reactive/internal/model/reentry<e>
-  match value
-    Public-reentry(inner) -> inner
-
-fun unwrap-structural-owner(value : structural-owner<e>)
-    : kokaine/reactive/internal/structural/structural-owner<e>
-  match value
-    Public-structural-owner(inner) -> inner
-
-fun unwrap-structural-transaction(value : structural-transaction<e>)
-    : kokaine/reactive/internal/structural/structural-transaction<e>
-  match value
-    Public-structural-transaction(inner) -> inner
 
 pub fun dispatch(root : root<e>,
                  action : () -> <signal-read,signal-write,pure|e> a)
@@ -114,9 +90,6 @@ pub fun signal/set(value : signal<a>, next : a) : signal-write ()
 pub fun signal/modify(value : signal<a>, update : a -> a) : signal-write ()
   runtime-signal-modify(value.unwrap-signal,update)
 
-pub fun signal/update(value : signal<a>, update : a -> a) : signal-write ()
-  value.modify(update)
-
 pub fun batch(root : root<e>, action : () -> <signal-write,pure|e1> a)
              : <signal-write,pure|e1> a
   runtime-batch(root.unwrap-root,action)
@@ -141,22 +114,6 @@ pub fun derive-always(root : root<e>, initial : a,
                      : <signal-write,pure> memo<a>
   derive-by(root,initial,calculate,fn(_,_) False)
 
-pub fun memo-by(root : root<e>, initial : a,
-                calculate : (previous : a) -> <signal-read,pure> a,
-                equals : (a,a) -> bool) : <signal-write,pure> memo<a>
-  Public-memo(runtime-memo-by(
-    root.unwrap-root,initial,calculate,equals))
-
-pub fun memo(root : root<e>, initial : a,
-             calculate : (previous : a) -> <signal-read,pure> a,
-             ?(==) : (a,a) -> bool) : <signal-write,pure> memo<a>
-  memo-by(root,initial,calculate,(==))
-
-pub fun memo-always(root : root<e>, initial : a,
-                    calculate : (previous : a) -> <signal-read,pure> a)
-                   : <signal-write,pure> memo<a>
-  memo-by(root,initial,calculate,fn(_,_) False)
-
 pub fun memo/get(value : memo<a>) : signal-read a
   runtime-memo-get(value.unwrap-memo)
 
@@ -169,72 +126,3 @@ pub fun create-effect(root : root<e>,
 pub fun on-cleanup(root : root<e>,
                    cleanup : () -> <signal-write,pure|e> ()) : exn ()
   runtime-on-cleanup(root.unwrap-root,cleanup)
-
-// Host callbacks capture the continuation generation which registered them.
-// Work created during re-entry is structurally owned by that generation.
-pub fun capture-reentry(root : root<e>) : exn reentry<e>
-  Public-reentry(runtime-capture-reentry(root.unwrap-root))
-
-pub fun reenter(value : reentry<e>,
-                action : () -> <signal-read,signal-write,pure|e> a)
-               : <exn|e> a
-  runtime-run-reentry(value.unwrap-reentry,action)
-
-// Koka has no package-private exports. These qualified names form the narrow
-// backend bridge used by `kokaine/dom` and are not application API.
-pub fun internal/open-structural-owner(root : root<e>)
-                                      : exn structural-owner<e>
-  Public-structural-owner(
-    runtime-open-structural-owner(root.unwrap-root))
-
-pub fun internal/with-structural-owner(
-          root : root<r>, owner : structural-owner<r>,
-          action : () -> <div,exn|e> a)
-         : <div,exn|e> a
-  runtime-with-structural-owner(
-    root.unwrap-root,owner.unwrap-structural-owner,action)
-
-pub fun internal/dispose-structural-owner(owner : structural-owner<e>)
-                                         : <exn|e> ()
-  runtime-dispose-structural-owner(owner.unwrap-structural-owner)
-
-pub fun internal/open-structural-transaction(root : root<e>)
-                                            : exn structural-transaction<e>
-  Public-structural-transaction(
-    runtime-open-structural-transaction(root.unwrap-root))
-
-pub fun internal/drain-structural-transaction(
-    transaction : structural-transaction<e>) : <div,exn|e> ()
-  runtime-drain-structural-transaction(
-    transaction.unwrap-structural-transaction)
-
-pub fun internal/structural-transaction-owned(
-    transaction : structural-transaction<e>) : bool
-  runtime-structural-transaction-owned(
-    transaction.unwrap-structural-transaction)
-
-pub fun internal/stage-structural-publication(
-    transaction : structural-transaction<e>,
-    prepare : () -> <exn|e> (), publish : () -> (),
-    rollback : () -> <exn|e> ()) : exn ()
-  runtime-stage-structural-publication(
-    transaction.unwrap-structural-transaction,
-    prepare,publish,rollback)
-
-pub fun internal/commit-structural-transaction(
-    transaction : structural-transaction<e>) : <div,exn|e> ()
-  runtime-commit-structural-transaction(
-    transaction.unwrap-structural-transaction)
-
-pub fun internal/abort-structural-transaction(
-    transaction : structural-transaction<e>) : <exn|e> ()
-  runtime-abort-structural-transaction(
-    transaction.unwrap-structural-transaction)
-
-// Run a direct-style browser task under the exact structural generation which
-// is current at the call site. Each suspension is registered with that owner;
-// later completion re-enters through a fresh Kokaine batch.
-pub fun run-async(root : root<<ui>>,
-                  action : () -> <async,signal-read,signal-write,pure,ui> ())
-                 : <signal-read,signal-write,pure,ui> ()
-  runtime-run-generation-async(root.unwrap-root,action)

@@ -25,13 +25,13 @@ pub struct report-model(
   report-flow-count          : signal<int>,
   report-flow-square         : memo<int>,
   report-flow-parity         : memo<string>,
-  report-flow-revision       : memo<int>,
-  report-flow-peak           : memo<int>,
+  report-flow-revision       : signal<int>,
+  report-flow-peak           : signal<int>,
   report-dynamic-name        : signal<string>,
   report-dynamic-count       : signal<string>,
   report-dynamic-name-mode   : signal<bool>,
   report-dynamic-output      : memo<string>,
-  report-dynamic-runs        : memo<int>,
+  report-dynamic-runs        : signal<int>,
   report-owner-visible       : signal<bool>,
   report-owner-active        : signal<bool>,
   report-owner-runs          : signal<int>,
@@ -41,6 +41,9 @@ pub struct report-model(
 
 fun magnitude(value : int) : int
   if value < 0 then 0 - value else value
+
+fun retain-maximum(previous : int, current : int) : int
+  if current > previous then current else previous
 
 pub fun report-create(root)
   val scheduler = scheduler-create(root)
@@ -61,15 +64,19 @@ pub fun report-create(root)
     if flow-count.get % 2 == 0 then "偶数" else "奇数"
   )
 
-  // These are state-entry computations: `previous` belongs to the memo
-  // capability, not to a second mutable signal hidden behind the example.
-  val flow-revision = memo(root,0,fn(previous)
-    val _ = flow-count.get
-    previous + 1
+  // Revision and peak are accumulated state, so the model exposes them as
+  // signals and updates them from effects with explicit dependencies.
+  val flow-revision = signal(root,0)
+  val flow-revision-dispose = create-effect(root,
+    fn() flow-count.get,
+    fn(_) flow-revision.modify(fn(previous) previous + 1)
   )
-  val flow-peak = memo(root,2,fn(previous)
-    val current = magnitude(flow-count.get)
-    if current > previous then current else previous
+  val flow-peak = signal(root,2)
+  val flow-peak-dispose = create-effect(root,
+    fn() magnitude(flow-count.get),
+    fn(current) flow-peak.modify(
+      fn(previous) retain-maximum(previous,current)
+    )
   )
 
   val dynamic-name = signal(root,"Koka")
@@ -83,11 +90,12 @@ pub fun report-create(root)
     then "访客 " ++ dynamic-name.get
     else "当前计数 " ++ dynamic-count.get
   )
-  val dynamic-runs = memo(root,0,fn(previous)
-    val _ = if dynamic-name-mode.get
-            then dynamic-name.get
-            else dynamic-count.get
-    previous + 1
+  val dynamic-runs = signal(root,0)
+  val dynamic-run-dispose = create-effect(root,
+    fn() if dynamic-name-mode.get
+         then dynamic-name.get
+         else dynamic-count.get,
+    fn(_) dynamic-runs.modify(fn(previous) previous + 1)
   )
 
   val owner-visible = signal(root,True)

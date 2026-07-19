@@ -66,7 +66,7 @@ pub fun same-root(left : root-key, right : root-key) : bool
 // permits one operation: hand that typed pair to a polymorphic consumer.
 pub type packed-capture
   Packed-capture(
-    run-packed : forall<r> (forall<e::E> (plane<e>,trace<e>,trace<e>) -> r) -> r
+    run-packed : forall<r> (forall<e::E> (plane<e>,trace<e>) -> r) -> r
   )
 
 pub type source<a>
@@ -79,13 +79,11 @@ pub type source<a>
   )
 
 
-// `Track-read` captures the exact suffix. `State-entry-read` injects the
-// latest committed state into the memo entry continuation without subscribing
-// the memo to its own source. `Sample-read` is the untracked override.
+// `Track-read` captures the exact suffix. `Sample-read` is the untracked
+// override.
 pub type read-mode
   Track-read
   Sample-read
-  State-entry-read
 
 pub value type signal<a>
   Signal(signal-source : source<a>)
@@ -120,23 +118,14 @@ pub type continuation-gate
 pub div type trace<e::E>
   Trace-end
   Trace-read(
-    trace-gate         : continuation-gate,
-    trace-owner        : ref<global,maybe<derive-producer>>,
-    trace-entry-target : maybe<trace<e>>,
-    trace-child        : ref<global,trace<e>>,
-    trace-frame        : ref<global,frame<e>>,
-    trace-resume       : (frame<e>) -> <div,exn|e> built-trace<e>,
-    trace-finalize     : () -> <div,exn|e> (),
-    trace-unlink       : () -> (),
-    trace-stale        : () -> bool
-  )
-  Trace-entry(
-    entry-gate     : continuation-gate,
-    entry-owner    : ref<global,maybe<derive-producer>>,
-    entry-child    : ref<global,trace<e>>,
-    entry-frame    : ref<global,frame<e>>,
-    entry-resume   : (frame<e>) -> <div,exn|e> built-trace<e>,
-    entry-finalize : () -> <div,exn|e> ()
+    trace-gate     : continuation-gate,
+    trace-owner    : ref<global,maybe<derive-producer>>,
+    trace-child    : ref<global,trace<e>>,
+    trace-frame    : ref<global,frame<e>>,
+    trace-resume   : (frame<e>) -> <div,exn|e> built-trace<e>,
+    trace-finalize : () -> <div,exn|e> (),
+    trace-unlink   : () -> (),
+    trace-stale    : () -> bool
   )
 
 pub type built-trace<e::E>
@@ -216,7 +205,6 @@ pub type plane<e::E>
     plane-queue         : work-queue<work<e>>,
     plane-work-group    : ref<global,maybe<work-group<work<e>>>>,
     plane-current       : ref<global,maybe<continuation-gate>>,
-    plane-current-entry : ref<global,maybe<trace<e>>>,
     plane-current-frame : ref<global,frame<e>>,
     plane-draft         : ref<global,maybe<ref<global,list<trace<e>>>>>,
     plane-retirement    : retirement-coordinator<e>
@@ -227,24 +215,11 @@ pub type root<e::E>
     root-key          : root-key,
     root-derive-plane : plane<total>,
     root-effect-plane : plane<e>,
-    root-work-publications
-                      : ref<global,maybe<work-queue<work-publication<e>>>>,
     root-lifetime     : lifetime-owner<e>,
     root-batch-depth  : ref<global,int>,
     root-flushing     : ref<global,bool>,
     root-disposing    : ref<global,bool>,
     root-disposed     : ref<global,bool>
-  )
-
-// A host callback cannot retain Koka's dynamic handler stack after its
-// originating turn returns. It can, however, retain the exact structural
-// capability of that turn: the effect plane, continuation gate, and frame
-// which own any reactive work created when the callback later re-enters.
-pub value type reentry<e::E>
-  Reentry(
-    reentry-root       : root<e>,
-    reentry-checkpoint : maybe<continuation-gate>,
-    reentry-frame      : frame<e>
   )
 
 pub type derive-producer

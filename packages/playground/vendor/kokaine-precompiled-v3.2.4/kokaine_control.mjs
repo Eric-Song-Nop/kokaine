@@ -41,10 +41,10 @@ export function branch(value, children) /* forall<a,e> (value : kokaine/reactive
      
     var x_10053 = $std_core_hnd._open_at1(1, function(value_0 /* kokaine/reactive/memo<110> */ ) {
          
-        var value_0_10060 = $std_core_hnd._open_none1(function(value_1 /* kokaine/reactive/memo<110> */ ) {
+        var value_0_10042 = $std_core_hnd._open_none1(function(value_1 /* kokaine/reactive/memo<110> */ ) {
             return value_1;
           }, value_0);
-        return $kokaine_reactive_internal_runtime.memo_fs_get(value_0_10060);
+        return $kokaine_reactive_internal_runtime.memo_fs_get(value_0_10042);
       }, value);
     if ($std_core_hnd._yielding()) {
       return $std_core_hnd.yield_extend(children);
@@ -76,10 +76,10 @@ export function when(condition, children, fallback) /* forall<e> (condition : ko
      
     var x_10055 = $std_core_hnd._open_at1(1, function(value_0 /* kokaine/reactive/memo<bool> */ ) {
          
-        var value_0_10060 = $std_core_hnd._open_none1(function(value_1 /* kokaine/reactive/memo<bool> */ ) {
+        var value_0_10042 = $std_core_hnd._open_none1(function(value_1 /* kokaine/reactive/memo<bool> */ ) {
             return value_1;
           }, value_0);
-        return $kokaine_reactive_internal_runtime.memo_fs_get(value_0_10060);
+        return $kokaine_reactive_internal_runtime.memo_fs_get(value_0_10042);
       }, condition);
      
     function next_10056(visible_10002) /* (bool) -> <kokaine/reactive/effects/signal-read,kokaine/html/html<156>> () */  {
