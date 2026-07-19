@@ -1,8 +1,20 @@
 {
-  "name": "create-kokaine",
+  "name": "@kokaine/create",
   "version": "0.1.0",
   "description": "Create a Kokaine application backed by npm and Vite",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Eric-Song-Nop/kokaine.git",
+    "directory": "packages/create-kokaine"
+  },
+  "homepage": "https://github.com/Eric-Song-Nop/kokaine/tree/main/packages/create-kokaine#readme",
+  "bugs": {
+    "url": "https://github.com/Eric-Song-Nop/kokaine/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "bin": {
     "create-kokaine": "bin/create-kokaine.js"
@@ -10,7 +22,8 @@
   "files": [
     "bin",
     "src",
-    "template"
+    "template",
+    "README.md"
   ],
   "scripts": {
     "test": "node --test"

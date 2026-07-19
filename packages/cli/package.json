@@ -3,6 +3,18 @@
   "version": "0.1.0",
   "description": "npm-native build, development, and diagnostics tooling for Kokaine",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Eric-Song-Nop/kokaine.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/Eric-Song-Nop/kokaine/tree/main/packages/cli#readme",
+  "bugs": {
+    "url": "https://github.com/Eric-Song-Nop/kokaine/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "bin": {
     "kokaine": "bin/kokaine.js"

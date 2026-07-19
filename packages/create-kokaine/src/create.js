@@ -29,7 +29,7 @@ export async function createProject(targetDirectory, options = {}) {
 
 export async function run(argv = process.argv.slice(2)) {
   if (argv.includes("--help") || argv.includes("-h")) {
-    process.stdout.write("Usage: npm create kokaine [directory]\n");
+    process.stdout.write("Usage: npm create @kokaine [directory]\n");
     return;
   }
   const target = argv.find((argument) => !argument.startsWith("-")) ?? "kokaine-app";
