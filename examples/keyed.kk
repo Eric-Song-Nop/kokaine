@@ -31,7 +31,7 @@ struct specimen-model(
 
 fun initial-specimens() : list<specimen>
   [ Specimen(17,"Continuation","runtime",0)
-  , Specimen(31,"Structural owner","lifetime",0)
+  , Specimen(31,"Lifetime scope","lifetime",0)
   , Specimen(42,"DOM range","renderer",0)
   ]
 
