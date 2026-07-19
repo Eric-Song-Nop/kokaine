@@ -309,44 +309,6 @@ fun test-final-control-retires-unpublished-bootstrap()
   else throw("bootstrap rollback left the root undisposable")
 
 
-fun run-state-entry-target-order(direct-first : bool)
-  val runs = hidden(0)
-  val observed = hidden(-1)
-  val (root,(direct,base,state)) = create-root fn(root)
-    val direct = signal(root,1)
-    val base = signal(root,10)
-    val upstream = derive(root,0,fn() base.get * 10)
-    val state = memo(root,100,fn(previous)
-      bump(runs)
-      previous + direct.get + upstream.get
-    )
-    (direct,base,state)
-
-  val initial-value = sample(root){ state.get }
-  if initial-value == 201 && load(runs) == 1 then ()
-  else throw("state entry fixture did not initialize once")
-
-  dispatch(root)
-    batch(root)
-      if direct-first then
-        direct.set(2)
-        base.set(20)
-      else
-        base.set(20)
-        direct.set(2)
-      store(observed,state.get)
-
-  val final-value = sample(root){ state.get }
-  if load(observed) == 403 && final-value == 403 &&
-     load(runs) == 2
-  then ()
-  else throw("entry target advanced previous more than once")
-  root.dispose()
-
-fun test-state-entry-targeted-input-coherence()
-  run-state-entry-target-order(True)
-  run-state-entry-target-order(False)
-
 fun test-pure-phase-guards-every-raw-suffix-and-cross-root()
   val rejections = hidden(0)
   val (foreign,foreign-value) : (root<total>,signal<int>) =
@@ -486,7 +448,6 @@ pub fun main()
   test-owner-gate-defers-to-lazy-parent-dependency()
   test-batch-targeted-pull-failure-isolation()
   test-final-control-retires-unpublished-bootstrap()
-  test-state-entry-targeted-input-coherence()
   test-pure-phase-guards-every-raw-suffix-and-cross-root()
   test-pure-phase-rejects-child-registration-atomically()
   test-pure-phase-rejects-cleanup-registration-atomically()

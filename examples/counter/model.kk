@@ -3,7 +3,8 @@
 
   This module deliberately contains no DOM vocabulary. It makes the reactive
   topology readable on its own: ordinary sources, dynamic selection,
-  equality-pruned derivation, stateful entry, untracked sampling, and sinks.
+  equality-pruned derivation, explicit accumulated state, untracked sampling,
+  and sinks.
 --------------------------------------------------------------------------*/
 module examples/counter/model
 
@@ -31,11 +32,11 @@ pub struct lab-model(
   lab-total-value     : memo<int>,
   lab-square-value    : memo<int>,
   lab-parity-value    : memo<string>,
-  lab-peak-value      : memo<int>,
+  lab-peak-value      : signal<int>,
   lab-band-value      : memo<lab-band>,
-  lab-band-revisions  : memo<int>,
+  lab-band-revisions  : signal<int>,
   lab-sampled-operator : memo<string>,
-  lab-heartbeat-runs  : memo<int>,
+  lab-heartbeat-runs  : signal<int>,
   lab-effect-runs     : signal<int>,
   lab-effect-snapshot : signal<string>
 )
@@ -43,6 +44,9 @@ pub struct lab-model(
 
 pub fun lab-magnitude(value : int) : int
   if value < 0 then 0 - value else value
+
+fun lab-retain-maximum(previous : int, current : int) : int
+  if current > previous then current else previous
 
 pub fun lab-band-of(value : int) : string
   if value < 0 then "NEGATIVE"
@@ -82,11 +86,14 @@ pub fun lab-create(root)
     if active-value.get % 2 == 0 then "EVEN" else "ODD"
   )
 
-  // `previous` enters through a state-entry continuation. The peak survives
-  // later values without a second mutable source.
-  val peak-value = memo(root,0,fn(previous)
-    val current = lab-magnitude(active-value.get)
-    if current > previous then current else previous
+  // Accumulated values are explicit state. The effect tracks the pure active
+  // derivation; its apply phase does not add dependencies.
+  val peak-value = signal(root,0)
+  val peak-dispose = create-effect(root,
+    fn() lab-magnitude(active-value.get),
+    fn(current) peak-value.modify(
+      fn(previous) lab-retain-maximum(previous,current)
+    )
   )
 
   // Recompute on every active change, but publish only when the band changes.
@@ -99,9 +106,10 @@ pub fun lab-create(root)
       Lab-band(lab-band-of(current),current)
     ,fn(left,right) left.lab-band-index == right.lab-band-index
   )
-  val band-revisions = memo(root,0,fn(previous)
-    val current-band = band-value.get
-    previous + 1
+  val band-revisions = signal(root,0)
+  val band-revision-dispose = create-effect(root,
+    fn() band-value.get,
+    fn(_) band-revisions.modify(fn(previous) previous + 1)
   )
 
   // The operator is sampled only when the tracked active value invalidates
@@ -111,9 +119,10 @@ pub fun lab-create(root)
     untrack(fn() operator.get)
   )
 
-  val heartbeat-runs = memo(root,0,fn(previous)
-    val pulse = heartbeat.get
-    previous + 1
+  val heartbeat-runs = signal(root,0)
+  val heartbeat-run-dispose = create-effect(root,
+    fn() heartbeat.get,
+    fn(_) heartbeat-runs.modify(fn(previous) previous + 1)
   )
 
   val effect-runs = signal(root,0)

@@ -34,9 +34,8 @@ pub alias dispose-fn = () -> ui ()
 pub alias ownership-release-fn = () -> ui bool
 
 // Setup installs a callback and returns either a disposer or a setup failure.
-// The completion flag is reserved for protocol compatibility. Primitive
-// Kokaine awaits are one-shot, accept only the first callback, and pass `True`.
-pub alias await-setup<a> = ((await-result<a>,bool) -> ui ()) -> ui error<dispose-fn>
+// Primitive Kokaine awaits are one-shot and accept only the first callback.
+pub alias await-setup<a> = (await-result<a> -> ui ()) -> ui error<dispose-fn>
 
 pub effect async-await
   // Suspend the current strand until the host handler supplies a result.
@@ -185,9 +184,9 @@ pub fun async-host(action : () -> ui a) : async a
 pub fun async-schedule(action : () -> ui ()) : async ()
   async-schedule-ioc(async-scope,action)
 
-// Acquire a lease for a host resource. By default it follows the reactive
-// generation rather than a structured cancellation scope; a nearer structured
-// or Resource ledger may further constrain or promote that lifetime.
+// Acquire a lease for a host resource. The active ownership interpreter
+// decides its default lifetime; a nearer structured or Resource ledger may
+// further constrain or promote that lifetime.
 pub fun async-own(dispose : dispose-fn) : async dispose-fn
   val release = async-own-disposer(dispose)
   fn()
@@ -283,7 +282,7 @@ pub fun setup/await-error(
     setup : ((a) -> ui ()) -> ui error<dispose-fn>)
     : async error<a>
   val wrapped = fn(complete)
-    setup(fn(value) complete(Result(value),True))
+    setup(fn(value) complete(Result(value)))
   val result = do-await(wrapped,async-scope,label)
   result.error(label)
 
@@ -293,7 +292,7 @@ pub fun setup/await-error1(
     setup : (error<a> -> ui ()) -> ui error<dispose-fn>)
     : async error<a>
   val wrapped = fn(complete)
-    setup(fn(value) complete(value.await-result,True))
+    setup(fn(value) complete(value.await-result))
   val result = do-await(wrapped,async-scope,label)
   result.error(label)
 

@@ -1,0 +1,110 @@
+/*--------------------------------------------------------------------------
+  Host re-entry through a captured reactive lifetime.
+
+  Re-entry is an integration capability: it lets a retained host callback
+  restore the reactive context which registered it. The core scheduler owns
+  the context primitives, but does not own the host callback policy.
+--------------------------------------------------------------------------*/
+module interface kokaine/reactive/integration/internal/reentry
+ 
+//------------------------------
+//#kki: import declarations
+ 
+import std/core/types = std/core/types pub = "";
+import std/core/hnd = std/core/hnd pub = "";
+import std/core/exn = std/core/exn pub = "";
+import std/core/bool = std/core/bool pub = "";
+import std/core/order = std/core/order pub = "";
+import std/core/char = std/core/char pub = "";
+import std/core/int = std/core/int pub = "";
+import std/core/vector = std/core/vector pub = "";
+import std/core/string = std/core/string pub = "";
+import std/core/sslice = std/core/sslice pub = "";
+import std/core/list = std/core/list pub = "";
+import std/core/maybe = std/core/maybe pub = "";
+import std/core/maybe2 = std/core/maybe2 pub = "";
+import std/core/either = std/core/either pub = "";
+import std/core/result = std/core/result pub = "";
+import std/core/tuple = std/core/tuple pub = "";
+import std/core/lazy = std/core/lazy pub = "";
+import std/core/show = std/core/show pub = "";
+import std/core/debug = std/core/debug pub = "";
+import std/core/delayed = std/core/delayed pub = "";
+import std/core/console = std/core/console pub = "";
+import std/core = std/core = "";
+import kokaine/reactive/internal/model = kokaine/reactive/internal/model = "";
+import kokaine/reactive/effects = kokaine/reactive/effects = "";
+import kokaine/reactive/internal/lifetime = kokaine/reactive/internal/lifetime = "";
+import kokaine/reactive/internal/scheduler = kokaine/reactive/internal/scheduler = "";
+import kokaine/reactive/internal/handlers = kokaine/reactive/internal/handlers = "";
+import std/core/undiv = std/core/undiv = "";
+import kokaine/reactive/internal/work-transaction = kokaine/reactive/internal/work-transaction inline = "";
+ 
+//------------------------------
+//#kki: external imports
+ 
+ 
+//------------------------------
+//#kki: fixity declarations
+ 
+ 
+//------------------------------
+//#kki: local imported aliases
+ 
+// An alias for pure effects: a pure function always returns the same result
+// when called with the same arguments but may not terminate or raise an exception.
+local alias std/core/pure[55,1,55,26] :: E = <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/div :: X)> = 1;
+ 
+//------------------------------
+//#kki: type declarations
+ 
+pub value{0,4,8} type reentry[18,1,23,3] <(e :: E)> :: E -> V {
+  con Reentry[19,3,19,9](reentry-root: (kokaine/reactive/internal/model/root :: E -> V)<(e :: E)>, reentry-checkpoint: (std/core/types/maybe :: V -> V)<kokaine/reactive/internal/model/continuation-gate>, reentry-frame: (kokaine/reactive/internal/model/frame :: E -> V)<(e :: E)>){0,4,8} : forall<(e :: E)> (reentry-root : (kokaine/reactive/internal/model/root :: E -> V)<(e :: E)>, reentry-checkpoint : (std/core/types/maybe :: V -> V)<kokaine/reactive/internal/model/continuation-gate>, reentry-frame : (kokaine/reactive/internal/model/frame :: E -> V)<(e :: E)>) -> (reentry :: E -> V)<(e :: E)> = 1;
+};
+ 
+//------------------------------
+//#kki: declarations
+ 
+// Automatically generated. Retrieves the `reentry-root` constructor field of the `:reentry` type.
+fun reentry/reentry-root[20,5,20,16] : forall<(e :: E)> (^ reentry : (reentry :: E -> V)<(e :: E)>) -> (kokaine/reactive/internal/model/root :: E -> V)<(e :: E)>;
+// Automatically generated. Retrieves the `reentry-checkpoint` constructor field of the `:reentry` type.
+fun reentry/reentry-checkpoint[21,5,21,22] : forall<(e :: E)> (^ reentry : (reentry :: E -> V)<(e :: E)>) -> (std/core/types/maybe :: V -> V)<kokaine/reactive/internal/model/continuation-gate>;
+// Automatically generated. Retrieves the `reentry-frame` constructor field of the `:reentry` type.
+fun reentry/reentry-frame[22,5,22,17] : forall<(e :: E)> (^ reentry : (reentry :: E -> V)<(e :: E)>) -> (kokaine/reactive/internal/model/frame :: E -> V)<(e :: E)>;
+pub fun reentry/@copy[19,3,19,9] : forall<(e :: E)> (@this : (reentry :: E -> V)<(e :: E)>, reentry-root : (std/core/types/@optional :: V -> V)<(kokaine/reactive/internal/model/root :: E -> V)<(e :: E)>>, reentry-checkpoint : (std/core/types/@optional :: V -> V)<(std/core/types/maybe :: V -> V)<kokaine/reactive/internal/model/continuation-gate>>, reentry-frame : (std/core/types/@optional :: V -> V)<(kokaine/reactive/internal/model/frame :: E -> V)<(e :: E)>>) -> (reentry :: E -> V)<(e :: E)>;
+pub fun reentry/root[25,9,25,20] : forall<(e :: E)> (value : (reentry :: E -> V)<(e :: E)>) -> (kokaine/reactive/internal/model/root :: E -> V)<(e :: E)>;
+// monadic lift
+fun @mlift-capture-reentry@10054[1,0,1,0] : forall<(e :: E),(_e1 :: E)> (root : (kokaine/reactive/internal/model/root :: E -> V)<(e :: E)>, wild_ : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (reentry :: E -> V)<(e :: E)>;
+// Capture is non-resumptive: it records the lifetime capability already
+// established by the current exact-read continuation. The host callback may
+// be invoked repeatedly while that generation remains live.
+pub fun capture-reentry[32,9,32,23] : forall<(e :: E)> (root : (kokaine/reactive/internal/model/root :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (reentry :: E -> V)<(e :: E)>;
+// monadic lift
+fun @mlift-reentry-turn@10055[1,0,1,0] : forall<a,(e :: E)> (action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)|(e :: E)> a, root : (kokaine/reactive/internal/model/root :: E -> V)<(e :: E)>, wild_ : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>|(e :: E)> a;
+fun reentry-turn[38,5,38,16] : forall<a,(e :: E)> (root : (kokaine/reactive/internal/model/root :: E -> V)<(e :: E)>, action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)|(e :: E)> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)|(e :: E)> a;
+// monadic lift
+fun @mlift-run-reentry@10056[1,0,1,0] : forall<a,(e :: E)> (action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)|(e :: E)> a, checkpoint : (std/core/types/maybe :: V -> V)<kokaine/reactive/internal/model/continuation-gate>, current : (kokaine/reactive/internal/model/frame :: E -> V)<(e :: E)>, root : (kokaine/reactive/internal/model/root :: E -> V)<(e :: E)>, wild_@0 : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a;
+// monadic lift
+fun @mlift-run-reentry@10057[1,0,1,0] : forall<a,(e :: E)> (action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)|(e :: E)> a, value : (reentry :: E -> V)<(e :: E)>, wild_ : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a;
+// Reinstall only Kokaine's reactive handlers and captured continuation
+// context. Arbitrary lexical user handlers are intentionally not fabricated.
+pub fun run-reentry[49,9,49,19] : forall<a,(e :: E)> (value : (reentry :: E -> V)<(e :: E)>, action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)|(e :: E)> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a;
+// monadic lift
+fun @mlift-run-retirement-reentry@10058[1,0,1,0] : forall<a,(e :: E)> (action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)|(e :: E)> a, value : (reentry :: E -> V)<(e :: E)>, wild_ : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a;
+// Retirement marks the captured frame dead before finalizers run. A parked
+// async strand still has to be discontinued so its lexical `finally` clauses
+// unwind, but it must not gain a fresh registration or host batch.
+pub fun run-retirement-reentry[71,9,71,30] : forall<a,(e :: E)> (value : (reentry :: E -> V)<(e :: E)>, action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)|(e :: E)> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a;
+ 
+fun @kokaine-cache-phase[1,0,1,0] : () -> std/core/types/int;
+ 
+//------------------------------
+//#kki: external declarations
+ 
+ 
+//------------------------------
+//#kki: inline definitions
+ 
+//.inline-section
+fun @kokaine-cache-phase // inline size: 1
+  = fn(){ 0; };

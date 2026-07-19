@@ -2398,7 +2398,7 @@ main {
   border-color: var(--orange);
 }
 
-.kk-flow__node--memo {
+.kk-flow__node--state {
   background: var(--mint-soft);
   border-color: #45b792;
 }

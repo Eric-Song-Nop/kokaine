@@ -4,6 +4,7 @@
 module window-event-lifecycle
 
 import kokaine/reactive
+import kokaine/reactive/async
 import kokaine/html
 import kokaine/dom
 import kokaine/web/window

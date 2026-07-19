@@ -33,7 +33,6 @@ import kokaine/reactive/effects = kokaine/reactive/effects = "";
 import kokaine/reactive/internal/scheduler = kokaine/reactive/internal/scheduler = "";
 import std/core/undiv = std/core/undiv = "";
 import kokaine/internal/registry = kokaine/internal/registry inline = "";
-import kokaine/reactive/internal/work-transaction = kokaine/reactive/internal/work-transaction inline = "";
  
 //------------------------------
 //#kki: external imports

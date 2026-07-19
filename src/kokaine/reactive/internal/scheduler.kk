@@ -14,38 +14,17 @@ import std/core/undiv
 // Source-local continuation indexing and invalidation
 // --------------------------------------------------------------------------
 
-pub fun pack-capture(plane : plane<e>, target : trace<e>, owner : trace<e>)
+pub fun pack-capture(plane : plane<e>, current : trace<e>)
                 : packed-capture
-  Packed-capture(fn(consume) consume(plane,target,owner))
-
-pub fun packed-active(packed : packed-capture) : bool
-  match packed
-    Packed-capture(run) -> run(fn(_,target,owner)
-      match owner.trace-state-of
-        Capture-dead -> False
-        _ ->
-          match target.trace-state-of
-            Capture-dead -> False
-            _ -> True
-    )
+  Packed-capture(fn(consume) consume(plane,current))
 
 pub fun cut-capture(packed : packed-capture) : ()
   match packed
     Packed-capture(run) ->
-      run(fn(plane,target,owner)
-        match owner.trace-state-of
+      run(fn(plane,current)
+        match current.trace-state-of
           Capture-dead -> ()
-          _ ->
-            match target.trace-state-of
-              Capture-running ->
-                match owner.trace-state-of
-                  // A Live owner belongs to the entry generation currently
-                  // being replaced. Its upstream commit is already observed
-                  // by the running entry calculation, so it must not schedule
-                  // a second recurrence. New-generation owners remain Draft.
-                  Capture-live -> ()
-                  _ -> enqueue-trace(plane,target)
-              _ -> enqueue-trace(plane,target)
+          _ -> enqueue-trace(plane,current)
       )
 
 pub fun pending-ancestor-loop(parent : maybe<continuation-gate>) : <div> bool
@@ -65,7 +44,7 @@ pub fun pending-ancestor(parent : maybe<continuation-gate>) : bool
 pub fun enqueue-trace(plane : plane<e>, current : trace<e>) : ()
   match current
     Trace-end -> ()
-    Trace-read(gate,_,_,_,_,_,_,_,_) ->
+    Trace-read(gate,_,_,_,_,_,_,_) ->
       val state = gate.gate-state
       match load(state)
         Capture-live ->
@@ -77,17 +56,6 @@ pub fun enqueue-trace(plane : plane<e>, current : trace<e>) : ()
           // an effect-plane final-control unwind preserves that exact ticket.
           store(state,Capture-pending)
         _ -> ()
-    Trace-entry(gate,_,_,_,_,_) ->
-      val state = gate.gate-state
-      match load(state)
-        Capture-live ->
-          store(state,Capture-pending)
-          route-resume(plane.plane-queue,Resume-work(current))
-        Capture-running ->
-          // A write from the currently resumed suffix schedules a later turn;
-          // the active queue ticket remains in place until this turn settles.
-          store(state,Capture-pending)
-        _ -> ()
 
 pub fun notify-source(source : source<a>) : ()
   source.source-captures.snapshot.foreach(cut-capture)
@@ -96,7 +64,7 @@ pub fun notify-source(source : source<a>) : ()
 pub fun activate-trace-loop(plane : plane<e>, current : trace<e>) : <div> ()
   match current
     Trace-end -> ()
-    Trace-read(gate,_,entry,child,current-frame-slot,_,_,_,stale) ->
+    Trace-read(gate,_,child,current-frame-slot,_,_,_,stale) ->
       val state = gate.gate-state
       match load(state)
         Capture-draft ->
@@ -104,20 +72,7 @@ pub fun activate-trace-loop(plane : plane<e>, current : trace<e>) : <div> ()
           store(state,Capture-live)
           store(current-frame.frame-lifetime.lifetime-token,Scope-live)
           activate-trace-loop(plane,load(child))
-          if stale() then
-            match entry
-              Nothing -> enqueue-trace(plane,current)
-              Just(target) -> enqueue-trace(plane,target)
-          else ()
-        _ -> ()
-    Trace-entry(gate,_,child,current-frame-slot,_,_) ->
-      val state = gate.gate-state
-      match load(state)
-        Capture-draft ->
-          val current-frame = load(current-frame-slot)
-          store(state,Capture-live)
-          store(current-frame.frame-lifetime.lifetime-token,Scope-live)
-          activate-trace-loop(plane,load(child))
+          if stale() then enqueue-trace(plane,current) else ()
         _ -> ()
 
 pub fun activate-trace(plane : plane<e>, current : trace<e>) : ()
@@ -152,21 +107,6 @@ pub fun work-stale(current : work<e>) : bool
         Capture-draft -> True
         Capture-live -> True
         _ -> False
-
-pub fun take-work-loop(values : list<work<e>>, skipped : list<work<e>>)
-                  : <div> (maybe<work<e>>,list<work<e>>)
-  match values
-    Nil -> (Nothing,skipped.reverse)
-    Cons(current,rest) ->
-      if current.work-runnable
-      then (Just(current),skipped.reverse ++ rest)
-      elif current.work-stale
-      then take-work-loop(rest,skipped)
-      else take-work-loop(rest,Cons(current,skipped))
-
-pub fun take-work(values : list<work<e>>)
-             : (maybe<work<e>>,list<work<e>>)
-  pretend-no-div{ take-work-loop(values,[]) }
 
 tail fun restore-skipped(queue : work-queue<work<e>>,
                          skipped : list<work<e>>) : <div> ()
@@ -309,9 +249,7 @@ pub fun resume-capture(plane : plane<e>, current : trace<e>)
                    : <div|e> error<()>
   match current
     Trace-end -> Ok(())
-    Trace-read(gate,_,_,child,current-frame-slot,resume,_,_,_) ->
-      resume-node(plane,current,gate,child,current-frame-slot,resume)
-    Trace-entry(gate,_,child,current-frame-slot,resume,_) ->
+    Trace-read(gate,_,child,current-frame-slot,resume,_,_,_) ->
       resume-node(plane,current,gate,child,current-frame-slot,resume)
 pub fun run-bootstrap(scope : continuation-scope<e>) : <div|e> error<()>
   match load(scope.scope-lifetime.lifetime-token)
@@ -356,8 +294,7 @@ pub fun run-derive-work(plane : plane<total>, current : work<total>)
       Resume-work(capture) ->
         match capture
           Trace-end -> Nothing
-          Trace-read(_,slot,_,_,_,_,_,_,_) -> load(slot)
-          Trace-entry(_,slot,_,_,_,_) -> load(slot)
+          Trace-read(_,slot,_,_,_,_,_,_) -> load(slot)
       Bootstrap-work(_,slot) -> load(slot)
     match owner
       Nothing ->
@@ -415,406 +352,6 @@ pub fun run-next-pure(plane : plane<total>) : error<bool>
   pretend-no-div{ run-next-derived(plane) }
 
 
-// --------------------------------------------------------------------------
-// Isolated bootstrap transactions
-// --------------------------------------------------------------------------
-
-abstract type scheduler-transaction<e::E>
-  Scheduler-transaction(
-    transaction-root-key     : root-key,
-    transaction-derive-group : work-group<work<total>>,
-    transaction-effect-group : work-group<work<e>>,
-    transaction-publications : work-queue<work-publication<e>>
-  )
-
-pub noinline fun scheduler-transaction/state(
-    transaction : scheduler-transaction<e>) : work-transaction-state
-  transaction.transaction-derive-group.state
-
-// Internal invariant probe used by transaction/root-retirement tests. A
-// terminal capability must not retain publication callbacks after ownership
-// has been claimed.
-pub fun scheduler-transaction/has-pending-publications(
-    transaction : scheduler-transaction<e>) : bool
-  !transaction.transaction-publications.values.is-nil
-
-fun plane-has-group(plane : plane<e>, expected : work-group<work<e>>) : bool
-  match load(plane.plane-work-group)
-    Nothing -> False
-    Just(actual) -> actual.same-transaction(expected)
-
-fun check-transaction-root(root : root<e>,
-                           transaction : scheduler-transaction<e>) : exn ()
-  if same-root(root.root-key,transaction.transaction-root-key) &&
-     !load(root.root-disposed) && !load(root.root-disposing)
-  then ()
-  else throw("scheduler transaction used outside its live reactive root")
-
-fun check-active-transaction(root : root<e>,
-                             transaction : scheduler-transaction<e>) : exn ()
-  check-transaction-root(root,transaction)
-  val publications-active = match load(root.root-work-publications)
-    Just(publications) -> publications.same(
-      transaction.transaction-publications)
-    Nothing -> False
-  if root.root-derive-plane.plane-has-group(
-       transaction.transaction-derive-group) &&
-     root.root-effect-plane.plane-has-group(
-       transaction.transaction-effect-group) && publications-active
-  then ()
-  else throw("scheduler transaction is not active on this root")
-
-pub fun open-work-transaction(root : root<e>) : exn scheduler-transaction<e>
-  check-registration(root)
-  if load(root.root-derive-plane.plane-work-group).is-just ||
-     load(root.root-effect-plane.plane-work-group).is-just ||
-     load(root.root-work-publications).is-just
-  then throw("a scheduler transaction is already active on this root")
-  else lift-exn(fn(){
-    val state = new-work-transaction-state()
-    val derive-group : work-group<work<total>> = new-work-group(state)
-    val effect-group : work-group<work<e>> = new-work-group(state)
-    val publications : work-queue<work-publication<e>> = new-work-queue()
-    store(root.root-derive-plane.plane-work-group,Just(derive-group))
-    store(root.root-effect-plane.plane-work-group,Just(effect-group))
-    store(root.root-work-publications,Just(publications))
-    Scheduler-transaction(
-      root.root-key,derive-group,effect-group,publications)
-  })
-
-// Structural adapters can be invoked recursively while an outer bootstrap is
-// draining. They must join that exact transaction instead of opening a second
-// pair of local groups or scanning the global frontier. The returned value is
-// only a borrowed capability; ownership remains with the caller which opened
-// the transaction.
-pub fun current-work-transaction(root : root<e>)
-                                 : exn maybe<scheduler-transaction<e>>
-  check-registration(root)
-  match (load(root.root-derive-plane.plane-work-group),
-         load(root.root-effect-plane.plane-work-group),
-         load(root.root-work-publications))
-    (Nothing,Nothing,Nothing) -> Nothing
-    (Just(derive-group),Just(effect-group),Just(publications)) ->
-      if !derive-group.same-transaction(effect-group)
-      then throw("reactive planes disagree about the active transaction")
-      else match derive-group.state
-        Work-open -> Just(Scheduler-transaction(
-          root.root-key,derive-group,effect-group,publications))
-        Work-draining -> Just(Scheduler-transaction(
-          root.root-key,derive-group,effect-group,publications))
-        _ -> throw("cannot join a terminal scheduler transaction")
-    _ -> throw("reactive root has a partially attached transaction")
-
-tail fun restore-group-skipped(group : work-group<work<e>>,
-                               skipped : list<work<e>>) : <div> ()
-  match skipped
-    Nil -> ()
-    Cons(current,rest) ->
-      group.prepend(current)
-      restore-group-skipped(group,rest)
-
-tail fun take-group-work-loop(group : work-group<work<e>>,
-                              skipped : list<work<e>>)
-                             : <div> maybe<work<e>>
-  match group.pop
-    Nothing ->
-      restore-group-skipped(group,skipped)
-      Nothing
-    Just(current) ->
-      if current.work-runnable then
-        restore-group-skipped(group,skipped)
-        Just(current)
-      elif current.work-stale then take-group-work-loop(group,skipped)
-      else take-group-work-loop(group,Cons(current,skipped))
-
-fun take-group-work(group : work-group<work<e>>) : maybe<work<e>>
-  pretend-no-div{ take-group-work-loop(group,[]) }
-
-fun restore-group-deferred(group : work-group<work<total>>,
-                           deferred : list<work<total>>) : ()
-  group.append-values(pretend-no-div{ deferred.reverse })
-
-fun run-next-derived-group-loop(plane : plane<total>,
-                                group : work-group<work<total>>,
-                                deferred : list<work<total>>)
-                               : div error<bool>
-  match take-group-work(group)
-    Nothing ->
-      restore-group-deferred(group,deferred)
-      Ok(False)
-    Just(current) ->
-      match run-derive-work(plane,current)
-        Settle-ok ->
-          if current.work-stale then () else group.append(current)
-          restore-group-deferred(group,deferred)
-          Ok(True)
-        Settle-deferred ->
-          run-next-derived-group-loop(plane,group,Cons(current,deferred))
-        Settle-failed(failure) ->
-          if current.work-stale then () else group.append(current)
-          restore-group-deferred(group,deferred)
-          Error(failure)
-
-fun run-next-derived-group(plane : plane<total>,
-                           group : work-group<work<total>>) : error<bool>
-  pretend-no-div{ run-next-derived-group-loop(plane,group,[]) }
-
-fun run-next-effect-group(plane : plane<e>, group : work-group<work<e>>)
-                      : <div|e> error<bool>
-  match take-group-work(group)
-    Nothing -> Ok(False)
-    Just(current) ->
-      // Preserve the concrete ticket across an ambient final-control unwind.
-      group.prepend(current)
-      match run-work-raw(plane,current)
-        Error(failure) -> Error(failure)
-        Ok(_) -> Ok(True)
-
-fun drain-work-transaction-loop(root : root<e>,
-                                transaction : scheduler-transaction<e>)
-                               : <div|e> error<()>
-  match run-next-derived-group(
-          root.root-derive-plane,transaction.transaction-derive-group)
-    Error(failure) -> Error(failure)
-    Ok(True) -> drain-work-transaction-loop(root,transaction)
-    Ok(False) ->
-      match run-next-effect-group(
-              root.root-effect-plane,transaction.transaction-effect-group)
-        Error(failure) -> Error(failure)
-        Ok(True) -> drain-work-transaction-loop(root,transaction)
-        Ok(False) -> Ok(())
-
-pub fun drain-work-transaction(root : root<e>,
-                               transaction : scheduler-transaction<e>)
-                              : <div,exn|e> ()
-  check-active-transaction(root,transaction)
-  val derive-group = transaction.transaction-derive-group
-  if !derive-group.begin-drain
-  then lift-div(fn(){
-    throw("scheduler transaction can only be drained while open")
-  })
-  else
-    val completed = cell(False)
-    val (result,transitioned) = lift-exn(fn()
-      finally(
-        fn() lift-div(fn(){
-          if load(completed) then () else
-            // `capture-error` cannot observe an abortive final control operation.
-            // Dynamically abort and detach the local groups before control
-            // returns to the host, just as abandoned continuation drafts roll
-            // back from their surrounding `finally`.
-            val _ = capture-error(fn(){
-              abort-work-transaction(root,transaction)
-            })
-            ()
-        }),
-        fn()
-          val result = drain-work-transaction-loop(root,transaction)
-          val transitioned = match result
-            Error(failure) -> derive-group.mark-failed(failure)
-            Ok(_) -> derive-group.mark-ready
-          if transitioned then
-            // Ordinary failure is a completed drain with Work-failed state; only
-            // a non-local exit before this point should trigger dynamic abort.
-            store(completed,True)
-          else ()
-          (result,transitioned)
-      )
-    )
-    if !transitioned
-    then throw("scheduler transaction could not enter a terminal drain state")
-    else result.untry
-
-fun detach-matching-group(plane : plane<e>,
-                          expected : work-group<work<e>>) : ()
-  match load(plane.plane-work-group)
-    Nothing -> ()
-    Just(actual) ->
-      if actual.same-transaction(expected)
-      then store(plane.plane-work-group,Nothing)
-      else ()
-
-fun detach-matching-publications(
-      root : root<e>, expected : work-queue<work-publication<e>>) : ()
-  match load(root.root-work-publications)
-    Nothing -> ()
-    Just(actual) ->
-      if actual.same(expected)
-      then store(root.root-work-publications,Nothing)
-      else ()
-
-pub fun stage-work-publication(
-      root : root<e>, transaction : scheduler-transaction<e>,
-      prepare : () -> <exn|e> (), publish : () -> (),
-      rollback : () -> <exn|e> ()) : exn ()
-  check-active-transaction(root,transaction)
-  match transaction.state
-    Work-open -> transaction.transaction-publications.append(
-      Work-publication(prepare,publish,rollback))
-    Work-draining -> transaction.transaction-publications.append(
-      Work-publication(prepare,publish,rollback))
-    _ -> throw("cannot enlist publication in a terminal scheduler transaction")
-
-tail fun prepare-work-publications-loop(values : list<work-publication<e>>)
-                                        : <exn|e> ()
-  match values
-    Nil -> ()
-    Cons(current,rest) ->
-      val prepare = current.publication-prepare
-      val _ = prepare()
-      prepare-work-publications-loop(rest)
-
-fun prepare-work-publications(values : list<work-publication<e>>)
-                              : <exn|e> ()
-  prepare-work-publications-loop(values)
-
-tail fun publish-work-publications-loop(values : list<work-publication<e>>)
-                                        : ()
-  match values
-    Nil -> ()
-    Cons(current,rest) ->
-      val publish = current.publication-publish
-      val _ = publish()
-      publish-work-publications-loop(rest)
-
-fun publish-work-publications(values : list<work-publication<e>>) : ()
-  publish-work-publications-loop(values)
-
-pub fun commit-work-transaction(root : root<e>,
-                                transaction : scheduler-transaction<e>)
-                               : <div,exn|e> ()
-  lift-div(fn()
-    check-active-transaction(root,transaction)
-    val derive-group = transaction.transaction-derive-group
-    val effect-group = transaction.transaction-effect-group
-    match derive-group.state
-      Work-ready ->
-        val completed = cell(False)
-        finally(
-          fn() {
-            if load(completed) then ()
-            else abort-work-transaction(root,transaction)
-          },
-          fn()
-            val publications = transaction.transaction-publications.values
-            // Every participant must prepare successfully before the scheduler
-            // lease is detached or any total state publication becomes visible.
-            prepare-work-publications(publications)
-            val derive-residual = derive-group.take-all
-            val effect-residual = effect-group.take-all
-            root.root-derive-plane.detach-matching-group(derive-group)
-            root.root-effect-plane.detach-matching-group(effect-group)
-            root.detach-matching-publications(
-              transaction.transaction-publications)
-            root.root-derive-plane.plane-queue.append-values(derive-residual)
-            root.root-effect-plane.plane-queue.append-values(effect-residual)
-            if derive-group.mark-committed then
-              // Publication callbacks are deliberately total. Once the state is
-              // committed there is no fallible gap between participant tables.
-              publish-work-publications(publications)
-              transaction.transaction-publications.clear
-              derive-group.release-rollback
-              effect-group.release-rollback
-              store(completed,True)
-            else throw("scheduler transaction commit lost its ready state")
-        )
-      _ -> throw("scheduler transaction must drain successfully before commit")
-  )
-
-tail fun prepend-bootstrap-retirements(
-    values : list<work<e>>, collected : list<retirement-work<e>>)
-    : <div> list<retirement-work<e>>
-  match values
-    Nil -> collected
-    Cons(current,rest) ->
-      match current
-        Bootstrap-work(scope,_) -> prepend-bootstrap-retirements(
-          rest,Cons(scope-retirement-work(scope),collected))
-        // Scheduler routing keeps every resumption on the global frontier.
-        // Ignore a malformed local resume instead of retiring a live trace.
-        Resume-work(_) -> prepend-bootstrap-retirements(rest,collected)
-
-tail fun prepend-pure-bootstrap-retirements(
-    values : list<work<total>>, collected : list<retirement-work<e>>)
-    : <div> list<retirement-work<e>>
-  match values
-    Nil -> collected
-    Cons(current,rest) ->
-      match current
-        Bootstrap-work(scope,_) ->
-          val structural = widen-pure-retirement(
-            scope-retirement-work(scope))
-          prepend-pure-bootstrap-retirements(
-            rest,Cons(structural,collected))
-        Resume-work(_) -> prepend-pure-bootstrap-retirements(rest,collected)
-
-tail fun prepend-publication-rollbacks(
-    values : list<work-publication<e>>,
-    collected : list<retirement-work<e>>)
-    : <div> list<retirement-work<e>>
-  match values
-    Nil -> collected
-    Cons(current,rest) ->
-      val rollback = current.publication-rollback
-      prepend-publication-rollbacks(
-        rest,Cons(Retirement-finalizer(
-          fn() lift-div(fn() rollback())),collected))
-
-fun retire-transaction-bootstraps(
-    root : root<e>,
-    derive-owned : list<work<total>>, effect-owned : list<work<e>>,
-    publications : list<work-publication<e>>)
-    : <div,exn|e> ()
-  val rollbacks = prepend-publication-rollbacks(publications,[])
-  val effect-structural = prepend-bootstrap-retirements(
-    effect-owned,rollbacks)
-  val structural = prepend-pure-bootstrap-retirements(
-    derive-owned,effect-structural)
-  // Expand every transaction-owned scope first. All bootstrap slots are
-  // cleared, scopes are dead, and owner registrations are unlinked before
-  // cleanup can run, including scopes which already drained successfully.
-  val finalizers = collect-retirement-work(structural)
-  run-finalizers(root.root-lifetime.lifetime-retirement,finalizers)
-
-pub fun abort-work-transaction(root : root<e>,
-                               transaction : scheduler-transaction<e>)
-                              : <exn|e> ()
-  pretend-no-div{
-    if !same-root(root.root-key,transaction.transaction-root-key) then () else
-      val derive-group = transaction.transaction-derive-group
-      val effect-group = transaction.transaction-effect-group
-      match derive-group.state
-        Work-committed -> ()
-        Work-aborted ->
-          // Keep repeated abort idempotent even if the first call was itself
-          // left through final control while running retirement finalizers.
-          root.root-derive-plane.detach-matching-group(derive-group)
-          root.root-effect-plane.detach-matching-group(effect-group)
-          root.detach-matching-publications(
-            transaction.transaction-publications)
-          derive-group.clear
-          effect-group.clear
-          transaction.transaction-publications.clear
-        _ ->
-          // Claim the complete rollback ledgers before clearing runnable queues.
-          // A successful drain has already discarded its stale queue ticket but
-          // remains transaction-owned until this claim or an explicit commit.
-          val derive-owned = derive-group.take-rollback
-          val effect-owned = effect-group.take-rollback
-          val publications = transaction.transaction-publications.values
-          transaction.transaction-publications.clear
-          root.root-derive-plane.detach-matching-group(derive-group)
-          root.root-effect-plane.detach-matching-group(effect-group)
-          root.detach-matching-publications(
-            transaction.transaction-publications)
-          val claimed = derive-group.mark-aborted
-          effect-group.clear
-          if !claimed
-          then throw("scheduler transaction abort lost its active state")
-          else retire-transaction-bootstraps(
-            root,derive-owned,effect-owned,publications)
-  }
-
 pub fun settle-failure(message : string) : settle-result
   match capture-error(fn() throw(message))
     Error(failure) -> Settle-failed(failure)
@@ -865,104 +402,47 @@ pub fun settle-trace-recheck(plane : plane<total>, current : trace<total>,
     Capture-running -> settle-failure("cyclic read of a running derivation")
     Capture-dead -> settle-failure("derived continuation was retired")
 
-pub fun settle-entry-target(plane : plane<total>,
-                        entry : maybe<trace<total>>) : <div> settle-result
-  match entry
-    Nothing -> Settle-ok
-    Just(target) ->
-      match target.trace-state-of
-        Capture-live -> Settle-ok
-        Capture-pending -> settle-trace-result(plane,target)
-        // The owner read belongs to a generation already replaced/retired.
-        Capture-dead -> Settle-ok
-        Capture-draft -> settle-failure("state entry target is draft")
-        Capture-running -> settle-failure("cyclic state entry target")
-
-pub fun settle-entry-node(plane : plane<total>, current : trace<total>,
+pub fun settle-read-child(plane : plane<total>, current : trace<total>,
                       gate : continuation-gate,
                       child : ref<global,trace<total>>)
                      : <div> settle-result
   match load(gate.gate-state)
-    Capture-pending -> settle-trace-recheck(plane,current,gate)
+    Capture-dead -> Settle-ok
     Capture-live ->
       val nested = settle-trace-result(plane,load(child))
-      // Any result from the previous child is obsolete if nested settlement
-      // invalidated the Entry. Resume the Entry K before propagating a stale
-      // child failure/defer result.
       match load(gate.gate-state)
-        Capture-pending -> settle-trace-recheck(plane,current,gate)
-        Capture-live -> nested
+        Capture-dead -> Settle-ok
         _ ->
           match nested
             Settle-ok -> settle-trace-recheck(plane,current,gate)
             _ -> nested
     _ -> settle-trace-recheck(plane,current,gate)
 
-pub fun settle-read-child(plane : plane<total>, current : trace<total>,
-                      gate : continuation-gate,
-                      entry : maybe<trace<total>>,
-                      child : ref<global,trace<total>>)
-                     : <div> settle-result
-  match settle-entry-target(plane,entry)
-    Settle-deferred -> Settle-deferred
-    Settle-failed(failure) -> Settle-failed(failure)
-    Settle-ok ->
-      match load(gate.gate-state)
-        Capture-dead -> Settle-ok
-        Capture-live ->
-          val nested = settle-trace-result(plane,load(child))
-          match settle-entry-target(plane,entry)
-            Settle-deferred -> Settle-deferred
-            Settle-failed(failure) -> Settle-failed(failure)
-            Settle-ok ->
-              match load(gate.gate-state)
-                Capture-dead -> Settle-ok
-                _ ->
-                  match nested
-                    Settle-ok -> settle-trace-recheck(plane,current,gate)
-                    _ -> nested
-        _ -> settle-trace-recheck(plane,current,gate)
-
 pub fun settle-read-node(plane : plane<total>, current : trace<total>,
                      gate : continuation-gate,
-                     entry : maybe<trace<total>>,
                      child : ref<global,trace<total>>)
                     : <div> settle-result
-  // Entry is checked before the producer input, after that input settles, and
-  // again after the child. This prevents work in an obsolete entry generation
-  // from winning over the actual Entry continuation.
-  match settle-entry-target(plane,entry)
-    Settle-deferred -> Settle-deferred
-    Settle-failed(failure) -> Settle-failed(failure)
-    Settle-ok ->
+  match load(gate.gate-state)
+    Capture-dead -> Settle-ok
+    Capture-live ->
+      val input = match gate.gate-input-producer
+        Nothing -> Settle-ok
+        Just(upstream) -> settle-producer-result(upstream)
       match load(gate.gate-state)
         Capture-dead -> Settle-ok
-        Capture-live ->
-          val input = match gate.gate-input-producer
-            Nothing -> Settle-ok
-            Just(upstream) -> settle-producer-result(upstream)
-          match settle-entry-target(plane,entry)
+        _ ->
+          match input
+            Settle-ok -> settle-read-child(plane,current,gate,child)
             Settle-deferred -> Settle-deferred
             Settle-failed(failure) -> Settle-failed(failure)
-            Settle-ok ->
-              match load(gate.gate-state)
-                Capture-dead -> Settle-ok
-                _ ->
-                  match input
-                    Settle-ok ->
-                      settle-read-child(plane,current,gate,entry,child)
-                    Settle-deferred -> Settle-deferred
-                    Settle-failed(failure) -> Settle-failed(failure)
-        _ -> settle-trace-recheck(plane,current,gate)
+    _ -> settle-trace-recheck(plane,current,gate)
 
 pub fun settle-trace-result(plane : plane<total>, current : trace<total>)
                        : <div> settle-result
   match current
     Trace-end -> Settle-ok
-    Trace-read(gate,_,entry,child,_,_,_,_,_) ->
-      settle-read-node(plane,current,gate,entry,child)
-    Trace-entry(gate,_,child,_,_,_) ->
-      settle-entry-node(plane,current,gate,child)
+    Trace-read(gate,_,child,_,_,_,_,_) ->
+      settle-read-node(plane,current,gate,child)
 
 pub fun settle-producer-body(producer : derive-producer) : <div> settle-result
   match load(producer.producer-scope.scope-lifetime.lifetime-token)
@@ -974,7 +454,7 @@ pub fun settle-producer-body(producer : derive-producer) : <div> settle-result
         Settle-deferred -> Settle-deferred
         Settle-failed(failure) -> Settle-failed(failure)
         Settle-ok ->
-          // Validation can retire the structural owner, so recheck before
+          // Validation can retire the parent lifetime, so recheck before
           // starting or walking the producer.
           match load(producer.producer-scope.scope-lifetime.lifetime-token)
             Scope-starting ->

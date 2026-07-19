@@ -6,10 +6,6 @@ module kokaine/reactive/internal/bridge
 import kokaine/reactive/internal/model
 import kokaine/reactive/effects
 import kokaine/reactive/internal/runtime
-import kokaine/reactive/internal/reentry
-import kokaine/reactive/internal/structural
-import kokaine/reactive/internal/async-runtime
-import kokaine/async/effects
 
 pub fun runtime-dispatch(root : root<e>,
                          action : () -> <signal-read,signal-write,pure|e> a)
@@ -64,13 +60,6 @@ pub fun runtime-derive-by(root : root<e>, initial : a,
   kokaine/reactive/internal/runtime/derive-by(
     root,initial,calculate,equals)
 
-pub fun runtime-memo-by(root : root<e>, initial : a,
-                        calculate : (previous : a) -> <signal-read,pure> a,
-                        equals : (a,a) -> bool)
-                       : <signal-write,pure> memo<a>
-  kokaine/reactive/internal/runtime/memo-by(
-    root,initial,calculate,equals)
-
 pub fun runtime-memo-get(value : memo<a>) : signal-read a
   kokaine/reactive/internal/runtime/memo/get(value)
 
@@ -83,60 +72,3 @@ pub fun runtime-create-effect(root : root<e>,
 pub fun runtime-on-cleanup(root : root<e>,
                            cleanup : () -> <signal-write,pure|e> ()) : exn ()
   kokaine/reactive/internal/runtime/on-cleanup(root,cleanup)
-
-pub fun runtime-capture-reentry(root : root<e>) : exn reentry<e>
-  kokaine/reactive/internal/reentry/capture-reentry(root)
-
-pub fun runtime-run-reentry(value : reentry<e>,
-                            action : () -> <signal-read,signal-write,pure|e> a)
-                           : <exn|e> a
-  kokaine/reactive/internal/reentry/run-reentry(value,action)
-
-pub fun runtime-open-structural-owner(root : root<e>)
-                                     : exn structural-owner<e>
-  open-structural-owner(root)
-
-pub fun runtime-with-structural-owner(root : root<r>,
-                                     owner : structural-owner<r>,
-                                     action : () -> <div,exn|e> a)
-                                    : <div,exn|e> a
-  with-structural-owner(root,owner,action)
-
-pub fun runtime-dispose-structural-owner(owner : structural-owner<e>)
-                                        : <exn|e> ()
-  dispose-structural-owner(owner)
-
-pub fun runtime-open-structural-transaction(root : root<e>)
-                                           : exn structural-transaction<e>
-  open-structural-transaction(root)
-
-pub fun runtime-drain-structural-transaction(
-    transaction : structural-transaction<e>) : <div,exn|e> ()
-  drain-structural-transaction(transaction)
-
-pub fun runtime-structural-transaction-owned(
-    transaction : structural-transaction<e>) : bool
-  transaction.owns-publication
-
-pub fun runtime-stage-structural-publication(
-    transaction : structural-transaction<e>,
-    prepare : () -> <exn|e> (), publish : () -> (),
-    rollback : () -> <exn|e> ()) : exn ()
-  stage-structural-publication(transaction,prepare,publish,rollback)
-
-pub fun runtime-commit-structural-transaction(
-    transaction : structural-transaction<e>) : <div,exn|e> ()
-  commit-structural-transaction(transaction)
-
-pub fun runtime-abort-structural-transaction(
-    transaction : structural-transaction<e>) : <exn|e> ()
-  abort-structural-transaction(transaction)
-
-// Browser async is interpreted only at explicit application/task boundaries.
-// Keeping this bridge separate from `dispatch` prevents async from entering
-// derivation or scheduler APIs merely because a root happens to carry `ui`.
-pub fun runtime-run-generation-async(
-    root : root<<ui>>,
-    action : () -> <async,signal-read,signal-write,pure,ui> ())
-    : <signal-read,signal-write,pure,ui> ()
-  kokaine/reactive/internal/async-runtime/run-generation-async(root,action)

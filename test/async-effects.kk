@@ -33,7 +33,7 @@ fun run-result(mode : completion-mode,
         Forced-cancel -> resume(Cancel)
         Complete-from-setup ->
           val completed = hidden(Nothing)
-          val capture = fn(result,_is-done)
+          val capture = fn(result)
             store(completed,Just(result))
           val installed = setup(capture)
           match installed

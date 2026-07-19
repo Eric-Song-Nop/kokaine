@@ -11,17 +11,17 @@
   generation through `run-reentry`, installs a fresh async handler inside the
   re-entry batch, and only then resumes the parked suffix.
 --------------------------------------------------------------------------*/
-module kokaine/reactive/internal/async-runtime
+module kokaine/reactive/async/internal/runtime
 
 import kokaine/async/effects
 import kokaine/async/internal/web-schedule
 import kokaine/reactive/effects
 import kokaine/reactive/internal/model
-import kokaine/reactive/internal/reentry
+import kokaine/reactive/integration/internal/reentry
 import kokaine/reactive/internal/runtime
-import kokaine/reactive/internal/application-runner
-import kokaine/reactive/internal/one-shot-task
-import kokaine/reactive/internal/cancellation-supervisor
+import kokaine/reactive/async/internal/host-turn
+import kokaine/async/internal/one-shot-task
+import kokaine/async/internal/cancellation-supervisor
 import kokaine/internal/registry
 import kokaine/internal/int-index
 import std/core/undiv
@@ -34,7 +34,7 @@ import std/core/undiv
 // The parked suffix is resumed shallowly: its primitive `async-await` handler
 // is deliberately absent. This lets the generation installed at the host
 // callback boundary become the nearest base interpreter for the next await.
-alias taskresume<e,a> = (await-result<a>,bool) -> <async,signal-read,signal-write,pure,ui|e> ()
+alias taskresume<e,a> = await-result<a> -> <async,signal-read,signal-write,pure,ui|e> ()
 
 alias task-cancel-strand = () -> ui ()
 
@@ -85,7 +85,7 @@ type async-family<e::E>
     family-index       : int-index<runtime-supervisor<e>>,
     family-canceled    : ref<global,list<async-scope>>,
     family-root-scope  : async-scope,
-    family-runner      : app-runner<<exn,ui|e>,<exn,ui>>
+    family-runner      : host-turn-runner<<exn,ui|e>,<exn,ui>>
   )
 
 // This wrapper is intentionally allocated for every browser turn. Its handler
@@ -349,15 +349,15 @@ fun run-task-result(task : generation-task<a,e>, family : async-family<e>)
       Nothing -> ()
       Just(Task-claim(payload,result,_disposer)) ->
         // `claim-ready` has already replaced all retained fields with Running.
-        // Unlink both ownership indexes before the application runner can
-        // restore handlers or execute any continuation/user action.
+        // Unlink both ownership indexes before the host-turn runner restores
+        // handlers or executes any continuation/user action.
         task.detach-cancellation
         decrement-outstanding()
         match payload
           Task-payload(portal,resume-action,label) ->
             // Browser turns have no ambient Koka exception stack. The runner
-            // explicitly reinstalls application handlers around the complete
-            // reactive turn; this outer boundary reports any remaining exn.
+            // closes the family row around the complete reactive turn; this
+            // outer boundary reports any remaining exn.
             with catch fn(problem)
               report-async-error("uncaught Kokaine async exception (" ++
                                  label ++ "): " ++ problem.show)
@@ -367,21 +367,21 @@ fun run-task-result(task : generation-task<a,e>, family : async-family<e>)
                 match result
                   Nothing -> ()
                   Just(completion) ->
-                    match portal
-                      Reentry(root,_,_) ->
-                        run-application-reentry(
-                          family.family-runner,portal,fn() {
-                            resume-generation(root,family,fn() {
-                              resume-action(completion,True)
-                            })
-                          })
+                    val root = portal.root
+                    family.family-runner.run(fn()
+                      run-reentry(portal,fn() {
+                        resume-generation(root,family,fn() {
+                          resume-action(completion)
+                        })
+                      })
+                    )
             )
 
 fun accept-task-result(task : generation-task<a,e>, family : async-family<e>,
-                       result : await-result<a>, _is-done : bool) : <div,ui> ()
+                       result : await-result<a>) : <div,ui> ()
   lift-div fn()
-    // `is-done` is reserved for future stream adapters. Primitive Kokaine
-    // awaits are one-shot: the first callback owns the scheduled resumption.
+    // Primitive Kokaine awaits are one-shot: the first callback owns the
+    // scheduled resumption.
     if task.task-state.accept(result)
     then enqueue-microtask(as-host-action(fn() run-task-result(task,family)))
     else ()
@@ -396,18 +396,18 @@ fun stopped-task-cancellation(
         val cancel-strand = fn()
           // The task was made terminal and unlinked during the claim phase. A
           // stale/re-entrant host callback therefore cannot win while its parked
-          // strand unwinds lexical finalizers under the application runner.
+          // strand unwinds lexical finalizers inside the closed host turn.
           with catch fn(problem)
             report-async-error("uncaught Kokaine async cancellation exception (" ++
                                label ++ "): " ++ problem.show)
-          match portal
-            Reentry(root,_,_) ->
-              run-application-retirement-reentry(
-                family.family-runner,portal,fn() {
-                  resume-generation(root,family,fn() {
-                    resume-action(Cancel,True)
-                  })
-                })
+          val root = portal.root
+          family.family-runner.run(fn()
+            run-retirement-reentry(portal,fn() {
+              resume-generation(root,family,fn() {
+                resume-action(Cancel)
+              })
+            })
+          )
         val dispose-host = fn()
           match disposer
             Nothing -> ()
@@ -441,7 +441,7 @@ fun register-task(
       scope : async-scope,
       label : string,
       setup : await-setup<a>,
-      resume-action : (await-result<a>,bool) -> <async,signal-read,signal-write,pure,ui|e> ())
+      resume-action : await-result<a> -> <async,signal-read,signal-write,pure,ui|e> ())
     : <signal-write,pure,ui|e> ()
   check-not-pure-plane("async suspension")
 
@@ -461,13 +461,13 @@ fun register-task(
   // links are durable. Rejected registration cannot retain an unowned task.
   increment-outstanding()
 
-  val complete = fn(result,is-done)
+  val complete = fn(result)
     as-host-action(fn()
-      accept-task-result(task,family,result,is-done)
+      accept-task-result(task,family,result)
     )()
   match setup(complete)
     Error(problem) ->
-      accept-task-result(task,family,Exception(problem),True)
+      accept-task-result(task,family,Exception(problem))
     Ok(dispose) ->
       match task.task-state.install-disposer(dispose)
         Nothing -> ()
@@ -566,9 +566,9 @@ fun register-scheduled-ioc(root : root<<ui|e>>,
                            host-action : () -> ui ())
                           : <signal-write,pure,ui|e> ()
   val scheduled-setup = fn(resume)
-    enqueue-microtask(fn() resume(Result(()),True))
+    enqueue-microtask(fn() resume(Result(())))
     Ok(fn() ())
-  val scheduled-resume = fn(result,_)
+  val scheduled-resume = fn(result)
     match result
       Result(_) -> host-action()
       _ -> ()
@@ -609,7 +609,7 @@ fun interpret-generation-await(
                 // captured re-entry. Registration itself performs no read.
                 mask<signal-read>{
                   register-task(root,runtime,scope,label,setup,
-                    fn(result,_) rcontext.resume-shallow(result))
+                    fn(result) rcontext.resume-shallow(result))
                 }
             }
           }
@@ -624,7 +624,7 @@ fun interpret-generation-await(
               if runtime.is-canceled(scope) then callback(Cancel) else
                 mask<signal-read>{
                   register-task(root,runtime,scope,label,setup,
-                    fn(result,_) callback(result))
+                    fn(result) callback(result))
                 }
             }
           }
@@ -719,8 +719,8 @@ pub fun run-generation-async(
     root : root<<ui>>,
     action : () -> <async,signal-read,signal-write,pure,ui> ())
     : <signal-read,signal-write,pure,ui> ()
-  val runner : app-runner<<exn,ui>,<exn,ui>> =
-    App-runner(fn(run-action) run-action())
+  val runner : host-turn-runner<<exn,ui>,<exn,ui>> =
+    Host-turn-runner(fn(run-action) run-action())
   run-generation-async-with-family(
     root,Async-family(new-registry(),new-int-index(),
                       cell([]),new-runtime-scope-root(),runner),action

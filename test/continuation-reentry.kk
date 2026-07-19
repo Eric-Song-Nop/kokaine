@@ -1,6 +1,7 @@
 module continuation-reentry
 
 import kokaine/reactive
+import kokaine/reactive/integration
 import std/core/unsafe
 
 effect ctl abandon-host-turn() : ()
@@ -164,7 +165,7 @@ fun test-final-control-restores-reentry-turn() : <abandon-host-turn,exn> ()
 
   update(root){ source.set(2) }
   check-int(sample(root){ source.get },2,
-    "final control restores frame, gate, entry target, and batch depth")
+    "final control restores frame, gate, and batch depth")
   root.dispose()
 
 pub fun main()

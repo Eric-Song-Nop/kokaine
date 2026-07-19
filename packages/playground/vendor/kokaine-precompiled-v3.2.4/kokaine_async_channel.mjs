@@ -309,7 +309,7 @@ export function route_awaits(queue, action) /* forall<e> (queue : resume-queue<(
              
             var x_0_10141 = $std_core_hnd._open_at4($std_core_hnd._evv_index($kokaine_async_effects.async_await_fs__tag), function(setup_0 /* kokaine/async/effects/await-setup<1311> */ , scope_0 /* kokaine/async/effects/async-scope */ , label_0 /* string */ , callback /* (kokaine/async/effects/await-result<1311>) -> ui () */ ) {
                 return $std_core_hnd._perform4($std_core_hnd._evv_at(0), $kokaine_async_effects.no_await_fs__select, setup_0, scope_0, label_0, callback);
-              }, function(complete /* (kokaine/async/effects/await-result<1311>, bool) -> ui () */ ) {
+              }, function(complete /* (kokaine/async/effects/await-result<1311>) -> ui () */ ) {
                 var _x12 = x.fst(complete);
                 if (_x12._tag === 1) {
                   return $std_core_types.$Error(_x12.error);

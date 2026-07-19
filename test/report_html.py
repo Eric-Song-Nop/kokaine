@@ -220,7 +220,7 @@ def main() -> int:
         "capture-reentry": "captured reactive reentry",
         "reenter(": "manual reactive reentry",
         "event-continuation": "duplicated DOM event continuation",
-        "reactive/internal/reentry": "internal reactive reentry import",
+        "reactive/integration/internal/reentry": "internal integration reentry import",
         "internal/event-runtime": "internal DOM event runtime import",
     }
     for token, label in forbidden_reentry.items():
@@ -313,7 +313,6 @@ def main() -> int:
 
     required_semantics = {
         "Trace-read",
-        "Trace-entry",
         "Resume-work(trace)",
         "source-local",
         "prefix",
@@ -326,11 +325,11 @@ def main() -> int:
         "pure plane",
         "effect plane",
         "targeted settle",
-        "State-entry-read",
-        "memo(previous)",
+        "signal + create-effect",
+        "显式累积状态",
         "final control",
         "html.emit",
-        "structural reentry",
+        "lifetime reentry",
         "ABI callback",
         "event continuation",
         "resume event K",
@@ -346,6 +345,19 @@ def main() -> int:
         errors.append(
             "Koka report misses continuation semantics: "
             + ", ".join(sorted(missing_semantics))
+        )
+
+    forbidden_semantics = {
+        "Trace-entry",
+        "State-entry-read",
+        "memo(previous)",
+        "stateful memo",
+    }
+    stale_semantics = {term for term in forbidden_semantics if term in application_text}
+    if stale_semantics:
+        errors.append(
+            "Koka examples retain removed state-entry semantics: "
+            + ", ".join(sorted(stale_semantics))
         )
 
     required_sources = {

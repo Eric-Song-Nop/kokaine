@@ -63,33 +63,42 @@ fun test-deep-wide-dynamic-diamond()
   val (root,(source,choose,joined)) = create-root fn(root)
     val source = signal(root,1)
     val choose = signal(root,True)
-    val m1 = memo(root,0,fn(_)
+    val m1 = derive(root,0,fn()
+      val current = source.get
       bump(m1-runs)
-      source.get * 2
+      current * 2
     )
-    val m2 = memo(root,0,fn(_)
+    val m2 = derive(root,0,fn()
+      val current = source.get
       bump(m2-runs)
-      source.get + 10
+      current + 10
     )
-    val m3 = memo(root,0,fn(_)
+    val m3 = derive(root,0,fn()
+      val first = m1.get
+      val second = m2.get
       bump(m3-runs)
-      m1.get + m2.get
+      first + second
     )
-    val m4 = memo(root,0,fn(_)
+    val m4 = derive(root,0,fn()
+      val current = m1.get
       bump(m4-runs)
-      m1.get * 3
+      current * 3
     )
-    val left = memo(root,0,fn(_)
+    val left = derive(root,0,fn()
+      val current = if choose.get then m3.get else m4.get
       bump(left-runs)
-      if choose.get then m3.get else m4.get
+      current
     )
-    val right = memo(root,0,fn(_)
+    val right = derive(root,0,fn()
+      val current = m2.get
       bump(right-runs)
-      m2.get * 2
+      current * 2
     )
-    val joined = memo(root,0,fn(_)
+    val joined = derive(root,0,fn()
+      val first = left.get
+      val second = right.get
       bump(join-runs)
-      left.get + right.get
+      first + second
     )
     val stop = create-effect(root,fn() joined.get,fn(value)
       bump(effect-runs)
@@ -143,13 +152,14 @@ fun test-batch-targeted-pull-failure-isolation()
   val (root,(x,y,good)) = create-root fn(root)
     val x = signal(root,1)
     val y = signal(root,0)
-    val good = memo(root,0,fn(_)
+    val good = derive(root,0,fn()
+      val current = x.get
       bump(good-runs)
-      x.get * 2
+      current * 2
     )
-    val bad = memo(root,0,fn(_)
-      bump(bad-runs)
+    val bad = derive(root,0,fn()
       val current = y.get
+      bump(bad-runs)
       if current == 1 then throw("intentional sibling failure") else current
     )
     (x,y,good)
@@ -181,69 +191,6 @@ fun test-batch-targeted-pull-failure-isolation()
 
 
 // --------------------------------------------------------------------------
-// previous state, equality pruning, and duplicate dependency reads
-// --------------------------------------------------------------------------
-
-fun test-previous-equality-duplicate-fanin()
-  val parity-runs = hidden-cell(0)
-  val accumulated-runs = hidden-cell(0)
-  val seen : ref<global,list<int>> = ref([])
-
-  val (root,(count,tick,accumulated)) = create-root fn(root)
-    val count = signal(root,1)
-    val tick = signal(root,0)
-    val parity = memo(root,0,fn(_)
-      bump(parity-runs)
-      count.get % 2
-    )
-    val accumulated = memo(root,0,fn(previous)
-      bump(accumulated-runs)
-      previous + parity.get + parity.get + tick.get
-    )
-    val stop = create-effect(root,fn() accumulated.get,fn(value)
-      seen.push(value)
-    )
-    (count,tick,accumulated)
-
-  (!seen).check-ints([2],"stateful fan-in publishes its initial value")
-  hidden-load(parity-runs).check-int(1,"parity initializes once")
-  hidden-load(accumulated-runs).check-int(1,"accumulator initializes once")
-  sample(root){ accumulated.get }.check-int(2,
-    "stateful fan-in initializes from previous and duplicate reads")
-
-  update(root){ count.set(3) }
-  hidden-load(parity-runs).check-int(2,"equal parity recomputes at its boundary")
-  hidden-load(accumulated-runs).check-int(1,
-    "equal parity output prunes the stateful duplicate fan-in")
-  (!seen).check-ints([2],"equal parity output does not republish accumulation")
-
-  val first = dispatch(root)
-    batch(root)
-      count.set(5)
-      tick.set(1)
-      accumulated.get
-  first.check-int(5,"explicit dirty pull advances previous exactly once")
-  hidden-load(parity-runs).check-int(3,
-    "equal upstream settles once during explicit dirty pull")
-  hidden-load(accumulated-runs).check-int(2,
-    "duplicate upstream reads share one captured dependency")
-  (!seen).check-ints([5,2],"explicit pull publishes one completed generation")
-
-  update(root)
-    batch(root)
-      count.set(4)
-      tick.set(2)
-  hidden-load(parity-runs).check-int(4,"changed parity settles once")
-  hidden-load(accumulated-runs).check-int(3,
-    "fan-in invalidations remain deduplicated")
-  (!seen).check-ints([7,5,2],
-    "stateful duplicate fan-in publishes no intermediate value")
-  sample(root){ accumulated.get }.check-int(7,
-    "changed parity and tick advance prior state once")
-  root.dispose()
-
-
-// --------------------------------------------------------------------------
 // Deep diamond failure and retry through an independent failure signal
 // --------------------------------------------------------------------------
 
@@ -258,23 +205,26 @@ fun test-deep-diamond-failure-retry()
   val (root,(source,should-fail,joined)) = create-root fn(root)
     val source = signal(root,1)
     val should-fail = signal(root,False)
-    val base = memo(root,0,fn(_)
+    val base = derive(root,0,fn()
+      val current = source.get
       bump(base-runs)
-      source.get * 2
+      current * 2
     )
-    val left = memo(root,0,fn(_)
+    val left = derive(root,0,fn()
+      val current = base.get
       bump(left-runs)
-      base.get + 1
+      current + 1
     )
-    val right = memo(root,0,fn(_)
+    val right = derive(root,0,fn()
+      val current = base.get
       bump(right-runs)
-      base.get * 10
+      current * 10
     )
-    val joined = memo(root,0,fn(_)
-      bump(join-runs)
+    val joined = derive(root,0,fn()
       val left-value = left.get
       val right-value = right.get
       val fail = should-fail.get
+      bump(join-runs)
       if fail then throw("intentional deep diamond failure")
       else left-value + right-value
     )
@@ -489,7 +439,7 @@ fun test-invalidated-owner-rejects-stale-memo-pull()
     val generation = signal(root,0)
     val payload = signal(root,10)
     val stop-parent = create-effect(root,fn() generation.get,fn(current)
-      val child = memo(root,0,fn(_) current * 100 + payload.get)
+      val child = derive(root,0,fn() current * 100 + payload.get)
       hidden-store(slot,Just(child))
       val stop-child = create-effect(root,fn() child.get,fn(value)
         seen.push(value)
@@ -524,9 +474,9 @@ fun test-owner-gate-validates-lazy-parent-dependency()
   val (root,(trigger,payload)) = create-root fn(root)
     val trigger = signal(root,0)
     val payload = signal(root,10)
-    val parent-input = memo(root,0,fn(_) trigger.get)
+    val parent-input = derive(root,0,fn() trigger.get)
     val stop-parent = create-effect(root,fn() parent-input.get,fn(current)
-      val child = memo(root,0,fn(_)
+      val child = derive(root,0,fn()
         val value = payload.get
         hidden-store(calculations,
           Cons("child" ++ current.show ++ ":" ++ value.show,
@@ -556,10 +506,10 @@ fun test-owner-gate-preserves-equal-parent-generation()
   val (root,(trigger,payload)) = create-root fn(root)
     val trigger = signal(root,0)
     val payload = signal(root,10)
-    val parent-input = memo(root,0,fn(_) trigger.get % 2)
+    val parent-input = derive(root,0,fn() trigger.get % 2)
     val stop-parent = create-effect(root,fn() parent-input.get,fn(current)
       bump(parent-runs)
-      val child = memo(root,0,fn(_)
+      val child = derive(root,0,fn()
         val value = payload.get
         hidden-store(calculations,
           Cons("child" ++ current.show ++ ":" ++ value.show,
@@ -588,14 +538,14 @@ fun test-owner-validation-failure-preserves-child-ticket()
     val trigger = signal(root,0)
     val payload = signal(root,10)
     val should-fail = signal(root,False)
-    val parent-input = memo(root,0,fn(_)
+    val parent-input = derive(root,0,fn()
       val value = trigger.get
       if should-fail.get then throw("intentional owner checkpoint failure")
       else value % 2
     )
     val stop-parent = create-effect(root,fn() parent-input.get,fn(current)
       bump(parent-runs)
-      val child = memo(root,0,fn(_)
+      val child = derive(root,0,fn()
         val value = payload.get
         hidden-store(calculations,
           Cons("child" ++ current.show ++ ":" ++ value.show,
@@ -653,7 +603,7 @@ fun test-owner-checkpoint-cycle-is-controlled()
       bump(parent-runs)
       on-cleanup(root,fn()
         if hidden-load(allow-cleanup-spawn) then
-          val child = memo(root,0,fn(_)
+          val child = derive(root,0,fn()
             bump(child-runs)
             payload.get
           )
@@ -700,7 +650,7 @@ fun test-owner-preflight-pull-does-not-reenter-flush()
 
   val (root,trigger) = create-root fn(root)
     val trigger = signal(root,0)
-    val parent-input = memo(root,0,fn(_)
+    val parent-input = derive(root,0,fn()
       val current = trigger.get
       if hidden-load(should-fail)
       then throw("intentional delayed owner-input failure")
@@ -710,7 +660,7 @@ fun test-owner-preflight-pull-does-not-reenter-flush()
       bump(track-runs)
       parent-input.get
     ,fn(current)
-      val child = memo(root,0,fn(_) current)
+      val child = derive(root,0,fn() current)
       hidden-store(slot,Just(child))
     )
     trigger
@@ -749,7 +699,7 @@ fun create-owned-memo-fanout(root : root<e>, payload : signal<int>,
                              remaining : int, child-runs : ref<global,int>)
                             : <div,exn,signal-write> ()
   if remaining <= 0 then () else
-    val child = memo(root,0,fn(_)
+    val child = derive(root,0,fn()
       bump(child-runs)
       payload.get
     )
@@ -764,7 +714,7 @@ fun run-large-stale-owner-fanout(trigger-first : bool)
   val (root,(trigger,payload)) = create-root fn(root)
     val trigger = signal(root,0)
     val payload = signal(root,10)
-    val parent-input = memo(root,0,fn(_) trigger.get)
+    val parent-input = derive(root,0,fn() trigger.get)
     val stop-parent = create-effect(root,fn() parent-input.get,fn(current)
       bump(parent-runs)
       if current == 0
@@ -801,7 +751,6 @@ fun test-large-stale-owner-fanout-is-stack-safe()
 pub fun main()
   test-deep-wide-dynamic-diamond()
   test-batch-targeted-pull-failure-isolation()
-  test-previous-equality-duplicate-fanin()
   test-deep-diamond-failure-retry()
   test-failed-parent-disposes-unstarted-child()
   test-parent-refresh-precedes-stale-child()

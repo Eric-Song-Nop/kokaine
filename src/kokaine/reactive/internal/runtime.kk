@@ -27,7 +27,7 @@ pub fun dispatch(root : root<e>,
 
 fun fresh-plane(current-frame : frame<e>,
                 retirement : retirement-coordinator<e>) : plane<e>
-  Plane(new-work-queue(),cell(Nothing),cell(Nothing),cell(Nothing),
+  Plane(new-work-queue(),cell(Nothing),cell(Nothing),
         cell(current-frame),cell(Nothing),retirement)
 
 fun fresh-root() : root<e>
@@ -43,35 +43,14 @@ fun fresh-root() : root<e>
     Root-key(cell(True)),
     fresh-plane(derive-frame,derive-retirement),
     fresh-plane(effect-frame,effect-retirement),
-    cell(Nothing),lifetime,cell(0),cell(False),cell(False),cell(False)
+    lifetime,cell(0),cell(False),cell(False),cell(False)
   )
   effect-retirement.install-root-disposal(fn() retire-root-now(root))
   root
 
-tail fun prepend-root-publication-rollbacks(
-    values : list<work-publication<e>>,
-    collected : list<retirement-work<e>>)
-    : <div> list<retirement-work<e>>
-  match values
-    Nil -> collected
-    Cons(current,rest) ->
-      val rollback = current.publication-rollback
-      prepend-root-publication-rollbacks(
-        rest,Cons(Retirement-finalizer(
-          fn() lift-div(fn() rollback())),collected))
-
-// Root retirement must claim every transaction capability before invoking any
-// user cleanup. A retained transaction can otherwise re-enter abort while the
-// copied journal and live queue still name the same rollback callbacks.
-fun claim-root-work(root : root<e>) : list<work-publication<e>>
-  val publications = match load(root.root-work-publications)
-    Nothing -> []
-    Just(pending) ->
-      val values = pending.values
-      pending.clear
-      values
-  store(root.root-work-publications,Nothing)
-
+// Root retirement detaches local bootstrap groups before invoking cleanup so
+// retained transaction capabilities cannot reclaim their scopes by re-entry.
+fun claim-root-work(root : root<e>) : ()
   val derive-group = load(root.root-derive-plane.plane-work-group)
   val effect-group = load(root.root-effect-plane.plane-work-group)
   store(root.root-derive-plane.plane-work-group,Nothing)
@@ -86,7 +65,6 @@ fun claim-root-work(root : root<e>) : list<work-publication<e>>
     Just(group) ->
       val _ = group.mark-aborted
       group.clear
-  publications
 
 // This is the non-validating half of root disposal. Besides ordinary public
 // disposal, it is used to roll back a root whose construction has not been
@@ -95,7 +73,7 @@ fun claim-root-work(root : root<e>) : list<work-publication<e>>
 fun retire-root-now(root : root<e>) : <div,exn|e> ()
   store(root.root-disposing,True)
   store(root.root-lifetime.lifetime-token,Scope-dead)
-  val publications = claim-root-work(root)
+  claim-root-work(root)
   finally(
     fn() {
       store(root.root-batch-depth,0)
@@ -108,19 +86,13 @@ fun retire-root-now(root : root<e>) : <div,exn|e> ()
       store(root.root-effect-plane.plane-work-group,Nothing)
       store(root.root-derive-plane.plane-current,Nothing)
       store(root.root-effect-plane.plane-current,Nothing)
-      store(root.root-derive-plane.plane-current-entry,Nothing)
-      store(root.root-effect-plane.plane-current-entry,Nothing)
       store(root.root-derive-plane.plane-draft,Nothing)
       store(root.root-effect-plane.plane-draft,Nothing)
     },
     fn()
       val lifetime-finalizers = collect-lifetime(root.root-lifetime)
-      val publication-rollbacks = prepend-root-publication-rollbacks(
-        publications,[])
-      val finalizers = pretend-no-div{
-        lifetime-finalizers ++ publication-rollbacks
-      }
-      run-finalizers(root.root-lifetime.lifetime-retirement,finalizers)
+      run-finalizers(
+        root.root-lifetime.lifetime-retirement,lifetime-finalizers)
   )
 
 pub fun create-root(action : (root<e>) -> <signal-write,pure|e> a)
@@ -205,9 +177,6 @@ pub fun signal/set(signal : signal<a>, value : a) : signal-write ()
 
 pub fun signal/modify(signal : signal<a>, update : a -> a) : signal-write ()
   modify-source(signal.signal-source,update)
-
-pub fun signal/update(signal : signal<a>, update : a -> a) : signal-write ()
-  signal.modify(update)
 
 pub fun batch(root : root<e>, action : () -> <signal-write,pure|e1> a)
              : <signal-write,pure|e1> a
@@ -297,52 +266,6 @@ pub fun derive-always(root : root<e>, initial : a,
                       calculate : () -> <signal-read,pure> a)
                      : <signal-write,pure> memo<a>
   derive-by(root,initial,calculate,fn(_,_) False)
-
-fun memo-by-inner(root : root<e>, initial : a,
-                  calculate : (previous : a) -> <signal-read,pure> a,
-                  equals : (a,a) -> bool) : <signal-write,pure> memo<a>
-  check-not-pure-plane("memo creation")
-  check-registration(root)
-  val source = new-source(root,initial,equals)
-  val effect-plane = root.root-effect-plane
-  val owner = load(effect-plane.plane-current-frame)
-  check-frame-registration(root,owner)
-  val derive-plane = root.root-derive-plane
-  val owner-slot = cell(Nothing)
-  // Bootstrap consumes `calculate` once. The retained execution capability is
-  // the raw continuation captured at State-entry-read; each resume injects the
-  // latest successfully committed source value as `previous`.
-  val track = fn() calculate(
-    read-source(source,State-entry-read,Nothing))
-  val (current,bootstrap,_) = prepare-trace(
-    root,derive-plane,owner-slot,load(effect-plane.plane-current),track,
-    fn(value) commit-derived(root,source,value)
-  )
-  val producer = Derive-producer(derive-plane,current,cell(False))
-  store(owner-slot,Just(producer))
-  val structural = pretend-no-div{
-    widen-pure-retirement(scope-retirement-work(current))
-  }
-  val registration = owner.frame-lifetime.register-child(structural)
-  store(current.scope-unlink,Just(fn() registration.take.is-just))
-  queue-work(derive-plane,bootstrap)
-  request-flush(root.root-key)
-  Memo(source,producer)
-
-pub fun memo-by(root : root<e>, initial : a,
-                calculate : (previous : a) -> <signal-read,pure> a,
-                equals : (a,a) -> bool) : <signal-write,pure> memo<a>
-  memo-by-inner(root,initial,calculate,equals)
-
-pub fun memo(root : root<e>, initial : a,
-             calculate : (previous : a) -> <signal-read,pure> a,
-             ?(==) : (a,a) -> bool) : <signal-write,pure> memo<a>
-  memo-by(root,initial,calculate,(==))
-
-pub fun memo-always(root : root<e>, initial : a,
-                    calculate : (previous : a) -> <signal-read,pure> a)
-                   : <signal-write,pure> memo<a>
-  memo-by(root,initial,calculate,fn(_,_) False)
 
 pub fun memo/get(memo : memo<a>) : signal-read a
   validate-derived(memo.memo-producer)

@@ -851,7 +851,7 @@ with serve_project() as origin:
         resource_result = page.evaluate("__kokaineAsyncResource")
         assert resource_result["ok"], resource_result["message"]
 
-        # Completed awaits must physically unlink their structural cleanup
+        # Completed awaits must physically unlink their lifetime cleanup
         # registrations instead of leaving one owner tombstone per turn.
         page.evaluate(
             """async () => {

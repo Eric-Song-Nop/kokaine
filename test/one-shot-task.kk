@@ -1,6 +1,6 @@
 module one-shot-task
 
-import kokaine/reactive/internal/one-shot-task
+import kokaine/async/internal/one-shot-task
 
 
 fun check(ok : bool, message : string)

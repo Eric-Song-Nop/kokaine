@@ -59,12 +59,12 @@ fun install-no-await(setup : await-setup<a>, scope : async-scope,
                      callback : await-result<a> -> ui ()) : ui ()
   store(installed-scopes,Cons(scope,load(installed-scopes)))
   val completed = hidden(False)
-  fun complete(result,is-done)
-    if is-done && !load(completed) then
+  fun complete(result)
+    if !load(completed) then
       store(completed,True)
       callback(result)
   match setup(complete)
-    Error(error) -> complete(Exception(error),True)
+    Error(error) -> complete(Exception(error))
     Ok(dispose) ->
       if load(completed) then ()
       else if scope-is-canceled(scope) then

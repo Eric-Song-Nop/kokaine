@@ -62,7 +62,7 @@ pub fun registry/count(target : registry<a>) : int
   match target
     Registry(_,_,count) -> load(count)
 
-// Internal observability for structural ownership tests. Unlike `count` or
+// Internal observability for lifetime ownership tests. Unlike `count` or
 // `snapshot`, this detects an empty tombstone still retained by the registry.
 pub noinline fun registry/has-linked-nodes(target : registry<a>) : bool
   match target

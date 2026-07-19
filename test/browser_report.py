@@ -125,13 +125,28 @@ def exercise_report(page) -> None:
     expect(wasm_link).to_have_class("is-active")
     expect(wasm_link).to_have_attribute("aria-current", "true")
 
-    # Real signal -> derive -> memo(previous) flow.
+    # Pure derivations and explicit accumulated state share one reactive root.
     expect(page.locator("#kk-flow-count")).to_have_text("2")
     expect(page.locator("#kk-flow-square")).to_have_text("4")
+    expect(page.locator("#kk-flow-revision")).to_have_text("1")
+    expect(page.locator("#kk-flow-peak")).to_have_text("2")
     page.locator("#kk-flow-plus").click()
     expect(page.locator("#kk-flow-count")).to_have_text("3")
     expect(page.locator("#kk-flow-square")).to_have_text("9")
     expect(page.locator("#kk-flow-parity")).to_have_text("奇数")
+    expect(page.locator("#kk-flow-revision")).to_have_text("2")
+    expect(page.locator("#kk-flow-peak")).to_have_text("3")
+    page.locator("#kk-flow-batch").click()
+    expect(page.locator("#kk-flow-count")).to_have_text("6")
+    expect(page.locator("#kk-flow-square")).to_have_text("36")
+    expect(page.locator("#kk-flow-parity")).to_have_text("偶数")
+    expect(page.locator("#kk-flow-revision")).to_have_text("3")
+    expect(page.locator("#kk-flow-peak")).to_have_text("6")
+    page.locator("#kk-flow-reset").click()
+    expect(page.locator("#kk-flow-count")).to_have_text("2")
+    expect(page.locator("#kk-flow-square")).to_have_text("4")
+    expect(page.locator("#kk-flow-revision")).to_have_text("4")
+    expect(page.locator("#kk-flow-peak")).to_have_text("6")
 
     # Feature atlas structure is replaced by a Kokaine dynamic region.
     control_tab = page.locator("#kk-feature-control")
@@ -278,11 +293,11 @@ def exercise_report(page) -> None:
     expect(page.locator("#code-panel-effect")).to_be_visible()
     expect(page.locator("#code-panel-signal")).to_be_hidden()
     effect_tab.press("ArrowRight")
-    expect(page.locator("#code-tab-batch")).to_have_attribute(
+    expect(page.locator("#code-tab-state")).to_have_attribute(
         "aria-selected", "true"
     )
-    expect(page.locator("#code-tab-batch")).to_be_focused()
-    expect(page.locator("#code-panel-batch")).to_be_visible()
+    expect(page.locator("#code-tab-state")).to_be_focused()
+    expect(page.locator("#code-panel-state")).to_be_visible()
     expect(page.locator("#code-panel-effect")).to_be_hidden()
 
     # Rebuilding the dynamic iframe region produces a new revision URL and a

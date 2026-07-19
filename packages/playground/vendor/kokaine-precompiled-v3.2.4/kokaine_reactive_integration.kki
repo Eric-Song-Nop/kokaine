@@ -1,0 +1,127 @@
+/*--------------------------------------------------------------------------
+  Integration capabilities for provisional reactive construction.
+
+  A provision is an identity-only borrowed view. Only the lease returned by
+  `open-provision` can drain, promote, or discard its local bootstrap work.
+  Integrations own their participation policy; Reactive owns only this work
+  frontier and its lifetime guarantees.
+--------------------------------------------------------------------------*/
+module interface kokaine/reactive/integration
+ 
+//------------------------------
+//#kki: import declarations
+ 
+import std/core/types = std/core/types pub = "";
+import std/core/hnd = std/core/hnd pub = "";
+import std/core/exn = std/core/exn pub = "";
+import std/core/bool = std/core/bool pub = "";
+import std/core/order = std/core/order pub = "";
+import std/core/char = std/core/char pub = "";
+import std/core/int = std/core/int pub = "";
+import std/core/vector = std/core/vector pub = "";
+import std/core/string = std/core/string pub = "";
+import std/core/sslice = std/core/sslice pub = "";
+import std/core/list = std/core/list pub = "";
+import std/core/maybe = std/core/maybe pub = "";
+import std/core/maybe2 = std/core/maybe2 pub = "";
+import std/core/either = std/core/either pub = "";
+import std/core/result = std/core/result pub = "";
+import std/core/tuple = std/core/tuple pub = "";
+import std/core/lazy = std/core/lazy pub = "";
+import std/core/show = std/core/show pub = "";
+import std/core/debug = std/core/debug pub = "";
+import std/core/delayed = std/core/delayed pub = "";
+import std/core/console = std/core/console pub = "";
+import kokaine/reactive/effects = kokaine/reactive/effects pub = "";
+import std/core = std/core = "";
+import kokaine/reactive = kokaine/reactive = "";
+import kokaine/reactive/integration/internal/lifetime-scope = kokaine/reactive/integration/internal/lifetime-scope = "";
+import kokaine/reactive/integration/internal/provision = kokaine/reactive/integration/internal/provision = "";
+import kokaine/reactive/integration/internal/reentry = kokaine/reactive/integration/internal/reentry = "";
+import kokaine/reactive/internal/model = kokaine/reactive/internal/model inline = "";
+ 
+//------------------------------
+//#kki: external imports
+ 
+ 
+//------------------------------
+//#kki: fixity declarations
+ 
+ 
+//------------------------------
+//#kki: local imported aliases
+ 
+// An alias for pure effects: a pure function always returns the same result
+// when called with the same arguments but may not terminate or raise an exception.
+local alias std/core/pure[55,1,55,26] :: E = <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/div :: X)> = 1;
+ 
+//------------------------------
+//#kki: type declarations
+ 
+pub value{0,1,8} type lifetime-scope[17,1,21,3] <(e :: E)> :: E -> V {
+  con Public-lifetime-scope[18,3,18,23](internal-lifetime-scope: (kokaine/reactive/integration/internal/lifetime-scope/lifetime-scope :: E -> V)<(e :: E)>){0,1,8} : forall<(e :: E)> (internal-lifetime-scope : (kokaine/reactive/integration/internal/lifetime-scope/lifetime-scope :: E -> V)<(e :: E)>) -> (lifetime-scope :: E -> V)<(e :: E)> = 1;
+};
+pub value{0,1,8} type provision[30,1,34,3] <(e :: E)> :: E -> V {
+  con Public-provision[31,3,31,18](internal-provision: (kokaine/reactive/integration/internal/provision/provision :: E -> V)<(e :: E)>){0,1,8} : forall<(e :: E)> (internal-provision : (kokaine/reactive/integration/internal/provision/provision :: E -> V)<(e :: E)>) -> (provision :: E -> V)<(e :: E)> = 1;
+};
+pub value{0,1,8} type provision-lease[36,1,40,3] <(e :: E)> :: E -> V {
+  con Public-provision-lease[37,3,37,24](internal-provision-lease: (kokaine/reactive/integration/internal/provision/provision-lease :: E -> V)<(e :: E)>){0,1,8} : forall<(e :: E)> (internal-provision-lease : (kokaine/reactive/integration/internal/provision/provision-lease :: E -> V)<(e :: E)>) -> (provision-lease :: E -> V)<(e :: E)> = 1;
+};
+pub value{0,4,8} type reentry[23,1,27,3] <(e :: E)> :: E -> V {
+  con Public-reentry[24,3,24,16](internal-reentry: (kokaine/reactive/integration/internal/reentry/reentry :: E -> V)<(e :: E)>){0,4,8} : forall<(e :: E)> (internal-reentry : (kokaine/reactive/integration/internal/reentry/reentry :: E -> V)<(e :: E)>) -> (reentry :: E -> V)<(e :: E)> = 1;
+};
+ 
+//------------------------------
+//#kki: declarations
+ 
+// Automatically generated. Retrieves the `internal-lifetime-scope` constructor field of the `:lifetime-scope` type.
+fun lifetime-scope/internal-lifetime-scope[19,5,19,27] : forall<(e :: E)> (^ @this : (lifetime-scope :: E -> V)<(e :: E)>) -> (kokaine/reactive/integration/internal/lifetime-scope/lifetime-scope :: E -> V)<(e :: E)>;
+pub fun lifetime-scope/@copy[18,3,18,23] : forall<(e :: E)> (@this : (lifetime-scope :: E -> V)<(e :: E)>, internal-lifetime-scope : (std/core/types/@optional :: V -> V)<(kokaine/reactive/integration/internal/lifetime-scope/lifetime-scope :: E -> V)<(e :: E)>>) -> (lifetime-scope :: E -> V)<(e :: E)>;
+// Automatically generated. Retrieves the `internal-reentry` constructor field of the `:reentry` type.
+fun reentry/internal-reentry[25,5,25,20] : forall<(e :: E)> (^ reentry : (reentry :: E -> V)<(e :: E)>) -> (kokaine/reactive/integration/internal/reentry/reentry :: E -> V)<(e :: E)>;
+pub fun reentry/@copy[24,3,24,16] : forall<(e :: E)> (@this : (reentry :: E -> V)<(e :: E)>, internal-reentry : (std/core/types/@optional :: V -> V)<(kokaine/reactive/integration/internal/reentry/reentry :: E -> V)<(e :: E)>>) -> (reentry :: E -> V)<(e :: E)>;
+// Automatically generated. Retrieves the `internal-provision` constructor field of the `:provision` type.
+fun provision/internal-provision[32,5,32,22] : forall<(e :: E)> (^ provision : (provision :: E -> V)<(e :: E)>) -> (kokaine/reactive/integration/internal/provision/provision :: E -> V)<(e :: E)>;
+pub fun provision/@copy[31,3,31,18] : forall<(e :: E)> (@this : (provision :: E -> V)<(e :: E)>, internal-provision : (std/core/types/@optional :: V -> V)<(kokaine/reactive/integration/internal/provision/provision :: E -> V)<(e :: E)>>) -> (provision :: E -> V)<(e :: E)>;
+// Automatically generated. Retrieves the `internal-provision-lease` constructor field of the `:provision-lease` type.
+fun provision-lease/internal-provision-lease[38,5,38,28] : forall<(e :: E)> (^ @this : (provision-lease :: E -> V)<(e :: E)>) -> (kokaine/reactive/integration/internal/provision/provision-lease :: E -> V)<(e :: E)>;
+pub fun provision-lease/@copy[37,3,37,24] : forall<(e :: E)> (@this : (provision-lease :: E -> V)<(e :: E)>, internal-provision-lease : (std/core/types/@optional :: V -> V)<(kokaine/reactive/integration/internal/provision/provision-lease :: E -> V)<(e :: E)>>) -> (provision-lease :: E -> V)<(e :: E)>;
+fun unwrap-lifetime-scope[42,5,42,25] : forall<(e :: E)> (value : (lifetime-scope :: E -> V)<(e :: E)>) -> (kokaine/reactive/integration/internal/lifetime-scope/lifetime-scope :: E -> V)<(e :: E)>;
+fun unwrap-reentry[47,5,47,18] : forall<(e :: E)> (value : (reentry :: E -> V)<(e :: E)>) -> (kokaine/reactive/integration/internal/reentry/reentry :: E -> V)<(e :: E)>;
+fun unwrap-provision[52,5,52,20] : forall<(e :: E)> (value : (provision :: E -> V)<(e :: E)>) -> (kokaine/reactive/integration/internal/provision/provision :: E -> V)<(e :: E)>;
+fun unwrap-provision-lease[57,5,57,26] : forall<(e :: E)> (value : (provision-lease :: E -> V)<(e :: E)>) -> (kokaine/reactive/integration/internal/provision/provision-lease :: E -> V)<(e :: E)>;
+// monadic lift
+fun @mlift-open-lifetime-scope@10041[1,0,1,0] : forall<(e :: E)> (@y-x10008 : (kokaine/reactive/integration/internal/lifetime-scope/lifetime-scope :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (lifetime-scope :: E -> V)<(e :: E)>;
+pub fun open-lifetime-scope[62,9,62,27] : forall<(e :: E)> (root : (kokaine/reactive/root :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (lifetime-scope :: E -> V)<(e :: E)>;
+pub fun with-lifetime-scope[67,9,67,27] : forall<a,(e :: E),(e1 :: E)> (root : (kokaine/reactive/root :: E -> V)<(e1 :: E)>, scope : (lifetime-scope :: E -> V)<(e1 :: E)>, action : () -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a;
+pub fun lifetime-scope/dispose[74,9,74,30] : forall<(e :: E)> (scope : (lifetime-scope :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+// monadic lift
+fun @mlift-capture-reentry@10042[1,0,1,0] : forall<(e :: E)> (@y-x10011 : (kokaine/reactive/integration/internal/reentry/reentry :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (reentry :: E -> V)<(e :: E)>;
+// Host callbacks capture the continuation generation which registered them.
+// Work created during re-entry remains owned by that generation.
+pub fun capture-reentry[80,9,80,23] : forall<(e :: E)> (root : (kokaine/reactive/root :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (reentry :: E -> V)<(e :: E)>;
+pub fun reenter[85,9,85,15] : forall<a,(e :: E)> (value : (reentry :: E -> V)<(e :: E)>, action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)|(e :: E)> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a;
+// monadic lift
+fun @mlift-current-provision@10043[1,0,1,0] : forall<(e :: E)> (@y-x10013 : (std/core/types/maybe :: V -> V)<(kokaine/reactive/integration/internal/provision/provision :: E -> V)<(e :: E)>>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (std/core/types/maybe :: V -> V)<(provision :: E -> V)<(e :: E)>>;
+pub fun current-provision[91,9,91,25] : forall<(e :: E)> (root : (kokaine/reactive/root :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (std/core/types/maybe :: V -> V)<(provision :: E -> V)<(e :: E)>>;
+// monadic lift
+fun @mlift-open-provision@10044[1,0,1,0] : forall<(e :: E)> (@y-x10015 : (kokaine/reactive/integration/internal/provision/provision-lease :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (provision-lease :: E -> V)<(e :: E)>;
+pub fun open-provision[97,9,97,22] : forall<(e :: E)> (root : (kokaine/reactive/root :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (provision-lease :: E -> V)<(e :: E)>;
+pub fun provision-lease/provision[102,9,102,33] : forall<(e :: E)> (lease : (provision-lease :: E -> V)<(e :: E)>) -> (provision :: E -> V)<(e :: E)>;
+pub fun provision/same[105,9,105,22] : forall<(e :: E)> (left : (provision :: E -> V)<(e :: E)>, right : (provision :: E -> V)<(e :: E)>) -> std/core/types/bool;
+pub fun drain-provision[109,9,109,23] : forall<(e :: E)> (lease : (provision-lease :: E -> V)<(e :: E)>) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+pub fun promote-provision[113,9,113,25] : forall<(e :: E)> (lease : (provision-lease :: E -> V)<(e :: E)>) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+pub fun discard-provision[117,9,117,25] : forall<(e :: E)> (lease : (provision-lease :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+ 
+fun @kokaine-cache-phase[1,0,1,0] : () -> std/core/types/int;
+ 
+//------------------------------
+//#kki: external declarations
+ 
+ 
+//------------------------------
+//#kki: inline definitions
+ 
+//.inline-section
+fun @kokaine-cache-phase // inline size: 1
+  = fn(){ 0; };

@@ -7,7 +7,7 @@ import kokaine/async/effects
 import kokaine/async/web
 import kokaine/async/structured
 import kokaine/reactive
-import kokaine/reactive/internal/async-runtime
+import kokaine/reactive/async/internal/runtime
 import kokaine/html
 import kokaine/dom
 import std/time/duration

@@ -143,25 +143,31 @@ fun create-stress-fixture()
     val x = signal(root,1)
     val y = signal(root,2)
     val choose = signal(root,True)
-    val selected = memo(root,0,fn(_)
+    val selected = derive(root,0,fn()
+      val current = if choose.get then x.get else y.get
       hidden-store(selected-runs,hidden-load(selected-runs) + 1)
-      if choose.get then x.get else y.get
+      current
     )
-    val bucket = memo(root,0,fn(_)
+    val bucket = derive(root,0,fn()
+      val current = selected.get
       hidden-store(bucket-runs,hidden-load(bucket-runs) + 1)
-      nonzero-mod(selected.get,5)
+      nonzero-mod(current,5)
     )
-    val left = memo(root,0,fn(_)
+    val left = derive(root,0,fn()
+      val current = selected.get
       hidden-store(left-runs,hidden-load(left-runs) + 1)
-      selected.get * 2
+      current * 2
     )
-    val right = memo(root,0,fn(_)
+    val right = derive(root,0,fn()
+      val current = selected.get
       hidden-store(right-runs,hidden-load(right-runs) + 1)
-      selected.get * 3
+      current * 3
     )
-    val joined = memo(root,0,fn(_)
+    val joined = derive(root,0,fn()
+      val first = left.get
+      val second = right.get
       hidden-store(joined-runs,hidden-load(joined-runs) + 1)
-      left.get + right.get
+      first + second
     )
     val stop-bucket = create-effect(root,fn() bucket.get,fn(value)
       hidden-store(bucket-applies,hidden-load(bucket-applies) + 1)

@@ -1,6 +1,7 @@
 module dom-keyed
 
 import kokaine/reactive
+import kokaine/reactive/integration
 import kokaine/html
 import kokaine/control
 import kokaine/dom
@@ -187,41 +188,41 @@ fun safe-unmount(dispose : disposer<<ui>>) : ui bool
   True
 
 fun registry-unlink-stress(root : root<<ui>>,
-                           owner : structural-owner<<ui>>) : ui bool
+                           scope : lifetime-scope<<ui>>) : ui bool
   with catch fn(_)
     False
   val children = pretend-no-div{
-    internal/with-structural-owner(root,owner,fn()
+    with-lifetime-scope(root,scope,fn()
       fold(4000,[]) fn(_,values)
-        Cons(internal/open-structural-owner(root),values)
+        Cons(open-lifetime-scope(root),values)
     )
   }
   children.foreach fn(child)
-    internal/dispose-structural-owner(child)
+    child.dispose
   True
 
 fun bulk-retirement-stress(root : root<<ui>>,
-                           owner : structural-owner<<ui>>) : ui bool
+                           scope : lifetime-scope<<ui>>) : ui bool
   with catch fn(_)
     False
   val finalized = probe-cell(0)
   val parent = pretend-no-div{
-    internal/with-structural-owner(root,owner,fn()
-      internal/open-structural-owner(root)
+    with-lifetime-scope(root,scope,fn()
+      open-lifetime-scope(root)
     )
   }
   pretend-no-div{
-    internal/with-structural-owner(root,parent,fn()
+    with-lifetime-scope(root,parent,fn()
       for(4000) fn(_)
-        val child = internal/open-structural-owner(root)
-        internal/with-structural-owner(root,child,fn()
+        val child = open-lifetime-scope(root)
+        with-lifetime-scope(root,child,fn()
           on-cleanup(root,fn()
             probe-store(finalized,probe-load(finalized) + 1)
           )
         )
     )
   }
-  internal/dispose-structural-owner(parent)
+  parent.dispose
   probe-load(finalized) == 4000
 
 fun main-row(root : root<<ui>>, pulse : signal<int>, clicks : signal<int>,
@@ -398,8 +399,8 @@ pub fun main()
     bootstrap-order-root,query("#keyed-bootstrap-order-root"),
     bootstrap-order-page(bootstrap-order-source))
 
-  val (compact-root,compact-owner) = create-root fn(current-root)
-    internal/open-structural-owner(current-root)
+  val (compact-root,compact-scope) = create-root fn(current-root)
+    open-lifetime-scope(current-root)
 
   val (dispose-stress-root,dispose-stress-source) = create-root fn(current-root)
     signal(current-root,stress-items())
@@ -455,8 +456,8 @@ pub fun main()
       [item(1,"one"),item(2,"two"),item(3,"three")]),
     fn() safe-set(bootstrap-root,bootstrap-source,[item(7,"seven")]),
     fn() safe-set(bootstrap-root,bootstrap-source,[]),
-    fn() registry-unlink-stress(compact-root,compact-owner),
-    fn() bulk-retirement-stress(compact-root,compact-owner),
+    fn() registry-unlink-stress(compact-root,compact-scope),
+    fn() bulk-retirement-stress(compact-root,compact-scope),
     fn() safe-unmount(move-dispose)
   )
   publish-stress(

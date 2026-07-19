@@ -29,7 +29,6 @@ import * as $kokaine_reactive_effects from './kokaine_reactive_effects.mjs';
 import * as $kokaine_reactive_internal_scheduler from './kokaine_reactive_internal_scheduler.mjs';
 import * as $std_core_undiv from './std_core_undiv.mjs';
 import * as $kokaine_internal_registry from './kokaine_internal_registry.mjs';
-import * as $kokaine_reactive_internal_work_dash_transaction from './kokaine_reactive_internal_work_dash_transaction.mjs';
  
 // externals
  

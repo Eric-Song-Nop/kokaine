@@ -11,9 +11,10 @@
 module kokaine/resource
 
 import kokaine/reactive
+import kokaine/reactive/async
 import kokaine/async/effects
 import kokaine/internal/compat
-import kokaine/reactive/internal/async-runtime
+import kokaine/reactive/async/internal/runtime
 import std/core/unsafe
 
 

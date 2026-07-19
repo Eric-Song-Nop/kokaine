@@ -91,7 +91,7 @@ fun registry-link/set-back[48,5,48,26] : forall<a> (value : (registry-link :: V 
 pub fun new-registry[54,9,54,20] : forall<a> () -> (registry :: V -> V)<a>;
 pub fun registry/sealed[57,9,57,23] : forall<a> (target : (registry :: V -> V)<a>) -> std/core/types/bool;
 pub fun registry/count[61,9,61,22] : forall<a> (target : (registry :: V -> V)<a>) -> std/core/types/int;
-// Internal observability for structural ownership tests. Unlike `count` or
+// Internal observability for lifetime ownership tests. Unlike `count` or
 // `snapshot`, this detects an empty tombstone still retained by the registry.
 pub fun registry/has-linked-nodes[67,18,67,42] : forall<a> (target : (registry :: V -> V)<a>) -> std/core/types/bool;
 // monadic lift

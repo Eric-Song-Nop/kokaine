@@ -6,7 +6,7 @@
   first seals the registry and invokes every claim; only then does it return
   actions which may enter arbitrary host or user code.
 --------------------------------------------------------------------------*/
-module interface kokaine/reactive/internal/cancellation-supervisor
+module interface kokaine/async/internal/cancellation-supervisor
  
 //------------------------------
 //#kki: import declarations

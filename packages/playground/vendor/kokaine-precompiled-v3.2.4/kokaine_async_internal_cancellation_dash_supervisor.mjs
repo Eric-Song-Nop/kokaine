@@ -1,4 +1,4 @@
-// Koka generated module: kokaine/reactive/internal/cancellation-supervisor, koka version: 3.2.4
+// Koka generated module: kokaine/async/internal/cancellation-supervisor, koka version: 3.2.4
 "use strict";
  
 // imports

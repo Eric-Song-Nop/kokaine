@@ -4,7 +4,7 @@ import kokaine/reactive
 import kokaine/resource
 import kokaine/async/effects
 import kokaine/async/internal/web-schedule
-import kokaine/reactive/internal/async-runtime
+import kokaine/reactive/async/internal/runtime
 import std/core/unsafe
 
 

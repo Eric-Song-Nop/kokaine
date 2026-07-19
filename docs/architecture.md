@@ -13,10 +13,34 @@ execution unit, and frames plus the scheduler order and retire those units.
 Having effect-typed signal operations alone would not establish the second
 property; the previous Observer implementation already had such an API.
 
+## Layering target
+
+The dependency direction is intentionally one-way:
+
+```text
+DOM renderer / reactive Async adapter
+                 |
+                 v
+reactive integration capabilities
+                 |
+                 v
+reactive continuation kernel
+```
+
+The kernel knows only sources, traces, planes, scheduling, and lifetime
+retirement. Integration owns capabilities needed by an external system:
+persistent lifetime scopes, provisional construction, and retained host
+re-entry. DOM owns renderer publication and browser event policy. Reactive
+Async owns host-turn closure, task leases, and cancellation policy. A lower
+layer must not import a higher one; a static boundary canary enforces this rule
+in addition to Koka's module graph.
+
 ## Module boundaries
 
 The public module, `src/kokaine/reactive.kk`, exposes opaque roots, signals,
-memos, and re-entry capabilities. Its implementation is split by responsibility:
+and memos. Host-facing capabilities live in
+`src/kokaine/reactive/integration.kk`. Implementations are split by
+responsibility:
 
 | Module | Responsibility |
 | --- | --- |
@@ -25,19 +49,23 @@ memos, and re-entry capabilities. Its implementation is split by responsibility:
 | `internal/capture.kk` | raw-handler reification of synchronous read suffixes |
 | `internal/lifetime.kk` | detached, iterative two-phase retirement |
 | `internal/work-transaction.kk` | deque frontiers and local bootstrap groups |
-| `internal/structural.kk` | retained keyed lifetimes and transaction leases |
 | `internal/scheduler.kk` | invalidation, queueing, resumption, and targeted settle |
 | `internal/handlers.kk` | write interpretation, sampled reads, and dispatch |
-| `internal/reentry.kk` | continuation-derived host re-entry |
-| `internal/application-runner.kk` | explicit rank-2 application-handler reinstallation |
+| `reactive/integration.kk` | host re-entry, borrowed provisions, exclusive leases, and lifetime scopes |
+| `reactive/integration/internal/lifetime-scope.kk` | persistent integration-owned lifetimes |
+| `reactive/integration/internal/provision.kk` | provision lease state, local drain, promotion, and rollback retirement |
+| `reactive/integration/internal/reentry.kk` | captured lifetime context and batched host re-entry |
 | `kokaine/internal/registry.kk` | shared O(1) intrusive registration, claim, and unlink |
-| `internal/one-shot-task.kk` | atomic host-task state and winning claims |
-| `internal/cancellation-supervisor.kk` | claim-first lexical scope cancellation |
-| `internal/async-runtime.kk` | generation-bound Web awaits and task leases |
+| `kokaine/async/internal/one-shot-task.kk` | atomic host-task state and winning claims |
+| `kokaine/async/internal/cancellation-supervisor.kk` | claim-first lexical scope cancellation |
+| `reactive/async.kk` | public generation-owned Async integration |
+| `reactive/async/internal/host-turn.kk` | rank-2 closure of retained completion/cancellation turns |
+| `reactive/async/internal/runtime.kk` | generation-bound Web awaits and task leases |
 | `kokaine/internal/event-runtime.kk` | guarded multi-shot browser-event continuation |
 | `kokaine/internal/key-index.kk` | persistent balanced key lookup shared by renderers |
+| `kokaine/dom/internal/keyed-transaction.kk` | renderer-owned keyed publication journal |
 | `kokaine/control.kk` | memo branches and list/vector keyed control flow |
-| `internal/runtime.kk` | roots and high-level signal, memo, and effect operations |
+| `internal/runtime.kk` | roots and high-level signal, derived memo, and effect operations |
 | `internal/bridge.kk` | unambiguous calls from the opaque facade |
 | `kokaine/async/{effects,structured,web}.kk` | async algebra, groups, and timer/fetch adapters |
 | `kokaine/web/window.kk` | one-shot window awaits, focus, and geometry |
@@ -58,7 +86,7 @@ An effect row reports operations that escape a function after local handling.
 It does not attest that an operation was never performed inside the function,
 and it does not say how reactivity propagates. Kokaine adds the missing runtime
 boundary explicitly: every pure derivation bootstrap, resumption, and targeted
-settlement enters a nested pure phase. Reactive writes, structural registration,
+settlement enters a nested pure phase. Reactive writes, lifetime registration,
 disposal, and re-entry fail before mutation in that phase, even when a local
 wrapper handled their public effect row or targets another root. Separately,
 continuation-native propagation is guaranteed structurally: sources store
@@ -120,9 +148,7 @@ dynamic dependencies change without explicit subscribe/unsubscribe logic.
 `Sample-read`, used by `untrack`, resumes the raw context with the current value
 without creating a trace or source entry. Outside `reify-trace`, the ordinary
 dispatch read handler likewise validates and returns the cell without retaining
-a continuation. `State-entry-read` inside stateful reification is different
-again: it captures the memo entry described below but deliberately creates no
-self-edge on the output source.
+a continuation.
 
 The initial calculation closure exists only in a one-shot bootstrap slot. The
 slot is cleared before invocation. Once bootstrap has begun, neither a producer
@@ -135,13 +161,13 @@ has been captured and invalidated.
 ## Source-local continuation indexing
 
 A source contains its current cell, equality function, version, and a list of
-rank-2 `packed-capture` values. Each package contains a typed triple:
+rank-2 `packed-capture` values. Each package contains:
 
 ```text
-(execution plane, target trace, owning read trace)
+(execution plane, captured read trace)
 ```
 
-The rank-2 consumer can enqueue or inspect the pair without exposing its
+The rank-2 consumer can enqueue or inspect the capability without exposing its
 ambient effect row. The source does not store a subscriber callback, node ID,
 rank, or retained observer action.
 
@@ -157,8 +183,8 @@ For an unequal write, the write handler:
 1. commits the source cell;
 2. increments its version;
 3. visits its active packed continuation capabilities;
-4. changes each live target to `Capture-pending` and queues
-   `Resume-work(target)`; and
+4. changes each live trace to `Capture-pending` and queues
+   `Resume-work(trace)`; and
 5. flushes unless a batch or another flush is active.
 
 `Capture-pending` and `Capture-running` describe the state of the actual
@@ -168,10 +194,9 @@ Bootstrap tickets contain a scope whose one-shot bootstrap slot has not yet
 been consumed.
 
 Equality is the first propagation boundary. An equal write neither increments
-the version nor visits the source index. `signal-always` and the `*-always`
-derived forms select an equality function that always reports unequal; custom
-`signal-by`, `derive-by`, and `memo-by` equality can deliberately stop a whole
-downstream suffix tree.
+the version nor visits the source index. `signal-always` and `derive-always`
+select an equality function that always reports unequal; custom `signal-by`
+and `derive-by` equality can deliberately stop a whole downstream suffix tree.
 
 ## Continuation frontier
 
@@ -209,42 +234,31 @@ so targeted validation cannot accidentally resume an effectful UI continuation
 under an erased effect row.
 
 During a full flush, runnable pure derivations are advanced before user effects;
-a pure ticket whose structural owner first needs an effect-plane generation is
+a pure ticket whose parent lifetime first needs an effect-plane generation is
 deferred while the scheduler scans the rest of the pure frontier. Only then
 does the flush advance effect work.
 
 During `memo/get`, the `validate-derived` operation settles that memo before its
 output cell is read. Targeted settling walks only the requested producer's
-structural parent gates, input producer capabilities, state-entry target, and
-nested child trace. It can resume the necessary pure K immediately and reports
-`ok`, `deferred`, or `failed`; it never drains unrelated pure tickets or any
-effect-plane queue. A per-producer settling guard and trace/gate states detect
-cycles. This is why synchronous reads remain coherent without a global
-topological rank or a full scheduler drain.
+parent gates, input producer capabilities, and nested child trace. It can resume
+the necessary pure K immediately and reports `ok`, `deferred`, or `failed`; it
+never drains unrelated pure tickets or any effect-plane queue. A per-producer
+settling guard and trace/gate states detect cycles. This is why synchronous
+reads remain coherent without a global topological rank or a full scheduler
+drain.
 
-## `derive` and `memo(previous)`
+## Derived values and accumulated state
 
-Both APIs expose a read-only memo value backed by a source and pure producer,
-and both pass publication through their selected equality function.
+`derive`, `derive-by`, and `derive-always` expose a stateless read-only
+`memo<a>` backed by a source and pure producer. Bootstrap invokes the calculator
+once, tracked reads capture calculator suffixes, and later invalidation resumes
+those suffixes. The producer retains its pure scope and settling guard, not the
+calculator. Publication passes through the selected equality function.
 
-`derive` is stateless. Bootstrap invokes its calculator once, tracked reads
-capture the calculator suffix, and later invalidation resumes those suffixes.
-The producer retains its pure scope and settling guard, not the calculator.
-
-`memo(previous)` adds state without subscribing to its own output. Before it
-invokes the user calculator, bootstrap performs `State-entry-read` on the output
-source. That operation captures a `Trace-entry` but does not add a source edge.
-Each entry resume injects the latest successfully committed output as
-`previous`, then executes the calculator suffix. The initial argument is used
-until a value has committed successfully; a failed draft cannot become the next
-state.
-
-Reads beneath an entry target that entry capability rather than an ordinary
-read node. Targeted settling checks the entry before and after input and child
-settlement so work from an obsolete entry generation cannot win over the
-replacement continuation. This state-entry routing is the semantic difference
-between `memo(previous)` and a stateless `derive`; it is not a hidden mutable
-observer field or an output self-dependency.
+Accumulated values are modeled explicitly. A `signal` stores the mutable value;
+a `create-effect` tracks the inputs and modifies that signal from its untracked
+apply phase. This keeps history in the write/effect plane and leaves pure
+derivations as functions of their current reactive inputs.
 
 ## Draft publication and failure
 
@@ -254,13 +268,13 @@ generation, publishes the new value or effect, activates the draft trace, and
 marks its frame live.
 
 If calculation, cleanup, or publication fails, the draft continuations and
-structural children are finalized. The source write that triggered the turn is
-not rolled back. The original continuation capability remains pending and can
-be retried by a later flush; there is no recovery action that reruns the whole
-calculation. An abortive final control operation follows the same dynamic
-rollback path even though it does not return an `Error` value.
+owned lifetime children are finalized. The source write that triggered the
+turn is not rolled back. The original continuation capability remains pending
+and can be retried by a later flush; there is no recovery action that reruns
+the whole calculation. An abortive final control operation follows the same
+dynamic rollback path even though it does not return an `Error` value.
 
-## Structural lifetime
+## Continuation and integration lifetimes
 
 Every resumed suffix runs in a fresh draft frame. Work created during that
 dynamic extent—child effect scopes, pure derivation scopes, and opaque resource
@@ -269,7 +283,7 @@ child or finalizer registries on the frame's lifetime owner. Each registration
 has an O(1), idempotent unlink handle. A resource's cleanup action remains
 inside the parked K's `finally`; the registry retains only its abstract
 one-shot finalization capability. On successful publication the draft frame
-becomes the live structural extent of that trace node.
+becomes the live lifetime extent of that trace node.
 
 Replacing a generation first marks the old frame and its complete subtree dead,
 then runs finalizers. This prevents cleanup code from attaching new reactive
@@ -277,20 +291,20 @@ work to a half-retired branch. A stale frame rejects registration, and root
 disposal applies the same retirement transitively and idempotently.
 
 Lifetime ownership is explicit, but it is not part of dependency propagation.
-Retirement seals and detaches the complete structural subtree, marks every
+Retirement seals and detaches the complete owned subtree, marks every
 scope dead, and only then runs collected finalizers iteratively. Cleanup calls
 `rcontext.finalize`, which enters the parked resource K's `finally` to remove
 DOM listeners and ranges exactly once. Explicit unregistration consumes the
 resource capability as well as its registry handle.
 
-Keyed rows require a lifetime that outlasts any one collection-trace
-generation. An explicit structural owner is only a lifetime, frame, captured
-continuation gate, and removable registration under the current frame. It owns
-no queue, target marks, or secondary ledger. Each keyed region owns one
-persistent reconciliation owner; every business key owns a child row owner.
-Reordering retains that child owner, deletion unlinks and retires it exactly
-once, and retiring the enclosing conditional region or root reaches the same
-row subtree transitively.
+Integrations sometimes require a lifetime that outlasts any one trace
+generation. `kokaine/reactive/integration` exposes a persistent lifetime scope
+for that purpose. The scope contains only a lifetime frame, captured generation
+gate, and removable registration under its parent; it owns no queue or
+publication journal. Each keyed region opens one integration scope, and every
+business key opens a child row scope. Reordering retains that child scope,
+deletion unlinks and retires it exactly once, and retiring the enclosing region
+or root reaches the same row subtree transitively.
 
 ## Batching
 
@@ -299,7 +313,7 @@ Nested batches are counted on the root, and the outermost `leave-batch` flushes.
 Synchronous memo reads remain coherent through targeted producer settlement.
 
 Host re-entry is always one batched turn. This lets a callback register all of
-its structural children before one of its writes can retire the registering
+its lifetime children before one of its writes can retire the registering
 generation. At batch exit, an invalidated generation and every child created
 during the callback are retired together.
 
@@ -341,7 +355,7 @@ imperative and declarative closed-shadow hosts are recorded separately.
 Managed element and trusted-HTML roots carry an internal same-root re-entry
 capability in a `WeakMap`. A later `mount` into such a node restores that exact
 generation before registering its own scope, so physical nesting under a
-dynamic region also becomes structural ownership. `mount-independent` opts out
+dynamic region also becomes lifetime ownership. `mount-independent` opts out
 when an independently disposed nested root is intentional. Retirement clears
 the live portal and leaves only a numeric same-root tombstone, so an externally
 retained stale node is rejected without retaining its root or generation frame.
@@ -371,18 +385,22 @@ commit.
 
 Reconciliation uses a persistent AVL key index. One sequential source walk
 constructs the desired table and update list with `O(log n)` lookup/insertion,
-so table construction is `O(n log n)`. Draft bootstrap uses the scheduler's
-deque-backed local work transaction rather than scanning the global frontier.
+so table construction is `O(n log n)`. Draft bootstrap uses a deque-backed
+provision rather than scanning the global frontier. `provision` is a borrowed
+identity; only its `provision-lease` can drain, promote, or discard the local
+work. This lets integrations decide participation without giving a nested
+joiner authority over its owner.
 Inserting a duplicate key fails the draft. DOM ordering is then a four-part
 transaction:
 
 1. build draft rows and validate keys/equality without publishing the new table
    or any retained-row source updates;
-2. drain only the transaction-local bootstrap FIFO while resumptions remain on
+2. drain only the provision-local bootstrap FIFO while resumptions remain on
    the global frontier; nested keyed construction enlists a two-phase
-   prepare/publish participant in the active outer lease;
-3. prepare and revalidate every enlisted DOM change, commit the outer scheduler
-   lease, and only then publish joined and outer keyed tables; and
+   prepare/publish participant in the mount's renderer-owned journal;
+3. prepare and revalidate every enlisted DOM change, promote the independent
+   provision lease, and only then publish the renderer journal plus the outer
+   keyed table; and
 4. retire stale rows through an explicit pending-retirement ledger which keeps
    a failed host cleanup retryable without making unmanaged DOM invisible to
    the authoritative table.
@@ -391,10 +409,12 @@ On bootstrap failure or abortive final control, reconciliation aborts and
 detaches the local work groups before cleanup can re-enter, then disposes every
 rollback-reachable draft and rolls back every enlisted publication. On a move
 or participant-prepare failure, it restores the previous row order and disposes
-draft owners before rethrowing. A joined nested lease cannot steal commit or
-abort authority from its outer owner, and cannot publish merely because its own
-adapter call returned. Structural transactions encode that distinction as
-`Owned` versus `Joined` authority rather than inferring it from a no-op commit.
+draft owners before rethrowing. A nested adapter receives only a borrowed
+`provision`, so it cannot steal promote/discard authority from its outer owner
+or publish merely because its own call returned. The mount-level keyed context
+maps that exact provision identity to the renderer journal. If an active
+provision belongs to another integration, keyed reconciliation fails closed;
+Reactive neither stores the journal nor decides renderer ownership.
 Joined keyed reconciliation is intentionally initial-only: updating retained
 rows would require signal writes in the journal's total publication suffix, so
 that case fails closed instead of weakening the two-phase contract.
@@ -453,10 +473,11 @@ validated native or fragment paths, including ordinary `div`/`span` content.
 Initial mounts, data-only updates, and keyed updates whose physical order
 already matches remain unaffected.
 
-The atomicity claim is about scheduler ownership and authoritative reactive
-publication: no joined or outer table/source state becomes visible until every
-enlisted prepare succeeds. Browser DOM preparation itself is not a reversible
-database transaction. Ordinary ranges are restored on modeled failure, and
+The atomicity claim coordinates two independent owners: Reactive owns draft
+bootstrap work, while the renderer owns authoritative table/source publication.
+No joined or outer state becomes visible until every renderer prepare succeeds.
+Browser DOM preparation itself is not a reversible database transaction.
+Ordinary ranges are restored on modeled failure, and
 custom-element or opaque lifecycle cases which could synchronously observe an
 unrecoverable partial move are rejected before mutation. Stale-row removal is
 deliberately post-commit; while it is pending, the table explicitly records the
@@ -486,17 +507,16 @@ The retained JavaScript function is only the transport/ABI trampoline. When the
 browser invokes it, the adapter snapshots the event and `reenter`:
 
 1. rejects a retired or disposed frame;
-2. sets the state-entry target to `Nothing`;
-3. restores the captured effect-plane gate and frame;
-4. installs fresh signal read/write handlers; and
-5. synchronously resumes the event continuation as one batch.
+2. restores the captured effect-plane gate and lifetime frame;
+3. installs fresh signal read/write handlers; and
+4. synchronously resumes the event continuation as one batch.
 
 Reactive work created inside the callback is therefore owned by the exact DOM
 generation that installed the listener and is retired with that region or
 mount.
 
 `reenter` does not itself advance a tracked-read K and remains non-resumptive.
-It supplies the structural/reactive handler context in which the separate event
+It supplies the lifetime/reactive handler context in which the separate event
 K is resumed. Signal writes made by the resumed action then invalidate and
 schedule tracked-read continuations in the usual way.
 
@@ -509,16 +529,16 @@ function that no longer retains the root or portal. The parked suffix has not
 begun the user action and therefore owns no acquired cleanup.
 
 This boundary is intentionally precise. Browser delivery begins with an ABI
-callback, then performs structural re-entry and an actual event-continuation
+callback, then performs generation re-entry and an actual event-continuation
 resume. It still cannot reconstruct arbitrary user-defined handlers whose
 lexical extent around `mount` has already returned. Accordingly, `callback` has
 the closed `<signal-read,signal-write,ui,async,pure>` capability row. An
 unsupported application effect must be handled inside the callback and is
 otherwise rejected during type checking; it cannot silently become a delayed
-missing-handler failure. The internal rank-2 `AppRunner` surrounds each whole
-host re-entry, including batch exit and cleanup. The current public Web surface
-uses its closed `ui` runner; a wider future surface must supply an explicit
-runner which really reinstalls its application handlers.
+missing-handler failure. DOM event delivery already has a closed public
+callback row and does not use the Async host-turn runner. Its ABI trampoline
+enters the integration-owned `reentry` capability directly before resuming the
+separate event continuation.
 
 Koka's `pure` row includes modeled `exn`/`div`; such exceptions are reported by
 the event boundary and unwind the batch normally. A native JavaScript throw from
@@ -528,11 +548,14 @@ innermost boundary and translate them to Koka `exn`, as the DOM adapter does.
 
 ## Browser async task leases
 
-`run-async(root, action)` is the explicit boundary for direct-style Web async.
+`kokaine/reactive/async.run-async(root, action)` is the explicit boundary for
+direct-style Web async. The reactive core does not import this integration
+module; it supplies only the root and generation capabilities used by it.
 An await parks only its suffix and returns from the initiating reactive turn.
 Even a synchronously reported setup result is queued as a microtask, so every
 continuation after an await enters a fresh reactive batch through the captured
-generation and its application runner.
+generation. Before that retained callback runs, the Async adapter closes the
+complete turn through its rank-2 `host-turn-runner`.
 
 Each host operation is a task lease backed by `one-shot-task`'s single state
 cell. Its only winning transitions are Pending to Ready, Ready to Running, and
@@ -542,13 +565,13 @@ user finalizer runs. A disposer returned after another transition has already
 won is returned to setup code and invoked immediately.
 
 Tasks in one active lexical `async-scope` share a registry-backed cancellation
-supervisor and one structural cleanup registration. Normal completion claims
+supervisor and one lifetime cleanup registration. Normal completion claims
 Ready, unlinks its cancellation registration in O(1), and detaches the empty
-supervisor before re-entry. Cancellation or structural retirement instead:
+supervisor before re-entry. Cancellation or lifetime retirement instead:
 
 1. seals and detaches the supervisor registry;
 2. claims every sibling task state;
-3. unlinks the aggregate structural, family, and direct-index registrations;
+3. unlinks the aggregate lifetime, family, and direct-index registrations;
 4. unwinds every cancel continuation and lexical `finally`; and only then
 5. invokes the detached host disposers.
 
@@ -574,11 +597,13 @@ outermost snapshot drains, then the private root retirement runs exactly once.
 Coordinators are per root, so nested cleanup may retire another root without
 consuming or blocking the first root's deferred request.
 
-Ordinary host completion uses validated `run-application-reentry`. Retirement
-has a narrower internal re-entry which restores the already captured reactive
-context solely to discontinue the parked strand after its frame is dead. The
-`AppRunner` still surrounds that complete cancellation turn, while any attempt
-by a canceling `finally` to register fresh work is rejected by the dead frame.
+Ordinary host completion uses validated `run-reentry`. Retirement has a
+narrower internal re-entry which restores the already captured reactive context
+solely to discontinue the parked strand after its frame is dead. Both paths run
+inside the Async-owned `host-turn-runner`. The current public `ui` surface uses
+an identity runtime function, but the rank-2 field is the type-level boundary
+which closes the whole completion or cancellation turn. Any attempt by a
+canceling `finally` to register fresh work is rejected by the dead frame.
 
 Promise, timer, Fetch, window-event, structured concurrency, and `Resource`
 adapters all use this protocol. The window adapter races revocable one-shot
@@ -596,12 +621,12 @@ complete rollback snapshot, and stale handles no longer retain sibling values.
 - `trace-semantics.kk` checks exact suffix capture and dynamic branches.
 - `targeted-settle*.kk` and `execution-planes.kk` check isolated producer
   settlement and the pure/effect split.
-- `stateful-entry-gates.kk`, `entry-targeted-settle.kk`, and
-  `entry-structural.kk` check state-entry routing and ownership.
-- `structural-scopes.kk` checks replacement cleanup and stale-frame rejection.
-- `structural-transactions.kk` checks persistent row ownership, parent/root
-  retirement, stale-owner rejection, outer-versus-joined leases, and the
-  prepare/publish/rollback journal.
+- `derived-structural.kk` and `structural-scopes.kk` check derived replacement,
+  cleanup, and stale-frame rejection.
+- `integration-boundaries.kk` checks persistent row ownership, exact borrowed
+  provision identity, exclusive leases, and failed-prefix cleanup. Renderer
+  journal ordering is guarded separately by `keyed_transaction_boundary.py`
+  and the keyed browser fixture.
 - `control-flow.kk` checks conditional/list/vector snapshots and duplicate-key
   parity; `key-index.kk` checks balanced lookup under adversarial insertion.
 - `final-control-rollback.kk` checks abandoned drafts and exact-K retry.
