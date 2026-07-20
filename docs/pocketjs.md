@@ -77,14 +77,19 @@ the generated application module, not Koka's auto-running `__main` wrapper.
 Pocket's manifest still selects its supported framework adapter; Kokaine is
 composed beneath that entry rather than added as a third Pocket framework mode.
 
-That rollback boundary covers the state Kokaine owns: the Koka cleanup,
-detached Koka root, and installed bridge. Pocket 0.6's own `render()` installs
-its application/overlay layers and frame handler before invoking the renderer
-callback, but exposes no public rollback when a later startup operation throws.
-Consequently, a Pocket-side mount failure after that point must be treated as a
-fatal application-start failure and must not be retried in the same guest. Full
-host rollback requires an upstream transactional `mount()` implementation; the
-adapter deliberately does not reach into Pocket's private renderer state.
+The Koka entry must bracket its own partial startup until it returns cleanup;
+the wrapper cannot call a disposer that was never returned. The runnable
+example uses a committed `finally` to retire a Koka root if view construction or
+mounting throws. After cleanup has been returned, the wrapper rollback boundary
+covers that cleanup, the native Koka root, and the installed bridge.
+
+Pocket 0.6's own `render()` installs its application/overlay layers and frame
+handler before invoking the renderer callback, but exposes no public rollback
+when a later startup operation throws. Consequently, any startup failure after
+that point must be treated as a fatal application-start failure and must not be
+retried in the same guest. Full host rollback requires an upstream transactional
+`mount()` implementation; the adapter deliberately does not reach into Pocket's
+private renderer state.
 
 Generated Koka exports also need a modeled-exception handler at every raw
 JavaScript call edge. Wrap the entry and returned disposer with `host-entry`;
