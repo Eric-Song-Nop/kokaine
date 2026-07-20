@@ -12,6 +12,10 @@ import {
 
 const BRIDGE_KEY = Symbol.for("kokaine.pocketjs.bridge");
 const BRIDGE_VERSION = 1;
+// PocketJS 0.6 always bakes its default 16px regular face into slot 2, while
+// the native core's raw node default remains slot 0. Class-based text sizing
+// selects a slot explicitly; Kokaine's inline-style vocabulary must as well.
+const DEFAULT_FONT_SLOT = 2;
 
 const BRIDGE_METHODS = [
   "createView",
@@ -76,6 +80,7 @@ function validateRenderer(renderer) {
 function createBridge(renderer, roots) {
   const inlineStyles = new WeakMap();
   const pressHandlers = new WeakMap();
+  const textChildren = new WeakMap();
 
   function setInlineStyle(node, name, value) {
     const previous = inlineStyles.get(node) ?? {};
@@ -100,7 +105,27 @@ function createBridge(renderer, roots) {
     },
 
     createText(value) {
-      return renderer.createTextNode(value);
+      const element = renderer.createElement("text");
+      let content;
+      try {
+        setInlineStyle(element, "fontSlot", DEFAULT_FONT_SLOT);
+        content = renderer.createTextNode(value);
+        renderer.insertNode(element, content, null);
+      } catch (error) {
+        // Roll back every native allocation without replacing the causal
+        // renderer error if cleanup itself fails.
+        for (const node of [content, element]) {
+          if (!node) continue;
+          try {
+            discardNode(node);
+          } catch {
+            // Best-effort rollback only.
+          }
+        }
+        throw error;
+      }
+      textChildren.set(element, content);
+      return element;
     },
 
     createImage() {
@@ -134,7 +159,11 @@ function createBridge(renderer, roots) {
     },
 
     replaceText(node, value) {
-      return renderer.replaceText(node, value);
+      const content = textChildren.get(node);
+      if (!content) {
+        throw new TypeError("Kokaine PocketJS replaceText() requires a bridge text element");
+      }
+      return renderer.replaceText(content, value);
     },
 
     insertBefore(parent, node, anchor) {
