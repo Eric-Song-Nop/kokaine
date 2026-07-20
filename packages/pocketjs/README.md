@@ -45,6 +45,11 @@ evaluated in Pocket's native QuickJS guest. Lower-level
 `installPocketBridge()` and `createPocketRoot()` exports remain available for
 hosts which need to compose Pocket's `mount` manually.
 
+On startup failure, the wrapper rolls back Koka-owned cleanup, its root, and
+the bridge. Pocket 0.6 installs its own root layers and frame handler before the
+render callback and has no public full-startup rollback, so a later Pocket-side
+mount failure is fatal for that guest and must not be retried in place.
+
 Pocket 0.6's CLI expects to run from a full PocketJS checkout. To compile and
 exercise this repository's example against the upstream Rust/WASM core:
 
