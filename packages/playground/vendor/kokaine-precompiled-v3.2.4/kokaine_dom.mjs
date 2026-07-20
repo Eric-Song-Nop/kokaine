@@ -28,14 +28,14 @@ import * as $std_core from './std_core.mjs';
 import * as $kokaine_reactive from './kokaine_reactive.mjs';
 import * as $kokaine_reactive_integration from './kokaine_reactive_integration.mjs';
 import * as $kokaine_reactive_async from './kokaine_reactive_async.mjs';
+import * as $kokaine_async_effects from './kokaine_async_effects.mjs';
 import * as $kokaine_html from './kokaine_html.mjs';
-import * as $kokaine_internal_event_dash_runtime from './kokaine_internal_event_dash_runtime.mjs';
+import * as $kokaine_reactive_integration_event from './kokaine_reactive_integration_event.mjs';
 import * as $kokaine_internal_key_dash_index from './kokaine_internal_key_dash_index.mjs';
 import * as $kokaine_internal_compat from './kokaine_internal_compat.mjs';
 import * as $kokaine_dom_internal_keyed_dash_transaction from './kokaine_dom_internal_keyed_dash_transaction.mjs';
 import * as $std_core_unsafe from './std_core_unsafe.mjs';
 import * as $std_core_undiv from './std_core_undiv.mjs';
-import * as $kokaine_async_effects from './kokaine_async_effects.mjs';
 import * as $kokaine_reactive_integration_internal_lifetime_dash_scope from './kokaine_reactive_integration_internal_lifetime_dash_scope.mjs';
 import * as $kokaine_reactive_integration_internal_provision from './kokaine_reactive_integration_internal_provision.mjs';
 import * as $kokaine_reactive_integration_internal_reentry from './kokaine_reactive_integration_internal_reentry.mjs';
@@ -2171,14 +2171,14 @@ export function snapshot(value) /* (value : raw-event) -> <exn,ui> kokaine/html/
  
  
 // monadic lift
-export function _mlift_invoke_event_11425(_pat_1_2) /* (bool) -> <pure,kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue,kokaine/reactive/effects/signal-read,kokaine/reactive/effects/signal-write,ui> () */  {
+export function _mlift_invoke_event_11425(_pat_1_2) /* (bool) -> <kokaine/reactive/effects/signal-read,kokaine/reactive/effects/signal-write,ui,pure|kokaine/async/effects/async> () */  {
   return $std_core_types.Unit;
 }
  
  
 // monadic lift
-export function _mlift_invoke_event_11426(continuation, portal, root, captured) /* forall<_e> (continuation : kokaine/internal/event-runtime/event-continuation, portal : kokaine/reactive/integration/reentry<ui>, root : kokaine/reactive/root<ui>, captured : kokaine/html/event) -> <exn,ui> () */  {
-  var _x67 = $std_core_hnd._open_none1(function(value_1 /* kokaine/internal/event-runtime/event-continuation */ ) {
+export function _mlift_invoke_event_11426(continuation, portal, root, captured) /* forall<_e> (continuation : kokaine/reactive/integration/event/event-continuation<kokaine/async/effects/async,kokaine/html/event>, portal : kokaine/reactive/integration/reentry<ui>, root : kokaine/reactive/root<ui>, captured : kokaine/html/event) -> <exn,ui> () */  {
+  var _x67 = $std_core_hnd._open_none1(function(value_1 /* kokaine/reactive/integration/event/event-continuation<kokaine/async/effects/async,kokaine/html/event> */ ) {
       var _x68 = value_1.value;
       return (_x68 !== null);
     }, continuation);
@@ -2190,7 +2190,7 @@ export function _mlift_invoke_event_11426(continuation, portal, root, captured) 
               return value_3;
             }, root), function() {
              
-            var x_11738 = $kokaine_internal_event_dash_runtime.event_continuation_fs_resume(continuation, captured);
+            var x_11738 = $kokaine_reactive_integration_event.event_continuation_fs_resume(continuation, captured);
             if ($std_core_hnd._yielding()) {
               return $std_core_hnd.yield_extend(_mlift_invoke_event_11425);
             }
@@ -2205,7 +2205,7 @@ export function _mlift_invoke_event_11426(continuation, portal, root, captured) 
   }
 }
  
-export function invoke_event(root, portal, continuation, value) /* (root : kokaine/reactive/root<ui>, portal : kokaine/reactive/integration/reentry<ui>, continuation : kokaine/internal/event-runtime/event-continuation, value : raw-event) -> ui () */  {
+export function invoke_event(root, portal, continuation, value) /* (root : kokaine/reactive/root<ui>, portal : kokaine/reactive/integration/reentry<ui>, continuation : kokaine/reactive/integration/event/event-continuation<kokaine/async/effects/async,kokaine/html/event>, value : raw-event) -> ui () */  {
   return $std_core_exn.exn_fs__handle($std_core_exn._Hnd_exn(0, function(m /* hnd/marker<ui,()> */ , ___wildcard_x654__16 /* hnd/ev<exn> */ , x /* exception */ ) {
         return $std_core_hnd.yield_to_final(m, function(___wildcard_x654__45 /* (hnd/resume-result<10004,()>) -> ui () */ ) {
             var _x69 = x.message;
@@ -2214,7 +2214,7 @@ export function invoke_event(root, portal, continuation, value) /* (root : kokai
       }), function(_res /* () */ ) {
       return _res;
     }, function() {
-      var _x70 = $std_core_hnd._open_none1(function(value_0 /* kokaine/internal/event-runtime/event-continuation */ ) {
+      var _x70 = $std_core_hnd._open_none1(function(value_0 /* kokaine/reactive/integration/event/event-continuation<kokaine/async/effects/async,kokaine/html/event> */ ) {
           var _x71 = value_0.value;
           return (_x71 !== null);
         }, continuation);
@@ -2236,7 +2236,7 @@ export function invoke_event(root, portal, continuation, value) /* (root : kokai
     });
 }
  
-export function retire_event_listener(target, name, continuation, listener) /* (target : element, name : string, continuation : kokaine/internal/event-runtime/event-continuation, listener : ref<global,maybe<dom-listener>>) -> <exn,ui> () */  {
+export function retire_event_listener(target, name, continuation, listener) /* (target : element, name : string, continuation : kokaine/reactive/integration/event/event-continuation<kokaine/async/effects/async,kokaine/html/event>, listener : ref<global,maybe<dom-listener>>) -> <exn,ui> () */  {
   return $std_core_hnd.finally_prompt(function() {
       var _x72 = listener.value;
       if (_x72 === null) {
@@ -2259,20 +2259,20 @@ export function retire_event_listener(target, name, continuation, listener) /* (
           return $std_core_exn.$throw($std_core_types._lp__plus__plus__rp_("browser DOM exception: ", $std_core_hnd._open_none1(dom_attempt_message, result)));
         }
       }
-    }, $std_core_hnd._open_none1(function(value_2 /* kokaine/internal/event-runtime/event-continuation */ ) {
-        return ((value_2).value = ($kokaine_internal_event_dash_runtime.Event_retired));
+    }, $std_core_hnd._open_none1(function(value_2 /* kokaine/reactive/integration/event/event-continuation<kokaine/async/effects/async,kokaine/html/event> */ ) {
+        return ((value_2).value = ($kokaine_reactive_integration_event.Event_retired));
       }, continuation));
 }
  
  
 // monadic lift
-export function _mlift_capture_event_listener_11427(captured, _y_x10412) /* forall<_e> (captured : ref<global,maybe<kokaine/internal/event-runtime/event-continuation>>, kokaine/internal/event-runtime/event-continuation) -> <pure,kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue,kokaine/reactive/effects/signal-read,kokaine/reactive/effects/signal-write,ui> () */  {
+export function _mlift_capture_event_listener_11427(captured, _y_x10412) /* forall<_e> (captured : ref<global,maybe<kokaine/reactive/integration/event/event-continuation<<kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue>,kokaine/html/event>>>, kokaine/reactive/integration/event/event-continuation<<kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue>,kokaine/html/event>) -> <kokaine/reactive/effects/signal-read,kokaine/reactive/effects/signal-write,ui,pure,kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue> () */  {
   return ((captured).value = ($std_core_types.Just(_y_x10412)));
 }
  
  
 // monadic lift
-export function _mlift_capture_event_listener_11428(captured, wild__) /* forall<_e> (captured : ref<global,maybe<kokaine/internal/event-runtime/event-continuation>>, wild_ : ()) -> <exn,ui> kokaine/internal/event-runtime/event-continuation */  {
+export function _mlift_capture_event_listener_11428(captured, wild__) /* forall<_e> (captured : ref<global,maybe<kokaine/reactive/integration/event/event-continuation<<kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue>,kokaine/html/event>>>, wild_ : ()) -> <exn,ui> kokaine/reactive/integration/event/event-continuation<<kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue>,kokaine/html/event> */  {
   var _x74 = captured.value;
   if (_x74 !== null) {
     return _x74.value;
@@ -2282,22 +2282,22 @@ export function _mlift_capture_event_listener_11428(captured, wild__) /* forall<
   }
 }
  
-export function capture_event_listener(root, action) /* (root : kokaine/reactive/root<ui>, action : kokaine/html/callback) -> <exn,ui> kokaine/internal/event-runtime/event-continuation */  {
+export function capture_event_listener(root, action) /* (root : kokaine/reactive/root<ui>, action : kokaine/html/callback) -> <exn,ui> kokaine/reactive/integration/event/event-continuation<kokaine/async/effects/async,kokaine/html/event> */  {
    
   var captured = { value: ($std_core_types.Nothing) };
    
-  var root_0_10004 = $std_core_hnd._open_none1(function(value_0 /* kokaine/reactive/root<ui> */ ) {
+  var inner_0 = $std_core_hnd._open_none1(function(value_0 /* kokaine/reactive/root<ui> */ ) {
       return value_0;
     }, root);
    
-  var x_11746 = $kokaine_reactive_internal_handlers.dispatch_handled(root_0_10004, function() {
+  var x_11746 = $kokaine_reactive_internal_handlers.dispatch_handled(inner_0, function() {
       return $kokaine_reactive_async_internal_runtime.run_generation_async($std_core_hnd._open_none1(function(value_1 /* kokaine/reactive/root<ui> */ ) {
             return value_1;
           }, root), function() {
            
-          var x_0_11749 = $kokaine_internal_event_dash_runtime.capture_event(action);
+          var x_0_11749 = $kokaine_reactive_integration_event.capture_event(action);
            
-          function next_0_11750(_y_x10412) /* (kokaine/internal/event-runtime/event-continuation) -> <pure,kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue,kokaine/reactive/effects/signal-read,kokaine/reactive/effects/signal-write,ui> () */  {
+          function next_0_11750(_y_x10412) /* (kokaine/reactive/integration/event/event-continuation<<kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue>,kokaine/html/event>) -> <kokaine/reactive/effects/signal-read,kokaine/reactive/effects/signal-write,ui,pure,kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue> () */  {
             return ((captured).value = ($std_core_types.Just(_y_x10412)));
           }
           if ($std_core_hnd._yielding()) {
@@ -2326,7 +2326,7 @@ export function capture_event_listener(root, action) /* (root : kokaine/reactive
  
  
 // monadic lift
-export function _mlift_install_event_listener_11429(continuation, listener, name, target, _y_x10422) /* (continuation : kokaine/internal/event-runtime/event-continuation, listener : ref<global,maybe<dom-listener>>, name : string, target : element, hnd/ev-index) -> <kokaine/reactive/effects/signal-write,div,exn,ui> () */  {
+export function _mlift_install_event_listener_11429(continuation, listener, name, target, _y_x10422) /* (continuation : kokaine/reactive/integration/event/event-continuation<kokaine/async/effects/async,kokaine/html/event>, listener : ref<global,maybe<dom-listener>>, name : string, target : element, hnd/ev-index) -> <kokaine/reactive/effects/signal-write,div,exn,ui> () */  {
   return $std_core_hnd._mask_at(_y_x10422, false, function() {
       return retire_event_listener(target, name, continuation, listener);
     });
@@ -2340,7 +2340,7 @@ export function _mlift_install_event_listener_11430(committed, _pat_1) /* forall
  
  
 // monadic lift
-export function _mlift_install_event_listener_11431(committed, continuation, listener, name, root, target, installed) /* forall<_e> (committed : ref<global,bool>, continuation : kokaine/internal/event-runtime/event-continuation, listener : ref<global,maybe<dom-listener>>, name : string, root : kokaine/reactive/root<ui>, target : element, installed : dom-listener) -> <ui,exn> () */  {
+export function _mlift_install_event_listener_11431(committed, continuation, listener, name, root, target, installed) /* forall<_e> (committed : ref<global,bool>, continuation : kokaine/reactive/integration/event/event-continuation<kokaine/async/effects/async,kokaine/html/event>, listener : ref<global,maybe<dom-listener>>, name : string, root : kokaine/reactive/root<ui>, target : element, installed : dom-listener) -> <ui,exn> () */  {
    
   ((listener).value = ($std_core_types.Just(installed)));
    
@@ -2372,7 +2372,7 @@ export function _mlift_install_event_listener_11431(committed, continuation, lis
  
  
 // monadic lift
-export function _mlift_install_event_listener_11432(continuation, name, root, target, _y_x10418) /* forall<_e,_e1,_e2> (continuation : kokaine/internal/event-runtime/event-continuation, name : string, root : kokaine/reactive/root<ui>, target : element, kokaine/reactive/integration/internal/reentry/reentry<ui>) -> exn () */  {
+export function _mlift_install_event_listener_11432(continuation, name, root, target, _y_x10418) /* forall<_e,_e1,_e2> (continuation : kokaine/reactive/integration/event/event-continuation<kokaine/async/effects/async,kokaine/html/event>, name : string, root : kokaine/reactive/root<ui>, target : element, kokaine/reactive/integration/internal/reentry/reentry<ui>) -> exn () */  {
    
   var listener = { value: ($std_core_types.Nothing) };
    
@@ -2412,7 +2412,7 @@ export function _mlift_install_event_listener_11432(continuation, name, root, ta
  
  
 // monadic lift
-export function _mlift_install_event_listener_11433(name, root, target, continuation) /* forall<_e,_e1,_e2> (name : string, root : kokaine/reactive/root<ui>, target : element, continuation : kokaine/internal/event-runtime/event-continuation) -> <exn,ui> () */  {
+export function _mlift_install_event_listener_11433(name, root, target, continuation) /* forall<_e,_e1,_e2> (name : string, root : kokaine/reactive/root<ui>, target : element, continuation : kokaine/reactive/integration/event/event-continuation<kokaine/async/effects/async,kokaine/html/event>) -> <exn,ui> () */  {
    
   var x_11765 = $kokaine_reactive_integration_internal_reentry.capture_reentry($std_core_hnd._open_none1(function(value /* kokaine/reactive/root<ui> */ ) {
       return value;
@@ -2431,7 +2431,7 @@ export function install_event_listener(root, target, name, action) /* (root : ko
    
   var x_11767 = capture_event_listener(root, action);
   if ($std_core_hnd._yielding()) {
-    return $std_core_hnd.yield_extend(function(continuation /* kokaine/internal/event-runtime/event-continuation */ ) {
+    return $std_core_hnd.yield_extend(function(continuation /* kokaine/reactive/integration/event/event-continuation<kokaine/async/effects/async,kokaine/html/event> */ ) {
       return _mlift_install_event_listener_11433(name, root, target, continuation);
     });
   }
@@ -2812,9 +2812,9 @@ export function exhaust_keyed_row_actions(rows, action) /* forall<a,b,e,e1> (row
 }
  
 export function dispose_keyed_rows(rows) /* forall<a,b,e> (rows : list<keyed-row<e,a,b>>) -> <ui,exn> () */  {
-  return exhaust_keyed_row_actions(rows, function(row /* keyed-row<5987,5985,5986> */ ) {
+  return exhaust_keyed_row_actions(rows, function(row /* keyed-row<6029,6027,6028> */ ) {
        
-      var scope_10087 = $std_core_hnd._open_none1(function(_this /* keyed-row<5987,5985,5986> */ ) {
+      var scope_10087 = $std_core_hnd._open_none1(function(_this /* keyed-row<6029,6027,6028> */ ) {
           return _this.row_scope;
         }, row);
       return $kokaine_reactive_integration_internal_lifetime_dash_scope.lifetime_scope_fs_dispose($std_core_hnd._open_none1(function(value /* kokaine/reactive/integration/lifetime-scope<ui> */ ) {
@@ -2898,11 +2898,11 @@ export function _mlift_rollback_keyed_order_11451(last, parent, row, next) /* fo
   }
   else {
      
-    var first_10281 = $std_core_hnd._open_none1(function(_this_1 /* keyed-row<6111,6109,6110> */ ) {
+    var first_10281 = $std_core_hnd._open_none1(function(_this_1 /* keyed-row<6153,6151,6152> */ ) {
         return _this_1.row_first;
       }, row);
      
-    var last_0_10282 = $std_core_hnd._open_none1(function(_this_2 /* keyed-row<6111,6109,6110> */ ) {
+    var last_0_10282 = $std_core_hnd._open_none1(function(_this_2 /* keyed-row<6153,6151,6152> */ ) {
         return _this_2.row_last;
       }, row);
      
@@ -2929,13 +2929,13 @@ export function _mlift_rollback_keyed_order_11451(last, parent, row, next) /* fo
 }
  
 export function rollback_keyed_order(parent, last, rows) /* forall<a,b,e> (parent : node, last : node, rows : list<keyed-row<e,a,b>>) -> <ui,exn> () */  {
-  return exhaust_keyed_row_actions(rows, function(row /* keyed-row<6111,6109,6110> */ ) {
+  return exhaust_keyed_row_actions(rows, function(row /* keyed-row<6153,6151,6152> */ ) {
        
-      var first_10089 = $std_core_hnd._open_none1(function(_this /* keyed-row<6111,6109,6110> */ ) {
+      var first_10089 = $std_core_hnd._open_none1(function(_this /* keyed-row<6153,6151,6152> */ ) {
           return _this.row_first;
         }, row);
        
-      var last_0_10090 = $std_core_hnd._open_none1(function(_this_0 /* keyed-row<6111,6109,6110> */ ) {
+      var last_0_10090 = $std_core_hnd._open_none1(function(_this_0 /* keyed-row<6153,6151,6152> */ ) {
           return _this_0.row_last;
         }, row);
        
@@ -2978,13 +2978,13 @@ export function _mlift_validate_keyed_move_lifecycles_11452(first_10092, last_10
 }
  
 export function validate_keyed_move_lifecycles(parent, rows) /* forall<a,b,e> (parent : node, rows : list<keyed-row<e,a,b>>) -> <ui,exn> () */  {
-  return $std_core_list.foreach(rows, function(row /* keyed-row<6195,6193,6194> */ ) {
+  return $std_core_list.foreach(rows, function(row /* keyed-row<6237,6235,6236> */ ) {
        
-      var first_10092 = $std_core_hnd._open_none1(function(_this /* keyed-row<6195,6193,6194> */ ) {
+      var first_10092 = $std_core_hnd._open_none1(function(_this /* keyed-row<6237,6235,6236> */ ) {
           return _this.row_first;
         }, row);
        
-      var last_10093 = $std_core_hnd._open_none1(function(_this_0 /* keyed-row<6195,6193,6194> */ ) {
+      var last_10093 = $std_core_hnd._open_none1(function(_this_0 /* keyed-row<6237,6235,6236> */ ) {
           return _this_0.row_last;
         }, row);
        
@@ -3029,7 +3029,7 @@ export function validate_keyed_order(parent_0, last_0, cursor, rows) /* forall<a
   }
   else {
      
-    var _x_x2_0_11198 = $std_core_hnd._open_none1(function(_this /* keyed-row<6353,6351,6352> */ ) {
+    var _x_x2_0_11198 = $std_core_hnd._open_none1(function(_this /* keyed-row<6395,6393,6394> */ ) {
         return _this.row_first;
       }, rows.head);
      
@@ -3042,11 +3042,11 @@ export function validate_keyed_order(parent_0, last_0, cursor, rows) /* forall<a
     }
     else {
        
-      var first_10095 = $std_core_hnd._open_none1(function(_this_0 /* keyed-row<6353,6351,6352> */ ) {
+      var first_10095 = $std_core_hnd._open_none1(function(_this_0 /* keyed-row<6395,6393,6394> */ ) {
           return _this_0.row_first;
         }, rows.head);
        
-      var last_0_10096 = $std_core_hnd._open_none1(function(_this_1 /* keyed-row<6353,6351,6352> */ ) {
+      var last_0_10096 = $std_core_hnd._open_none1(function(_this_1 /* keyed-row<6395,6393,6394> */ ) {
           return _this_1.row_last;
         }, rows.head);
        
@@ -3091,7 +3091,7 @@ export function keyed_order_matches(parent_0, last_0, cursor, rows) /* forall<a,
   }
   else {
      
-    var _x_x2_0_11206 = $std_core_hnd._open_none1(function(_this /* keyed-row<6484,6482,6483> */ ) {
+    var _x_x2_0_11206 = $std_core_hnd._open_none1(function(_this /* keyed-row<6526,6524,6525> */ ) {
         return _this.row_first;
       }, rows.head);
      
@@ -3104,11 +3104,11 @@ export function keyed_order_matches(parent_0, last_0, cursor, rows) /* forall<a,
     }
     else {
        
-      var first_10098 = $std_core_hnd._open_none1(function(_this_0 /* keyed-row<6484,6482,6483> */ ) {
+      var first_10098 = $std_core_hnd._open_none1(function(_this_0 /* keyed-row<6526,6524,6525> */ ) {
           return _this_0.row_first;
         }, rows.head);
        
-      var last_0_10099 = $std_core_hnd._open_none1(function(_this_1 /* keyed-row<6484,6482,6483> */ ) {
+      var last_0_10099 = $std_core_hnd._open_none1(function(_this_1 /* keyed-row<6526,6524,6525> */ ) {
           return _this_1.row_last;
         }, rows.head);
        
@@ -3225,7 +3225,7 @@ export function _mlift_place_keyed_updates_11458(cursor_2, first_10285_1, last_1
 // monadic lift
 export function _mlift_place_keyed_updates_11459(cursor_3, parent_3, rest_3, row, next_2) /* forall<a,b,e> (cursor : node, parent : node, rest : list<keyed-update<e,a,b>>, row : keyed-row<e,a,b>, next : node) -> <ui,exn> node */  {
    
-  var _x_x2_11214 = $std_core_hnd._open_none1(function(_this_2 /* keyed-row<6660,6658,6659> */ ) {
+  var _x_x2_11214 = $std_core_hnd._open_none1(function(_this_2 /* keyed-row<6702,6700,6701> */ ) {
       return _this_2.row_first;
     }, row);
   var _x87 = $std_core_hnd._open_none2(dom_same_node, cursor_3, _x_x2_11214);
@@ -3234,11 +3234,11 @@ export function _mlift_place_keyed_updates_11459(cursor_3, parent_3, rest_3, row
   }
   else {
      
-    var first_10285_2 = $std_core_hnd._open_none1(function(_this_3 /* keyed-row<6660,6658,6659> */ ) {
+    var first_10285_2 = $std_core_hnd._open_none1(function(_this_3 /* keyed-row<6702,6700,6701> */ ) {
         return _this_3.row_first;
       }, row);
      
-    var last_10286_2 = $std_core_hnd._open_none1(function(_this_4 /* keyed-row<6660,6658,6659> */ ) {
+    var last_10286_2 = $std_core_hnd._open_none1(function(_this_4 /* keyed-row<6702,6700,6701> */ ) {
         return _this_4.row_last;
       }, row);
      
@@ -3271,15 +3271,15 @@ export function place_keyed_updates(parent_4, cursor_4, updates) /* forall<a,b,e
   }
   else {
      
-    var row_0 = $std_core_hnd._open_none1(function(_this /* keyed-update<6660,6658,6659> */ ) {
+    var row_0 = $std_core_hnd._open_none1(function(_this /* keyed-update<6702,6700,6701> */ ) {
         return _this.update_row;
       }, updates.head);
      
-    var first_10101 = $std_core_hnd._open_none1(function(_this_0 /* keyed-row<6660,6658,6659> */ ) {
+    var first_10101 = $std_core_hnd._open_none1(function(_this_0 /* keyed-row<6702,6700,6701> */ ) {
         return _this_0.row_first;
       }, row_0);
      
-    var last_10102 = $std_core_hnd._open_none1(function(_this_1 /* keyed-row<6660,6658,6659> */ ) {
+    var last_10102 = $std_core_hnd._open_none1(function(_this_1 /* keyed-row<6702,6700,6701> */ ) {
         return _this_1.row_last;
       }, row_0);
      
@@ -3301,7 +3301,7 @@ export function place_keyed_updates(parent_4, cursor_4, updates) /* forall<a,b,e
     }
     else {
        
-      var _x_x2_11214_0 = $std_core_hnd._open_none1(function(_this_2_0 /* keyed-row<6660,6658,6659> */ ) {
+      var _x_x2_11214_0 = $std_core_hnd._open_none1(function(_this_2_0 /* keyed-row<6702,6700,6701> */ ) {
           return _this_2_0.row_first;
         }, row_0);
       var _x88 = $std_core_hnd._open_none2(dom_same_node, cursor_4, _x_x2_11214_0);
@@ -3315,11 +3315,11 @@ export function place_keyed_updates(parent_4, cursor_4, updates) /* forall<a,b,e
       }
       else {
          
-        var first_10285_3 = $std_core_hnd._open_none1(function(_this_3_0 /* keyed-row<6660,6658,6659> */ ) {
+        var first_10285_3 = $std_core_hnd._open_none1(function(_this_3_0 /* keyed-row<6702,6700,6701> */ ) {
             return _this_3_0.row_first;
           }, row_0);
          
-        var last_10286_3 = $std_core_hnd._open_none1(function(_this_4_0 /* keyed-row<6660,6658,6659> */ ) {
+        var last_10286_3 = $std_core_hnd._open_none1(function(_this_4_0 /* keyed-row<6702,6700,6701> */ ) {
             return _this_4_0.row_last;
           }, row_0);
          
@@ -3513,13 +3513,13 @@ export function _mlift_detach_keyed_retirements_loop_11461(current, detached, in
    
   ((table).value = (Keyed_table(index, order, rest)));
    
-  var _x_x1_11218 = $std_core_hnd._open_none1(function(_this_0 /* keyed-retirement<7244,7242,7243> */ ) {
+  var _x_x1_11218 = $std_core_hnd._open_none1(function(_this_0 /* keyed-retirement<7286,7284,7285> */ ) {
       return _this_0.retirement_handle;
     }, current);
    
   $std_core_hnd._open_none1(dom_release_retirement, _x_x1_11218);
    
-  var value_1_10892 = $std_core_types.Cons($std_core_hnd._open_none1(function(_this_1 /* keyed-retirement<7244,7242,7243> */ ) {
+  var value_1_10892 = $std_core_types.Cons($std_core_hnd._open_none1(function(_this_1 /* keyed-retirement<7286,7284,7285> */ ) {
         return _this_1.retirement_row;
       }, current), detached.value);
    
@@ -3556,13 +3556,13 @@ export function detach_keyed_retirements_loop(table_0, detached_0) /* forall<a,b
        
       ((table_0).value = (Keyed_table(_x93.table_index, _x93.table_order, _x93.table_retirements.tail)));
        
-      var _x_x1_11218_0 = $std_core_hnd._open_none1(function(_this_0_0 /* keyed-retirement<7244,7242,7243> */ ) {
+      var _x_x1_11218_0 = $std_core_hnd._open_none1(function(_this_0_0 /* keyed-retirement<7286,7284,7285> */ ) {
           return _this_0_0.retirement_handle;
         }, _x93.table_retirements.head);
        
       $std_core_hnd._open_none1(dom_release_retirement, _x_x1_11218_0);
        
-      var value_1_10892_0 = $std_core_types.Cons($std_core_hnd._open_none1(function(_this_1_0 /* keyed-retirement<7244,7242,7243> */ ) {
+      var value_1_10892_0 = $std_core_types.Cons($std_core_hnd._open_none1(function(_this_1_0 /* keyed-retirement<7286,7284,7285> */ ) {
             return _this_1_0.retirement_row;
           }, _x93.table_retirements.head), detached_0.value);
        
@@ -3578,9 +3578,9 @@ export function detach_keyed_retirements_loop(table_0, detached_0) /* forall<a,b
  
 // monadic lift
 export function _mlift_drain_keyed_retirements_11462(rows) /* forall<a,b,e> (rows : list<keyed-row<e,a,b>>) -> <exn,ui> () */  {
-  return exhaust_keyed_row_actions(rows, function(row /* keyed-row<7357,7355,7356> */ ) {
+  return exhaust_keyed_row_actions(rows, function(row /* keyed-row<7399,7397,7398> */ ) {
        
-      var scope_10087 = $std_core_hnd._open_none1(function(_this /* keyed-row<7357,7355,7356> */ ) {
+      var scope_10087 = $std_core_hnd._open_none1(function(_this /* keyed-row<7399,7397,7398> */ ) {
           return _this.row_scope;
         }, row);
       return $kokaine_reactive_integration_internal_lifetime_dash_scope.lifetime_scope_fs_dispose($std_core_hnd._open_none1(function(value /* kokaine/reactive/integration/lifetime-scope<ui> */ ) {
@@ -3598,10 +3598,10 @@ export function drain_keyed_retirements(table) /* forall<a,b,e> (table : ref<glo
        
       var x_11892 = $std_core_list.reverse_acc($std_core_types.Nil, xs_10896);
        
-      function next_11893(rows) /* (list<keyed-row<7357,7355,7356>>) -> <exn,ui> () */  {
-        return exhaust_keyed_row_actions(rows, function(row /* keyed-row<7357,7355,7356> */ ) {
+      function next_11893(rows) /* (list<keyed-row<7399,7397,7398>>) -> <exn,ui> () */  {
+        return exhaust_keyed_row_actions(rows, function(row /* keyed-row<7399,7397,7398> */ ) {
              
-            var scope_10087 = $std_core_hnd._open_none1(function(_this /* keyed-row<7357,7355,7356> */ ) {
+            var scope_10087 = $std_core_hnd._open_none1(function(_this /* keyed-row<7399,7397,7398> */ ) {
                 return _this.row_scope;
               }, row);
             return $kokaine_reactive_integration_internal_lifetime_dash_scope.lifetime_scope_fs_dispose($std_core_hnd._open_none1(function(value /* kokaine/reactive/integration/lifetime-scope<ui> */ ) {
@@ -3622,11 +3622,11 @@ export function drain_keyed_retirements(table) /* forall<a,b,e> (table : ref<glo
 // monadic lift
 export function _mlift_commit_keyed_update_11463(row, update, wild___1) /* forall<_e,a,b,e1> (row : keyed-row<e1,a,b>, update : keyed-update<e1,a,b>, wild_@1 : ()) -> kokaine/reactive/effects/signal-write () */  {
    
-  var target_0_10911 = $std_core_hnd._open_none1(function(_this_8 /* keyed-row<7589,7587,7588> */ ) {
+  var target_0_10911 = $std_core_hnd._open_none1(function(_this_8 /* keyed-row<7631,7629,7630> */ ) {
       return _this_8.row_current_index;
     }, row);
    
-  var value_3_10912 = $std_core_hnd._open_none1(function(_this_9 /* keyed-update<7589,7587,7588> */ ) {
+  var value_3_10912 = $std_core_hnd._open_none1(function(_this_9 /* keyed-update<7631,7629,7630> */ ) {
       return _this_9.update_index;
     }, update);
   return ((target_0_10911).value = value_3_10912);
@@ -3636,11 +3636,11 @@ export function _mlift_commit_keyed_update_11463(row, update, wild___1) /* foral
 // monadic lift
 export function _mlift_commit_keyed_update_11464(row, update, wild__) /* forall<_e,a,b,e1> (row : keyed-row<e1,a,b>, update : keyed-update<e1,a,b>, wild_ : ()) -> kokaine/reactive/effects/signal-write () */  {
    
-  var target_10903 = $std_core_hnd._open_none1(function(_this_3 /* keyed-row<7589,7587,7588> */ ) {
+  var target_10903 = $std_core_hnd._open_none1(function(_this_3 /* keyed-row<7631,7629,7630> */ ) {
       return _this_3.row_current_item;
     }, row);
    
-  var value_0_10904 = $std_core_hnd._open_none1(function(_this_4 /* keyed-update<7589,7587,7588> */ ) {
+  var value_0_10904 = $std_core_hnd._open_none1(function(_this_4 /* keyed-update<7631,7629,7630> */ ) {
       return _this_4.update_item;
     }, update);
   return ((target_10903).value = value_0_10904);
@@ -3649,16 +3649,16 @@ export function _mlift_commit_keyed_update_11464(row, update, wild__) /* forall<
  
 // monadic lift
 export function _mlift_commit_keyed_update_11465(row, update, _c_x10517) /* forall<_e,a,b,e1> (row : keyed-row<e1,a,b>, update : keyed-update<e1,a,b>, ()) -> () */  {
-  var _x94 = $std_core_hnd._open_none1(function(_this_5 /* keyed-update<7589,7587,7588> */ ) {
+  var _x94 = $std_core_hnd._open_none1(function(_this_5 /* keyed-update<7631,7629,7630> */ ) {
       return _this_5.update_index_changed;
     }, update);
   if (_x94) {
      
-    var value_2_10120 = $std_core_hnd._open_none1(function(_this_6 /* keyed-row<7589,7587,7588> */ ) {
+    var value_2_10120 = $std_core_hnd._open_none1(function(_this_6 /* keyed-row<7631,7629,7630> */ ) {
         return _this_6.row_index_source;
       }, row);
      
-    var next_0_10121 = $std_core_hnd._open_none1(function(_this_7 /* keyed-update<7589,7587,7588> */ ) {
+    var next_0_10121 = $std_core_hnd._open_none1(function(_this_7 /* keyed-update<7631,7629,7630> */ ) {
         return _this_7.update_index;
       }, update);
      
@@ -3683,24 +3683,24 @@ export function _mlift_commit_keyed_update_11465(row, update, _c_x10517) /* fora
  
 export function commit_keyed_update(update) /* forall<a,b,e> (update : keyed-update<e,a,b>) -> kokaine/reactive/effects/signal-write () */  {
    
-  var row = $std_core_hnd._open_none1(function(_this /* keyed-update<7589,7587,7588> */ ) {
+  var row = $std_core_hnd._open_none1(function(_this /* keyed-update<7631,7629,7630> */ ) {
       return _this.update_row;
     }, update);
    
-  var _x95 = $std_core_hnd._open_none1(function(_this_0 /* keyed-update<7589,7587,7588> */ ) {
+  var _x95 = $std_core_hnd._open_none1(function(_this_0 /* keyed-update<7631,7629,7630> */ ) {
       return _this_0.update_item_changed;
     }, update);
   if (_x95) {
      
-    var value_10117 = $std_core_hnd._open_none1(function(_this_1 /* keyed-row<7589,7587,7588> */ ) {
+    var value_10117 = $std_core_hnd._open_none1(function(_this_1 /* keyed-row<7631,7629,7630> */ ) {
         return _this_1.row_item_source;
       }, row);
      
-    var next_10118 = $std_core_hnd._open_none1(function(_this_2 /* keyed-update<7589,7587,7588> */ ) {
+    var next_10118 = $std_core_hnd._open_none1(function(_this_2 /* keyed-update<7631,7629,7630> */ ) {
         return _this_2.update_item;
       }, update);
      
-    var value_0_10023 = $std_core_hnd._open_none1(function(value_1 /* kokaine/reactive/signal<7587> */ ) {
+    var value_0_10023 = $std_core_hnd._open_none1(function(value_1 /* kokaine/reactive/signal<7629> */ ) {
         return value_1;
       }, value_10117);
      
@@ -3723,16 +3723,16 @@ export function commit_keyed_update(update) /* forall<a,b,e> (update : keyed-upd
     });
   }
   else {
-    var _x95 = $std_core_hnd._open_none1(function(_this_5 /* keyed-update<7589,7587,7588> */ ) {
+    var _x95 = $std_core_hnd._open_none1(function(_this_5 /* keyed-update<7631,7629,7630> */ ) {
         return _this_5.update_index_changed;
       }, update);
     if (_x95) {
        
-      var value_2_10120 = $std_core_hnd._open_none1(function(_this_6 /* keyed-row<7589,7587,7588> */ ) {
+      var value_2_10120 = $std_core_hnd._open_none1(function(_this_6 /* keyed-row<7631,7629,7630> */ ) {
           return _this_6.row_index_source;
         }, row);
        
-      var next_0_10121 = $std_core_hnd._open_none1(function(_this_7 /* keyed-update<7589,7587,7588> */ ) {
+      var next_0_10121 = $std_core_hnd._open_none1(function(_this_7 /* keyed-update<7631,7629,7630> */ ) {
           return _this_7.update_index;
         }, update);
        
@@ -3748,11 +3748,11 @@ export function commit_keyed_update(update) /* forall<a,b,e> (update : keyed-upd
       }
       else {
          
-        var target_0_10911 = $std_core_hnd._open_none1(function(_this_8 /* keyed-row<7589,7587,7588> */ ) {
+        var target_0_10911 = $std_core_hnd._open_none1(function(_this_8 /* keyed-row<7631,7629,7630> */ ) {
             return _this_8.row_current_index;
           }, row);
          
-        var value_3_10912 = $std_core_hnd._open_none1(function(_this_9 /* keyed-update<7589,7587,7588> */ ) {
+        var value_3_10912 = $std_core_hnd._open_none1(function(_this_9 /* keyed-update<7631,7629,7630> */ ) {
             return _this_9.update_index;
           }, update);
         return ((target_0_10911).value = value_3_10912);
@@ -3841,7 +3841,7 @@ export function _mlift_create_keyed_row_11471(children, committed_1, first_2, id
           var x_1_11912 = $kokaine_html.collect(function() {
             return $std_core_hnd._open2($std_core_vector.unvlist($std_core_types.Cons(1, $std_core_types.Cons(2, $std_core_types.Nil))), children, function() {
                  
-                var value_0_10022 = $std_core_hnd._open_none1(function(value_1_0 /* kokaine/reactive/signal<10799> */ ) {
+                var value_0_10022 = $std_core_hnd._open_none1(function(value_1_0 /* kokaine/reactive/signal<10841> */ ) {
                     return value_1_0;
                   }, item_source_1);
                 return $kokaine_reactive_internal_runtime.signal_fs_get(value_0_10022);
@@ -3854,7 +3854,7 @@ export function _mlift_create_keyed_row_11471(children, committed_1, first_2, id
               });
           });
           if ($std_core_hnd._yielding()) {
-            return $std_core_hnd.yield_extend(function(_y_x10553_0 /* list<kokaine/html/view<10800>> */ ) {
+            return $std_core_hnd.yield_extend(function(_y_x10553_0 /* list<kokaine/html/view<10842>> */ ) {
               return _mlift_create_keyed_row_11469(_y_x10553_0);
             });
           }
@@ -3864,7 +3864,7 @@ export function _mlift_create_keyed_row_11471(children, committed_1, first_2, id
         });
     });
   if ($std_core_hnd._yielding()) {
-    return $std_core_hnd.yield_extend(function(tree_0 /* kokaine/html/view<10800> */ ) {
+    return $std_core_hnd.yield_extend(function(tree_0 /* kokaine/html/view<10842> */ ) {
       return _mlift_create_keyed_row_11470(committed_1, first_2, identity_1, index_1, index_source_1, item_1, item_source_1, parent_0, renderer_0, root_0, row_last_2, scope_2, tree_0);
     });
   }
@@ -3910,7 +3910,7 @@ export function _mlift_create_keyed_row_11475(children_1, committed_3, first_4, 
           return value_11;
         }, root_3);
        
-      var x_4_11918 = $kokaine_reactive_internal_runtime.signal_by(root_1_10019_0, initial_0, function(___wildcard_x82__29_0 /* int */ , ___wildcard_x82__31_0 /* int */ ) {
+      var x_4_11918 = $kokaine_reactive_internal_runtime.signal_by(root_1_10019_0, initial_0, function(___wildcard_x87__29_0 /* int */ , ___wildcard_x87__31_0 /* int */ ) {
           return false;
         });
       if ($std_core_hnd._yielding()) {
@@ -3960,17 +3960,17 @@ export function _mlift_create_keyed_row_11478(children_2, committed_4, first_6, 
    
   ((range_owned).value = true);
    
-  var x_5_11922 = $std_core_hnd._open_at2(0, function(root_2_0 /* kokaine/reactive/root<ui> */ , initial /* 10799 */ ) {
+  var x_5_11922 = $std_core_hnd._open_at2(0, function(root_2_0 /* kokaine/reactive/root<ui> */ , initial /* 10841 */ ) {
        
       var root_1_10019 = $std_core_hnd._open_none1(function(value_10 /* kokaine/reactive/root<ui> */ ) {
           return value_10;
         }, root_2_0);
        
-      var x_6_11924 = $kokaine_reactive_internal_runtime.signal_by(root_1_10019, initial, function(___wildcard_x82__29 /* 10799 */ , ___wildcard_x82__31 /* 10799 */ ) {
+      var x_6_11924 = $kokaine_reactive_internal_runtime.signal_by(root_1_10019, initial, function(___wildcard_x87__29 /* 10841 */ , ___wildcard_x87__31 /* 10841 */ ) {
           return false;
         });
       if ($std_core_hnd._yielding()) {
-        return $std_core_hnd.yield_extend(function(_y_x10545_0 /* kokaine/reactive/internal/model/signal<10799> */ ) {
+        return $std_core_hnd.yield_extend(function(_y_x10545_0 /* kokaine/reactive/internal/model/signal<10841> */ ) {
           return _mlift_create_keyed_row_11474(_y_x10545_0);
         });
       }
@@ -3979,7 +3979,7 @@ export function _mlift_create_keyed_row_11478(children_2, committed_4, first_6, 
       }
     }, root_4, item_4);
   if ($std_core_hnd._yielding()) {
-    return $std_core_hnd.yield_extend(function(item_source_4 /* kokaine/reactive/signal<10799> */ ) {
+    return $std_core_hnd.yield_extend(function(item_source_4 /* kokaine/reactive/signal<10841> */ ) {
       return _mlift_create_keyed_row_11475(children_2, committed_4, first_6, identity_4, index_4, item_4, parent_3, renderer_3, root_4, row_last_6, scope_5, item_source_4);
     });
   }
@@ -4169,9 +4169,9 @@ export function _mlift_create_keyed_row_11483(children_6, identity_8, index_8, i
 export function _mlift_reconcile_keyed_11484(drafts, wild___0_0) /* forall<_e,a,b,e1> (drafts : ref<global,list<keyed-row<e1,a,b>>>, wild_@0@0 : ()) -> <ui,exn> () */  {
    
   var rows_10161 = drafts.value;
-  return exhaust_keyed_row_actions(rows_10161, function(row_0 /* keyed-row<10818,10816,10817> */ ) {
+  return exhaust_keyed_row_actions(rows_10161, function(row_0 /* keyed-row<10860,10858,10859> */ ) {
        
-      var scope_1_10163 = $std_core_hnd._open_none1(function(_this /* keyed-row<10818,10816,10817> */ ) {
+      var scope_1_10163 = $std_core_hnd._open_none1(function(_this /* keyed-row<10860,10858,10859> */ ) {
           return _this.row_scope;
         }, row_0);
       return $kokaine_reactive_integration_internal_lifetime_dash_scope.lifetime_scope_fs_dispose($std_core_hnd._open_none1(function(value_28 /* kokaine/reactive/integration/lifetime-scope<ui> */ ) {
@@ -4221,7 +4221,7 @@ export function _mlift_reconcile_keyed_11486(table, _y_x10632) /* forall<a,b,e> 
 // monadic lift
 export function _mlift_reconcile_keyed_11487(final_updates, _y_x10626) /* forall<a,b,e> (final-updates : list<keyed-update<e,a,b>>, hnd/ev-index) -> <exn,div,kokaine/reactive/effects/signal-write> () */  {
   return $std_core_hnd._mask_at(_y_x10626, false, function() {
-      return $std_core_list.foreach(final_updates, function(update_1 /* keyed-update<10818,10816,10817> */ ) {
+      return $std_core_list.foreach(final_updates, function(update_1 /* keyed-update<10860,10858,10859> */ ) {
           return commit_keyed_update(update_1);
         });
     });
@@ -4381,11 +4381,11 @@ export function _mlift_reconcile_keyed_11495(committed_0_7, final_index_6, final
 // monadic lift
 export function _mlift_reconcile_keyed_11496(committed_0_8, final_index_7, final_order_7, final_updates_7, participation_4, publication_transaction_5, staged_retirements_8, stale, table_8, wild___13) /* forall<_e,a,b,e1> (committed@0 : ref<global,bool>, final-index : kokaine/internal/key-index/key-index<b,keyed-row<e1,a,b>>, final-order : list<keyed-row<e1,a,b>>, final-updates : list<keyed-update<e1,a,b>>, participation : keyed-participation, publication-transaction : kokaine/dom/internal/keyed-transaction/keyed-transaction, staged-retirements : ref<global,list<keyed-retirement<e1,a,b>>>, stale : list<keyed-row<e1,a,b>>, table : ref<global,keyed-table<e1,a,b>>, wild_@13 : ()) -> <kokaine/reactive/effects/signal-write,div,exn,ui> () */  {
    
-  var x_25_11976 = $std_core_hnd._open_at1(0, function(rows_0 /* list<keyed-row<10818,10816,10817>> */ ) {
+  var x_25_11976 = $std_core_hnd._open_at1(0, function(rows_0 /* list<keyed-row<10860,10858,10859>> */ ) {
       return stage_keyed_retirements_loop(rows_0, $std_core_types.Nil);
     }, stale);
   if ($std_core_hnd._yielding()) {
-    return $std_core_hnd.yield_extend(function(retirements_7 /* list<keyed-retirement<10818,10816,10817>> */ ) {
+    return $std_core_hnd.yield_extend(function(retirements_7 /* list<keyed-retirement<10860,10858,10859>> */ ) {
       return _mlift_reconcile_keyed_11495(committed_0_8, final_index_7, final_order_7, final_updates_7, participation_4, publication_transaction_5, staged_retirements_8, table_8, retirements_7);
     });
   }
@@ -4810,9 +4810,9 @@ export function _mlift_reconcile_keyed_11517(committed_0_17, drafts_1, enlisted_
               else {
                 return $std_core_types.Unit;
               }
-            }, exhaust_keyed_row_actions(rows_1_10216, function(row_1 /* keyed-row<10818,10816,10817> */ ) {
+            }, exhaust_keyed_row_actions(rows_1_10216, function(row_1 /* keyed-row<10860,10858,10859> */ ) {
                  
-                var scope_2_10218 = $std_core_hnd._open_none1(function(_this_4 /* keyed-row<10818,10816,10817> */ ) {
+                var scope_2_10218 = $std_core_hnd._open_none1(function(_this_4 /* keyed-row<10860,10858,10859> */ ) {
                     return _this_4.row_scope;
                   }, row_1);
                 return $kokaine_reactive_integration_internal_lifetime_dash_scope.lifetime_scope_fs_dispose($std_core_hnd._open_none1(function(value_60 /* kokaine/reactive/integration/lifetime-scope<ui> */ ) {
@@ -4863,7 +4863,7 @@ export function _mlift_reconcile_keyed_11519(committed_0_19, drafts_3, enlisted_
   }
   else {
      
-    var _x_x1_31_11326 = $std_core_hnd._open_none1(function(list /* list<keyed-row<10818,10816,10817>> */ ) {
+    var _x_x1_31_11326 = $std_core_hnd._open_none1(function(list /* list<keyed-row<10860,10858,10859>> */ ) {
         return (list === null);
       }, old_order_2);
      
@@ -4875,7 +4875,7 @@ export function _mlift_reconcile_keyed_11519(committed_0_19, drafts_3, enlisted_
     }
     else {
        
-      var _x_x1_34_11330 = $std_core_hnd._open_none1(function(list_0 /* list<keyed-row<10818,10816,10817>> */ ) {
+      var _x_x1_34_11330 = $std_core_hnd._open_none1(function(list_0 /* list<keyed-row<10860,10858,10859>> */ ) {
           return (list_0 === null);
         }, stale_8);
       var _x104 = $std_core_hnd._open_none1(function(b_3 /* bool */ ) {
@@ -4903,7 +4903,7 @@ export function _mlift_reconcile_keyed_11519(committed_0_19, drafts_3, enlisted_
 // monadic lift
 export function _mlift_reconcile_keyed_11520(current_index, existing, item_changed, item_0_0, position, updates, _c_x10589) /* forall<_e,_e1,a,b,e2> (current-index : int, existing : keyed-row<e2,a,b>, item-changed : bool, item@0@0 : a, position : ref<global,int>, updates : ref<global,list<keyed-update<e2,a,b>>>, ()) -> () */  {
    
-  var value_39_0_10990 = $std_core_hnd._open_none1(function(_this_1 /* keyed-row<10818,10816,10817> */ ) {
+  var value_39_0_10990 = $std_core_hnd._open_none1(function(_this_1 /* keyed-row<10860,10858,10859> */ ) {
       return _this_1.row_current_index;
     }, existing);
    
@@ -4921,7 +4921,7 @@ export function _mlift_reconcile_keyed_11520(current_index, existing, item_chang
 // monadic lift
 export function _mlift_reconcile_keyed_11521(current_index_0, draft, item_0_0_0, position_0, updates_0, _c_x10592) /* forall<_e,_e1,a,b,e2> (current-index : int, draft : keyed-row<e2,a,b>, item@0@0 : a, position : ref<global,int>, updates : ref<global,list<keyed-update<e2,a,b>>>, ()) -> () */  {
    
-  var value_46_0_11007 = $std_core_hnd._open_none1(function(_this_2 /* keyed-row<10818,10816,10817> */ ) {
+  var value_46_0_11007 = $std_core_hnd._open_none1(function(_this_2 /* keyed-row<10860,10858,10859> */ ) {
       return _this_2.row_current_index;
     }, draft);
    
@@ -4974,13 +4974,13 @@ export function _mlift_reconcile_keyed_11523(committed_0_20, compare_0, drafts_5
    
   var stale_9 = $std_core_hnd._open_none3(collect_stale_rows, old_order_3, final_index_19, compare_0);
    
-  var x_50_12036 = $std_core_list.map(final_updates_25, function(update_0_0 /* keyed-update<10818,10816,10817> */ ) {
-      return $std_core_hnd._open_none1(function(_this_3 /* keyed-update<10818,10816,10817> */ ) {
+  var x_50_12036 = $std_core_list.map(final_updates_25, function(update_0_0 /* keyed-update<10860,10858,10859> */ ) {
+      return $std_core_hnd._open_none1(function(_this_3 /* keyed-update<10860,10858,10859> */ ) {
           return _this_3.update_row;
         }, update_0_0);
     });
   if ($std_core_hnd._yielding()) {
-    return $std_core_hnd.yield_extend(function(final_order_23 /* list<keyed-row<10818,10816,10817>> */ ) {
+    return $std_core_hnd.yield_extend(function(final_order_23 /* list<keyed-row<10860,10858,10859>> */ ) {
       return _mlift_reconcile_keyed_11519(committed_0_20, drafts_5, enlisted_3, final_index_19, final_updates_25, first_0_0_12, last_0_0_15, move_phase_11, old_order_3, owns_provision_0, parent_0_0_18, participation_14, publication_transaction_17, renderer_0_2, root_0_0_15, scope_0_0_15, staged_retirements_18, stale_9, table_20, final_order_23);
     });
   }
@@ -4995,13 +4995,13 @@ export function _mlift_reconcile_keyed_11524(children_0_0, committed_0_21, compa
    
   var xs_10977 = keyed_items.value;
    
-  var x_51_12038 = $std_core_list.foreach($std_core_list.reverse_acc($std_core_types.Nil, xs_10977), function(keyed_item /* (10816, 10817) */ ) {
+  var x_51_12038 = $std_core_list.foreach($std_core_list.reverse_acc($std_core_types.Nil, xs_10977), function(keyed_item /* (10858, 10859) */ ) {
        
       var current_index_2 = position_2.value;
       var _x103 = $std_core_hnd._open_none3($kokaine_internal_key_dash_index.find, old_index, keyed_item.snd, compare_1);
       if (_x103 !== null) {
          
-        var value_37_10983 = $std_core_hnd._open_none1(function(_this_0 /* keyed-row<10818,10816,10817> */ ) {
+        var value_37_10983 = $std_core_hnd._open_none1(function(_this_0 /* keyed-row<10860,10858,10859> */ ) {
             return _this_0.row_current_item;
           }, _x103.value);
          
@@ -5035,7 +5035,7 @@ export function _mlift_reconcile_keyed_11524(children_0_0, committed_0_21, compa
          
         var x_53_12042 = create_keyed_row(renderer_0_3, root_0_0_16, parent_0_0_19, last_0_0_16, keyed_item.snd, keyed_item.fst, current_index_2, children_0_0);
         if ($std_core_hnd._yielding()) {
-          return $std_core_hnd.yield_extend(function(draft_1 /* keyed-row<10818,10816,10817> */ ) {
+          return $std_core_hnd.yield_extend(function(draft_1 /* keyed-row<10860,10858,10859> */ ) {
             return _mlift_reconcile_keyed_11522(compare_1, current_index_2, drafts_6, keyed_item.snd, keyed_item.fst, next_index_1, position_2, updates_3, draft_1);
           });
         }
@@ -5062,7 +5062,7 @@ export function _mlift_reconcile_keyed_11525(children_0_1, committed_0_22, compa
    
   var keyed_items_0 = { value: ($std_core_types.Nil) };
    
-  var x_54_12044 = $std_core_list.foreach(items, function(item_0_1 /* 10816 */ ) {
+  var x_54_12044 = $std_core_list.foreach(items, function(item_0_1 /* 10858 */ ) {
        
       var identity_0_1 = $std_core_hnd._open_none1(key, item_0_1);
        
@@ -5326,12 +5326,12 @@ export function _mlift_mount_keyed_fields_11538(children_1_1, committed_1_1, com
       else {
         return _mlift_mount_keyed_fields_11533(read_0, x_62_12070);
       }
-    }, function(snapshot_0 /* 10835 */ ) {
+    }, function(snapshot_0 /* 10877 */ ) {
       return $kokaine_reactive_integration.with_lifetime_scope(root_1_0_1, scope_1_0_1, function() {
            
           var items_0_1 = { value: ($std_core_types.Nil) };
            
-          var x_63_12072 = walk(snapshot_0, function(item_1_0 /* 10836 */ ) {
+          var x_63_12072 = walk(snapshot_0, function(item_1_0 /* 10878 */ ) {
                
               var value_77_11081 = $std_core_types.Cons(item_1_0, items_0_1.value);
               return ((items_0_1).value = value_77_11081);
@@ -5634,7 +5634,7 @@ export function _mlift_mount_view_11550(before_1_1, parent_3_0_2, target_1_0, wi
 // monadic lift
 export function _mlift_mount_view_11551(before_1_2, children_3_0, parent_3_0_3, renderer_3_0, root_3_0_1, target_1_0_0, wild___1_2) /* forall<e> (before@1 : maybe<node>, children@3 : list<kokaine/html/view<e>>, parent@3@0 : node, renderer@3 : kokaine/dom/internal/keyed-transaction/keyed-context, root@3@0 : kokaine/reactive/root<ui>, target@1@0 : element, wild_@1@2 : ()) -> <div,exn,kokaine/reactive/effects/signal-write,ui> () */  {
    
-  var x_76_12107 = $std_core_list.foreach(children_3_0, function(child /* kokaine/html/view<10864> */ ) {
+  var x_76_12107 = $std_core_list.foreach(children_3_0, function(child /* kokaine/html/view<10906> */ ) {
       return mount_view(renderer_3_0, root_3_0_1, $std_core_hnd._open_none1(element_node, target_1_0_0), $std_core_types.Nothing, child);
     });
   if ($std_core_hnd._yielding()) {
@@ -5651,7 +5651,7 @@ export function _mlift_mount_view_11551(before_1_2, children_3_0, parent_3_0_3, 
 // monadic lift
 export function _mlift_mount_view_11552(attributes, before_1_3, children_3_1, parent_3_0_4, renderer_3_1, root_3_0_2, target_1_0_1, wild___0_2) /* forall<e> (attributes : list<kokaine/html/attribute<e>>, before@1 : maybe<node>, children@3 : list<kokaine/html/view<e>>, parent@3@0 : node, renderer@3 : kokaine/dom/internal/keyed-transaction/keyed-context, root@3@0 : kokaine/reactive/root<ui>, target@1@0 : element, wild_@0@2 : ()) -> <pure,kokaine/reactive/effects/signal-write,ui> () */  {
    
-  var x_77_12109 = $std_core_list.foreach(attributes, function(attribute /* kokaine/html/attribute<10864> */ ) {
+  var x_77_12109 = $std_core_list.foreach(attributes, function(attribute /* kokaine/html/attribute<10906> */ ) {
       return mount_attribute(root_3_0_2, target_1_0_1, attribute);
     });
   if ($std_core_hnd._yielding()) {
@@ -5740,7 +5740,7 @@ export function _mlift_mount_view_11559(first_2_0_0, last_2_0_1, parent_3_0_7, r
       else {
         return _mlift_mount_view_11554(read_0_0_0_0, x_80_12118);
       }
-    }, function(next_1_1 /* kokaine/html/view<10864> */ ) {
+    }, function(next_1_1 /* kokaine/html/view<10906> */ ) {
        
       var x_81_12120 = $std_core_hnd._open_at2(0, function(root_10 /* kokaine/reactive/root<ui> */ , cleanup_1 /* () -> <kokaine/reactive/effects/signal-write,pure,ui> () */ ) {
            
@@ -6159,7 +6159,7 @@ export function mount_view(renderer_3_7, root_3_0_8, parent_3_0_10, before_1_7, 
         }
         else {
            
-          var x_108_12194 = $std_core_list.foreach(tree_0_0.attributes, function(attribute_0 /* kokaine/html/attribute<10864> */ ) {
+          var x_108_12194 = $std_core_list.foreach(tree_0_0.attributes, function(attribute_0 /* kokaine/html/attribute<10906> */ ) {
               return mount_attribute(root_3_0_8, x_106_12188, attribute_0);
             });
           if ($std_core_hnd._yielding()) {
@@ -6169,7 +6169,7 @@ export function mount_view(renderer_3_7, root_3_0_8, parent_3_0_10, before_1_7, 
           }
           else {
              
-            var x_109_12197 = $std_core_list.foreach(tree_0_0.children, function(child_1 /* kokaine/html/view<10864> */ ) {
+            var x_109_12197 = $std_core_list.foreach(tree_0_0.children, function(child_1 /* kokaine/html/view<10906> */ ) {
                 return mount_view(renderer_3_7, root_3_0_8, $std_core_hnd._open_none1(element_node, x_106_12188), $std_core_types.Nothing, child_1);
               });
             if ($std_core_hnd._yielding()) {
@@ -6215,7 +6215,7 @@ export function mount_view(renderer_3_7, root_3_0_8, parent_3_0_10, before_1_7, 
     }
   }
   else if (tree_0_0._tag === 5) {
-    return $std_core_list.foreach(tree_0_0.children, function(child_0_0_0 /* kokaine/html/view<10864> */ ) {
+    return $std_core_list.foreach(tree_0_0.children, function(child_0_0_0 /* kokaine/html/view<10906> */ ) {
         return mount_view(renderer_3_7, root_3_0_8, parent_3_0_10, before_1_7, child_0_0_0);
       });
   }
@@ -6264,7 +6264,7 @@ export function mount_view(renderer_3_7, root_3_0_8, parent_3_0_10, before_1_7, 
               else {
                 return _mlift_mount_view_11554(tree_0_0.read, x_114_12214);
               }
-            }, function(next_1_2 /* kokaine/html/view<10864> */ ) {
+            }, function(next_1_2 /* kokaine/html/view<10906> */ ) {
                
               var x_115_12216 = $std_core_hnd._open_at2(0, function(root_10_0 /* kokaine/reactive/root<ui> */ , cleanup_1_0 /* () -> <kokaine/reactive/effects/signal-write,pure,ui> () */ ) {
                    
@@ -6489,7 +6489,7 @@ export function mount_effect(renderer, root, parent, tree) /* forall<e> (rendere
       else {
         return _mlift_mount_effect_11563(x_12245);
       }
-    }, function(___wildcard_x1447__40 /* () */ ) {
+    }, function(___wildcard_x1448__40 /* () */ ) {
        
       var x_0_12247 = $std_core_hnd._open_at1(0, dom_attempt, function() {
           return dom_create_comment("kokaine:mount");

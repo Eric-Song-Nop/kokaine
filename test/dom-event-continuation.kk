@@ -2,9 +2,10 @@ module dom-event-continuation
 
 import kokaine/reactive
 import kokaine/reactive/async
+import kokaine/async/effects
 import kokaine/html
 import kokaine/dom
-import kokaine/internal/event-runtime
+import kokaine/reactive/integration/event
 import std/core/unsafe
 
 
@@ -55,7 +56,8 @@ fun safe-read(root : root<<ui>>, count : signal<int>) : ui int
     -999
   sample(root){ count.get }
 
-fun safe-raw-resume(root : root<<ui>>, value : event-continuation) : ui bool
+fun safe-raw-resume(root : root<<ui>>,
+                    value : event-continuation<async,event>) : ui bool
   with catch fn(problem)
     report-error("raw event-continuation resume failed: " ++ problem.show)
     False

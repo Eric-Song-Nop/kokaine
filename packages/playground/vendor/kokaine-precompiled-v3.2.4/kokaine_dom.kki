@@ -36,14 +36,14 @@ import std/core = std/core = "";
 import kokaine/reactive = kokaine/reactive = "";
 import kokaine/reactive/integration = kokaine/reactive/integration = "";
 import kokaine/reactive/async = kokaine/reactive/async = "";
+import kokaine/async/effects = kokaine/async/effects = "";
 import kokaine/html = kokaine/html = "";
-import kokaine/internal/event-runtime = kokaine/internal/event-runtime = "";
+import kokaine/reactive/integration/event = kokaine/reactive/integration/event = "";
 import kokaine/internal/key-index = kokaine/internal/key-index = "";
 import kokaine/internal/compat = kokaine/internal/compat = "";
 import kokaine/dom/internal/keyed-transaction = kokaine/dom/internal/keyed-transaction = "";
 import std/core/unsafe = std/core/unsafe = "";
 import std/core/undiv = std/core/undiv = "";
-import kokaine/async/effects = kokaine/async/effects type = "";
 import kokaine/reactive/integration/internal/lifetime-scope = kokaine/reactive/integration/internal/lifetime-scope inline = "";
 import kokaine/reactive/integration/internal/provision = kokaine/reactive/integration/internal/provision inline = "";
 import kokaine/reactive/integration/internal/reentry = kokaine/reactive/integration/internal/reentry inline = "";
@@ -93,167 +93,167 @@ local alias std/core/pure[55,1,55,26] :: E = <(std/core/types/handled :: ((E, V)
 //------------------------------
 //#kki: type declarations
  
-pub value{0,1,8} type dom-listener[35,1,36,27] {
-  con Dom-listener[36,3,36,14](value: std/core/types/any){0,1,8} : (value : std/core/types/any) -> dom-listener = 1;
+pub value{0,1,8} type dom-listener[36,1,37,27] {
+  con Dom-listener[37,3,37,14](value: std/core/types/any){0,1,8} : (value : std/core/types/any) -> dom-listener = 1;
 };
-pub value{0,1,8} type dom-owner-registration[38,1,39,37] {
-  con Dom-owner-registration[39,3,39,24](value: std/core/types/any){0,1,8} : (value : std/core/types/any) -> dom-owner-registration = 1;
+pub value{0,1,8} type dom-owner-registration[39,1,40,37] {
+  con Dom-owner-registration[40,3,40,24](value: std/core/types/any){0,1,8} : (value : std/core/types/any) -> dom-owner-registration = 1;
 };
 // A staged retirement snapshots a complete row range once. Later retries use
 // that snapshot instead of requiring the marker endpoints to remain attached.
-pub value{0,1,8} type dom-retirement[43,1,44,29] {
-  con Dom-retirement[44,3,44,16](value: std/core/types/any){0,1,8} : (value : std/core/types/any) -> dom-retirement = 1;
+pub value{0,1,8} type dom-retirement[44,1,45,29] {
+  con Dom-retirement[45,3,45,16](value: std/core/types/any){0,1,8} : (value : std/core/types/any) -> dom-retirement = 1;
 };
-pub value{0,1,8} type element[29,1,30,26] {
-  con Dom-element[30,3,30,13](value: std/core/types/any){0,1,8} : (value : std/core/types/any) -> element = 1;
+pub value{0,1,8} type element[30,1,31,26] {
+  con Dom-element[31,3,31,13](value: std/core/types/any){0,1,8} : (value : std/core/types/any) -> element = 1;
 };
 // The renderer, not Reactive, decides whether this reconciliation owns a new
 // provision or joins the journal already draining on this mount. A joiner has
 // no lease and therefore cannot drain, promote, or discard outer work.
-type keyed-participation[97,1,106,3] {
-  con Keyed-owned[98,3,98,13](keyed-provision: (kokaine/reactive/integration/provision :: E -> V)<<(std/core/ui :: X)>>, keyed-lease: (kokaine/reactive/integration/provision-lease :: E -> V)<<(std/core/ui :: X)>>, keyed-journal: kokaine/dom/internal/keyed-transaction/keyed-transaction){0,3,8} : (keyed-provision : (kokaine/reactive/integration/provision :: E -> V)<<(std/core/ui :: X)>>, keyed-lease : (kokaine/reactive/integration/provision-lease :: E -> V)<<(std/core/ui :: X)>>, keyed-journal : kokaine/dom/internal/keyed-transaction/keyed-transaction) -> keyed-participation = 1;
-  con Keyed-joined[103,3,103,14](keyed-provision: (kokaine/reactive/integration/provision :: E -> V)<<(std/core/ui :: X)>>, keyed-journal: kokaine/dom/internal/keyed-transaction/keyed-transaction){0,2,8} : (keyed-provision : (kokaine/reactive/integration/provision :: E -> V)<<(std/core/ui :: X)>>, keyed-journal : kokaine/dom/internal/keyed-transaction/keyed-transaction) -> keyed-participation = 2;
+type keyed-participation[98,1,107,3] {
+  con Keyed-owned[99,3,99,13](keyed-provision: (kokaine/reactive/integration/provision :: E -> V)<<(std/core/ui :: X)>>, keyed-lease: (kokaine/reactive/integration/provision-lease :: E -> V)<<(std/core/ui :: X)>>, keyed-journal: kokaine/dom/internal/keyed-transaction/keyed-transaction){0,3,8} : (keyed-provision : (kokaine/reactive/integration/provision :: E -> V)<<(std/core/ui :: X)>>, keyed-lease : (kokaine/reactive/integration/provision-lease :: E -> V)<<(std/core/ui :: X)>>, keyed-journal : kokaine/dom/internal/keyed-transaction/keyed-transaction) -> keyed-participation = 1;
+  con Keyed-joined[104,3,104,14](keyed-provision: (kokaine/reactive/integration/provision :: E -> V)<<(std/core/ui :: X)>>, keyed-journal: kokaine/dom/internal/keyed-transaction/keyed-transaction){0,2,8} : (keyed-provision : (kokaine/reactive/integration/provision :: E -> V)<<(std/core/ui :: X)>>, keyed-journal : kokaine/dom/internal/keyed-transaction/keyed-transaction) -> keyed-participation = 2;
 };
-pub value{0,1,8} type node[26,1,27,23] {
-  con Dom-node[27,3,27,10](value: std/core/types/any){0,1,8} : (value : std/core/types/any) -> node = 1;
+pub value{0,1,8} type node[27,1,28,23] {
+  con Dom-node[28,3,28,10](value: std/core/types/any){0,1,8} : (value : std/core/types/any) -> node = 1;
 };
 // A keyed row has a lifetime which is deliberately independent from the
 // collection observer generation.  `current-item` and `current-index` are the
 // last committed values; their always-publishing sources are written only
 // after the reconciler has already performed every fallible comparison and DOM
 // move in the draft transaction.
-type keyed-row[60,1,70,3] <(e :: E),a,b> :: (E, V, V) -> V {
-  con Keyed-row[61,3,61,11](row-key: b, row-current-item: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>, row-current-index: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>, row-item-source: (kokaine/reactive/signal :: V -> V)<a>, row-index-source: (kokaine/reactive/signal :: V -> V)<std/core/types/int>, row-scope: (kokaine/reactive/integration/lifetime-scope :: E -> V)<<(std/core/ui :: X)>>, row-first: node, row-last: node){0,8,8} : forall<(e :: E),a,b> (row-key : b, row-current-item : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>, row-current-index : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>, row-item-source : (kokaine/reactive/signal :: V -> V)<a>, row-index-source : (kokaine/reactive/signal :: V -> V)<std/core/types/int>, row-scope : (kokaine/reactive/integration/lifetime-scope :: E -> V)<<(std/core/ui :: X)>>, row-first : node, row-last : node) -> (keyed-row :: (E, V, V) -> V)<(e :: E),a,b> = 1;
+type keyed-row[61,1,71,3] <(e :: E),a,b> :: (E, V, V) -> V {
+  con Keyed-row[62,3,62,11](row-key: b, row-current-item: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>, row-current-index: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>, row-item-source: (kokaine/reactive/signal :: V -> V)<a>, row-index-source: (kokaine/reactive/signal :: V -> V)<std/core/types/int>, row-scope: (kokaine/reactive/integration/lifetime-scope :: E -> V)<<(std/core/ui :: X)>>, row-first: node, row-last: node){0,8,8} : forall<(e :: E),a,b> (row-key : b, row-current-item : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>, row-current-index : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>, row-item-source : (kokaine/reactive/signal :: V -> V)<a>, row-index-source : (kokaine/reactive/signal :: V -> V)<std/core/types/int>, row-scope : (kokaine/reactive/integration/lifetime-scope :: E -> V)<<(std/core/ui :: X)>>, row-first : node, row-last : node) -> (keyed-row :: (E, V, V) -> V)<(e :: E),a,b> = 1;
 };
-type keyed-retirement[81,1,85,3] <(e :: E),a,b> :: (E, V, V) -> V {
-  con Keyed-retirement[82,3,82,18](retirement-row: (keyed-row :: (E, V, V) -> V)<(e :: E),a,b>, retirement-handle: dom-retirement){0,2,8} : forall<(e :: E),a,b> (retirement-row : (keyed-row :: (E, V, V) -> V)<(e :: E),a,b>, retirement-handle : dom-retirement) -> (keyed-retirement :: (E, V, V) -> V)<(e :: E),a,b> = 1;
+type keyed-retirement[82,1,86,3] <(e :: E),a,b> :: (E, V, V) -> V {
+  con Keyed-retirement[83,3,83,18](retirement-row: (keyed-row :: (E, V, V) -> V)<(e :: E),a,b>, retirement-handle: dom-retirement){0,2,8} : forall<(e :: E),a,b> (retirement-row : (keyed-row :: (E, V, V) -> V)<(e :: E),a,b>, retirement-handle : dom-retirement) -> (keyed-retirement :: (E, V, V) -> V)<(e :: E),a,b> = 1;
 };
-type keyed-table[87,1,92,3] <(e :: E),a,b> :: (E, V, V) -> V {
-  con Keyed-table[88,3,88,13](table-index: (kokaine/internal/key-index/key-index :: (V, V) -> V)<b,(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>, table-order: (std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>, table-retirements: (std/core/types/list :: V -> V)<(keyed-retirement :: (E, V, V) -> V)<(e :: E),a,b>>){0,3,8} : forall<(e :: E),a,b> (table-index : (kokaine/internal/key-index/key-index :: (V, V) -> V)<b,(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>, table-order : (std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>, table-retirements : (std/core/types/list :: V -> V)<(keyed-retirement :: (E, V, V) -> V)<(e :: E),a,b>>) -> (keyed-table :: (E, V, V) -> V)<(e :: E),a,b> = 1;
+type keyed-table[88,1,93,3] <(e :: E),a,b> :: (E, V, V) -> V {
+  con Keyed-table[89,3,89,13](table-index: (kokaine/internal/key-index/key-index :: (V, V) -> V)<b,(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>, table-order: (std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>, table-retirements: (std/core/types/list :: V -> V)<(keyed-retirement :: (E, V, V) -> V)<(e :: E),a,b>>){0,3,8} : forall<(e :: E),a,b> (table-index : (kokaine/internal/key-index/key-index :: (V, V) -> V)<b,(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>, table-order : (std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>, table-retirements : (std/core/types/list :: V -> V)<(keyed-retirement :: (E, V, V) -> V)<(e :: E),a,b>>) -> (keyed-table :: (E, V, V) -> V)<(e :: E),a,b> = 1;
 };
-type keyed-update[72,1,79,3] <(e :: E),a,b> :: (E, V, V) -> V {
-  con Keyed-update[73,3,73,14](update-row: (keyed-row :: (E, V, V) -> V)<(e :: E),a,b>, update-item: a, update-index: std/core/types/int, update-item-changed: std/core/types/bool, update-index-changed: std/core/types/bool){2,3,8} : forall<(e :: E),a,b> (update-row : (keyed-row :: (E, V, V) -> V)<(e :: E),a,b>, update-item : a, update-index : std/core/types/int, update-item-changed : std/core/types/bool, update-index-changed : std/core/types/bool) -> (keyed-update :: (E, V, V) -> V)<(e :: E),a,b> = 1;
+type keyed-update[73,1,80,3] <(e :: E),a,b> :: (E, V, V) -> V {
+  con Keyed-update[74,3,74,14](update-row: (keyed-row :: (E, V, V) -> V)<(e :: E),a,b>, update-item: a, update-index: std/core/types/int, update-item-changed: std/core/types/bool, update-index-changed: std/core/types/bool){2,3,8} : forall<(e :: E),a,b> (update-row : (keyed-row :: (E, V, V) -> V)<(e :: E),a,b>, update-item : a, update-index : std/core/types/int, update-item-changed : std/core/types/bool, update-index-changed : std/core/types/bool) -> (keyed-update :: (E, V, V) -> V)<(e :: E),a,b> = 1;
 };
-type owner-match[46,1,49,15] {
-  con Owner-none[47,3,47,12]{0,0,0} : owner-match = 1;
-  con Owner-live[48,3,48,12](owner-portal: (kokaine/reactive/integration/reentry :: E -> V)<<(std/core/ui :: X)>>){0,4,8} : (owner-portal : (kokaine/reactive/integration/reentry :: E -> V)<<(std/core/ui :: X)>>) -> owner-match = 2;
-  con Owner-retired[49,3,49,15]{0,0,0} : owner-match = 3;
+type owner-match[47,1,50,15] {
+  con Owner-none[48,3,48,12]{0,0,0} : owner-match = 1;
+  con Owner-live[49,3,49,12](owner-portal: (kokaine/reactive/integration/reentry :: E -> V)<<(std/core/ui :: X)>>){0,4,8} : (owner-portal : (kokaine/reactive/integration/reentry :: E -> V)<<(std/core/ui :: X)>>) -> owner-match = 2;
+  con Owner-retired[50,3,50,15]{0,0,0} : owner-match = 3;
 };
-pub value{0,1,8} type raw-event[32,1,33,24] {
-  con Raw-event[33,3,33,11](value: std/core/types/any){0,1,8} : (value : std/core/types/any) -> raw-event = 1;
+pub value{0,1,8} type raw-event[33,1,34,24] {
+  con Raw-event[34,3,34,11](value: std/core/types/any){0,1,8} : (value : std/core/types/any) -> raw-event = 1;
 };
-pub value{1,0,1} type toggle-state[51,1,53,15] {
-  pub con Toggle-open[52,3,52,13]{0,0,0} : toggle-state = 1;
-  pub con Toggle-closed[53,3,53,15]{0,0,0} : toggle-state = 2;
+pub value{1,0,1} type toggle-state[52,1,54,15] {
+  pub con Toggle-open[53,3,53,13]{0,0,0} : toggle-state = 1;
+  pub con Toggle-closed[54,3,54,15]{0,0,0} : toggle-state = 2;
 };
  
 //------------------------------
 //#kki: declarations
  
 // Automatically generated. Retrieves the `value` constructor field of the `:node` type.
-fun node/value[27,12,27,16] : (^ node : node) -> std/core/types/any;
-pub fun node/@copy[27,3,27,10] : (@this : node, value : (std/core/types/@optional :: V -> V)<std/core/types/any>) -> node;
+fun node/value[28,12,28,16] : (^ node : node) -> std/core/types/any;
+pub fun node/@copy[28,3,28,10] : (@this : node, value : (std/core/types/@optional :: V -> V)<std/core/types/any>) -> node;
 // Automatically generated. Retrieves the `value` constructor field of the `:element` type.
-fun element/value[30,15,30,19] : (^ element : element) -> std/core/types/any;
-pub fun element/@copy[30,3,30,13] : (@this : element, value : (std/core/types/@optional :: V -> V)<std/core/types/any>) -> element;
+fun element/value[31,15,31,19] : (^ element : element) -> std/core/types/any;
+pub fun element/@copy[31,3,31,13] : (@this : element, value : (std/core/types/@optional :: V -> V)<std/core/types/any>) -> element;
 // Automatically generated. Retrieves the `value` constructor field of the `:raw-event` type.
-fun raw-event/value[33,13,33,17] : (^ @this : raw-event) -> std/core/types/any;
-pub fun raw-event/@copy[33,3,33,11] : (@this : raw-event, value : (std/core/types/@optional :: V -> V)<std/core/types/any>) -> raw-event;
+fun raw-event/value[34,13,34,17] : (^ @this : raw-event) -> std/core/types/any;
+pub fun raw-event/@copy[34,3,34,11] : (@this : raw-event, value : (std/core/types/@optional :: V -> V)<std/core/types/any>) -> raw-event;
 // Automatically generated. Retrieves the `value` constructor field of the `:dom-listener` type.
-fun dom-listener/value[36,16,36,20] : (^ @this : dom-listener) -> std/core/types/any;
-pub fun dom-listener/@copy[36,3,36,14] : (@this : dom-listener, value : (std/core/types/@optional :: V -> V)<std/core/types/any>) -> dom-listener;
+fun dom-listener/value[37,16,37,20] : (^ @this : dom-listener) -> std/core/types/any;
+pub fun dom-listener/@copy[37,3,37,14] : (@this : dom-listener, value : (std/core/types/@optional :: V -> V)<std/core/types/any>) -> dom-listener;
 // Automatically generated. Retrieves the `value` constructor field of the `:dom-owner-registration` type.
-fun dom-owner-registration/value[39,26,39,30] : (^ @this : dom-owner-registration) -> std/core/types/any;
-pub fun dom-owner-registration/@copy[39,3,39,24] : (@this : dom-owner-registration, value : (std/core/types/@optional :: V -> V)<std/core/types/any>) -> dom-owner-registration;
+fun dom-owner-registration/value[40,26,40,30] : (^ @this : dom-owner-registration) -> std/core/types/any;
+pub fun dom-owner-registration/@copy[40,3,40,24] : (@this : dom-owner-registration, value : (std/core/types/@optional :: V -> V)<std/core/types/any>) -> dom-owner-registration;
 // Automatically generated. Retrieves the `value` constructor field of the `:dom-retirement` type.
-fun dom-retirement/value[44,18,44,22] : (^ @this : dom-retirement) -> std/core/types/any;
-pub fun dom-retirement/@copy[44,3,44,16] : (@this : dom-retirement, value : (std/core/types/@optional :: V -> V)<std/core/types/any>) -> dom-retirement;
+fun dom-retirement/value[45,18,45,22] : (^ @this : dom-retirement) -> std/core/types/any;
+pub fun dom-retirement/@copy[45,3,45,16] : (@this : dom-retirement, value : (std/core/types/@optional :: V -> V)<std/core/types/any>) -> dom-retirement;
 // Automatically generated. Tests for the `Owner-none` constructor of the `:owner-match` type.
-fip fun is-owner-none[47,3,47,12] : (^ owner-match : owner-match) -> std/core/types/bool;
+fip fun is-owner-none[48,3,48,12] : (^ owner-match : owner-match) -> std/core/types/bool;
 // Automatically generated. Tests for the `Owner-live` constructor of the `:owner-match` type.
-fip fun is-owner-live[48,3,48,12] : (^ owner-match : owner-match) -> std/core/types/bool;
+fip fun is-owner-live[49,3,49,12] : (^ owner-match : owner-match) -> std/core/types/bool;
 // Automatically generated. Tests for the `Owner-retired` constructor of the `:owner-match` type.
-fip fun is-owner-retired[49,3,49,15] : (^ owner-match : owner-match) -> std/core/types/bool;
+fip fun is-owner-retired[50,3,50,15] : (^ owner-match : owner-match) -> std/core/types/bool;
 // Automatically generated. Tests for the `Toggle-open` constructor of the `:toggle-state` type.
-pub fip fun is-toggle-open[52,3,52,13] : (^ toggle-state : toggle-state) -> std/core/types/bool;
+pub fip fun is-toggle-open[53,3,53,13] : (^ toggle-state : toggle-state) -> std/core/types/bool;
 // Automatically generated. Tests for the `Toggle-closed` constructor of the `:toggle-state` type.
-pub fip fun is-toggle-closed[53,3,53,15] : (^ toggle-state : toggle-state) -> std/core/types/bool;
+pub fip fun is-toggle-closed[54,3,54,15] : (^ toggle-state : toggle-state) -> std/core/types/bool;
 // Automatically generated. Retrieves the `row-key` constructor field of the `:keyed-row` type.
-fun keyed-row/row-key[62,5,62,11] : forall<(e :: E),a,b> (^ @this : (keyed-row :: (E, V, V) -> V)<(e :: E),a,b>) -> b;
+fun keyed-row/row-key[63,5,63,11] : forall<(e :: E),a,b> (^ @this : (keyed-row :: (E, V, V) -> V)<(e :: E),a,b>) -> b;
 // Automatically generated. Retrieves the `row-current-item` constructor field of the `:keyed-row` type.
-fun keyed-row/row-current-item[63,5,63,20] : forall<(e :: E),a,b> (^ @this : (keyed-row :: (E, V, V) -> V)<(e :: E),a,b>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>;
+fun keyed-row/row-current-item[64,5,64,20] : forall<(e :: E),a,b> (^ @this : (keyed-row :: (E, V, V) -> V)<(e :: E),a,b>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>;
 // Automatically generated. Retrieves the `row-current-index` constructor field of the `:keyed-row` type.
-fun keyed-row/row-current-index[64,5,64,21] : forall<(e :: E),a,b> (^ @this : (keyed-row :: (E, V, V) -> V)<(e :: E),a,b>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>;
+fun keyed-row/row-current-index[65,5,65,21] : forall<(e :: E),a,b> (^ @this : (keyed-row :: (E, V, V) -> V)<(e :: E),a,b>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>;
 // Automatically generated. Retrieves the `row-item-source` constructor field of the `:keyed-row` type.
-fun keyed-row/row-item-source[65,5,65,19] : forall<(e :: E),a,b> (^ @this : (keyed-row :: (E, V, V) -> V)<(e :: E),a,b>) -> (kokaine/reactive/signal :: V -> V)<a>;
+fun keyed-row/row-item-source[66,5,66,19] : forall<(e :: E),a,b> (^ @this : (keyed-row :: (E, V, V) -> V)<(e :: E),a,b>) -> (kokaine/reactive/signal :: V -> V)<a>;
 // Automatically generated. Retrieves the `row-index-source` constructor field of the `:keyed-row` type.
-fun keyed-row/row-index-source[66,5,66,20] : forall<(e :: E),a,b> (^ @this : (keyed-row :: (E, V, V) -> V)<(e :: E),a,b>) -> (kokaine/reactive/signal :: V -> V)<std/core/types/int>;
+fun keyed-row/row-index-source[67,5,67,20] : forall<(e :: E),a,b> (^ @this : (keyed-row :: (E, V, V) -> V)<(e :: E),a,b>) -> (kokaine/reactive/signal :: V -> V)<std/core/types/int>;
 // Automatically generated. Retrieves the `row-scope` constructor field of the `:keyed-row` type.
-fun keyed-row/row-scope[67,5,67,13] : forall<(e :: E),a,b> (^ @this : (keyed-row :: (E, V, V) -> V)<(e :: E),a,b>) -> (kokaine/reactive/integration/lifetime-scope :: E -> V)<<(std/core/ui :: X)>>;
+fun keyed-row/row-scope[68,5,68,13] : forall<(e :: E),a,b> (^ @this : (keyed-row :: (E, V, V) -> V)<(e :: E),a,b>) -> (kokaine/reactive/integration/lifetime-scope :: E -> V)<<(std/core/ui :: X)>>;
 // Automatically generated. Retrieves the `row-first` constructor field of the `:keyed-row` type.
-fun keyed-row/row-first[68,5,68,13] : forall<(e :: E),a,b> (^ @this : (keyed-row :: (E, V, V) -> V)<(e :: E),a,b>) -> node;
+fun keyed-row/row-first[69,5,69,13] : forall<(e :: E),a,b> (^ @this : (keyed-row :: (E, V, V) -> V)<(e :: E),a,b>) -> node;
 // Automatically generated. Retrieves the `row-last` constructor field of the `:keyed-row` type.
-fun keyed-row/row-last[69,5,69,12] : forall<(e :: E),a,b> (^ @this : (keyed-row :: (E, V, V) -> V)<(e :: E),a,b>) -> node;
-fun keyed-row/@copy[61,3,61,11] : forall<(e :: E),a,b> (@this : (keyed-row :: (E, V, V) -> V)<(e :: E),a,b>, row-key : (std/core/types/@optional :: V -> V)<b>, row-current-item : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>>, row-current-index : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>>, row-item-source : (std/core/types/@optional :: V -> V)<(kokaine/reactive/signal :: V -> V)<a>>, row-index-source : (std/core/types/@optional :: V -> V)<(kokaine/reactive/signal :: V -> V)<std/core/types/int>>, row-scope : (std/core/types/@optional :: V -> V)<(kokaine/reactive/integration/lifetime-scope :: E -> V)<<(std/core/ui :: X)>>>, row-first : (std/core/types/@optional :: V -> V)<node>, row-last : (std/core/types/@optional :: V -> V)<node>) -> (keyed-row :: (E, V, V) -> V)<(e :: E),a,b>;
+fun keyed-row/row-last[70,5,70,12] : forall<(e :: E),a,b> (^ @this : (keyed-row :: (E, V, V) -> V)<(e :: E),a,b>) -> node;
+fun keyed-row/@copy[62,3,62,11] : forall<(e :: E),a,b> (@this : (keyed-row :: (E, V, V) -> V)<(e :: E),a,b>, row-key : (std/core/types/@optional :: V -> V)<b>, row-current-item : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>>, row-current-index : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>>, row-item-source : (std/core/types/@optional :: V -> V)<(kokaine/reactive/signal :: V -> V)<a>>, row-index-source : (std/core/types/@optional :: V -> V)<(kokaine/reactive/signal :: V -> V)<std/core/types/int>>, row-scope : (std/core/types/@optional :: V -> V)<(kokaine/reactive/integration/lifetime-scope :: E -> V)<<(std/core/ui :: X)>>>, row-first : (std/core/types/@optional :: V -> V)<node>, row-last : (std/core/types/@optional :: V -> V)<node>) -> (keyed-row :: (E, V, V) -> V)<(e :: E),a,b>;
 // Automatically generated. Retrieves the `update-row` constructor field of the `:keyed-update` type.
-fun keyed-update/update-row[74,5,74,14] : forall<(e :: E),a,b> (^ @this : (keyed-update :: (E, V, V) -> V)<(e :: E),a,b>) -> (keyed-row :: (E, V, V) -> V)<(e :: E),a,b>;
+fun keyed-update/update-row[75,5,75,14] : forall<(e :: E),a,b> (^ @this : (keyed-update :: (E, V, V) -> V)<(e :: E),a,b>) -> (keyed-row :: (E, V, V) -> V)<(e :: E),a,b>;
 // Automatically generated. Retrieves the `update-item` constructor field of the `:keyed-update` type.
-fun keyed-update/update-item[75,5,75,15] : forall<(e :: E),a,b> (^ @this : (keyed-update :: (E, V, V) -> V)<(e :: E),a,b>) -> a;
+fun keyed-update/update-item[76,5,76,15] : forall<(e :: E),a,b> (^ @this : (keyed-update :: (E, V, V) -> V)<(e :: E),a,b>) -> a;
 // Automatically generated. Retrieves the `update-index` constructor field of the `:keyed-update` type.
-fun keyed-update/update-index[76,5,76,16] : forall<(e :: E),a,b> (^ @this : (keyed-update :: (E, V, V) -> V)<(e :: E),a,b>) -> std/core/types/int;
+fun keyed-update/update-index[77,5,77,16] : forall<(e :: E),a,b> (^ @this : (keyed-update :: (E, V, V) -> V)<(e :: E),a,b>) -> std/core/types/int;
 // Automatically generated. Retrieves the `update-item-changed` constructor field of the `:keyed-update` type.
-fun keyed-update/update-item-changed[77,5,77,23] : forall<(e :: E),a,b> (^ @this : (keyed-update :: (E, V, V) -> V)<(e :: E),a,b>) -> std/core/types/bool;
+fun keyed-update/update-item-changed[78,5,78,23] : forall<(e :: E),a,b> (^ @this : (keyed-update :: (E, V, V) -> V)<(e :: E),a,b>) -> std/core/types/bool;
 // Automatically generated. Retrieves the `update-index-changed` constructor field of the `:keyed-update` type.
-fun keyed-update/update-index-changed[78,5,78,24] : forall<(e :: E),a,b> (^ @this : (keyed-update :: (E, V, V) -> V)<(e :: E),a,b>) -> std/core/types/bool;
-fun keyed-update/@copy[73,3,73,14] : forall<(e :: E),a,b> (@this : (keyed-update :: (E, V, V) -> V)<(e :: E),a,b>, update-row : (std/core/types/@optional :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>, update-item : (std/core/types/@optional :: V -> V)<a>, update-index : (std/core/types/@optional :: V -> V)<std/core/types/int>, update-item-changed : (std/core/types/@optional :: V -> V)<std/core/types/bool>, update-index-changed : (std/core/types/@optional :: V -> V)<std/core/types/bool>) -> (keyed-update :: (E, V, V) -> V)<(e :: E),a,b>;
+fun keyed-update/update-index-changed[79,5,79,24] : forall<(e :: E),a,b> (^ @this : (keyed-update :: (E, V, V) -> V)<(e :: E),a,b>) -> std/core/types/bool;
+fun keyed-update/@copy[74,3,74,14] : forall<(e :: E),a,b> (@this : (keyed-update :: (E, V, V) -> V)<(e :: E),a,b>, update-row : (std/core/types/@optional :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>, update-item : (std/core/types/@optional :: V -> V)<a>, update-index : (std/core/types/@optional :: V -> V)<std/core/types/int>, update-item-changed : (std/core/types/@optional :: V -> V)<std/core/types/bool>, update-index-changed : (std/core/types/@optional :: V -> V)<std/core/types/bool>) -> (keyed-update :: (E, V, V) -> V)<(e :: E),a,b>;
 // Automatically generated. Retrieves the `retirement-row` constructor field of the `:keyed-retirement` type.
-fun keyed-retirement/retirement-row[83,5,83,18] : forall<(e :: E),a,b> (^ @this : (keyed-retirement :: (E, V, V) -> V)<(e :: E),a,b>) -> (keyed-row :: (E, V, V) -> V)<(e :: E),a,b>;
+fun keyed-retirement/retirement-row[84,5,84,18] : forall<(e :: E),a,b> (^ @this : (keyed-retirement :: (E, V, V) -> V)<(e :: E),a,b>) -> (keyed-row :: (E, V, V) -> V)<(e :: E),a,b>;
 // Automatically generated. Retrieves the `retirement-handle` constructor field of the `:keyed-retirement` type.
-fun keyed-retirement/retirement-handle[84,5,84,21] : forall<(e :: E),a,b> (^ @this : (keyed-retirement :: (E, V, V) -> V)<(e :: E),a,b>) -> dom-retirement;
-fun keyed-retirement/@copy[82,3,82,18] : forall<(e :: E),a,b> (@this : (keyed-retirement :: (E, V, V) -> V)<(e :: E),a,b>, retirement-row : (std/core/types/@optional :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>, retirement-handle : (std/core/types/@optional :: V -> V)<dom-retirement>) -> (keyed-retirement :: (E, V, V) -> V)<(e :: E),a,b>;
+fun keyed-retirement/retirement-handle[85,5,85,21] : forall<(e :: E),a,b> (^ @this : (keyed-retirement :: (E, V, V) -> V)<(e :: E),a,b>) -> dom-retirement;
+fun keyed-retirement/@copy[83,3,83,18] : forall<(e :: E),a,b> (@this : (keyed-retirement :: (E, V, V) -> V)<(e :: E),a,b>, retirement-row : (std/core/types/@optional :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>, retirement-handle : (std/core/types/@optional :: V -> V)<dom-retirement>) -> (keyed-retirement :: (E, V, V) -> V)<(e :: E),a,b>;
 // Automatically generated. Retrieves the `table-index` constructor field of the `:keyed-table` type.
-fun keyed-table/table-index[89,5,89,15] : forall<(e :: E),a,b> (^ @this : (keyed-table :: (E, V, V) -> V)<(e :: E),a,b>) -> (kokaine/internal/key-index/key-index :: (V, V) -> V)<b,(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>;
+fun keyed-table/table-index[90,5,90,15] : forall<(e :: E),a,b> (^ @this : (keyed-table :: (E, V, V) -> V)<(e :: E),a,b>) -> (kokaine/internal/key-index/key-index :: (V, V) -> V)<b,(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>;
 // Automatically generated. Retrieves the `table-order` constructor field of the `:keyed-table` type.
-fun keyed-table/table-order[90,5,90,15] : forall<(e :: E),a,b> (^ @this : (keyed-table :: (E, V, V) -> V)<(e :: E),a,b>) -> (std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>;
+fun keyed-table/table-order[91,5,91,15] : forall<(e :: E),a,b> (^ @this : (keyed-table :: (E, V, V) -> V)<(e :: E),a,b>) -> (std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>;
 // Automatically generated. Retrieves the `table-retirements` constructor field of the `:keyed-table` type.
-fun keyed-table/table-retirements[91,5,91,21] : forall<(e :: E),a,b> (^ @this : (keyed-table :: (E, V, V) -> V)<(e :: E),a,b>) -> (std/core/types/list :: V -> V)<(keyed-retirement :: (E, V, V) -> V)<(e :: E),a,b>>;
-fun keyed-table/@copy[88,3,88,13] : forall<(e :: E),a,b> (@this : (keyed-table :: (E, V, V) -> V)<(e :: E),a,b>, table-index : (std/core/types/@optional :: V -> V)<(kokaine/internal/key-index/key-index :: (V, V) -> V)<b,(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>>, table-order : (std/core/types/@optional :: V -> V)<(std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>>, table-retirements : (std/core/types/@optional :: V -> V)<(std/core/types/list :: V -> V)<(keyed-retirement :: (E, V, V) -> V)<(e :: E),a,b>>>) -> (keyed-table :: (E, V, V) -> V)<(e :: E),a,b>;
+fun keyed-table/table-retirements[92,5,92,21] : forall<(e :: E),a,b> (^ @this : (keyed-table :: (E, V, V) -> V)<(e :: E),a,b>) -> (std/core/types/list :: V -> V)<(keyed-retirement :: (E, V, V) -> V)<(e :: E),a,b>>;
+fun keyed-table/@copy[89,3,89,13] : forall<(e :: E),a,b> (@this : (keyed-table :: (E, V, V) -> V)<(e :: E),a,b>, table-index : (std/core/types/@optional :: V -> V)<(kokaine/internal/key-index/key-index :: (V, V) -> V)<b,(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>>, table-order : (std/core/types/@optional :: V -> V)<(std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>>, table-retirements : (std/core/types/@optional :: V -> V)<(std/core/types/list :: V -> V)<(keyed-retirement :: (E, V, V) -> V)<(e :: E),a,b>>>) -> (keyed-table :: (E, V, V) -> V)<(e :: E),a,b>;
 // Automatically generated. Tests for the `Keyed-owned` constructor of the `:keyed-participation` type.
-fip fun is-keyed-owned[98,3,98,13] : (^ keyed-participation : keyed-participation) -> std/core/types/bool;
+fip fun is-keyed-owned[99,3,99,13] : (^ keyed-participation : keyed-participation) -> std/core/types/bool;
 // Automatically generated. Retrieves the `keyed-provision` constructor field of the `:keyed-participation` type.
-fun keyed-participation/keyed-provision[99,5,99,19] : (^ @this : keyed-participation) -> (kokaine/reactive/integration/provision :: E -> V)<<(std/core/ui :: X)>>;
+fun keyed-participation/keyed-provision[100,5,100,19] : (^ @this : keyed-participation) -> (kokaine/reactive/integration/provision :: E -> V)<<(std/core/ui :: X)>>;
 // Automatically generated. Retrieves the `keyed-journal` constructor field of the `:keyed-participation` type.
-fun keyed-participation/keyed-journal[101,5,101,17] : (^ @this : keyed-participation) -> kokaine/dom/internal/keyed-transaction/keyed-transaction;
+fun keyed-participation/keyed-journal[102,5,102,17] : (^ @this : keyed-participation) -> kokaine/dom/internal/keyed-transaction/keyed-transaction;
 // Automatically generated. Tests for the `Keyed-joined` constructor of the `:keyed-participation` type.
-fip fun is-keyed-joined[103,3,103,14] : (^ keyed-participation : keyed-participation) -> std/core/types/bool;
-fun keyed-participation/journal[108,5,108,31] : (current : keyed-participation) -> kokaine/dom/internal/keyed-transaction/keyed-transaction;
-fun keyed-participation/is-owned[114,5,114,32] : (current : keyed-participation) -> std/core/types/bool;
+fip fun is-keyed-joined[104,3,104,14] : (^ keyed-participation : keyed-participation) -> std/core/types/bool;
+fun keyed-participation/journal[109,5,109,31] : (current : keyed-participation) -> kokaine/dom/internal/keyed-transaction/keyed-transaction;
+fun keyed-participation/is-owned[115,5,115,32] : (current : keyed-participation) -> std/core/types/bool;
 // monadic lift
 fun @mlift-open-keyed-participation@11398[1,0,1,0] : (@y-x10292 : (kokaine/reactive/integration/internal/provision/provision-lease :: E -> V)<<(std/core/ui :: X)>>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> keyed-participation;
 // monadic lift
 fun @mlift-open-keyed-participation@11399[1,0,1,0] : (current@0 : (kokaine/reactive/integration/provision :: E -> V)<<(std/core/ui :: X)>>, @y-x10293 : kokaine/dom/internal/keyed-transaction/keyed-transaction) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> keyed-participation;
 // monadic lift
 fun @mlift-open-keyed-participation@11400[1,0,1,0] : (renderer : kokaine/dom/internal/keyed-transaction/keyed-context, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, @y-x10291 : (std/core/types/maybe :: V -> V)<(kokaine/reactive/integration/provision :: E -> V)<<(std/core/ui :: X)>>>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> keyed-participation;
-fun open-keyed-participation[119,5,119,28] : (renderer : kokaine/dom/internal/keyed-transaction/keyed-context, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> keyed-participation;
-fun drain-keyed-participation[130,5,130,29] : (renderer : kokaine/dom/internal/keyed-transaction/keyed-context, current : keyed-participation) -> <(std/core/pure :: E),(std/core/ui :: X)> ();
-fun promote-keyed-participation[139,5,139,31] : (current : keyed-participation) -> <(std/core/pure :: E),(std/core/ui :: X)> ();
-fun discard-keyed-participation[145,5,145,31] : (current : keyed-participation) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
+fun open-keyed-participation[120,5,120,28] : (renderer : kokaine/dom/internal/keyed-transaction/keyed-context, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> keyed-participation;
+fun drain-keyed-participation[131,5,131,29] : (renderer : kokaine/dom/internal/keyed-transaction/keyed-context, current : keyed-participation) -> <(std/core/pure :: E),(std/core/ui :: X)> ();
+fun promote-keyed-participation[140,5,140,31] : (current : keyed-participation) -> <(std/core/pure :: E),(std/core/ui :: X)> ();
+fun discard-keyed-participation[146,5,146,31] : (current : keyed-participation) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
 // Transaction state must survive abortive control while mount bootstraps are
 // flushing. Keep this adapter-local and inaccessible to user code.
-fun transaction-cell[155,5,155,20] : forall<a> (value : a) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>;
-fun transaction-load[158,5,158,20] : forall<a> (value : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>) -> a;
-fun transaction-store[161,5,161,21] : forall<a> (target : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>, value : a) -> ();
-fun query-raw[169,8,169,16] : (selector : std/core/types/string) -> <(std/core/ui :: X)> std/core/types/any;
-fun any-is-null[172,8,172,18] : (value : std/core/types/any) -> std/core/types/bool;
-fun any-node[175,8,175,15] : (value : std/core/types/any) -> node;
-fun any-reentry[178,8,178,18] : (value : std/core/types/any) -> (kokaine/reactive/integration/reentry :: E -> V)<<(std/core/ui :: X)>>;
+fun transaction-cell[156,5,156,20] : forall<a> (value : a) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>;
+fun transaction-load[159,5,159,20] : forall<a> (value : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>) -> a;
+fun transaction-store[162,5,162,21] : forall<a> (target : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>, value : a) -> ();
+fun query-raw[170,8,170,16] : (selector : std/core/types/string) -> <(std/core/ui :: X)> std/core/types/any;
+fun any-is-null[173,8,173,18] : (value : std/core/types/any) -> std/core/types/bool;
+fun any-node[176,8,176,15] : (value : std/core/types/any) -> node;
+fun any-reentry[179,8,179,18] : (value : std/core/types/any) -> (kokaine/reactive/integration/reentry :: E -> V)<<(std/core/ui :: X)>>;
 // JavaScript DOM APIs throw native exceptions, which do not automatically
 // become Koka's `exn` effect. Keep raw exceptions inside this tiny result box
 // and rethrow them through Koka so handler/finally state is always restored.
-fun dom-attempt-raw[184,8,184,22] : forall<a> (action : () -> <(std/core/ui :: X)> a) -> <(std/core/ui :: X)> std/core/types/any;
-fun dom-attempt-ok[187,8,187,21] : (result : std/core/types/any) -> std/core/types/bool;
-fun dom-attempt-value[190,8,190,24] : forall<a> (result : std/core/types/any) -> a;
-fun dom-attempt-message[193,8,193,26] : (result : std/core/types/any) -> std/core/types/string;
+fun dom-attempt-raw[185,8,185,22] : forall<a> (action : () -> <(std/core/ui :: X)> a) -> <(std/core/ui :: X)> std/core/types/any;
+fun dom-attempt-ok[188,8,188,21] : (result : std/core/types/any) -> std/core/types/bool;
+fun dom-attempt-value[191,8,191,24] : forall<a> (result : std/core/types/any) -> a;
+fun dom-attempt-message[194,8,194,26] : (result : std/core/types/any) -> std/core/types/string;
 // Closed shadow roots are intentionally opaque, so a keyed move cannot inspect
 // them for custom-element callbacks after the fact. Install one wrapper per DOM
 // realm before mount construction and remember both observed closed hosts and
@@ -261,33 +261,33 @@ fun dom-attempt-message[193,8,193,26] : (result : std/core/types/any) -> std/cor
 // If another host shim replaces the wrapper, later moves fail closed. As with
 // the rest of the DOM adapter, direct calls through deliberately retained or
 // foreign native primitives are outside the cooperative host contract.
-fun dom-install-shadow-tracker[203,8,203,33] : (parent : node) -> <(std/core/ui :: X)> ();
-fun dom-create-element[206,8,206,25] : (parent : node, name : std/core/types/string) -> <(std/core/ui :: X)> element;
-fun dom-create-text[209,8,209,22] : (value : std/core/types/string) -> <(std/core/ui :: X)> node;
-fun dom-create-comment[212,8,212,25] : (value : std/core/types/string) -> <(std/core/ui :: X)> node;
-fun element-node[215,8,215,19] : (value : element) -> node;
+fun dom-install-shadow-tracker[204,8,204,33] : (parent : node) -> <(std/core/ui :: X)> ();
+fun dom-create-element[207,8,207,25] : (parent : node, name : std/core/types/string) -> <(std/core/ui :: X)> element;
+fun dom-create-text[210,8,210,22] : (value : std/core/types/string) -> <(std/core/ui :: X)> node;
+fun dom-create-comment[213,8,213,25] : (value : std/core/types/string) -> <(std/core/ui :: X)> node;
+fun element-node[216,8,216,19] : (value : element) -> node;
 // Nodes created by a managed generation remember its structural re-entry
 // capability. The registry gives each live root a weakly keyed numeric ID:
 // retired node tombstones can therefore reject stale same-root adoption without
 // retaining the root or its generation portal.
-fun dom-record-owner[222,8,222,23] : (value : node, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, portal : (kokaine/reactive/integration/reentry :: E -> V)<<(std/core/ui :: X)>>) -> <(std/core/ui :: X)> dom-owner-registration;
-fun dom-retire-owners[227,8,227,24] : (value : dom-owner-registration) -> <(std/core/ui :: X)> ();
-fun dom-find-owner[230,8,230,21] : (value : node, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>) -> <(std/core/ui :: X)> std/core/types/any;
-fun dom-owner-state[233,8,233,22] : (value : std/core/types/any) -> std/core/types/int;
-fun dom-owner-portal[236,8,236,23] : (value : std/core/types/any) -> std/core/types/any;
-fun dom-append[239,8,239,17] : (parent : node, child : node) -> <(std/core/ui :: X)> ();
-fun dom-insert-before[242,8,242,24] : (parent : node, child : node, before : node) -> <(std/core/ui :: X)> ();
+fun dom-record-owner[223,8,223,23] : (value : node, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, portal : (kokaine/reactive/integration/reentry :: E -> V)<<(std/core/ui :: X)>>) -> <(std/core/ui :: X)> dom-owner-registration;
+fun dom-retire-owners[228,8,228,24] : (value : dom-owner-registration) -> <(std/core/ui :: X)> ();
+fun dom-find-owner[231,8,231,21] : (value : node, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>) -> <(std/core/ui :: X)> std/core/types/any;
+fun dom-owner-state[234,8,234,22] : (value : std/core/types/any) -> std/core/types/int;
+fun dom-owner-portal[237,8,237,23] : (value : std/core/types/any) -> std/core/types/any;
+fun dom-append[240,8,240,17] : (parent : node, child : node) -> <(std/core/ui :: X)> ();
+fun dom-insert-before[243,8,243,24] : (parent : node, child : node, before : node) -> <(std/core/ui :: X)> ();
 // Assemble boundary markers off-tree and publish them with one host mutation.
 // If the final append/insert throws, neither endpoint has become observable in
 // the target DOM.
-fun dom-append-marker-pair[248,8,248,29] : (parent : node, first : node, last : node) -> <(std/core/ui :: X)> ();
-fun dom-insert-marker-pair-before[251,8,251,36] : (parent : node, first : node, last : node, before : node) -> <(std/core/ui :: X)> ();
-fun dom-same-node[255,8,255,20] : (left : node, right : node) -> std/core/types/bool;
+fun dom-append-marker-pair[249,8,249,29] : (parent : node, first : node, last : node) -> <(std/core/ui :: X)> ();
+fun dom-insert-marker-pair-before[252,8,252,36] : (parent : node, first : node, last : node, before : node) -> <(std/core/ui :: X)> ();
+fun dom-same-node[256,8,256,20] : (left : node, right : node) -> std/core/types/bool;
 // Validate a complete managed range before exposing either cursor.  The DOM
 // can be mutated by application JavaScript, custom-element callbacks, or test
 // fault injection, so reconciliation never trusts retained marker handles.
-fun dom-range-first[261,8,261,22] : (parent : node, first : node, last : node) -> <(std/core/ui :: X)> node;
-fun dom-range-next[264,8,264,21] : (parent : node, first : node, last : node) -> <(std/core/ui :: X)> node;
+fun dom-range-first[262,8,262,22] : (parent : node, first : node, last : node) -> <(std/core/ui :: X)> node;
+fun dom-range-next[265,8,265,21] : (parent : node, first : node, last : node) -> <(std/core/ui :: X)> node;
 // Move one inclusive row range with verified host operations.  Validation is
 // deliberately complete before extraction.  Custom-element-shaped nodes,
 // opaque shadow hosts, and opaque focused subtrees fail before movement because
@@ -297,189 +297,189 @@ fun dom-range-next[264,8,264,21] : (parent : node, first : node, last : node) ->
 // snapshotted node is pulled back before the original successor through the
 // same-realm parent prototype.  No node is cloned, so ordinary object identity,
 // listeners, form values, and owner registrations are retained.
-fun dom-validate-range-move-lifecycle[276,8,276,40] : (parent : node, first : node, last : node) -> <(std/core/ui :: X)> ();
-fun dom-validate-range-move-focus[280,8,280,36] : (parent : node, first : node, last : node) -> <(std/core/ui :: X)> ();
-fun dom-capture-range-focus[284,8,284,30] : (parent : node, first : node, last : node) -> <(std/core/ui :: X)> std/core/types/any;
-fun dom-move-range-before[288,8,288,28] : (parent : node, first : node, last : node, before : node, focus : std/core/types/any) -> <(std/core/ui :: X)> ();
-fun dom-set-text[292,8,292,19] : (value : node, content : std/core/types/string) -> <(std/core/ui :: X)> ();
-fun dom-set-attribute[295,8,295,24] : (value : element, name : std/core/types/string, content : std/core/types/string) -> <(std/core/ui :: X)> ();
-fun dom-remove-attribute[299,8,299,27] : (value : element, name : std/core/types/string) -> <(std/core/ui :: X)> ();
-fun dom-set-string-property[302,8,302,30] : (value : element, name : std/core/types/string, content : std/core/types/string) -> <(std/core/ui :: X)> ();
-fun dom-set-bool-property[306,8,306,28] : (value : element, name : std/core/types/string, content : std/core/types/bool) -> <(std/core/ui :: X)> ();
-fun dom-set-int-property[310,8,310,27] : (value : element, name : std/core/types/string, content : std/core/types/string) -> <(std/core/ui :: X)> ();
-fun dom-clean-range[314,8,314,22] : (first : node, last : node, inclusive : std/core/types/bool) -> <(std/core/ui :: X)> ();
-fun dom-clear-between[317,5,317,21] : (first : node, last : node) -> <(std/core/ui :: X)> ();
-fun dom-remove-range[320,5,320,20] : (first : node, last : node) -> <(std/core/ui :: X)> ();
+fun dom-validate-range-move-lifecycle[277,8,277,40] : (parent : node, first : node, last : node) -> <(std/core/ui :: X)> ();
+fun dom-validate-range-move-focus[281,8,281,36] : (parent : node, first : node, last : node) -> <(std/core/ui :: X)> ();
+fun dom-capture-range-focus[285,8,285,30] : (parent : node, first : node, last : node) -> <(std/core/ui :: X)> std/core/types/any;
+fun dom-move-range-before[289,8,289,28] : (parent : node, first : node, last : node, before : node, focus : std/core/types/any) -> <(std/core/ui :: X)> ();
+fun dom-set-text[293,8,293,19] : (value : node, content : std/core/types/string) -> <(std/core/ui :: X)> ();
+fun dom-set-attribute[296,8,296,24] : (value : element, name : std/core/types/string, content : std/core/types/string) -> <(std/core/ui :: X)> ();
+fun dom-remove-attribute[300,8,300,27] : (value : element, name : std/core/types/string) -> <(std/core/ui :: X)> ();
+fun dom-set-string-property[303,8,303,30] : (value : element, name : std/core/types/string, content : std/core/types/string) -> <(std/core/ui :: X)> ();
+fun dom-set-bool-property[307,8,307,28] : (value : element, name : std/core/types/string, content : std/core/types/bool) -> <(std/core/ui :: X)> ();
+fun dom-set-int-property[311,8,311,27] : (value : element, name : std/core/types/string, content : std/core/types/string) -> <(std/core/ui :: X)> ();
+fun dom-clean-range[315,8,315,22] : (first : node, last : node, inclusive : std/core/types/bool) -> <(std/core/ui :: X)> ();
+fun dom-clear-between[318,5,318,21] : (first : node, last : node) -> <(std/core/ui :: X)> ();
+fun dom-remove-range[321,5,321,20] : (first : node, last : node) -> <(std/core/ui :: X)> ();
 // Validate and snapshot an inclusive row range without changing the DOM.
-fun dom-stage-retirement[324,8,324,27] : (first : node, last : node) -> <(std/core/ui :: X)> dom-retirement;
+fun dom-stage-retirement[325,8,325,27] : (first : node, last : node) -> <(std/core/ui :: X)> dom-retirement;
 // Detach a staged snapshot. If a host primitive throws before detaching its
 // target, stop immediately so the complete remaining row stays retryable. A
 // commit-then-throw is recognized by inspecting the target after the throw.
-fun dom-run-retirement[330,8,330,25] : (value : dom-retirement) -> <(std/core/ui :: X)> ();
-fun dom-release-retirement[333,8,333,29] : (value : dom-retirement) -> <(std/core/ui :: X)> ();
-fun dom-append-html[336,8,336,22] : (parent : node, content : std/core/types/string, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, portal : (kokaine/reactive/integration/reentry :: E -> V)<<(std/core/ui :: X)>>) -> <(std/core/ui :: X)> dom-owner-registration;
-fun dom-insert-html-before[341,8,341,29] : (parent : node, before : node, content : std/core/types/string, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, portal : (kokaine/reactive/integration/reentry :: E -> V)<<(std/core/ui :: X)>>) -> <(std/core/ui :: X)> dom-owner-registration;
-fun dom-listen[347,8,347,17] : (value : element, name : std/core/types/string, action : (raw-event) -> <(std/core/ui :: X)> ()) -> <(std/core/ui :: X)> dom-listener;
+fun dom-run-retirement[331,8,331,25] : (value : dom-retirement) -> <(std/core/ui :: X)> ();
+fun dom-release-retirement[334,8,334,29] : (value : dom-retirement) -> <(std/core/ui :: X)> ();
+fun dom-append-html[337,8,337,22] : (parent : node, content : std/core/types/string, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, portal : (kokaine/reactive/integration/reentry :: E -> V)<<(std/core/ui :: X)>>) -> <(std/core/ui :: X)> dom-owner-registration;
+fun dom-insert-html-before[342,8,342,29] : (parent : node, before : node, content : std/core/types/string, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, portal : (kokaine/reactive/integration/reentry :: E -> V)<<(std/core/ui :: X)>>) -> <(std/core/ui :: X)> dom-owner-registration;
+fun dom-listen[348,8,348,17] : (value : element, name : std/core/types/string, action : (raw-event) -> <(std/core/ui :: X)> ()) -> <(std/core/ui :: X)> dom-listener;
 // Drop the Koka closure before asking an unreliable host to detach the ABI
 // trampoline. A callback retained after failed removal is then inert and no
 // longer keeps the root, structural portal, or event K reachable.
-fun dom-retire-listener[354,8,354,26] : (listener : dom-listener) -> <(std/core/ui :: X)> ();
-fun dom-unlisten[357,8,357,19] : (value : element, name : std/core/types/string, listener : dom-listener) -> <(std/core/ui :: X)> ();
-fun raw-event-value[361,8,361,22] : (value : raw-event) -> <(std/core/ui :: X)> std/core/types/string;
-fun raw-event-checked[364,8,364,24] : (value : raw-event) -> <(std/core/ui :: X)> std/core/types/bool;
-fun raw-event-key[367,8,367,20] : (value : raw-event) -> <(std/core/ui :: X)> std/core/types/string;
-fun raw-event-any[370,8,370,20] : (value : raw-event) -> std/core/types/any;
-fun event-prevent-default[373,8,373,28] : (value : std/core/types/any) -> <(std/core/ui :: X)> ();
-fun event-stop-propagation[376,8,376,29] : (value : std/core/types/any) -> <(std/core/ui :: X)> ();
+fun dom-retire-listener[355,8,355,26] : (listener : dom-listener) -> <(std/core/ui :: X)> ();
+fun dom-unlisten[358,8,358,19] : (value : element, name : std/core/types/string, listener : dom-listener) -> <(std/core/ui :: X)> ();
+fun raw-event-value[362,8,362,22] : (value : raw-event) -> <(std/core/ui :: X)> std/core/types/string;
+fun raw-event-checked[365,8,365,24] : (value : raw-event) -> <(std/core/ui :: X)> std/core/types/bool;
+fun raw-event-key[368,8,368,20] : (value : raw-event) -> <(std/core/ui :: X)> std/core/types/string;
+fun raw-event-any[371,8,371,20] : (value : raw-event) -> std/core/types/any;
+fun event-prevent-default[374,8,374,28] : (value : std/core/types/any) -> <(std/core/ui :: X)> ();
+fun event-stop-propagation[377,8,377,29] : (value : std/core/types/any) -> <(std/core/ui :: X)> ();
 // Validate and invoke within one host action. The surrounding `dom-attempt`
 // then translates both adapter validation failures and native DOM exceptions.
 // Native Web IDL getters provide realm-neutral brand checks: unlike
 // `instanceof`, they accept genuine nodes created by another same-origin realm.
-fun dom-require-dialog-target[383,8,383,32] : (target : node, message : std/core/types/string) -> <(std/core/ui :: X)> ();
-fun dom-require-element-target[386,8,386,33] : (target : node, message : std/core/types/string) -> <(std/core/ui :: X)> ();
+fun dom-require-dialog-target[384,8,384,32] : (target : node, message : std/core/types/string) -> <(std/core/ui :: X)> ();
+fun dom-require-element-target[387,8,387,33] : (target : node, message : std/core/types/string) -> <(std/core/ui :: X)> ();
 // Read the platform reflection getter directly. An own `popover` class field on
 // a custom element must neither hide a real content attribute nor manufacture
 // popover state where the browser has none.
-fun dom-require-popover-target[392,8,392,33] : (target : node, message : std/core/types/string) -> <(std/core/ui :: X)> ();
-fun dom-dialog-show[395,8,395,22] : (target : node) -> <(std/core/ui :: X)> ();
-fun dom-dialog-show-modal[398,8,398,28] : (target : node) -> <(std/core/ui :: X)> ();
-fun dom-dialog-close[401,8,401,23] : (target : node, result : std/core/types/string) -> <(std/core/ui :: X)> ();
+fun dom-require-popover-target[393,8,393,33] : (target : node, message : std/core/types/string) -> <(std/core/ui :: X)> ();
+fun dom-dialog-show[396,8,396,22] : (target : node) -> <(std/core/ui :: X)> ();
+fun dom-dialog-show-modal[399,8,399,28] : (target : node) -> <(std/core/ui :: X)> ();
+fun dom-dialog-close[402,8,402,23] : (target : node, result : std/core/types/string) -> <(std/core/ui :: X)> ();
 // `close()` cannot emulate the cancellable `cancel` event from requestClose.
-fun dom-dialog-request-close[405,8,405,31] : (target : node, result : std/core/types/string) -> <(std/core/ui :: X)> ();
-fun dom-dialog-is-open[408,8,408,25] : (target : node) -> <(std/core/ui :: X)> std/core/types/bool;
-fun dom-dialog-is-modal[411,8,411,26] : (target : node) -> <(std/core/ui :: X)> std/core/types/bool;
-fun dom-dialog-return-value[414,8,414,30] : (target : node) -> <(std/core/ui :: X)> std/core/types/string;
+fun dom-dialog-request-close[406,8,406,31] : (target : node, result : std/core/types/string) -> <(std/core/ui :: X)> ();
+fun dom-dialog-is-open[409,8,409,25] : (target : node) -> <(std/core/ui :: X)> std/core/types/bool;
+fun dom-dialog-is-modal[412,8,412,26] : (target : node) -> <(std/core/ui :: X)> std/core/types/bool;
+fun dom-dialog-return-value[415,8,415,30] : (target : node) -> <(std/core/ui :: X)> std/core/types/string;
 // A recognized reflected `popover` value distinguishes enabled elements from
 // arbitrary nodes. Do not infer state or simulate unsupported native methods.
-fun dom-popover-show[419,8,419,23] : (target : node) -> <(std/core/ui :: X)> ();
-fun dom-popover-hide[422,8,422,23] : (target : node) -> <(std/core/ui :: X)> ();
+fun dom-popover-show[420,8,420,23] : (target : node) -> <(std/core/ui :: X)> ();
+fun dom-popover-hide[423,8,423,23] : (target : node) -> <(std/core/ui :: X)> ();
 // Some older implementations return `undefined`; querying the selector after
 // the call gives Koka the authoritative post-toggle state in every case.
-fun dom-popover-toggle[427,8,427,25] : (target : node) -> <(std/core/ui :: X)> std/core/types/bool;
+fun dom-popover-toggle[428,8,428,25] : (target : node) -> <(std/core/ui :: X)> std/core/types/bool;
 // The force overload arrived after the core Popover API. Compare state first so
 // older implementations which ignore that argument still provide a true setter.
 // A same-state force call still performs native validity checks; delegate an
 // invalid case to the unforced method so its DOMException is not suppressed.
 // `:modal` covers modal dialogs and the target's own fullscreen flag. Unlike
 // `:fullscreen`, it does not match a retargeted shadow host.
-fun dom-popover-set-open[436,8,436,27] : (target : node, open : std/core/types/bool) -> <(std/core/ui :: X)> ();
-fun dom-popover-is-open[439,8,439,26] : (target : node) -> <(std/core/ui :: X)> std/core/types/bool;
-fun dom-toggle-state[442,8,442,23] : (value : std/core/types/any) -> <(std/core/ui :: X)> std/core/types/int;
-fun dom-dialog-event-return-value[445,8,445,36] : (value : std/core/types/any) -> <(std/core/ui :: X)> std/core/types/string;
-fun dom-report-error[448,8,448,23] : (message : std/core/types/string) -> <(std/core/ui :: X)> ();
-fun dom-attempt[580,5,580,15] : forall<a> (action : () -> <(std/core/ui :: X)> a) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> a;
+fun dom-popover-set-open[437,8,437,27] : (target : node, open : std/core/types/bool) -> <(std/core/ui :: X)> ();
+fun dom-popover-is-open[440,8,440,26] : (target : node) -> <(std/core/ui :: X)> std/core/types/bool;
+fun dom-toggle-state[443,8,443,23] : (value : std/core/types/any) -> <(std/core/ui :: X)> std/core/types/int;
+fun dom-dialog-event-return-value[446,8,446,36] : (value : std/core/types/any) -> <(std/core/ui :: X)> std/core/types/string;
+fun dom-report-error[449,8,449,23] : (message : std/core/types/string) -> <(std/core/ui :: X)> ();
+fun dom-attempt[581,5,581,15] : forall<a> (action : () -> <(std/core/ui :: X)> a) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> a;
 // monadic lift
 fun @mlift-query@11401[1,0,1,0] : (selector : std/core/types/string, result : std/core/types/any) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> node;
-pub fun query[456,9,456,13] : (selector : std/core/types/string) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> node;
-pub fun body[462,9,462,12] : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> node;
-pub fun prevent-default[465,9,465,23] : (value : kokaine/html/event) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
-pub fun stop-propagation[468,9,468,24] : (value : kokaine/html/event) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
-pub fun dialog/show[471,9,471,19] : (target : node) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
-pub fun dialog/show-modal[478,9,478,25] : (target : node) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
-pub fun dialog/close[485,9,485,20] : (target : node, result : (std/core/types/@optional :: V -> V)<std/core/types/string>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
-pub fun dialog/request-close[492,9,492,28] : (target : node, result : (std/core/types/@optional :: V -> V)<std/core/types/string>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
-pub fun dialog/is-open[500,9,500,22] : (target : node) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> std/core/types/bool;
-pub fun dialog/is-modal[507,9,507,23] : (target : node) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> std/core/types/bool;
-pub fun dialog/return-value[514,9,514,27] : (target : node) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> std/core/types/string;
-pub fun dialog/event-return-value[521,9,521,33] : (value : kokaine/html/event) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> std/core/types/string;
-pub fun popover/show[524,9,524,20] : (target : node) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
-pub fun popover/hide[533,9,533,20] : (target : node) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
-pub fun popover/toggle[542,9,542,22] : (target : node) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> std/core/types/bool;
-pub fun popover/set-open[551,9,551,24] : (target : node, open : std/core/types/bool) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
-pub fun popover/is-open[560,9,560,23] : (target : node) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> std/core/types/bool;
+pub fun query[457,9,457,13] : (selector : std/core/types/string) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> node;
+pub fun body[463,9,463,12] : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> node;
+pub fun prevent-default[466,9,466,23] : (value : kokaine/html/event) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
+pub fun stop-propagation[469,9,469,24] : (value : kokaine/html/event) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
+pub fun dialog/show[472,9,472,19] : (target : node) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
+pub fun dialog/show-modal[479,9,479,25] : (target : node) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
+pub fun dialog/close[486,9,486,20] : (target : node, result : (std/core/types/@optional :: V -> V)<std/core/types/string>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
+pub fun dialog/request-close[493,9,493,28] : (target : node, result : (std/core/types/@optional :: V -> V)<std/core/types/string>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
+pub fun dialog/is-open[501,9,501,22] : (target : node) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> std/core/types/bool;
+pub fun dialog/is-modal[508,9,508,23] : (target : node) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> std/core/types/bool;
+pub fun dialog/return-value[515,9,515,27] : (target : node) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> std/core/types/string;
+pub fun dialog/event-return-value[522,9,522,33] : (value : kokaine/html/event) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> std/core/types/string;
+pub fun popover/show[525,9,525,20] : (target : node) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
+pub fun popover/hide[534,9,534,20] : (target : node) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
+pub fun popover/toggle[543,9,543,22] : (target : node) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> std/core/types/bool;
+pub fun popover/set-open[552,9,552,24] : (target : node, open : std/core/types/bool) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
+pub fun popover/is-open[561,9,561,23] : (target : node) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> std/core/types/bool;
 // monadic lift
 fun toggle/@mlift-state@11402[1,0,1,0] : (state : std/core/types/int) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> toggle-state;
-pub fun toggle/state[569,9,569,20] : (value : kokaine/html/event) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> toggle-state;
+pub fun toggle/state[570,9,570,20] : (value : kokaine/html/event) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> toggle-state;
 // monadic lift
 fun @mlift-tracked@11403[1,0,1,0] : forall<a> (read : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> a, @y-x10326 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> a;
-fun tracked[586,5,586,11] : forall<a> (read : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/pure :: E)> a;
+fun tracked[587,5,587,11] : forall<a> (read : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/pure :: E)> a;
 // monadic lift
 fun @mlift-constant-track@11404[1,0,1,0] : (@y-x10330 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/div :: X)> ();
 // monadic lift
 fun @mlift-constant-track@11405[1,0,1,0] : (@y-x10329 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
-fun constant-track[589,5,589,18] : () -> <(std/core/pure :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> ();
+fun constant-track[590,5,590,18] : () -> <(std/core/pure :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> ();
 // monadic lift
 fun @mlift-reactive-ui-exn@11406[1,0,1,0] : forall<a,(e :: E)> (action : () -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> a, @y-x10333 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)|(e :: E)> a;
-fun reactive-ui-exn[592,5,592,19] : forall<a,(e :: E)> (action : () -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E),(std/core/ui :: X)|(e :: E)> a;
+fun reactive-ui-exn[593,5,593,19] : forall<a,(e :: E)> (action : () -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E),(std/core/ui :: X)|(e :: E)> a;
 // monadic lift
 fun @mlift-reactive-ui-exn-open@11407[1,0,1,0] : forall<a,(e :: E)> (action : () -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a, @y-x10337 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)|(e :: E)> a;
-fun reactive-ui-exn-open[596,5,596,24] : forall<a,(e :: E)> (action : () -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E),(std/core/ui :: X)|(e :: E)> a;
+fun reactive-ui-exn-open[597,5,597,24] : forall<a,(e :: E)> (action : () -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E),(std/core/ui :: X)|(e :: E)> a;
 // monadic lift
 fun @mlift-reactive-sample@11408[1,0,1,0] : forall<a> (action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/pure :: E)> a, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, @y-x10340 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> a;
 // Row renderers are sampled once while their live closures retain the item and
 // index accessors.  Widen the handled sample back to the DOM apply row so Koka
 // does not prematurely close a surrounding lifetime-scope action at `<ui>`.
-fun reactive-sample[603,5,603,19] : forall<a> (root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/pure :: E)> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E),(std/core/ui :: X)> a;
+fun reactive-sample[604,5,604,19] : forall<a> (root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/pure :: E)> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E),(std/core/ui :: X)> a;
 // monadic lift
 fun @mlift-reactive-write-ui@11409[1,0,1,0] : forall<a,(e :: E)> (action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>> a, @y-x10344 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>|(e :: E)> a;
-fun reactive-write-ui[608,5,608,21] : forall<a,(e :: E)> (action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E),(std/core/ui :: X)|(e :: E)> a;
+fun reactive-write-ui[609,5,609,21] : forall<a,(e :: E)> (action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E),(std/core/ui :: X)|(e :: E)> a;
 // monadic lift
 fun @mlift-reactive-integration@11410[1,0,1,0] : forall<a,(e :: E)> (action : () -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)|(e :: E)> a, @y-x10349 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)|(e :: E)> a;
-fun reactive-integration[612,5,612,24] : forall<a,(e :: E)> (action : () -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)|(e :: E)> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E),(std/core/ui :: X)|(e :: E)> a;
-fun insert[616,5,616,10] : (parent : node, before : (std/core/types/maybe :: V -> V)<node>, child : node) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
-fun insert-marker-pair[621,5,621,22] : (parent : node, before : (std/core/types/maybe :: V -> V)<node>, first : node, last : node) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
-fun range-first[628,5,628,15] : (parent : node, first : node, last : node) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> node;
-fun range-next[631,5,631,14] : (parent : node, first : node, last : node) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> node;
+fun reactive-integration[613,5,613,24] : forall<a,(e :: E)> (action : () -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)|(e :: E)> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E),(std/core/ui :: X)|(e :: E)> a;
+fun insert[617,5,617,10] : (parent : node, before : (std/core/types/maybe :: V -> V)<node>, child : node) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
+fun insert-marker-pair[622,5,622,22] : (parent : node, before : (std/core/types/maybe :: V -> V)<node>, first : node, last : node) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
+fun range-first[629,5,629,15] : (parent : node, first : node, last : node) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> node;
+fun range-next[632,5,632,14] : (parent : node, first : node, last : node) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> node;
 // monadic lift
 fun @mlift-validate-range-move-lifecycle@11411[1,0,1,0] : (first : node, last : node, parent : node, wild_ : ()) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
-fun validate-range-move-lifecycle[640,5,640,33] : (parent : node, first : node, last : node) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
+fun validate-range-move-lifecycle[641,5,641,33] : (parent : node, first : node, last : node) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
 // monadic lift
 fun @mlift-move-range-before@11412[1,0,1,0] : (before : node, first : node, last : node, parent : node, focus : std/core/types/any) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
 // monadic lift
 fun @mlift-move-range-before@11413[1,0,1,0] : (before : node, first : node, last : node, parent : node, wild_@0 : ()) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
 // monadic lift
 fun @mlift-move-range-before@11414[1,0,1,0] : (before : node, first : node, last : node, parent : node, wild_ : ()) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
-fun move-range-before[634,5,634,21] : (parent : node, first : node, last : node, before : node) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
-fun retire-owner-registration[649,5,649,29] : (value : dom-owner-registration) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
+fun move-range-before[635,5,635,21] : (parent : node, first : node, last : node, before : node) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
+fun retire-owner-registration[650,5,650,29] : (value : dom-owner-registration) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
 // monadic lift
 fun @mlift-register-owner-cleanup@11415[1,0,1,0] : (@pat@1 : (kokaine/reactive/internal/model/cleanup-registration :: E -> V)<<(std/core/ui :: X)>>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
 // monadic lift
 fun @mlift-register-owner-cleanup@11416[1,0,1,0] : (value : dom-owner-registration, @y-x10370 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
 // monadic lift
 fun @mlift-register-owner-cleanup@11417[1,0,1,0] : forall<(_e :: E)> (committed : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>, wild_ : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X),(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>> ();
-fun register-owner-cleanup[652,5,652,26] : (root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, value : dom-owner-registration) -> <(std/core/pure :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/ui :: X)> ();
+fun register-owner-cleanup[653,5,653,26] : (root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, value : dom-owner-registration) -> <(std/core/pure :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/ui :: X)> ();
 // monadic lift
 fun @mlift-record-owner@11418[1,0,1,0] : (root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, registered : dom-owner-registration) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X),(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>> ();
 // monadic lift
 fun @mlift-record-owner@11419[1,0,1,0] : (@y-x10376 : (kokaine/reactive/integration/internal/reentry/reentry :: E -> V)<<(std/core/ui :: X)>>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (kokaine/reactive/integration/reentry :: E -> V)<<(std/core/ui :: X)>>;
 // monadic lift
 fun @mlift-record-owner@11420[1,0,1,0] : (root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, value : node, portal : (kokaine/reactive/integration/reentry :: E -> V)<<(std/core/ui :: X)>>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/ui :: X)> ();
-fun record-owner[668,5,668,16] : (root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, value : node) -> <(std/core/pure :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/ui :: X)> ();
+fun record-owner[669,5,669,16] : (root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, value : node) -> <(std/core/pure :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/ui :: X)> ();
 // monadic lift
 fun @mlift-find-owner@11421[1,0,1,0] : (found : std/core/types/any) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> owner-match;
-fun find-owner[674,5,674,14] : (root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, value : node) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> owner-match;
+fun find-owner[675,5,675,14] : (root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, value : node) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> owner-match;
 // monadic lift
 fun @mlift-insert-html@11422[1,0,1,0] : (root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, @c-x10386 : dom-owner-registration) -> ();
 // monadic lift
 fun @mlift-insert-html@11423[1,0,1,0] : (@y-x10382 : (kokaine/reactive/integration/internal/reentry/reentry :: E -> V)<<(std/core/ui :: X)>>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (kokaine/reactive/integration/reentry :: E -> V)<<(std/core/ui :: X)>>;
 // monadic lift
 fun @mlift-insert-html@11424[1,0,1,0] : (before : (std/core/types/maybe :: V -> V)<node>, content : std/core/types/string, parent : node, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, portal : (kokaine/reactive/integration/reentry :: E -> V)<<(std/core/ui :: X)>>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/ui :: X)> ();
-fun insert-html[681,5,681,15] : (root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, parent : node, before : (std/core/types/maybe :: V -> V)<node>, content : std/core/types/string) -> <(std/core/pure :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/ui :: X)> ();
-fun set-attribute[693,5,693,17] : (value : element, name : std/core/types/string, content : (std/core/types/maybe :: V -> V)<std/core/types/string>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
-fun set-property[701,5,701,16] : (value : element, name : std/core/types/string, content : kokaine/html/property-value) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
-fun snapshot[713,5,713,12] : (value : raw-event) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> kokaine/html/event;
+fun insert-html[682,5,682,15] : (root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, parent : node, before : (std/core/types/maybe :: V -> V)<node>, content : std/core/types/string) -> <(std/core/pure :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/ui :: X)> ();
+fun set-attribute[694,5,694,17] : (value : element, name : std/core/types/string, content : (std/core/types/maybe :: V -> V)<std/core/types/string>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
+fun set-property[702,5,702,16] : (value : element, name : std/core/types/string, content : kokaine/html/property-value) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
+fun snapshot[714,5,714,12] : (value : raw-event) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> kokaine/html/event;
 // monadic lift
-fun @mlift-invoke-event@11425[1,0,1,0] : (@pat@1@2 : std/core/types/bool) -> <(std/core/pure :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/ui :: X)> ();
+fun @mlift-invoke-event@11425[1,0,1,0] : (@pat@1@2 : std/core/types/bool) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/ui :: X),(std/core/pure :: E)|(kokaine/async/effects/async :: E)> ();
 // monadic lift
-fun @mlift-invoke-event@11426[1,0,1,0] : forall<(_e :: E)> (continuation : kokaine/internal/event-runtime/event-continuation, portal : (kokaine/reactive/integration/reentry :: E -> V)<<(std/core/ui :: X)>>, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, captured : kokaine/html/event) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
-fun invoke-event[718,5,718,16] : (root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, portal : (kokaine/reactive/integration/reentry :: E -> V)<<(std/core/ui :: X)>>, continuation : kokaine/internal/event-runtime/event-continuation, value : raw-event) -> <(std/core/ui :: X)> ();
-fun retire-event-listener[749,5,749,25] : (target : element, name : std/core/types/string, continuation : kokaine/internal/event-runtime/event-continuation, listener : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<dom-listener>>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
+fun @mlift-invoke-event@11426[1,0,1,0] : forall<(_e :: E)> (continuation : (kokaine/reactive/integration/event/event-continuation :: (E, V) -> V)<(kokaine/async/effects/async :: E),kokaine/html/event>, portal : (kokaine/reactive/integration/reentry :: E -> V)<<(std/core/ui :: X)>>, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, captured : kokaine/html/event) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
+fun invoke-event[719,5,719,16] : (root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, portal : (kokaine/reactive/integration/reentry :: E -> V)<<(std/core/ui :: X)>>, continuation : (kokaine/reactive/integration/event/event-continuation :: (E, V) -> V)<(kokaine/async/effects/async :: E),kokaine/html/event>, value : raw-event) -> <(std/core/ui :: X)> ();
+fun retire-event-listener[750,5,750,25] : (target : element, name : std/core/types/string, continuation : (kokaine/reactive/integration/event/event-continuation :: (E, V) -> V)<(kokaine/async/effects/async :: E),kokaine/html/event>, listener : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<dom-listener>>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
 // monadic lift
-fun @mlift-capture-event-listener@11427[1,0,1,0] : forall<(_e :: E)> (captured : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<kokaine/internal/event-runtime/event-continuation>>, @y-x10412 : kokaine/internal/event-runtime/event-continuation) -> <(std/core/pure :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/ui :: X)> ();
+fun @mlift-capture-event-listener@11427[1,0,1,0] : forall<(_e :: E)> (captured : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<(kokaine/reactive/integration/event/event-continuation :: (E, V) -> V)<<(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>>,kokaine/html/event>>>, @y-x10412 : (kokaine/reactive/integration/event/event-continuation :: (E, V) -> V)<<(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>>,kokaine/html/event>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/ui :: X),(std/core/pure :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>> ();
 // monadic lift
-fun @mlift-capture-event-listener@11428[1,0,1,0] : forall<(_e :: E)> (captured : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<kokaine/internal/event-runtime/event-continuation>>, wild_ : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> kokaine/internal/event-runtime/event-continuation;
-fun capture-event-listener[768,5,768,26] : (root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, action : kokaine/html/callback) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> kokaine/internal/event-runtime/event-continuation;
+fun @mlift-capture-event-listener@11428[1,0,1,0] : forall<(_e :: E)> (captured : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<(kokaine/reactive/integration/event/event-continuation :: (E, V) -> V)<<(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>>,kokaine/html/event>>>, wild_ : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> (kokaine/reactive/integration/event/event-continuation :: (E, V) -> V)<<(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>>,kokaine/html/event>;
+fun capture-event-listener[769,5,769,26] : (root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, action : kokaine/html/callback) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> (kokaine/reactive/integration/event/event-continuation :: (E, V) -> V)<(kokaine/async/effects/async :: E),kokaine/html/event>;
 // monadic lift
-fun @mlift-install-event-listener@11429[1,0,1,0] : (continuation : kokaine/internal/event-runtime/event-continuation, listener : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<dom-listener>>, name : std/core/types/string, target : element, @y-x10422 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
+fun @mlift-install-event-listener@11429[1,0,1,0] : (continuation : (kokaine/reactive/integration/event/event-continuation :: (E, V) -> V)<(kokaine/async/effects/async :: E),kokaine/html/event>, listener : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<dom-listener>>, name : std/core/types/string, target : element, @y-x10422 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
 // monadic lift
 fun @mlift-install-event-listener@11430[1,0,1,0] : forall<(_e :: E)> (committed : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>, @pat@1 : (kokaine/reactive/internal/model/cleanup-registration :: E -> V)<<(std/core/ui :: X)>>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
 // monadic lift
-fun @mlift-install-event-listener@11431[1,0,1,0] : forall<(_e :: E)> (committed : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>, continuation : kokaine/internal/event-runtime/event-continuation, listener : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<dom-listener>>, name : std/core/types/string, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, target : element, installed : dom-listener) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
+fun @mlift-install-event-listener@11431[1,0,1,0] : forall<(_e :: E)> (committed : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>, continuation : (kokaine/reactive/integration/event/event-continuation :: (E, V) -> V)<(kokaine/async/effects/async :: E),kokaine/html/event>, listener : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<dom-listener>>, name : std/core/types/string, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, target : element, installed : dom-listener) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
 // monadic lift
-fun @mlift-install-event-listener@11432[1,0,1,0] : forall<(_e :: E),(_e1 :: E),(_e2 :: E)> (continuation : kokaine/internal/event-runtime/event-continuation, name : std/core/types/string, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, target : element, @y-x10418 : (kokaine/reactive/integration/internal/reentry/reentry :: E -> V)<<(std/core/ui :: X)>>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
+fun @mlift-install-event-listener@11432[1,0,1,0] : forall<(_e :: E),(_e1 :: E),(_e2 :: E)> (continuation : (kokaine/reactive/integration/event/event-continuation :: (E, V) -> V)<(kokaine/async/effects/async :: E),kokaine/html/event>, name : std/core/types/string, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, target : element, @y-x10418 : (kokaine/reactive/integration/internal/reentry/reentry :: E -> V)<<(std/core/ui :: X)>>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
 // monadic lift
-fun @mlift-install-event-listener@11433[1,0,1,0] : forall<(_e :: E),(_e1 :: E),(_e2 :: E)> (name : std/core/types/string, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, target : element, continuation : kokaine/internal/event-runtime/event-continuation) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
-fun install-event-listener[783,5,783,26] : (root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, target : element, name : std/core/types/string, action : kokaine/html/callback) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
+fun @mlift-install-event-listener@11433[1,0,1,0] : forall<(_e :: E),(_e1 :: E),(_e2 :: E)> (name : std/core/types/string, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, target : element, continuation : (kokaine/reactive/integration/event/event-continuation :: (E, V) -> V)<(kokaine/async/effects/async :: E),kokaine/html/event>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
+fun install-event-listener[784,5,784,26] : (root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, target : element, name : std/core/types/string, action : kokaine/html/callback) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
 // monadic lift
 fun @mlift-mount-attribute@11434[1,0,1,0] : (read : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> (std/core/types/maybe :: V -> V)<std/core/types/string>, @y-x10431 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> (std/core/types/maybe :: V -> V)<std/core/types/string>;
 // monadic lift
@@ -496,8 +496,8 @@ fun @mlift-mount-attribute@11439[1,0,1,0] : (@y-x10446 : (kokaine/reactive/inter
 fun @mlift-mount-attribute@11440[1,0,1,0] : (action@1 : kokaine/html/callback, name@4 : std/core/types/string, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, target : element, @y-x10449 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
 // monadic lift
 fun @mlift-mount-attribute@11441[1,0,1,0] : (action@1 : kokaine/html/callback, name@4 : std/core/types/string, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, target : element, @c-x10448 : ()) -> ();
-fun mount-attribute[817,5,817,19] : forall<(e :: E)> (root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, target : element, attribute : (kokaine/html/attribute :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/ui :: X),(std/core/pure :: E)> ();
-fun throw-keyed-row-failure[847,5,847,27] : (failure : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/exn/error :: V -> V)<()>>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
+fun mount-attribute[818,5,818,19] : forall<(e :: E)> (root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, target : element, attribute : (kokaine/html/attribute :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/ui :: X),(std/core/pure :: E)> ();
+fun throw-keyed-row-failure[848,5,848,27] : (failure : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/exn/error :: V -> V)<()>>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
 // monadic lift
 fun @mlift-run-keyed-row-actions@11442[1,0,1,0] : forall<(e :: E)> (failure : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/exn/error :: V -> V)<()>>, wild_ : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
 // monadic lift
@@ -508,11 +508,11 @@ fun @mlift-run-keyed-row-actions@11444[1,0,1,0] : forall<(_e :: E),(e1 :: E)> (c
 fun @mlift-run-keyed-row-actions@11445[1,0,1,0] : forall<(_e :: E),(_e1 :: E),a,b,(e2 :: E),(e3 :: E)> (action : ((keyed-row :: (E, V, V) -> V)<(e2 :: E),a,b>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e3 :: E)> (), completed : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>, failure : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/exn/error :: V -> V)<()>>, row : (keyed-row :: (E, V, V) -> V)<(e2 :: E),a,b>, @y-x10458 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e3 :: E)> ();
 // monadic lift
 fun @mlift-run-keyed-row-actions@11446[1,0,1,0] : forall<a,b,(e :: E),(e1 :: E)> (action : ((keyed-row :: (E, V, V) -> V)<(e :: E),a,b>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e1 :: E)> (), failure : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/exn/error :: V -> V)<()>>, rest : (std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>, wild_@2 : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e1 :: E)> ();
-fun run-keyed-row-actions[851,5,851,25] : forall<a,b,(e :: E),(e1 :: E)> (rows : (std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>, action : ((keyed-row :: (E, V, V) -> V)<(e :: E),a,b>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e1 :: E)> (), failure : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/exn/error :: V -> V)<()>>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e1 :: E)> ();
+fun run-keyed-row-actions[852,5,852,25] : forall<a,b,(e :: E),(e1 :: E)> (rows : (std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>, action : ((keyed-row :: (E, V, V) -> V)<(e :: E),a,b>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e1 :: E)> (), failure : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/exn/error :: V -> V)<()>>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e1 :: E)> ();
 // monadic lift
 fun @mlift-exhaust-keyed-row-actions@11447[1,0,1,0] : forall<(e :: E)> (failure : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/exn/error :: V -> V)<()>>, wild_ : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
-fun exhaust-keyed-row-actions[884,5,884,29] : forall<a,b,(e :: E),(e1 :: E)> (rows : (std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>, action : ((keyed-row :: (E, V, V) -> V)<(e :: E),a,b>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e1 :: E)> ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e1 :: E)> ();
-fun dispose-keyed-rows[892,5,892,22] : forall<a,b,(e :: E)> (rows : (std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
+fun exhaust-keyed-row-actions[885,5,885,29] : forall<a,b,(e :: E),(e1 :: E)> (rows : (std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>, action : ((keyed-row :: (E, V, V) -> V)<(e :: E),a,b>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e1 :: E)> ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e1 :: E)> ();
+fun dispose-keyed-rows[893,5,893,22] : forall<a,b,(e :: E)> (rows : (std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
 // monadic lift
 fun @mlift-rollback-keyed-order@11448[1,0,1,0] : (first@10281 : node, last : node, last@0@10282 : node, parent : node, focus : std/core/types/any) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
 // monadic lift
@@ -521,16 +521,16 @@ fun @mlift-rollback-keyed-order@11449[1,0,1,0] : (first@10281 : node, last : nod
 fun @mlift-rollback-keyed-order@11450[1,0,1,0] : (first@10281 : node, last : node, last@0@10282 : node, parent : node, wild_ : ()) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
 // monadic lift
 fun @mlift-rollback-keyed-order@11451[1,0,1,0] : forall<a,b,(e :: E)> (last : node, parent : node, row : (keyed-row :: (E, V, V) -> V)<(e :: E),a,b>, next : node) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
-fun rollback-keyed-order[899,5,899,24] : forall<a,b,(e :: E)> (parent : node, last : node, rows : (std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
+fun rollback-keyed-order[900,5,900,24] : forall<a,b,(e :: E)> (parent : node, last : node, rows : (std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
 // monadic lift
 fun @mlift-validate-keyed-move-lifecycles@11452[1,0,1,0] : (first@10092 : node, last@10093 : node, parent : node, wild_ : ()) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
-fun validate-keyed-move-lifecycles[909,5,909,34] : forall<a,b,(e :: E)> (parent : node, rows : (std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
+fun validate-keyed-move-lifecycles[910,5,910,34] : forall<a,b,(e :: E)> (parent : node, rows : (std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
 // monadic lift
 fun @mlift-validate-keyed-order@11453[1,0,1,0] : forall<a,b,(e :: E)> (last : node, parent : node, rest : (std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>, next : node) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
-fun validate-keyed-order[914,5,914,24] : forall<a,b,(e :: E)> (parent : node, last : node, cursor : node, rows : (std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
+fun validate-keyed-order[915,5,915,24] : forall<a,b,(e :: E)> (parent : node, last : node, cursor : node, rows : (std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
 // monadic lift
 fun @mlift-keyed-order-matches@11454[1,0,1,0] : forall<a,b,(e :: E)> (last : node, parent : node, rest : (std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>, next : node) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> std/core/types/bool;
-fun keyed-order-matches[927,5,927,23] : forall<a,b,(e :: E)> (parent : node, last : node, cursor : node, rows : (std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> std/core/types/bool;
+fun keyed-order-matches[928,5,928,23] : forall<a,b,(e :: E)> (parent : node, last : node, cursor : node, rows : (std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> std/core/types/bool;
 // monadic lift
 fun @mlift-place-keyed-updates@11455[1,0,1,0] : forall<a,b,(e :: E)> (cursor : node, parent : node, rest : (std/core/types/list :: V -> V)<(keyed-update :: (E, V, V) -> V)<(e :: E),a,b>>, wild_@1 : ()) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> node;
 // monadic lift
@@ -541,27 +541,27 @@ fun @mlift-place-keyed-updates@11457[1,0,1,0] : forall<a,b,(e :: E)> (cursor : n
 fun @mlift-place-keyed-updates@11458[1,0,1,0] : forall<a,b,(e :: E)> (cursor : node, first@10285 : node, last@10286 : node, parent : node, rest : (std/core/types/list :: V -> V)<(keyed-update :: (E, V, V) -> V)<(e :: E),a,b>>, wild_ : ()) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> node;
 // monadic lift
 fun @mlift-place-keyed-updates@11459[1,0,1,0] : forall<a,b,(e :: E)> (cursor : node, parent : node, rest : (std/core/types/list :: V -> V)<(keyed-update :: (E, V, V) -> V)<(e :: E),a,b>>, row : (keyed-row :: (E, V, V) -> V)<(e :: E),a,b>, next : node) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> node;
-fun place-keyed-updates[937,5,937,23] : forall<a,b,(e :: E)> (parent : node, cursor : node, updates : (std/core/types/list :: V -> V)<(keyed-update :: (E, V, V) -> V)<(e :: E),a,b>>) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> node;
-fun @trmc-collect-stale-rows[951,5,951,22] : forall<a,b,(e :: E)> (rows : (std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>, next : (kokaine/internal/key-index/key-index :: (V, V) -> V)<b,(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>, compare : (b, b) -> std/core/types/order, @acc : (std/core/types/ctx :: V -> V)<(std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>>) -> (std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>;
-fun collect-stale-rows[951,5,951,22] : forall<a,b,(e :: E)> (rows : (std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>, next : (kokaine/internal/key-index/key-index :: (V, V) -> V)<b,(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>, compare : (b, b) -> std/core/types/order) -> (std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>;
+fun place-keyed-updates[938,5,938,23] : forall<a,b,(e :: E)> (parent : node, cursor : node, updates : (std/core/types/list :: V -> V)<(keyed-update :: (E, V, V) -> V)<(e :: E),a,b>>) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> node;
+fun @trmc-collect-stale-rows[952,5,952,22] : forall<a,b,(e :: E)> (rows : (std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>, next : (kokaine/internal/key-index/key-index :: (V, V) -> V)<b,(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>, compare : (b, b) -> std/core/types/order, @acc : (std/core/types/ctx :: V -> V)<(std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>>) -> (std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>;
+fun collect-stale-rows[952,5,952,22] : forall<a,b,(e :: E)> (rows : (std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>, next : (kokaine/internal/key-index/key-index :: (V, V) -> V)<b,(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>, compare : (b, b) -> std/core/types/order) -> (std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>;
 // monadic lift
 fun @mlift-stage-keyed-retirements-loop@11460[1,0,1,0] : forall<a,b,(e :: E)> (collected : (std/core/types/list :: V -> V)<(keyed-retirement :: (E, V, V) -> V)<(e :: E),a,b>>, rest : (std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>, row : (keyed-row :: (E, V, V) -> V)<(e :: E),a,b>, staged : dom-retirement) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (std/core/types/list :: V -> V)<(keyed-retirement :: (E, V, V) -> V)<(e :: E),a,b>>;
-tail fun stage-keyed-retirements-loop[962,10,962,37] : forall<a,b,(e :: E)> (rows : (std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>, collected : (std/core/types/list :: V -> V)<(keyed-retirement :: (E, V, V) -> V)<(e :: E),a,b>>) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (std/core/types/list :: V -> V)<(keyed-retirement :: (E, V, V) -> V)<(e :: E),a,b>>;
-fun stage-keyed-retirements[975,5,975,27] : forall<a,b,(e :: E)> (rows : (std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (std/core/types/list :: V -> V)<(keyed-retirement :: (E, V, V) -> V)<(e :: E),a,b>>;
-tail fun release-keyed-retirements[980,10,980,34] : forall<a,b,(e :: E)> (values : (std/core/types/list :: V -> V)<(keyed-retirement :: (E, V, V) -> V)<(e :: E),a,b>>) -> <(std/core/ui :: X)> ();
+tail fun stage-keyed-retirements-loop[963,10,963,37] : forall<a,b,(e :: E)> (rows : (std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>, collected : (std/core/types/list :: V -> V)<(keyed-retirement :: (E, V, V) -> V)<(e :: E),a,b>>) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (std/core/types/list :: V -> V)<(keyed-retirement :: (E, V, V) -> V)<(e :: E),a,b>>;
+fun stage-keyed-retirements[976,5,976,27] : forall<a,b,(e :: E)> (rows : (std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (std/core/types/list :: V -> V)<(keyed-retirement :: (E, V, V) -> V)<(e :: E),a,b>>;
+tail fun release-keyed-retirements[981,10,981,34] : forall<a,b,(e :: E)> (values : (std/core/types/list :: V -> V)<(keyed-retirement :: (E, V, V) -> V)<(e :: E),a,b>>) -> <(std/core/ui :: X)> ();
 // monadic lift
 fun @mlift-detach-keyed-retirements-loop@11461[1,0,1,0] : forall<(_e :: E),(_e1 :: E),a,b,(e2 :: E)> (current : (keyed-retirement :: (E, V, V) -> V)<(e2 :: E),a,b>, detached : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e2 :: E),a,b>>>, index : (kokaine/internal/key-index/key-index :: (V, V) -> V)<b,(keyed-row :: (E, V, V) -> V)<(e2 :: E),a,b>>, order : (std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e2 :: E),a,b>>, rest : (std/core/types/list :: V -> V)<(keyed-retirement :: (E, V, V) -> V)<(e2 :: E),a,b>>, table : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(keyed-table :: (E, V, V) -> V)<(e2 :: E),a,b>>, wild_ : ()) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
-tail fun detach-keyed-retirements-loop[988,10,988,38] : forall<a,b,(e :: E)> (table : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(keyed-table :: (E, V, V) -> V)<(e :: E),a,b>>, detached : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>>) -> <(std/core/pure :: E),(std/core/ui :: X)> ();
+tail fun detach-keyed-retirements-loop[989,10,989,38] : forall<a,b,(e :: E)> (table : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(keyed-table :: (E, V, V) -> V)<(e :: E),a,b>>, detached : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>>) -> <(std/core/pure :: E),(std/core/ui :: X)> ();
 // monadic lift
 fun @mlift-drain-keyed-retirements@11462[1,0,1,0] : forall<a,b,(e :: E)> (rows : (std/core/types/list :: V -> V)<(keyed-row :: (E, V, V) -> V)<(e :: E),a,b>>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
-fun drain-keyed-retirements[1003,5,1003,27] : forall<a,b,(e :: E)> (table : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(keyed-table :: (E, V, V) -> V)<(e :: E),a,b>>) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
+fun drain-keyed-retirements[1004,5,1004,27] : forall<a,b,(e :: E)> (table : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(keyed-table :: (E, V, V) -> V)<(e :: E),a,b>>) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
 // monadic lift
 fun @mlift-commit-keyed-update@11463[1,0,1,0] : forall<(_e :: E),a,b,(e1 :: E)> (row : (keyed-row :: (E, V, V) -> V)<(e1 :: E),a,b>, update : (keyed-update :: (E, V, V) -> V)<(e1 :: E),a,b>, wild_@1 : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>> ();
 // monadic lift
 fun @mlift-commit-keyed-update@11464[1,0,1,0] : forall<(_e :: E),a,b,(e1 :: E)> (row : (keyed-row :: (E, V, V) -> V)<(e1 :: E),a,b>, update : (keyed-update :: (E, V, V) -> V)<(e1 :: E),a,b>, wild_ : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>> ();
 // monadic lift
 fun @mlift-commit-keyed-update@11465[1,0,1,0] : forall<(_e :: E),a,b,(e1 :: E)> (row : (keyed-row :: (E, V, V) -> V)<(e1 :: E),a,b>, update : (keyed-update :: (E, V, V) -> V)<(e1 :: E),a,b>, @c-x10517 : ()) -> ();
-fun commit-keyed-update[1016,5,1016,23] : forall<a,b,(e :: E)> (update : (keyed-update :: (E, V, V) -> V)<(e :: E),a,b>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>> ();
+fun commit-keyed-update[1017,5,1017,23] : forall<a,b,(e :: E)> (update : (keyed-update :: (E, V, V) -> V)<(e :: E),a,b>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>> ();
 // monadic lift
 fun @mlift-create-keyed-row@11466[1,0,1,0] : (scope : (kokaine/reactive/integration/lifetime-scope :: E -> V)<<(std/core/ui :: X)>>, @y-x10522 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ();
 // monadic lift
@@ -754,11 +754,11 @@ fun @mlift-mount-view@11559[1,0,1,0] : forall<(e :: E)> (first@2@0 : node, last@
 fun @mlift-mount-view@11560[1,0,1,0] : forall<(e :: E)> (before@1 : (std/core/types/maybe :: V -> V)<node>, first@2@0 : node, parent@3@0 : node, read@0@0@0 : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> (kokaine/html/view :: E -> V)<(e :: E)>, renderer@3 : kokaine/dom/internal/keyed-transaction/keyed-context, root@3@0 : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, last@2@0 : node) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X),(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>> ();
 // monadic lift
 fun @mlift-mount-view@11561[1,0,1,0] : forall<(e :: E)> (before@1 : (std/core/types/maybe :: V -> V)<node>, parent@3@0 : node, read@0@0@0 : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> (kokaine/html/view :: E -> V)<(e :: E)>, renderer@3 : kokaine/dom/internal/keyed-transaction/keyed-context, root@3@0 : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, first@2@0 : node) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X),(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>> ();
-fun create-keyed-row[1028,5,1028,20] : forall<a,b,(e :: E)> (renderer : kokaine/dom/internal/keyed-transaction/keyed-context, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, parent : node, last : node, identity : a, item : b, index : std/core/types/int, children : (item : (kokaine/html/accessor :: V -> V)<b>, index : (kokaine/html/accessor :: V -> V)<std/core/types/int>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e :: E)>>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> ()) -> <(std/core/pure :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/ui :: X)> (keyed-row :: (E, V, V) -> V)<(e :: E),b,a>;
-fun reconcile-keyed[1093,5,1093,19] : forall<a,b,(e :: E)> (renderer : kokaine/dom/internal/keyed-transaction/keyed-context, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, parent : node, first : node, last : node, scope : (kokaine/reactive/integration/lifetime-scope :: E -> V)<<(std/core/ui :: X)>>, table : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(keyed-table :: (E, V, V) -> V)<(e :: E),a,b>>, items : (std/core/types/list :: V -> V)<a>, key : (a) -> b, compare : (b, b) -> std/core/types/order, item-equals : (a, a) -> std/core/types/bool, children : (item : (kokaine/html/accessor :: V -> V)<a>, index : (kokaine/html/accessor :: V -> V)<std/core/types/int>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e :: E)>>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> ()) -> <(std/core/pure :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/ui :: X)> ();
-fun mount-keyed-fields[1321,5,1321,22] : forall<a,b,c,(e :: E)> (renderer : kokaine/dom/internal/keyed-transaction/keyed-context, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, parent : node, before : (std/core/types/maybe :: V -> V)<node>, read : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> a, walk : forall<(e1 :: E)> (a, (b) -> (e1 :: E) ()) -> (e1 :: E) (), key : (b) -> c, compare : (c, c) -> std/core/types/order, item-equals : (b, b) -> std/core/types/bool, children : (item : (kokaine/html/accessor :: V -> V)<b>, index : (kokaine/html/accessor :: V -> V)<std/core/types/int>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e :: E)>>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> ()) -> <(std/core/pure :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/ui :: X)> ();
-fun mount-keyed-plan[1388,5,1388,20] : forall<(e :: E)> (renderer : kokaine/dom/internal/keyed-transaction/keyed-context, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, parent : node, before : (std/core/types/maybe :: V -> V)<node>, plan : (kokaine/html/keyed-plan :: E -> V)<(e :: E)>) -> <(std/core/pure :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/ui :: X)> ();
-fun mount-view[1399,5,1399,14] : forall<(e :: E)> (renderer : kokaine/dom/internal/keyed-transaction/keyed-context, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, parent : node, before : (std/core/types/maybe :: V -> V)<node>, tree : (kokaine/html/view :: E -> V)<(e :: E)>) -> <(std/core/pure :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/ui :: X)> ();
+fun create-keyed-row[1029,5,1029,20] : forall<a,b,(e :: E)> (renderer : kokaine/dom/internal/keyed-transaction/keyed-context, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, parent : node, last : node, identity : a, item : b, index : std/core/types/int, children : (item : (kokaine/html/accessor :: V -> V)<b>, index : (kokaine/html/accessor :: V -> V)<std/core/types/int>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e :: E)>>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> ()) -> <(std/core/pure :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/ui :: X)> (keyed-row :: (E, V, V) -> V)<(e :: E),b,a>;
+fun reconcile-keyed[1094,5,1094,19] : forall<a,b,(e :: E)> (renderer : kokaine/dom/internal/keyed-transaction/keyed-context, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, parent : node, first : node, last : node, scope : (kokaine/reactive/integration/lifetime-scope :: E -> V)<<(std/core/ui :: X)>>, table : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(keyed-table :: (E, V, V) -> V)<(e :: E),a,b>>, items : (std/core/types/list :: V -> V)<a>, key : (a) -> b, compare : (b, b) -> std/core/types/order, item-equals : (a, a) -> std/core/types/bool, children : (item : (kokaine/html/accessor :: V -> V)<a>, index : (kokaine/html/accessor :: V -> V)<std/core/types/int>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e :: E)>>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> ()) -> <(std/core/pure :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/ui :: X)> ();
+fun mount-keyed-fields[1322,5,1322,22] : forall<a,b,c,(e :: E)> (renderer : kokaine/dom/internal/keyed-transaction/keyed-context, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, parent : node, before : (std/core/types/maybe :: V -> V)<node>, read : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> a, walk : forall<(e1 :: E)> (a, (b) -> (e1 :: E) ()) -> (e1 :: E) (), key : (b) -> c, compare : (c, c) -> std/core/types/order, item-equals : (b, b) -> std/core/types/bool, children : (item : (kokaine/html/accessor :: V -> V)<b>, index : (kokaine/html/accessor :: V -> V)<std/core/types/int>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e :: E)>>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> ()) -> <(std/core/pure :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/ui :: X)> ();
+fun mount-keyed-plan[1389,5,1389,20] : forall<(e :: E)> (renderer : kokaine/dom/internal/keyed-transaction/keyed-context, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, parent : node, before : (std/core/types/maybe :: V -> V)<node>, plan : (kokaine/html/keyed-plan :: E -> V)<(e :: E)>) -> <(std/core/pure :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/ui :: X)> ();
+fun mount-view[1400,5,1400,14] : forall<(e :: E)> (renderer : kokaine/dom/internal/keyed-transaction/keyed-context, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, parent : node, before : (std/core/types/maybe :: V -> V)<node>, tree : (kokaine/html/view :: E -> V)<(e :: E)>) -> <(std/core/pure :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/ui :: X)> ();
 // monadic lift
 fun @mlift-mount-effect@11562[1,0,1,0] : (@y-x10740 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/div :: X)> ();
 // monadic lift
@@ -775,7 +775,7 @@ fun @mlift-mount-effect@11567[1,0,1,0] : forall<(e :: E)> (first : node, last : 
 fun @mlift-mount-effect@11568[1,0,1,0] : forall<(e :: E)> (first : node, parent : node, renderer : kokaine/dom/internal/keyed-transaction/keyed-context, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, tree : (kokaine/html/view :: E -> V)<(e :: E)>, last : node) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X),(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>> ();
 // monadic lift
 fun @mlift-mount-effect@11569[1,0,1,0] : forall<(e :: E)> (parent : node, renderer : kokaine/dom/internal/keyed-transaction/keyed-context, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, tree : (kokaine/html/view :: E -> V)<(e :: E)>, first : node) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X),(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>> ();
-fun mount-effect[1444,5,1444,16] : forall<(e :: E)> (renderer : kokaine/dom/internal/keyed-transaction/keyed-context, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, parent : node, tree : (kokaine/html/view :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/ui :: X),(std/core/pure :: E)> (kokaine/reactive/disposer :: E -> V)<<(std/core/ui :: X)>>;
+fun mount-effect[1445,5,1445,16] : forall<(e :: E)> (renderer : kokaine/dom/internal/keyed-transaction/keyed-context, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, parent : node, tree : (kokaine/html/view :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/ui :: X),(std/core/pure :: E)> (kokaine/reactive/disposer :: E -> V)<<(std/core/ui :: X)>>;
 // monadic lift
 fun @mlift-mount-transaction@11570[1,0,1,0] : forall<(_e :: E)> (pending : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<() -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ()>>, dispose@0 : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/ui :: X),(std/core/pure :: E)> (() -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ());
 // monadic lift
@@ -786,13 +786,13 @@ fun @mlift-mount-transaction@11572[1,0,1,0] : (register : () -> <(std/core/types
 fun @mlift-mount-transaction@11573[1,0,1,0] : forall<(_e :: E)> (committed : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>, @c-x10772 : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ()) -> (() -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ());
 // monadic lift
 fun @mlift-mount-transaction@11574[1,0,1,0] : forall<(_e :: E),(_e1 :: E),(_e2 :: E),(e3 :: E)> (inherit-owner : std/core/types/bool, parent : node, root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, tree : (kokaine/html/view :: E -> V)<(e3 :: E)>, wild_ : ()) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (() -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> ());
-fun mount-transaction[1459,5,1459,21] : forall<(e :: E)> (root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, parent : node, tree : (kokaine/html/view :: E -> V)<(e :: E)>, inherit-owner : std/core/types/bool) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (kokaine/reactive/disposer :: E -> V)<<(std/core/ui :: X)>>;
-pub fun mount[1496,9,1496,13] : forall<(e :: E)> (root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, parent : node, tree : (kokaine/html/view :: E -> V)<(e :: E)>) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (kokaine/reactive/disposer :: E -> V)<<(std/core/ui :: X)>>;
+fun mount-transaction[1460,5,1460,21] : forall<(e :: E)> (root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, parent : node, tree : (kokaine/html/view :: E -> V)<(e :: E)>, inherit-owner : std/core/types/bool) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (kokaine/reactive/disposer :: E -> V)<<(std/core/ui :: X)>>;
+pub fun mount[1497,9,1497,13] : forall<(e :: E)> (root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, parent : node, tree : (kokaine/html/view :: E -> V)<(e :: E)>) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (kokaine/reactive/disposer :: E -> V)<<(std/core/ui :: X)>>;
 // Opt out of physical DOM ownership inheritance for intentionally independent
 // roots mounted inside a managed subtree. The caller then owns the returned
 // disposer and must retire it explicitly.
-pub fun mount-independent[1503,9,1503,25] : forall<(e :: E)> (root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, parent : node, tree : (kokaine/html/view :: E -> V)<(e :: E)>) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (kokaine/reactive/disposer :: E -> V)<<(std/core/ui :: X)>>;
-pub fun unmount[1507,9,1507,15] : forall<(e :: E)> (dispose : (kokaine/reactive/disposer :: E -> V)<<(std/core/ui :: X)|(e :: E)>>) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+pub fun mount-independent[1504,9,1504,25] : forall<(e :: E)> (root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, parent : node, tree : (kokaine/html/view :: E -> V)<(e :: E)>) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (kokaine/reactive/disposer :: E -> V)<<(std/core/ui :: X)>>;
+pub fun unmount[1508,9,1508,15] : forall<(e :: E)> (dispose : (kokaine/reactive/disposer :: E -> V)<<(std/core/ui :: X)|(e :: E)>>) -> <(std/core/ui :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
  
 fun @kokaine-cache-phase[1,0,1,0] : () -> std/core/types/int;
  
