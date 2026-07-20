@@ -173,22 +173,52 @@ try:
             f"HostOps calls: {host_calls}"
         )
 
-        for selector in ['[data-btn="0x0040"]', '[data-btn="0x2000"]']:
-            button = page.locator(selector)
-            button.dispatch_event("mousedown")
-            page.wait_for_timeout(80)
-            button.dispatch_event("mouseup")
-            page.wait_for_timeout(80)
+        down = page.locator('[data-btn="0x0040"]')
+        down.dispatch_event("mousedown")
+        page.wait_for_timeout(80)
+        down.dispatch_event("mouseup")
+        page.wait_for_timeout(80)
+        page.wait_for_function(
+            """before => globalThis.__kokainePocketHostCalls.filter(
+                ([name]) => name === 'setFocus'
+            ).length > before""",
+            arg=focus_calls_before,
+        )
+        host_calls_after_down = page.evaluate("globalThis.__kokainePocketHostCalls")
+        new_focus_calls = [
+            call
+            for call in host_calls_after_down
+            if call[0] == "setFocus"
+        ][focus_calls_before:]
+        assert any(len(call) > 1 and call[1] != 0 for call in new_focus_calls), (
+            f"Pocket DOWN input did not focus a native node: {new_focus_calls}"
+        )
+
+        application_hash_script = """canvas => {
+            const { data } = canvas.getContext('2d').getImageData(20, 22, 260, 110);
+            let hash = 2166136261;
+            for (const byte of data) {
+                hash ^= byte;
+                hash = Math.imul(hash, 16777619);
+            }
+            return hash >>> 0;
+        }"""
+        hash_after_down = page.locator("#screen").evaluate(application_hash_script)
+
+        circle = page.locator('[data-btn="0x2000"]')
+        circle.dispatch_event("mousedown")
+        page.wait_for_timeout(80)
+        circle.dispatch_event("mouseup")
+        page.wait_for_timeout(80)
 
         page.wait_for_function(
             """globalThis.__kokainePocketHostCalls.some(
                 ([name, , text]) => name === 'replaceText' && text === 'Count 1'
             )"""
         )
-        host_calls_after = page.evaluate("globalThis.__kokainePocketHostCalls")
-        focus_calls_after = sum(call[0] == "setFocus" for call in host_calls_after)
-        assert focus_calls_after > focus_calls_before, (
-            "Pocket DOWN input did not move native focus"
+        hash_after_circle = page.locator("#screen").evaluate(application_hash_script)
+        assert hash_after_circle != hash_after_down, (
+            "Pocket replaceText reached HostOps but Count 1 did not reach the Canvas"
         )
         expect(page.locator("#log")).not_to_contain_text("ERROR")
 
