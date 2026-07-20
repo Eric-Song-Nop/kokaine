@@ -41,7 +41,7 @@
     "test": "bun test test/*.test.js"
   },
   "peerDependencies": {
-    "@kokaine/core": "^0.1.0",
+    "@kokaine/core": "^0.1.1",
     "@pocketjs/framework": ">=0.6.0 <0.7.0"
   },
   "devDependencies": {

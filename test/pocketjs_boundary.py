@@ -15,6 +15,7 @@ def main() -> int:
     bridge = (ROOT / "packages/pocketjs/js/bridge.js").read_text()
     guest = (ROOT / "packages/pocketjs/js/guest.js").read_text()
     manifest = json.loads((ROOT / "packages/pocketjs/package.json").read_text())
+    core_manifest = json.loads((ROOT / "package.json").read_text())
 
     forbidden_imports = (
         "import kokaine/html",
@@ -41,6 +42,11 @@ def main() -> int:
         raise AssertionError("Pocket renderer must not masquerade as a Koka target")
     if manifest["peerDependencies"]["@pocketjs/framework"] != ">=0.6.0 <0.7.0":
         raise AssertionError("Pocket pre-1.0 compatibility window drifted")
+    expected_core = f"^{core_manifest['version']}"
+    if manifest["peerDependencies"]["@kokaine/core"] != expected_core:
+        raise AssertionError(
+            "Pocket peer range must require the core release containing its integration API"
+        )
     if manifest["license"] != "MIT" or not (ROOT / "packages/pocketjs/LICENSE").is_file():
         raise AssertionError("published Pocket package must carry the repository license")
     if manifest["exports"]["."]["default"] != "./js/index.js":
