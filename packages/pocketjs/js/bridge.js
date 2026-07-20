@@ -167,17 +167,36 @@ function createBridge(renderer, roots) {
 
     setPress(node, handler) {
       const previous = pressHandlers.get(node);
-      const result = renderer.setProp(node, "onPress", handler, previous);
-      pressHandlers.set(node, handler);
-      return result;
+      if (previous) {
+        pressHandlers.delete(node);
+        previous.state.action = undefined;
+      }
+
+      const state = { action: handler };
+      const trampoline = (...args) => state.action?.(...args);
+      try {
+        const result = renderer.setProp(
+          node,
+          "onPress",
+          trampoline,
+          previous?.trampoline
+        );
+        pressHandlers.set(node, { state, trampoline });
+        return result;
+      } catch (error) {
+        // The host may have partially installed this callback before failing.
+        // Make either the old or new trampoline inert before the error escapes.
+        state.action = undefined;
+        throw error;
+      }
     },
 
     clearPress(node) {
       const previous = pressHandlers.get(node);
       if (previous === undefined) return undefined;
-      const result = renderer.setProp(node, "onPress", undefined, previous);
       pressHandlers.delete(node);
-      return result;
+      previous.state.action = undefined;
+      return renderer.setProp(node, "onPress", undefined, previous.trampoline);
     }
   });
 }
