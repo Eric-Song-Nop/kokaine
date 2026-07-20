@@ -108,6 +108,7 @@ not a new Koka compiler target:
 
 ```sh
 make test-pocketjs-wasm POCKETJS_CHECKOUT=/path/to/pocketjs-v0.6.0
+make test-pocketjs-browser POCKETJS_CHECKOUT=/path/to/pocketjs-v0.6.0
 ```
 
 Pocket's build is two-pass. The first pass transforms the reachable TypeScript
@@ -124,6 +125,14 @@ That creates two explicit rules for this adapter:
   TypeScript sidecar visible to the collector. `--extra-chars` is also suitable
   for glyph coverage. Missing declarations may produce tofu glyphs or missing
   packaged images even though the JavaScript bundle itself is valid.
+
+Pocket 0.6 bakes its default 16px regular atlas into font slot 2, while a raw
+core text node defaults to slot 0. Pocket's text-size and font-weight utilities
+select an atlas slot explicitly. Kokaine uses inline styles, so its bridge
+initializes each native `Text` wrapper with slot 2; an explicit
+`font-slot(...)` property still overrides it.
+Without this adapter default, HostOps receives the correct string but the text
+run has zero height and renders no glyphs.
 
 See Pocket's [build pipeline](https://pocketjs.dev/docs/build-pipeline/) and
 [native contract](https://pocketjs.dev/docs/native-contract/) for the upstream
@@ -145,6 +154,18 @@ writes, Kokaine UI lifetime work, and modeled exceptions are allowed; the Web
 Async adapter, timers, Fetch, and browser window operations are not. Native
 animation and future Pocket-specific effects should be modeled against Pocket's
 frame boundary rather than routed through `kokaine/async/web`.
+
+The browser example is a development preview, not a production Web backend. It
+serves the physical `host-web` directory and `pocketjs.wasm` shipped inside the
+lockfile-pinned framework package because Pocket 0.6 does not export that host
+as a public package API. The server supplies Pocket's dynamic `/demos` endpoint,
+and the upstream engine evaluates the compiled IIFE with `new Function`; a
+strict Content Security Policy would therefore require a different loader or
+`unsafe-eval`. The software renderer uses a fixed 480x272 framebuffer and copies
+it to Canvas every frame. It is useful for layout, text, and input correctness,
+but it is not evidence of QuickJS compatibility, PSP memory usage, GPU behavior,
+or device frame rate. The fixture intentionally provides no HMR or production
+deployment layer.
 
 ## First-release surface
 
@@ -193,8 +214,11 @@ one:
 The checked-in verification currently covers typed Koka callback/lifetime tests,
 the JavaScript bridge contract, an exact 0.6.0 `pocket compile`, a QuickJS-like
 no-console/no-process bundle smoke test with injected HostOps, and the upstream
-Rust/WASM layout/raster core. It also drives Pocket's DOWN/CIRCLE input path and
-observes the Koka live-text update.
+Rust/WASM layout/raster core. A real headless Chromium run loads Pocket's
+official Web host, verifies the baked font atlas and visible Canvas text, drives
+the DOWN/CIRCLE path through the on-screen controls, observes native focus, and
+checks that Koka live text becomes `Count 1` without page, console, or HTTP
+errors.
 PPSSPP, the native QuickJS PSP host, memory/frame profiling, and real hardware
 have **not** been run. In particular, compiler or Rust/WASM success is not a
 device-performance result; real PSP behavior remains unverified until tested on

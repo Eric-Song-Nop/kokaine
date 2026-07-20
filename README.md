@@ -73,6 +73,15 @@ See [PocketJS feasibility and boundaries](docs/pocketjs.md) before choosing it;
 the first release is intentionally smaller than the DOM surface and has
 important build-time asset and runtime API constraints.
 
+The [PocketJS browser example](examples/pocketjs/README.md) runs the generated
+Koka application through Pocket's official Canvas/WASM host. With an exact
+PocketJS 0.6.0 checkout prepared as described there, use:
+
+```sh
+make serve-pocketjs-example POCKETJS_CHECKOUT=/absolute/path/to/pocketjs
+make test-pocketjs-browser POCKETJS_CHECKOUT=/absolute/path/to/pocketjs
+```
+
 ## Interactive report
 
 The Chinese report [代数效应与续体如何组成增量 UI](docs/algebraic-effects-ui-report/index.html)
