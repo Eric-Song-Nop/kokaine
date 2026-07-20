@@ -133,6 +133,10 @@ compile-pocketjs-example: build-pocketjs-example
 		echo "POCKETJS_CHECKOUT must be the exact PocketJS v$(POCKETJS_VERSION) tag ($(POCKETJS_COMMIT))"; \
 		exit 2; \
 	fi
+	@if ! git -C "$(POCKETJS_CHECKOUT)" diff --quiet HEAD --; then \
+		echo "POCKETJS_CHECKOUT has tracked changes; exact verification requires a clean v$(POCKETJS_VERSION) checkout"; \
+		exit 2; \
+	fi
 	cd "$(POCKETJS_CHECKOUT)" && $(BUN) scripts/pocket.ts compile \
 		--target psp \
 		--project-root "$(PROJECT_ROOT)/examples/pocketjs" \
