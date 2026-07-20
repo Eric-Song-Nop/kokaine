@@ -9,6 +9,7 @@ WRANGLER ?= npx wrangler
 PLAYGROUND_PAGES_PROJECT ?= kokaine-playground
 PLAYGROUND_PAGES_BRANCH ?= main
 POCKETJS_CHECKOUT ?=
+POCKETJS_WEB_PORT ?= 8130
 POCKETJS_VERSION := 0.6.0
 POCKETJS_COMMIT := 1f848dcdb2629e3c6373710cd0aa16d775ea2ad3
 
@@ -18,7 +19,7 @@ KOKA_FLAGS := -j1 -i./src
 DIST_KOKA = $(PYTHON) "$(RUN_LOCKED)" dist/.koka-build.lock \
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist
 
-.PHONY: test test-native test-pocketjs-runtime test-pocketjs-bundle test-pocketjs-wasm test-tooling test-all test-wasm test-report build-counter build-top-layer build-keyed build-report build-pocketjs-example compile-pocketjs-example build-window-fixture build-browser-fixtures browser-install test-browser serve serve-top-layer serve-keyed serve-report
+.PHONY: test test-native test-pocketjs-runtime test-pocketjs-bundle test-pocketjs-wasm test-pocketjs-browser test-tooling test-all test-wasm test-report build-counter build-top-layer build-keyed build-report build-pocketjs-example compile-pocketjs-example build-window-fixture build-browser-fixtures browser-install test-browser serve serve-pocketjs-example serve-top-layer serve-keyed serve-report
 .PHONY: playground-install playground-precompile playground-sync-assets playground-build playground-preview playground-release playground-deploy serve-playground
 
 test: test-native test-pocketjs-runtime
@@ -154,6 +155,9 @@ test-pocketjs-wasm: test-pocketjs-bundle
 		"$(PROJECT_ROOT)/examples/pocketjs/dist/kokaine-pocket-demo.pak" \
 		"$(POCKETJS_CHECKOUT)"
 
+test-pocketjs-browser: test-pocketjs-bundle
+	$(UV) run --with playwright python test/browser_pocketjs.py
+
 build-window-fixture:
 	$(DIST_KOKA) \
 		--buildname=window-event-lifecycle test/window-event-lifecycle.kk
@@ -205,6 +209,11 @@ test-all: test-tooling test test-browser test-wasm test-report
 
 serve: build-counter
 	$(PYTHON) -m http.server 4173 --bind 127.0.0.1
+
+serve-pocketjs-example: test-pocketjs-bundle
+	@echo "Kokaine PocketJS browser example: http://127.0.0.1:$(POCKETJS_WEB_PORT)/"
+	PORT="$(POCKETJS_WEB_PORT)" \
+		$(BUN) examples/pocketjs/serve.ts
 
 serve-top-layer: build-top-layer
 	@echo "Kokaine top-layer example: http://127.0.0.1:4173/examples/top-layer/"
