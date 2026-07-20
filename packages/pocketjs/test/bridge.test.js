@@ -204,7 +204,10 @@ test("registers and clears press handlers through onPress", () => {
   const restore = installPocketBridge(renderer);
   const bridge = globalThis[BRIDGE_KEY];
   const node = {};
-  const handler = () => {};
+  let presses = 0;
+  const handler = () => {
+    presses += 1;
+  };
   let installed;
   renderer.setProp = (target, name, value, previous) => {
     calls.push(["setProp", target, name, value, previous]);
@@ -214,13 +217,43 @@ test("registers and clears press handlers through onPress", () => {
   };
 
   bridge.setPress(node, handler);
+  const trampoline = installed;
+  assert.notEqual(trampoline, handler);
+  trampoline();
   bridge.clearPress(node);
+  trampoline();
 
   assert.deepEqual(calls, [
-    ["setProp", node, "onPress", handler, undefined],
-    ["setProp", node, "onPress", undefined, handler]
+    ["setProp", node, "onPress", trampoline, undefined],
+    ["setProp", node, "onPress", undefined, trampoline]
   ]);
+  assert.equal(presses, 1);
   assert.equal(installed, undefined);
+  restore();
+});
+
+test("severs press callbacks before a native clear failure", () => {
+  const { renderer } = createRendererDouble();
+  const failure = new Error("native clear failed");
+  let installed;
+  renderer.setProp = (_target, _name, value) => {
+    if (value === undefined) throw failure;
+    installed = value;
+    return value;
+  };
+  const restore = installPocketBridge(renderer);
+  const bridge = globalThis[BRIDGE_KEY];
+  const node = {};
+  let presses = 0;
+
+  bridge.setPress(node, () => {
+    presses += 1;
+  });
+  installed();
+  assert.throws(() => bridge.clearPress(node), (error) => error === failure);
+  installed();
+
+  assert.equal(presses, 1);
   restore();
 });
 
