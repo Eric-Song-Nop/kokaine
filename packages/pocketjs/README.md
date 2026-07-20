@@ -78,5 +78,13 @@ cd pocketjs && bun install --frozen-lockfile && cd -
 make test-pocketjs-wasm POCKETJS_CHECKOUT=/absolute/path/to/pocketjs
 ```
 
+To open the same example in Pocket's official browser/WASM host, or exercise it
+in real headless Chromium:
+
+```sh
+make serve-pocketjs-example POCKETJS_CHECKOUT=/absolute/path/to/pocketjs
+make test-pocketjs-browser POCKETJS_CHECKOUT=/absolute/path/to/pocketjs
+```
+
 See [`docs/pocketjs.md`](../../docs/pocketjs.md) and the runnable composition
 under [`examples/pocketjs`](../../examples/pocketjs).
