@@ -115,6 +115,7 @@ test("forwards node creation and structural operations without changing argument
 
   const view = bridge.createView();
   const text = bridge.createText("hello");
+  const textContent = calls[4][2];
   const image = bridge.createImage();
   bridge.replaceText(text, "goodbye");
   bridge.insertBefore(view, text, image);
@@ -125,14 +126,64 @@ test("forwards node creation and structural operations without changing argument
 
   assert.deepEqual(calls, [
     ["createElement", "view"],
+    ["createElement", "text"],
+    ["setProp", text, "style", { fontSlot: 2 }, {}],
     ["createTextNode", "hello"],
+    ["insertNode", text, textContent, null],
     ["createElement", "image"],
-    ["replaceText", text, "goodbye"],
+    ["replaceText", textContent, "goodbye"],
     ["insertNode", view, text, image],
     ["detachNode", view, text],
     ["release", image],
     ["setProp", view, "focusable", true],
     ["setProp", image, "src", "hero"]
+  ]);
+  restore();
+});
+
+test("discards both native text nodes when text assembly fails", () => {
+  const { calls, renderer } = createRendererDouble();
+  const failure = new Error("text insertion failed");
+  let textElement;
+  let textContent;
+  renderer.createElement = (tag) => {
+    calls.push(["createElement", tag]);
+    textElement = { kind: tag };
+    return textElement;
+  };
+  renderer.createTextNode = (value) => {
+    calls.push(["createTextNode", value]);
+    textContent = { kind: "text-node", value };
+    return textContent;
+  };
+  renderer.insertNode = () => {
+    throw failure;
+  };
+  const restore = installPocketBridge(renderer);
+  const bridge = globalThis[BRIDGE_KEY];
+
+  assert.throws(() => bridge.createText("hello"), (error) => error === failure);
+  assert.deepEqual(calls, [
+    ["createElement", "text"],
+    ["setProp", textElement, "style", { fontSlot: 2 }, {}],
+    ["createTextNode", "hello"],
+    ["release", textContent],
+    ["release", textElement]
+  ]);
+  restore();
+});
+
+test("lets an explicit font slot override the Pocket default", () => {
+  const { calls, renderer } = createRendererDouble();
+  const restore = installPocketBridge(renderer);
+  const bridge = globalThis[BRIDGE_KEY];
+  const text = bridge.createText("hello");
+
+  calls.length = 0;
+  bridge.setStyleNumber(text, "fontSlot", 9);
+
+  assert.deepEqual(calls, [
+    ["setProp", text, "style", { fontSlot: 9 }, { fontSlot: 2 }]
   ]);
   restore();
 });
