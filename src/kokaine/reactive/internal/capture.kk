@@ -15,6 +15,49 @@ import std/core/undiv
 // Reifying exact read suffixes
 // --------------------------------------------------------------------------
 
+abstract type read-cache
+  Read-cache-empty
+  Read-cache-value(source-version : ref<global,int>,
+                   version : int, value : any)
+
+extern read-cache-box(value : a) : any
+  inline "#1"
+
+extern read-cache-unbox(value : any) : a
+  inline "#1"
+
+// Keeping the cached action pure prevents a hit from spanning root disposal
+// or another state-changing effect that must reach the outer read handler.
+pub fun cache-repeated-reads(action : () -> <signal-read,pure> a)
+                             : <signal-read,pure> a
+  val cache = cell(Read-cache-empty)
+  with override
+    fun validate-derived(producer)
+      validate-derived(producer)
+    fun read-source(source,mode,producer)
+      match mode
+        Track-read ->
+          val current-version = load(source.source-version)
+          match load(cache)
+            Read-cache-value(identity,version,value) ->
+              if same-source-version(identity,source.source-version) &&
+                 version == current-version
+              then read-cache-unbox(value)
+              else
+                val current = read-source(source,mode,producer)
+                store(cache,Read-cache-value(
+                  source.source-version,load(source.source-version),
+                  read-cache-box(current)))
+                current
+            Read-cache-empty ->
+              val current = read-source(source,mode,producer)
+              store(cache,Read-cache-value(
+                source.source-version,load(source.source-version),
+                read-cache-box(current)))
+              current
+        Sample-read -> read-source(source,mode,producer)
+  action()
+
 pub fun reify-trace(root : root<r>, plane : plane<e>,
                 owner-slot : ref<global,maybe<derive-producer>>,
                 track : () -> <signal-read,pure> a,

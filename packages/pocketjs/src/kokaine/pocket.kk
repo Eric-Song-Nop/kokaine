@@ -11,6 +11,7 @@ module kokaine/pocket
 import kokaine/reactive
 import kokaine/reactive/integration
 import kokaine/reactive/integration/event
+import kokaine/reactive/internal/capture
 import std/core/unsafe
 
 
@@ -216,6 +217,19 @@ pub fun on-press-write(action : () -> signal-write ()) : property
 abstract type node
   Pocket-node(value : any)
 
+abstract type live-binding
+  Binding-text(target : node, read : () -> signal-read string,
+               value : ref<global,string>,
+               committed : ref<global,maybe<string>>)
+  Binding-style-number(target : node, name : string,
+                       read : () -> signal-read int,
+                       value : ref<global,int>,
+                       committed : ref<global,maybe<int>>)
+  Binding-style-string(target : node, name : string,
+                       read : () -> signal-read string,
+                       value : ref<global,string>,
+                       committed : ref<global,maybe<string>>)
+
 extern pocket-bridge() : ui any
   js inline "(function(){ var bridge=globalThis[Symbol.for('kokaine.pocketjs.bridge')]; if(!bridge || bridge.version!==1) throw new Error('Kokaine PocketJS bridge version 1 is not installed'); return bridge; })()"
 
@@ -328,6 +342,91 @@ fun constant-track() : <signal-read,pure> ()
 fun reactive-ui-exn(action : () -> <ui,exn> a)
                     : <signal-write,pure,ui|e> a
   mask<signal-write>{ mask<div>{ action() } }
+
+fun add-live-binding(bindings : ref<global,list<live-binding>>,
+                     binding : live-binding) : ()
+  store(bindings,Cons(binding,load(bindings)))
+
+fun read-live-binding(binding : live-binding)
+                     : <signal-read,pure> ()
+  match binding
+    Binding-text(_,read,value,_) ->
+      store(value,tracked(read))
+    Binding-style-number(_,_,read,value,_) ->
+      store(value,tracked(read))
+    Binding-style-string(_,_,read,value,_) ->
+      store(value,tracked(read))
+
+fun read-live-bindings-loop(bindings : list<live-binding>)
+                           : <signal-read,pure> ()
+  match bindings
+    Nil -> ()
+    Cons(binding,rest) ->
+      read-live-binding(binding)
+      read-live-bindings-loop(rest)
+
+fun read-live-bindings(bindings : list<live-binding>)
+                      : <signal-read,pure> ()
+  cache-repeated-reads(fn() read-live-bindings-loop(bindings))
+
+fun publish-live-binding(bridge : any, binding : live-binding) : ui ()
+  match binding
+    Binding-text(target,_,value,committed) ->
+      val next = load(value)
+      match load(committed)
+        Just(previous) ->
+          if previous == next then () else
+            bridge-replace-text(bridge,target,next)
+            store(committed,Just(next))
+        Nothing ->
+          bridge-replace-text(bridge,target,next)
+          store(committed,Just(next))
+    Binding-style-number(target,name,_,value,committed) ->
+      val next = load(value)
+      match load(committed)
+        Just(previous) ->
+          if previous == next then () else
+            bridge-set-style-number(bridge,target,name,next)
+            store(committed,Just(next))
+        Nothing ->
+          bridge-set-style-number(bridge,target,name,next)
+          store(committed,Just(next))
+    Binding-style-string(target,name,_,value,committed) ->
+      val next = load(value)
+      match load(committed)
+        Just(previous) ->
+          if previous == next then () else
+            bridge-set-style-string(bridge,target,name,next)
+            store(committed,Just(next))
+        Nothing ->
+          bridge-set-style-string(bridge,target,name,next)
+          store(committed,Just(next))
+
+fun publish-live-bindings(bindings : list<live-binding>)
+                         : <signal-write,pure,ui|e> ()
+  reactive-ui-exn{
+    pocket-attempt{
+      val bridge = pocket-bridge()
+      bindings.foreach(fn(binding) publish-live-binding(bridge,binding))
+    }
+  }
+
+fun create-live-bindings-effect(owner : root<<ui>>,
+                               bindings : list<live-binding>)
+                               : <signal-write,pure,ui> ()
+  val dispose = create-effect(owner,
+    fn() read-live-bindings(bindings),
+    fn(_) publish-live-bindings(bindings))
+  ()
+
+fun install-live-bindings(owner : root<<ui>>,
+                          pending : ref<global,list<live-binding>>)
+                         : <signal-write,pure,ui> ()
+  val bindings = load(pending).reverse
+  store(pending,[])
+  match bindings
+    Nil -> ()
+    _ -> create-live-bindings-effect(owner,bindings)
 
 fun host-root() : <ui,exn> node
   pocket-attempt{
@@ -461,7 +560,8 @@ fun install-press(root : root<<ui>>, target : node,
 // Retained tree interpreter
 // --------------------------------------------------------------------------
 
-fun mount-property(root : root<<ui>>, target : node,
+fun mount-property(root : root<<ui>>, bindings : ref<global,list<live-binding>>,
+                   target : node,
                    value : property) : <signal-write,ui,pure> ()
   match value
     Style-number(name,number) -> reactive-ui-exn{
@@ -477,25 +577,13 @@ fun mount-property(root : root<<ui>>, target : node,
       }
     }
     Live-style-number(name,read) ->
-      val dispose = create-effect(root,fn() tracked(read),fn(number)
-        reactive-ui-exn{
-          pocket-attempt{
-            val bridge = pocket-bridge()
-            bridge-set-style-number(bridge,target,name,number)
-          }
-        }
-      )
-      ()
+      add-live-binding(
+        bindings,Binding-style-number(
+          target,name,read,cell(0),cell(Nothing)))
     Live-style-string(name,read) ->
-      val dispose = create-effect(root,fn() tracked(read),fn(text)
-        reactive-ui-exn{
-          pocket-attempt{
-            val bridge = pocket-bridge()
-            bridge-set-style-string(bridge,target,name,text)
-          }
-        }
-      )
-      ()
+      add-live-binding(
+        bindings,Binding-style-string(
+          target,name,read,cell(""),cell(Nothing)))
     Focusable(enabled) -> reactive-ui-exn{
       pocket-attempt{
         val bridge = pocket-bridge()
@@ -510,8 +598,8 @@ fun mount-property(root : root<<ui>>, target : node,
     }
     Press(action) -> install-press(root,target,action)
 
-fun mount-view(root : root<<ui>>, parent : node,
-               before : maybe<node>, tree : view)
+fun mount-view(root : root<<ui>>, bindings : ref<global,list<live-binding>>,
+               parent : node, before : maybe<node>, tree : view)
               : <signal-write,ui,pure> list<node>
   match tree
     Empty -> []
@@ -529,7 +617,8 @@ fun mount-view(root : root<<ui>>, parent : node,
         fn()
           reactive-ui-exn{ insert(parent,before,target) }
           store(inserted,True)
-          properties.foreach fn(value) mount-property(root,target,value)
+          properties.foreach fn(value)
+            mount-property(root,bindings,target,value)
           store(committed,True)
           [target]
       )
@@ -547,15 +636,10 @@ fun mount-view(root : root<<ui>>, parent : node,
         fn()
           reactive-ui-exn{ insert(parent,before,target) }
           store(inserted,True)
-          properties.foreach fn(value) mount-property(root,target,value)
-          val dispose = create-effect(root,fn() tracked(read),fn(value)
-            reactive-ui-exn{
-              pocket-attempt{
-                val bridge = pocket-bridge()
-                bridge-replace-text(bridge,target,value)
-              }
-            }
-          )
+          properties.foreach fn(value)
+            mount-property(root,bindings,target,value)
+          add-live-binding(
+            bindings,Binding-text(target,read,cell(""),cell(Nothing)))
           store(committed,True)
           [target]
       )
@@ -573,8 +657,9 @@ fun mount-view(root : root<<ui>>, parent : node,
         fn()
           reactive-ui-exn{ insert(parent,before,target) }
           store(inserted,True)
-          properties.foreach fn(value) mount-property(root,target,value)
-          val _ = mount-views(root,target,Nothing,children)
+          properties.foreach fn(value)
+            mount-property(root,bindings,target,value)
+          val _ = mount-views(root,bindings,target,Nothing,children)
           store(committed,True)
           [target]
       )
@@ -592,11 +677,12 @@ fun mount-view(root : root<<ui>>, parent : node,
         fn()
           reactive-ui-exn{ insert(parent,before,target) }
           store(inserted,True)
-          properties.foreach fn(value) mount-property(root,target,value)
+          properties.foreach fn(value)
+            mount-property(root,bindings,target,value)
           store(committed,True)
           [target]
       )
-    Fragment(children) -> mount-views(root,parent,before,children)
+    Fragment(children) -> mount-views(root,bindings,parent,before,children)
     Region(read) ->
       val anchor = reactive-ui-exn{ create-text("") }
       val inserted = cell(False)
@@ -613,23 +699,26 @@ fun mount-view(root : root<<ui>>, parent : node,
           store(inserted,True)
           val dispose = create-effect(root,fn() tracked(read),fn(next)
             val mounted = cell([])
+            val region-bindings = cell([])
             on-cleanup(root,fn()
               reactive-ui-exn{ remove-nodes(parent,load(mounted)) }
             )
-            val nodes = mount-view(root,parent,Just(anchor),next)
+            val nodes = mount-view(
+              root,region-bindings,parent,Just(anchor),next)
             store(mounted,nodes)
+            install-live-bindings(root,region-bindings)
           )
           store(committed,True)
           [anchor]
       )
 
-fun mount-views(root : root<<ui>>, parent : node,
-                before : maybe<node>, trees : list<view>)
+fun mount-views(root : root<<ui>>, bindings : ref<global,list<live-binding>>,
+                parent : node, before : maybe<node>, trees : list<view>)
                : <signal-write,ui,pure> list<node>
   match trees
     Nil -> []
     Cons(tree,rest) ->
-      val first = mount-view(root,parent,before,tree)
+      val first = mount-view(root,bindings,parent,before,tree)
       val committed = cell(False)
       finally(
         fn() {
@@ -637,7 +726,7 @@ fun mount-views(root : root<<ui>>, parent : node,
           else reactive-ui-exn{ remove-nodes(parent,first) }
         },
         fn()
-          val remaining = mount-views(root,parent,before,rest)
+          val remaining = mount-views(root,bindings,parent,before,rest)
           store(committed,True)
           append-nodes(first,remaining)
       )
@@ -649,6 +738,7 @@ fun mount-effect(root : root<<ui>>, parent : node, tree : view)
     val inserted = cell(False)
     val range-owned = cell(False)
     val mounted = cell([])
+    val bindings = cell([])
     finally(
       fn() {
         if !load(inserted) then
@@ -670,8 +760,9 @@ fun mount-effect(root : root<<ui>>, parent : node, tree : view)
           }
         )
         store(range-owned,True)
-        val nodes = mount-view(root,parent,Just(anchor),tree)
+        val nodes = mount-view(root,bindings,parent,Just(anchor),tree)
         store(mounted,nodes)
+        install-live-bindings(root,bindings)
     )
   )
 

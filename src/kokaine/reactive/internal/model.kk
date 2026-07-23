@@ -78,6 +78,10 @@ pub type source<a>
     source-captures : registry<packed-capture>
   )
 
+pub fun same-source-version(left : ref<global,int>,
+                            right : ref<global,int>) : bool
+  unsafe-ptr-eq(left,right)
+
 
 // `Track-read` captures the exact suffix. `Sample-read` is the untracked
 // override.

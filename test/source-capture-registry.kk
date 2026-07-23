@@ -2,6 +2,7 @@ module source-capture-registry
 
 import kokaine/reactive/internal/model
 import kokaine/reactive/internal/runtime
+import kokaine/reactive/internal/capture
 import kokaine/internal/registry
 import kokaine/reactive/effects
 import std/core/unsafe
@@ -22,6 +23,17 @@ fun check(ok : bool, message : string)
 
 fun capture-count(value : signal<a>) : int
   value.signal-source.source-captures.count
+
+fun observe-reads(counter : ref<global,int>,
+                  action : () -> <signal-read,pure> a)
+                 : <signal-read,pure> a
+  with override
+    fun validate-derived(producer)
+      validate-derived(producer)
+    fun read-source(source,mode,producer)
+      hidden-store(counter,hidden-load(counter) + 1)
+      read-source(source,mode,producer)
+  action()
 
 tail fun create-effects(root : root<total>, source : signal<int>,
                         remaining : int, runs : ref<global,int>,
@@ -61,6 +73,85 @@ fun test-source-captures-unlink-immediately()
         "removed source registrations cannot resume retired continuations")
   root.dispose()
 
+fun test-cached-repeated-read-semantics()
+  val observed = hidden(0)
+  val seen = hidden([])
+  val (root,(source,ignored,stop)) = create-root fn(root)
+    val source = signal(root,1)
+    val ignored = signal(root,10)
+    val stop = create-effect(root,fn()
+      cache-repeated-reads(fn()
+        val first = source.get
+        val sampled = untrack{ ignored.get }
+        val second = observe-reads(observed,fn() source.get)
+        first + sampled + second
+      )
+    ,fn(value) hidden-store(seen,Cons(value,hidden-load(seen))))
+    (source,ignored,stop)
+
+  check(source.capture-count == 1,
+        "cached repeated reads retain one continuation registration")
+  check(ignored.capture-count == 0,
+        "cached untracked reads retain no continuation registration")
+  check(hidden-load(observed) == 1,
+        "an inner read handler observes a cached repeated read")
+  check(hidden-load(seen) == [12],"cached reads initially publish")
+
+  update(root){ ignored.set(20) }
+  check(hidden-load(seen) == [12],
+        "an untracked source cannot schedule the cached effect")
+  update(root){ source.set(2) }
+  check(source.capture-count == 1,
+        "resumption rebuilds one continuation registration")
+  check(hidden-load(observed) == 2,
+        "the inner read handler survives continuation resumption")
+  check(hidden-load(seen) == [24,12],
+        "resumption samples the latest untracked value")
+
+  stop()
+  check(source.capture-count == 0,
+        "disposing the cached effect unlinks its registration")
+  root.dispose()
+
+fun test-cached-read-preserves-cross-root-check()
+  val (foreign-root,foreign) = create-root fn(root)
+    signal(root,10)
+  val failed : error<()> = mask<exn>{
+    error/try fn()
+      val (local-root,_) = create-root fn(root)
+        val local = signal(root,1)
+        val stop = create-effect(root,fn()
+          cache-repeated-reads(fn() local.get + foreign.get)
+        ,fn(_) ())
+        ()
+      local-root.dispose()
+  }
+  check(failed.is-error,
+        "a cache miss still validates the source root")
+  foreign-root.dispose()
+
+fun test-outer-untrack-keeps-cached-reads-untracked()
+  val seen = hidden([])
+  val (root,(source,stop)) = create-root fn(root)
+    val source = signal(root,1)
+    val stop = create-effect(root,fn()
+      untrack{
+        cache-repeated-reads(fn() source.get + source.get)
+      }
+    ,fn(value) hidden-store(seen,Cons(value,hidden-load(seen))))
+    (source,stop)
+
+  check(source.capture-count == 0,
+        "an outer untrack prevents cached reads from registering")
+  update(root){ source.set(2) }
+  check(hidden-load(seen) == [2],
+        "an outer untrack prevents cached reads from scheduling")
+  stop()
+  root.dispose()
+
 pub fun main()
   test-source-captures-unlink-immediately()
+  test-cached-repeated-read-semantics()
+  test-cached-read-preserves-cross-root-check()
+  test-outer-untrack-keeps-cached-reads-untracked()
   println("source-capture-registry: all checks passed")
