@@ -1,0 +1,544 @@
+{
+  "schema_version": 1,
+  "run_date": "2026-07-23",
+  "provenance": {
+    "kokaine_commit": "6f8ee9ebfeaa1f7f1ae7ce8f60d935348a837771",
+    "koka_version": "3.2.3",
+    "kokaine_supported_pocketjs": {
+      "version": "0.6.0",
+      "commit": "1f848dcdb2629e3c6373710cd0aa16d775ea2ad3"
+    },
+    "comparison_pocketjs_pr": {
+      "number": 6,
+      "commit": "28aa0f27184fe61a0de92f0964096f1e646ebe50",
+      "status": "draft experimental branch"
+    },
+    "ppsspp_commit": "676724ee5e0283cbb879f45e1e88383cf821abd3",
+    "rust_psp_commit": "2cbaf8c9bc72569c76240a1d9743de10731e5f6b",
+    "quickjs_rs_commit": "0fc946fb670c0c29bc0135f510bcb0f595415a61",
+    "psp_sdk": "sdk-noabicalls-normalized-2026-06-19",
+    "graphics": "software"
+  },
+  "protocol": {
+    "samples_per_path": 7,
+    "logical_size": [
+      480,
+      272
+    ],
+    "cap_start": 16,
+    "cap_n": 120,
+    "circle_updates": 60,
+    "input_script": "0:0,4:0x40,8:0,16:0x2000,17:0,18:0x2000,19:0,20:0x2000,21:0,22:0x2000,23:0,24:0x2000,25:0,26:0x2000,27:0,28:0x2000,29:0,30:0x2000,31:0,32:0x2000,33:0,34:0x2000,35:0,36:0x2000,37:0,38:0x2000,39:0,40:0x2000,41:0,42:0x2000,43:0,44:0x2000,45:0,46:0x2000,47:0,48:0x2000,49:0,50:0x2000,51:0,52:0x2000,53:0,54:0x2000,55:0,56:0x2000,57:0,58:0x2000,59:0,60:0x2000,61:0,62:0x2000,63:0,64:0x2000,65:0,66:0x2000,67:0,68:0x2000,69:0,70:0x2000,71:0,72:0x2000,73:0,74:0x2000,75:0,76:0x2000,77:0,78:0x2000,79:0,80:0x2000,81:0,82:0x2000,83:0,84:0x2000,85:0,86:0x2000,87:0,88:0x2000,89:0,90:0x2000,91:0,92:0x2000,93:0,94:0x2000,95:0,96:0x2000,97:0,98:0x2000,99:0,100:0x2000,101:0,102:0x2000,103:0,104:0x2000,105:0,106:0x2000,107:0,108:0x2000,109:0,110:0x2000,111:0,112:0x2000,113:0,114:0x2000,115:0,116:0x2000,117:0,118:0x2000,119:0,120:0x2000,121:0,122:0x2000,123:0,124:0x2000,125:0,126:0x2000,127:0,128:0x2000,129:0,130:0x2000,131:0,132:0x2000,133:0,134:0x2000,135:0",
+    "budget_60hz_us": 16666.666666666668
+  },
+  "harness_fixes": [
+    "Add -ffreestanding to PSP C flags so LLVM 22 does not include host glibc headers.",
+    "Preserve reactive children/class/style getters in the experimental Solid primitive.",
+    "Expose the experimental Solid renderer subpath used by the Kokaine bridge."
+  ],
+  "validation": {
+    "all_paths_all_workloads_120_frames_byte_identical": true,
+    "final_frame_sha256": {
+      "static-16": "e0a3636ec36accac46a6cb898b9574b276b1b843b265fa9138c9b43015c2b99c",
+      "press-noop": "c3e7c0bb5ae2e28f2f0e1f09c82dfd64f8b3b6218b09928b7d6a717abe11bf1c",
+      "signal-only": "967e265379f693978cbcce37ada05a075747a2eea3ca5c57d904e16f2aaac013",
+      "text-one": "d8a265650cacfe0995dc151933ce0ab8c5e53f85d937b470fa79b76d2fa3606c",
+      "text-fanout-16": "cfd56331685e34ae0b765c3ff4b6816623c8405fa11fa83c0879ce280a6026cc",
+      "style-fanout-16": "7c5654ac0371e35785041c31b5df89d32a50f1f78d066359237a8f6977e0799a",
+      "region-replace-8": "95e54ab4c91202c7b88c5f9807950735a46ca039284f335a4ae61bb672388e79"
+    },
+    "psp_timer_samples_identical_within_each_eboot": true
+  },
+  "interpretation": {
+    "avg_work_excludes_gpu_sync_vblank_swap_and_capture_dump": true,
+    "ppsspp_headless_is_unthrottled": true,
+    "actual_hardware_fps_measured": false
+  },
+  "kokaine_ablation": {
+    "static-16": {
+      "no_circle_avg_work_us": 5860,
+      "with_circle_avg_work_us": 6047,
+      "max_work_us": 6250,
+      "estimated_per_circle_work_increment_us": 374,
+      "estimated_per_circle_js_increment_us": 374
+    },
+    "press-noop": {
+      "no_circle_avg_work_us": 2297,
+      "with_circle_avg_work_us": 5264,
+      "max_work_us": 8253,
+      "estimated_per_circle_work_increment_us": 5934,
+      "estimated_per_circle_js_increment_us": 6474
+    },
+    "signal-only": {
+      "no_circle_avg_work_us": 2328,
+      "with_circle_avg_work_us": 6063,
+      "max_work_us": 9821,
+      "estimated_per_circle_work_increment_us": 7470,
+      "estimated_per_circle_js_increment_us": 8004
+    },
+    "text-one": {
+      "no_circle_avg_work_us": 2916,
+      "with_circle_avg_work_us": 11858,
+      "max_work_us": 20991,
+      "estimated_per_circle_work_increment_us": 17884,
+      "estimated_per_circle_js_increment_us": 14208
+    },
+    "text-fanout-16": {
+      "no_circle_avg_work_us": 6444,
+      "with_circle_avg_work_us": 69553,
+      "max_work_us": 133104,
+      "estimated_per_circle_work_increment_us": 126218,
+      "estimated_per_circle_js_increment_us": 110956
+    },
+    "style-fanout-16": {
+      "no_circle_avg_work_us": 4478,
+      "with_circle_avg_work_us": 63084,
+      "max_work_us": 122750,
+      "estimated_per_circle_work_increment_us": 117212,
+      "estimated_per_circle_js_increment_us": 117308
+    },
+    "region-replace-8": {
+      "no_circle_avg_work_us": 4027,
+      "with_circle_avg_work_us": 65336,
+      "max_work_us": 128159,
+      "estimated_per_circle_work_increment_us": 122618,
+      "estimated_per_circle_js_increment_us": 113688
+    }
+  },
+  "metrics": {
+    "static-16": {
+      "kokaine": {
+        "eval_us": 1775021,
+        "boot_to_frame0_us": 1847076,
+        "avg_js_us": 270,
+        "avg_jobs_us": 1,
+        "avg_tick_us": 1,
+        "avg_draw_us": 1638,
+        "avg_render_us": 4135,
+        "avg_work_us": 6047,
+        "max_work_us": 6250,
+        "bundle_bytes": 118311,
+        "dcpak_bytes": 31632,
+        "hz60_avg_budget_passes": 7,
+        "samples": 7
+      },
+      "vue": {
+        "eval_us": 1584031,
+        "boot_to_frame0_us": 1646876,
+        "avg_js_us": 270,
+        "avg_jobs_us": 1,
+        "avg_tick_us": 1,
+        "avg_draw_us": 1645,
+        "avg_render_us": 4135,
+        "avg_work_us": 6054,
+        "max_work_us": 6256,
+        "bundle_bytes": 86000,
+        "dcpak_bytes": 32288,
+        "hz60_avg_budget_passes": 7,
+        "samples": 7
+      },
+      "vue-vapor": {
+        "eval_us": 2219814,
+        "boot_to_frame0_us": 2280843,
+        "avg_js_us": 270,
+        "avg_jobs_us": 1,
+        "avg_tick_us": 1,
+        "avg_draw_us": 1643,
+        "avg_render_us": 4135,
+        "avg_work_us": 6053,
+        "max_work_us": 6256,
+        "bundle_bytes": 131654,
+        "dcpak_bytes": 32288,
+        "hz60_avg_budget_passes": 7,
+        "samples": 7
+      },
+      "solid": {
+        "eval_us": 1519785,
+        "boot_to_frame0_us": 1580143,
+        "avg_js_us": 270,
+        "avg_jobs_us": 1,
+        "avg_tick_us": 1,
+        "avg_draw_us": 1645,
+        "avg_render_us": 4135,
+        "avg_work_us": 6054,
+        "max_work_us": 6255,
+        "bundle_bytes": 30468,
+        "dcpak_bytes": 32288,
+        "hz60_avg_budget_passes": 7,
+        "samples": 7
+      }
+    },
+    "press-noop": {
+      "kokaine": {
+        "eval_us": 1618856,
+        "boot_to_frame0_us": 1680243,
+        "avg_js_us": 3321,
+        "avg_jobs_us": 1,
+        "avg_tick_us": 1,
+        "avg_draw_us": 470,
+        "avg_render_us": 1469,
+        "avg_work_us": 5264,
+        "max_work_us": 8253,
+        "bundle_bytes": 117597,
+        "dcpak_bytes": 31632,
+        "hz60_avg_budget_passes": 7,
+        "samples": 7
+      },
+      "vue": {
+        "eval_us": 1269999,
+        "boot_to_frame0_us": 1329893,
+        "avg_js_us": 274,
+        "avg_jobs_us": 1,
+        "avg_tick_us": 1,
+        "avg_draw_us": 471,
+        "avg_render_us": 1734,
+        "avg_work_us": 2483,
+        "max_work_us": 2694,
+        "bundle_bytes": 85518,
+        "dcpak_bytes": 32288,
+        "hz60_avg_budget_passes": 7,
+        "samples": 7
+      },
+      "vue-vapor": {
+        "eval_us": 1978713,
+        "boot_to_frame0_us": 2030593,
+        "avg_js_us": 280,
+        "avg_jobs_us": 1,
+        "avg_tick_us": 1,
+        "avg_draw_us": 471,
+        "avg_render_us": 1749,
+        "avg_work_us": 2504,
+        "max_work_us": 2693,
+        "bundle_bytes": 131135,
+        "dcpak_bytes": 32288,
+        "hz60_avg_budget_passes": 7,
+        "samples": 7
+      },
+      "solid": {
+        "eval_us": 529606,
+        "boot_to_frame0_us": 579143,
+        "avg_js_us": 279,
+        "avg_jobs_us": 1,
+        "avg_tick_us": 1,
+        "avg_draw_us": 471,
+        "avg_render_us": 1751,
+        "avg_work_us": 2505,
+        "max_work_us": 2693,
+        "bundle_bytes": 30033,
+        "dcpak_bytes": 32288,
+        "hz60_avg_budget_passes": 7,
+        "samples": 7
+      }
+    },
+    "signal-only": {
+      "kokaine": {
+        "eval_us": 1644818,
+        "boot_to_frame0_us": 1696926,
+        "avg_js_us": 4092,
+        "avg_jobs_us": 1,
+        "avg_tick_us": 1,
+        "avg_draw_us": 470,
+        "avg_render_us": 1496,
+        "avg_work_us": 6063,
+        "max_work_us": 9821,
+        "bundle_bytes": 119086,
+        "dcpak_bytes": 31632,
+        "hz60_avg_budget_passes": 7,
+        "samples": 7
+      },
+      "vue": {
+        "eval_us": 1274663,
+        "boot_to_frame0_us": 1329893,
+        "avg_js_us": 425,
+        "avg_jobs_us": 13461,
+        "avg_tick_us": 1,
+        "avg_draw_us": 471,
+        "avg_render_us": 1491,
+        "avg_work_us": 15851,
+        "max_work_us": 29781,
+        "bundle_bytes": 85753,
+        "dcpak_bytes": 32288,
+        "hz60_avg_budget_passes": 7,
+        "samples": 7
+      },
+      "vue-vapor": {
+        "eval_us": 1981055,
+        "boot_to_frame0_us": 2030593,
+        "avg_js_us": 320,
+        "avg_jobs_us": 1,
+        "avg_tick_us": 1,
+        "avg_draw_us": 471,
+        "avg_render_us": 1779,
+        "avg_work_us": 2574,
+        "max_work_us": 2803,
+        "bundle_bytes": 131261,
+        "dcpak_bytes": 32288,
+        "hz60_avg_budget_passes": 7,
+        "samples": 7
+      },
+      "solid": {
+        "eval_us": 530490,
+        "boot_to_frame0_us": 579143,
+        "avg_js_us": 297,
+        "avg_jobs_us": 1,
+        "avg_tick_us": 1,
+        "avg_draw_us": 471,
+        "avg_render_us": 1781,
+        "avg_work_us": 2554,
+        "max_work_us": 2759,
+        "bundle_bytes": 30063,
+        "dcpak_bytes": 32288,
+        "hz60_avg_budget_passes": 7,
+        "samples": 7
+      }
+    },
+    "text-one": {
+      "kokaine": {
+        "eval_us": 1675560,
+        "boot_to_frame0_us": 1730293,
+        "avg_js_us": 7194,
+        "avg_jobs_us": 1,
+        "avg_tick_us": 1959,
+        "avg_draw_us": 639,
+        "avg_render_us": 2064,
+        "avg_work_us": 11858,
+        "max_work_us": 20991,
+        "bundle_bytes": 119729,
+        "dcpak_bytes": 31632,
+        "hz60_avg_budget_passes": 7,
+        "samples": 7
+      },
+      "vue": {
+        "eval_us": 1288939,
+        "boot_to_frame0_us": 1346576,
+        "avg_js_us": 426,
+        "avg_jobs_us": 15780,
+        "avg_tick_us": 2109,
+        "avg_draw_us": 529,
+        "avg_render_us": 2098,
+        "avg_work_us": 20944,
+        "max_work_us": 39457,
+        "bundle_bytes": 85841,
+        "dcpak_bytes": 32288,
+        "hz60_avg_budget_passes": 0,
+        "samples": 7
+      },
+      "vue-vapor": {
+        "eval_us": 1995200,
+        "boot_to_frame0_us": 2047276,
+        "avg_js_us": 399,
+        "avg_jobs_us": 797,
+        "avg_tick_us": 1802,
+        "avg_draw_us": 529,
+        "avg_render_us": 2069,
+        "avg_work_us": 5598,
+        "max_work_us": 8265,
+        "bundle_bytes": 131359,
+        "dcpak_bytes": 32288,
+        "hz60_avg_budget_passes": 7,
+        "samples": 7
+      },
+      "solid": {
+        "eval_us": 562046,
+        "boot_to_frame0_us": 612510,
+        "avg_js_us": 1389,
+        "avg_jobs_us": 1,
+        "avg_tick_us": 1802,
+        "avg_draw_us": 529,
+        "avg_render_us": 2078,
+        "avg_work_us": 5802,
+        "max_work_us": 8649,
+        "bundle_bytes": 30157,
+        "dcpak_bytes": 32288,
+        "hz60_avg_budget_passes": 7,
+        "samples": 7
+      }
+    },
+    "text-fanout-16": {
+      "kokaine": {
+        "eval_us": 2018392,
+        "boot_to_frame0_us": 2080643,
+        "avg_js_us": 55561,
+        "avg_jobs_us": 1,
+        "avg_tick_us": 7109,
+        "avg_draw_us": 1614,
+        "avg_render_us": 5267,
+        "avg_work_us": 69553,
+        "max_work_us": 133104,
+        "bundle_bytes": 120472,
+        "dcpak_bytes": 31632,
+        "hz60_avg_budget_passes": 0,
+        "samples": 7
+      },
+      "vue": {
+        "eval_us": 1523529,
+        "boot_to_frame0_us": 1596826,
+        "avg_js_us": 420,
+        "avg_jobs_us": 60364,
+        "avg_tick_us": 7032,
+        "avg_draw_us": 1686,
+        "avg_render_us": 5267,
+        "avg_work_us": 74771,
+        "max_work_us": 144088,
+        "bundle_bytes": 86134,
+        "dcpak_bytes": 32288,
+        "hz60_avg_budget_passes": 0,
+        "samples": 7
+      },
+      "vue-vapor": {
+        "eval_us": 2279780,
+        "boot_to_frame0_us": 2347576,
+        "avg_js_us": 1266,
+        "avg_jobs_us": 8223,
+        "avg_tick_us": 6971,
+        "avg_draw_us": 2377,
+        "avg_render_us": 5300,
+        "avg_work_us": 24139,
+        "max_work_us": 41072,
+        "bundle_bytes": 131756,
+        "dcpak_bytes": 32288,
+        "hz60_avg_budget_passes": 0,
+        "samples": 7
+      },
+      "solid": {
+        "eval_us": 1677628,
+        "boot_to_frame0_us": 1746976,
+        "avg_js_us": 26435,
+        "avg_jobs_us": 1,
+        "avg_tick_us": 6830,
+        "avg_draw_us": 1776,
+        "avg_render_us": 5382,
+        "avg_work_us": 40426,
+        "max_work_us": 74669,
+        "bundle_bytes": 30599,
+        "dcpak_bytes": 32288,
+        "hz60_avg_budget_passes": 0,
+        "samples": 7
+      }
+    },
+    "style-fanout-16": {
+      "kokaine": {
+        "eval_us": 2006205,
+        "boot_to_frame0_us": 2080643,
+        "avg_js_us": 58737,
+        "avg_jobs_us": 1,
+        "avg_tick_us": 1,
+        "avg_draw_us": 2876,
+        "avg_render_us": 1466,
+        "avg_work_us": 63084,
+        "max_work_us": 122750,
+        "bundle_bytes": 120737,
+        "dcpak_bytes": 31632,
+        "hz60_avg_budget_passes": 0,
+        "samples": 7
+      },
+      "vue": {
+        "eval_us": 1455867,
+        "boot_to_frame0_us": 1530093,
+        "avg_js_us": 419,
+        "avg_jobs_us": 56028,
+        "avg_tick_us": 1,
+        "avg_draw_us": 2643,
+        "avg_render_us": 1484,
+        "avg_work_us": 60577,
+        "max_work_us": 120384,
+        "bundle_bytes": 86105,
+        "dcpak_bytes": 32288,
+        "hz60_avg_budget_passes": 0,
+        "samples": 7
+      },
+      "vue-vapor": {
+        "eval_us": 2204791,
+        "boot_to_frame0_us": 2264160,
+        "avg_js_us": 1448,
+        "avg_jobs_us": 20263,
+        "avg_tick_us": 1,
+        "avg_draw_us": 3170,
+        "avg_render_us": 1466,
+        "avg_work_us": 26350,
+        "max_work_us": 48042,
+        "bundle_bytes": 131728,
+        "dcpak_bytes": 32288,
+        "hz60_avg_budget_passes": 0,
+        "samples": 7
+      },
+      "solid": {
+        "eval_us": 1293260,
+        "boot_to_frame0_us": 1363260,
+        "avg_js_us": 52379,
+        "avg_jobs_us": 1,
+        "avg_tick_us": 1,
+        "avg_draw_us": 2657,
+        "avg_render_us": 1466,
+        "avg_work_us": 56506,
+        "max_work_us": 109519,
+        "bundle_bytes": 30571,
+        "dcpak_bytes": 32288,
+        "hz60_avg_budget_passes": 0,
+        "samples": 7
+      }
+    },
+    "region-replace-8": {
+      "kokaine": {
+        "eval_us": 1794934,
+        "boot_to_frame0_us": 1863760,
+        "avg_js_us": 56927,
+        "avg_jobs_us": 1,
+        "avg_tick_us": 4754,
+        "avg_draw_us": 1200,
+        "avg_render_us": 2452,
+        "avg_work_us": 65336,
+        "max_work_us": 128159,
+        "bundle_bytes": 121096,
+        "dcpak_bytes": 31632,
+        "hz60_avg_budget_passes": 0,
+        "samples": 7
+      },
+      "vue": {
+        "eval_us": 1419328,
+        "boot_to_frame0_us": 1480043,
+        "avg_js_us": 420,
+        "avg_jobs_us": 38888,
+        "avg_tick_us": 4745,
+        "avg_draw_us": 1177,
+        "avg_render_us": 2452,
+        "avg_work_us": 47685,
+        "max_work_us": 92351,
+        "bundle_bytes": 86706,
+        "dcpak_bytes": 32288,
+        "hz60_avg_budget_passes": 0,
+        "samples": 7
+      },
+      "vue-vapor": {
+        "eval_us": 2122123,
+        "boot_to_frame0_us": 2180743,
+        "avg_js_us": 1043,
+        "avg_jobs_us": 5224,
+        "avg_tick_us": 4756,
+        "avg_draw_us": 1215,
+        "avg_render_us": 2452,
+        "avg_work_us": 14691,
+        "max_work_us": 25524,
+        "bundle_bytes": 132349,
+        "dcpak_bytes": 32288,
+        "hz60_avg_budget_passes": 7,
+        "samples": 7
+      },
+      "solid": {
+        "eval_us": 1632725,
+        "boot_to_frame0_us": 1696926,
+        "avg_js_us": 27809,
+        "avg_jobs_us": 1,
+        "avg_tick_us": 4474,
+        "avg_draw_us": 1199,
+        "avg_render_us": 2611,
+        "avg_work_us": 36095,
+        "max_work_us": 69095,
+        "bundle_bytes": 31104,
+        "dcpak_bytes": 32288,
+        "hz60_avg_budget_passes": 0,
+        "samples": 7
+      }
+    }
+  }
+}
