@@ -124,6 +124,28 @@ pub fun registry/snapshot(target : registry<a>) : list<a>
   match target
     Registry(_,head,_) -> pretend-no-div{ snapshot-loop(load(head),[]) }
 
+// Allocation-free traversal for internal callbacks which neither enter user
+// code nor mutate this registry. Read the successor before invoking the
+// callback so traversal never depends on the current node afterward. This
+// deliberately has a narrower contract than `snapshot`.
+tail fun visit-readonly-loop(values : registry-link<a>,
+                             action : (a) -> ()) : <div> ()
+  match values
+    Registry-end -> ()
+    Registry-link(slot,_,next) ->
+      val rest = load(next)
+      match load(slot)
+        Nothing -> visit-readonly-loop(rest,action)
+        Just(value) ->
+          action(value)
+          visit-readonly-loop(rest,action)
+
+pub fun registry/visit-readonly(target : registry<a>,
+                                action : (a) -> ()) : ()
+  match target
+    Registry(_,head,_) ->
+      pretend-no-div{ visit-readonly-loop(load(head),action) }
+
 tail fun detach-loop(values : registry-link<a>,
                      collected : list<a>) : <div> list<a>
   match values

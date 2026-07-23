@@ -78,10 +78,6 @@ pub type source<a>
     source-captures : registry<packed-capture>
   )
 
-pub fun same-source-version(left : ref<global,int>,
-                            right : ref<global,int>) : bool
-  unsafe-ptr-eq(left,right)
-
 
 // `Track-read` captures the exact suffix. `Sample-read` is the untracked
 // override.
@@ -134,8 +130,10 @@ pub div type trace<e::E>
 
 pub type built-trace<e::E>
   Built-trace(
-    built-root    : trace<e>,
-    built-publish : () -> <div|e> error<()>
+    built-root                : trace<e>,
+    built-publication-current : maybe<continuation-gate>,
+    built-publication-frame   : frame<e>,
+    built-publication-action  : () -> <div,exn|e> ()
   )
 
 pub type scope-state

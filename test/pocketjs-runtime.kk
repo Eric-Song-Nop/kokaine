@@ -2,10 +2,12 @@ module pocketjs-runtime
 
 import kokaine/reactive
 import kokaine/pocket
+import kokaine/reactive/effects
+import kokaine/reactive/internal/model
 
 
 extern install-test-host() : ui ()
-  js inline "(function(){ var all=[]; var root={ kind:'root', children:[], parent:null, style:{} }; var visit=function(node,action){ action(node); for(var i=0;i<node.children.length;i++) visit(node.children[i],action); }; var create=function(kind,text){ var node={ kind:kind, text:text||'', children:[], parent:null, style:{}, focusable:false, source:'', press:undefined, discarded:false }; all.push(node); return node; }; var state={ root:root, all:all, visit:visit, failAfter:-1, failLiveAfter:-1, liveWrites:0, discarded:0 }; var mutateLive=function(action){ if(state.failLiveAfter===0){ state.failLiveAfter=-1; throw new Error('injected live failure'); } if(state.failLiveAfter>0) state.failLiveAfter--; state.liveWrites++; action(); }; globalThis.__kokainePocketTest=state; globalThis[Symbol.for('kokaine.pocketjs.bridge')]={ version:1, getRoot:function(){ return root; }, createView:function(){ return create('view',''); }, createText:function(value){ return create('text',String(value)); }, createImage:function(){ return create('image',''); }, replaceText:function(node,value){ mutateLive(function(){ node.text=String(value); }); }, insertBefore:function(parent,node,anchor){ if(state.failAfter===0){ state.failAfter=-1; throw new Error('injected insert failure'); } if(state.failAfter>0) state.failAfter--; if(node.parent){ var old=node.parent.children.indexOf(node); if(old>=0) node.parent.children.splice(old,1); } var index=anchor==null ? parent.children.length : parent.children.indexOf(anchor); if(index<0) throw new Error('bad anchor'); parent.children.splice(index,0,node); node.parent=parent; }, remove:function(parent,node){ var index=parent.children.indexOf(node); if(index<0) throw new Error('not a child'); parent.children.splice(index,1); node.parent=null; }, discard:function(node){ if(node.parent) throw new Error('discarded attached node'); node.discarded=true; state.discarded++; }, setStyleNumber:function(node,name,value){ mutateLive(function(){ node.style[name]=Number(value); }); }, setStyleString:function(node,name,value){ mutateLive(function(){ node.style[name]=String(value); }); }, setFocusable:function(node,value){ node.focusable=!!value; }, setSource:function(node,value){ node.source=String(value); }, setPress:function(node,handler){ node.press=handler; }, clearPress:function(node){ node.press=undefined; } }; })()"
+  js inline "(function(){ var all=[]; var root={ kind:'root', children:[], parent:null, style:{} }; var visit=function(node,action){ action(node); for(var i=0;i<node.children.length;i++) visit(node.children[i],action); }; var create=function(kind,text){ var node={ kind:kind, text:text||'', children:[], parent:null, style:{}, focusable:false, source:'', press:undefined, discarded:false }; all.push(node); return node; }; var state={ root:root, all:all, visit:visit, failAfter:-1, failLiveAfter:-1, liveWrites:0, reboundWrites:0, previousBridge:null, discarded:0 }; var mutateLive=function(action){ if(state.failLiveAfter===0){ state.failLiveAfter=-1; throw new Error('injected live failure'); } if(state.failLiveAfter>0) state.failLiveAfter--; state.liveWrites++; action(); }; globalThis.__kokainePocketTest=state; globalThis[Symbol.for('kokaine.pocketjs.bridge')]={ version:1, getRoot:function(){ return root; }, createView:function(){ return create('view',''); }, createText:function(value){ return create('text',String(value)); }, createImage:function(){ return create('image',''); }, replaceText:function(node,value){ mutateLive(function(){ node.text=String(value); }); }, insertBefore:function(parent,node,anchor){ if(state.failAfter===0){ state.failAfter=-1; throw new Error('injected insert failure'); } if(state.failAfter>0) state.failAfter--; if(node.parent){ var old=node.parent.children.indexOf(node); if(old>=0) node.parent.children.splice(old,1); } var index=anchor==null ? parent.children.length : parent.children.indexOf(anchor); if(index<0) throw new Error('bad anchor'); parent.children.splice(index,0,node); node.parent=parent; }, remove:function(parent,node){ var index=parent.children.indexOf(node); if(index<0) throw new Error('not a child'); parent.children.splice(index,1); node.parent=null; }, discard:function(node){ if(node.parent) throw new Error('discarded attached node'); node.discarded=true; state.discarded++; }, setStyleNumber:function(node,name,value){ mutateLive(function(){ node.style[name]=Number(value); }); }, setStyleString:function(node,name,value){ mutateLive(function(){ node.style[name]=String(value); }); }, setFocusable:function(node,value){ node.focusable=!!value; }, setSource:function(node,value){ node.source=String(value); }, setPress:function(node,handler){ node.press=handler; }, clearPress:function(node){ node.press=undefined; } }; })()"
 
 extern host-root-child-count() : ui int
   js inline "globalThis.__kokainePocketTest.root.children.length"
@@ -37,6 +39,15 @@ extern host-fail-live-after(successful-writes : int) : ui ()
 extern host-live-writes() : ui int
   js inline "globalThis.__kokainePocketTest.liveWrites"
 
+extern host-install-rebound-bridge() : ui ()
+  js inline "(function(){ var key=Symbol.for('kokaine.pocketjs.bridge'); var state=globalThis.__kokainePocketTest; var previous=globalThis[key]; state.previousBridge=previous; var rebound=Object.create(previous); rebound.version=1; rebound.replaceText=function(node,value){ state.reboundWrites++; return previous.replaceText(node,value); }; globalThis[key]=rebound; })()"
+
+extern host-restore-bridge() : ui ()
+  js inline "(function(){ var key=Symbol.for('kokaine.pocketjs.bridge'); var state=globalThis.__kokainePocketTest; globalThis[key]=state.previousBridge; state.previousBridge=null; })()"
+
+extern host-rebound-writes() : ui int
+  js inline "globalThis.__kokainePocketTest.reboundWrites"
+
 extern host-discard-count() : ui int
   js inline "globalThis.__kokainePocketTest.discarded"
 
@@ -46,26 +57,38 @@ extern string-includes(value : string, part : string) : bool
 fun check(ok : bool, label : string)
   if ok then () else throw("FAILED: " ++ label)
 
-fun failing-insert-mount(root : root<<ui>>) : ui string
+fun failing-insert-mount(root : kokaine/reactive/root<<ui>>) : ui string
   with catch fn(problem) problem.show
   val dispose-failed = mount(root,scene
     live/text { "orphan" }
   )
   "missing failure"
 
-fun failing-live-update(root : root<<ui>>, source : signal<int>,
+fun failing-live-update(root : kokaine/reactive/root<<ui>>,
+                        source : kokaine/reactive/signal<int>,
                         value : int) : ui string
   with catch fn(problem) problem.show
   update(root){ source.set(value) }
   "missing failure"
 
+fun exact-untrack(action : () -> signal-read a) : signal-read a
+  with override
+    fun validate-derived(producer)
+      validate-derived(producer)
+    fun read-source(source,_,producer)
+      read-source(source,Sample-read,producer)
+  action()
+
 pub fun main()
   install-test-host()
   val (root,(count,visible,color,
-             (secondary,old-region,new-region,failure-value))) =
+             (secondary,old-region,new-region,failure-value,
+              (isolation-trigger,isolation-sample,
+               region-selector,region-value)))) =
     create-root fn(root)
       (signal(root,0),signal(root,True),signal(root,"#102030"),
-       (signal(root,0),signal(root,0),signal(root,0),signal(root,0)))
+       (signal(root,0),signal(root,0),signal(root,0),signal(root,0),
+        (signal(root,0),signal(root,0),signal(root,0),signal(root,0))))
   val increment = fn() count.modify(fn(value) value + 1)
 
   val page = scene
@@ -89,7 +112,7 @@ pub fun main()
         "root owns the page and a private mount anchor")
   check(host-texts() ==
         "Count 0|Mirror 0|Secondary 0|Old 0|Increment",
-        "batched live, static, and dynamic text mount in order")
+        "live, static, and dynamic text mount in order")
   check(host-first-style("bgColor") == "#102030",
         "live native style applies during bootstrap")
   check(host-first-text-style("textColor") == "#f0f4f8" &&
@@ -109,7 +132,7 @@ pub fun main()
   check(host-fire-press(),"focusable press handler is retained")
   check(host-texts() ==
         "Count 1|Mirror 1|Secondary 1|Old 0|Increment",
-        "press re-entry synchronously flushes batched live text")
+        "press re-entry synchronously flushes live text")
 
   update(root){
     visible.set(False)
@@ -178,7 +201,69 @@ pub fun main()
         "an equal update retries only the unpublished suffix")
   unmount(dispose-failure-page)
   check(host-root-child-count() == 0,
-        "the failure fixture releases its retained range")
+        "the update failure fixture releases its retained range")
+
+  val dispose-isolation-page = mount(root,scene
+    live/text { "Tracked " ++ isolation-trigger.get.show }
+    live/text {
+      "Sampled " ++ exact-untrack{ isolation-sample.get }.show
+    }
+  )
+  check(host-texts() == "Tracked 0|Sampled 0",
+        "the binding isolation fixture mounts in order")
+  val before-isolation-update = host-live-writes()
+  update(root){ isolation-sample.set(1) }
+  check(host-live-writes() == before-isolation-update &&
+        host-texts() == "Tracked 0|Sampled 0",
+        "an untracked sibling source cannot schedule host publication")
+  update(root){ isolation-trigger.set(1) }
+  check(host-live-writes() == before-isolation-update + 1 &&
+        host-texts() == "Tracked 1|Sampled 0",
+        "a tracked sibling update cannot resample a later binding")
+  unmount(dispose-isolation-page)
+  check(host-root-child-count() == 0,
+        "the binding isolation fixture releases its retained range")
+
+  val dispose-bridge-page = mount(root,scene
+    live/text { "Bridge " ++ secondary.get.show }
+  )
+  check(host-texts() == "Bridge 2",
+        "the dynamic bridge fixture mounts before replacement")
+  val before-rebound = host-rebound-writes()
+  host-install-rebound-bridge()
+  update(root){ secondary.set(3) }
+  check(host-rebound-writes() == before-rebound + 1 &&
+        host-texts() == "Bridge 3",
+        "a live publication resolves the currently installed bridge")
+  host-restore-bridge()
+  unmount(dispose-bridge-page)
+  check(host-root-child-count() == 0,
+        "the dynamic bridge fixture releases its retained range")
+
+  val dispose-region-failure = mount(root,scene
+    dynamic
+      if region-selector.get == 0 then text("Off")
+      else fragment
+        live/text { "First " ++ region-value.get.show }
+        live/text { "Second " ++ region-value.get.show }
+  )
+  check(host-texts() == "Off",
+        "the region failure fixture starts inactive")
+  val before-region-failure = host-live-writes()
+  host-fail-live-after(1)
+  val region-failure = failing-live-update(root,region-selector,1)
+  check(string-includes(region-failure,"injected live failure"),
+        "a region bootstrap bridge failure escapes its update")
+  check(host-live-writes() == before-region-failure + 1 &&
+        host-texts() == "First 0",
+        "a later bootstrap failure preserves its successful prefix")
+  update(root){ region-value.set(1) }
+  check(host-live-writes() == before-region-failure + 2 &&
+        host-texts() == "First 1",
+        "the successful prefix retains its independent continuation")
+  unmount(dispose-region-failure)
+  check(host-root-child-count() == 0,
+        "the region failure fixture releases its retained range")
 
   host-fail-after(1)
   val failure = failing-insert-mount(root)

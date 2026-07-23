@@ -66,6 +66,7 @@ test-native:
 	$(KOKA) $(KOKA_FLAGS) -e test/lifetime-foundation.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/work-transaction.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/integration-boundaries.kk
+	$(KOKA) $(KOKA_FLAGS) -e test/publication-effect.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/integration-event.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/async-host-turn.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/one-shot-task.kk
@@ -79,6 +80,7 @@ test-native:
 	$(KOKA) $(KOKA_FLAGS) -e test/smoke.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/continuation.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/final-control-rollback.kk
+	$(KOKA) $(KOKA_FLAGS) -e test/resume-transaction-regression.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/continuation-reentry.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/reactive.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/reactive-advanced.kk
@@ -91,6 +93,7 @@ test-native:
 	$(PYTHON) test/keyed_transaction_boundary.py
 	$(PYTHON) test/event_effect_boundary.py $(KOKA)
 	$(PYTHON) test/async_effect_boundary.py $(KOKA)
+	$(PYTHON) test/publication_effect_boundary.py $(KOKA)
 	$(PYTHON) test/run_locked.py
 	$(PYTHON) test/make_parallel.py
 

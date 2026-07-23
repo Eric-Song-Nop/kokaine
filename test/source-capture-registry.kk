@@ -2,7 +2,6 @@ module source-capture-registry
 
 import kokaine/reactive/internal/model
 import kokaine/reactive/internal/runtime
-import kokaine/reactive/internal/capture
 import kokaine/internal/registry
 import kokaine/reactive/effects
 import std/core/unsafe
@@ -73,36 +72,34 @@ fun test-source-captures-unlink-immediately()
         "removed source registrations cannot resume retired continuations")
   root.dispose()
 
-fun test-cached-repeated-read-semantics()
+fun test-repeated-track-reads-capture-exact-suffixes()
   val observed = hidden(0)
   val seen = hidden([])
   val (root,(source,ignored,stop)) = create-root fn(root)
     val source = signal(root,1)
     val ignored = signal(root,10)
     val stop = create-effect(root,fn()
-      cache-repeated-reads(fn()
-        val first = source.get
-        val sampled = untrack{ ignored.get }
-        val second = observe-reads(observed,fn() source.get)
-        first + sampled + second
-      )
+      val first = source.get
+      val sampled = untrack{ ignored.get }
+      val second = observe-reads(observed,fn() source.get)
+      first + sampled + second
     ,fn(value) hidden-store(seen,Cons(value,hidden-load(seen))))
     (source,ignored,stop)
 
-  check(source.capture-count == 1,
-        "cached repeated reads retain one continuation registration")
+  check(source.capture-count == 2,
+        "each repeated tracked read retains its exact continuation")
   check(ignored.capture-count == 0,
-        "cached untracked reads retain no continuation registration")
+        "an untracked read retains no continuation registration")
   check(hidden-load(observed) == 1,
-        "an inner read handler observes a cached repeated read")
-  check(hidden-load(seen) == [12],"cached reads initially publish")
+        "an inner read handler forwards the second tracked read")
+  check(hidden-load(seen) == [12],"repeated reads initially publish")
 
   update(root){ ignored.set(20) }
   check(hidden-load(seen) == [12],
-        "an untracked source cannot schedule the cached effect")
+        "an untracked source cannot schedule the effect")
   update(root){ source.set(2) }
-  check(source.capture-count == 1,
-        "resumption rebuilds one continuation registration")
+  check(source.capture-count == 2,
+        "resumption rebuilds both exact continuation registrations")
   check(hidden-load(observed) == 2,
         "the inner read handler survives continuation resumption")
   check(hidden-load(seen) == [24,12],
@@ -110,10 +107,10 @@ fun test-cached-repeated-read-semantics()
 
   stop()
   check(source.capture-count == 0,
-        "disposing the cached effect unlinks its registration")
+        "disposing the effect unlinks both registrations")
   root.dispose()
 
-fun test-cached-read-preserves-cross-root-check()
+fun test-repeated-track-read-preserves-cross-root-check()
   val (foreign-root,foreign) = create-root fn(root)
     signal(root,10)
   val failed : error<()> = mask<exn>{
@@ -121,37 +118,37 @@ fun test-cached-read-preserves-cross-root-check()
       val (local-root,_) = create-root fn(root)
         val local = signal(root,1)
         val stop = create-effect(root,fn()
-          cache-repeated-reads(fn() local.get + foreign.get)
+          local.get + local.get + foreign.get
         ,fn(_) ())
         ()
       local-root.dispose()
   }
   check(failed.is-error,
-        "a cache miss still validates the source root")
+        "a repeated tracked suffix still validates the foreign source root")
   foreign-root.dispose()
 
-fun test-outer-untrack-keeps-cached-reads-untracked()
+fun test-outer-untrack-keeps-repeated-reads-untracked()
   val seen = hidden([])
   val (root,(source,stop)) = create-root fn(root)
     val source = signal(root,1)
     val stop = create-effect(root,fn()
       untrack{
-        cache-repeated-reads(fn() source.get + source.get)
+        source.get + source.get
       }
     ,fn(value) hidden-store(seen,Cons(value,hidden-load(seen))))
     (source,stop)
 
   check(source.capture-count == 0,
-        "an outer untrack prevents cached reads from registering")
+        "an outer untrack prevents repeated reads from registering")
   update(root){ source.set(2) }
   check(hidden-load(seen) == [2],
-        "an outer untrack prevents cached reads from scheduling")
+        "an outer untrack prevents repeated reads from scheduling")
   stop()
   root.dispose()
 
 pub fun main()
   test-source-captures-unlink-immediately()
-  test-cached-repeated-read-semantics()
-  test-cached-read-preserves-cross-root-check()
-  test-outer-untrack-keeps-cached-reads-untracked()
+  test-repeated-track-reads-capture-exact-suffixes()
+  test-repeated-track-read-preserves-cross-root-check()
+  test-outer-untrack-keeps-repeated-reads-untracked()
   println("source-capture-registry: all checks passed")
