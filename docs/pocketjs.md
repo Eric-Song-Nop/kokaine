@@ -219,10 +219,15 @@ official Web host, verifies the baked font atlas and visible Canvas text, drives
 the DOWN/CIRCLE path through the on-screen controls, observes native focus, and
 checks that Koka live text becomes `Count 1` without page, console, or HTTP
 errors.
-PPSSPP, the native QuickJS PSP host, memory/frame profiling, and real hardware
-have **not** been run. In particular, compiler or Rust/WASM success is not a
-device-performance result; real PSP behavior remains unverified until tested on
-a device.
+A controlled [PPSSPP microbenchmark](pocketjs-ppsspp-benchmark.md) has now run
+the Kokaine bridge inside the native PSP QuickJS host and compared seven
+byte-identical workloads with the experimental Vue VDOM, Vue Vapor, and Solid
+paths. The comparison uses an older draft PocketJS branch because that is the
+only branch containing all three reference renderers; it is not verification of
+the exact supported 0.6.0 release host. Memory profiling and real hardware have
+still **not** been run. In particular, PPSSPP CPU submission-work timings are
+not a device FPS result; real PSP behavior remains unverified until tested on a
+device.
 
 Upstream references: [getting started](https://pocketjs.dev/docs/getting-started/),
 [frameworks](https://pocketjs.dev/docs/frameworks/), and
