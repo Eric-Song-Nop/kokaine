@@ -6,6 +6,7 @@ import kokaine/reactive/internal/capture
 import kokaine/reactive/internal/lifetime
 import kokaine/internal/registry
 import kokaine/reactive/internal/scheduler
+import kokaine/internal/compat
 import std/core/unsafe
 import std/core/undiv
 
@@ -92,6 +93,55 @@ fun test-wide-retirement-is_stack_safe()
   root.dispose()
   check(hidden-load(runs) == size,"wide retirement remains idempotent")
 
+fun test-empty-lifetime-retirement-seals-owner()
+  val coordinator : retirement-coordinator<total> =
+    new-retirement-coordinator()
+  val starting = new-lifetime-owner(Scope-starting,coordinator)
+  check(!starting.try-retire-empty,
+        "empty fast retirement rejects a starting owner")
+  check(!starting.lifetime-children.sealed &&
+        !starting.lifetime-finalizers.sealed,
+        "rejected starting owner keeps both registries open")
+  val live = new-lifetime-owner(Scope-live,coordinator)
+  check(!live.try-retire-empty,
+        "empty fast retirement rejects a live owner")
+  check(!live.lifetime-children.sealed &&
+        !live.lifetime-finalizers.sealed,
+        "rejected live owner keeps both registries open")
+
+  val empty = new-lifetime-owner(Scope-branch-dead,coordinator)
+
+  check(empty.try-retire-empty,
+        "empty lifetime retirement takes the structural fast path")
+  match hidden-load(empty.lifetime-token)
+    Scope-dead -> ()
+    _ -> throw("lifetime foundation: empty lifetime token remained live")
+  check(empty.lifetime-children.sealed,
+        "empty lifetime child registry is sealed")
+  check(empty.lifetime-finalizers.sealed,
+        "empty lifetime finalizer registry is sealed")
+  val rejected = capture-error(fn()
+    val _ = empty.register-finalizer(Retirement-finalizer(fn() ()))
+    ()
+  )
+  check(rejected.is-error,
+        "a fast-retired lifetime rejects later finalizer registration")
+  check(empty.try-retire-empty,
+        "empty lifetime retirement remains idempotent")
+
+  val runs = hidden(0)
+  val occupied = new-lifetime-owner(Scope-branch-dead,coordinator)
+  val _ = occupied.register-finalizer(Retirement-finalizer(fn()
+    hidden-store(runs,hidden-load(runs) + 1)
+  ))
+  check(!occupied.try-retire-empty,
+        "a lifetime with a finalizer stays on the exhaustive path")
+  check(!occupied.lifetime-finalizers.sealed,
+        "the rejected fast path leaves an occupied registry live")
+  pretend-no-div{ retire-lifetime(occupied) }
+  check(hidden-load(runs) == 1,
+        "the exhaustive path still runs an occupied finalizer")
+
 fun test-attempt-build-leaves-drafts-for-aggregate-retirement()
   val (root,source) : (root<<abandon-bootstrap>>,signal<int>) =
     require-bootstrap fn() create-root fn(root) signal(root,0)
@@ -170,6 +220,7 @@ pub fun main()
   test-explicit-unregister-discards-without-running()
   test-retirement-snapshot-cannot-lose-a-sibling()
   test-wide-retirement-is_stack_safe()
+  test-empty-lifetime-retirement-seals-owner()
   test-attempt-build-leaves-drafts-for-aggregate-retirement()
   test-bootstrap-abort-detaches-scope-before-draft-cleanup()
   println("lifetime-foundation: all checks passed")
