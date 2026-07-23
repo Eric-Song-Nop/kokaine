@@ -197,25 +197,48 @@ pub fun untrack(action : () -> <signal-read,pure|e> a)
 // Continuation-backed effects and derivations
 // --------------------------------------------------------------------------
 
-fun create-effect-inner(root : root<e>,
-                        track : () -> <signal-read,pure> a,
-                        apply : (value : a) -> <signal-write,pure|e> ())
-                       : <signal-write,pure> disposer<e>
+fun create-effect-publication(root : root<e>,
+                              track : () -> <signal-read,pure> a,
+                              publish : (value : a) -> <div,exn|e> ())
+                             : <signal-write,pure> disposer<e>
   check-not-pure-plane("effect creation")
   val plane = root.root-effect-plane
   val owner-slot = cell(Nothing)
   val owner = load(plane.plane-current-frame)
   check-frame-registration(root,owner)
   val (current,bootstrap,dispose) = prepare-trace(
-    root,plane,owner-slot,load(plane.plane-current),track,
-    fn(value) interpret-write(root,fn() apply(value))
-  )
+    root,plane,owner-slot,load(plane.plane-current),track,publish)
   val registration = owner.frame-lifetime.register-child(
     scope-retirement-work(current))
   store(current.scope-unlink,Just(fn() registration.take.is-just))
   queue-work(plane,bootstrap)
   request-flush(root.root-key)
   dispose
+
+fun create-effect-inner(root : root<e>,
+                        track : () -> <signal-read,pure> a,
+                        apply : (value : a) -> <signal-write,pure|e> ())
+                       : <signal-write,pure> disposer<e>
+  create-effect-publication(root,track,
+    fn(value) interpret-write(root,fn() apply(value)))
+
+// UI integrations can publish host state without installing a fresh
+// signal-write interpreter for every value. The closed publication row cannot
+// absorb a signal-write instance. The dynamic pure-plane guard also rejects
+// writes hidden behind a nested public reactive wrapper. `finally` restores
+// that guard for modeled exceptions and ambient final-control exits alike.
+pub fun create-ui-publication-effect(
+    root : root<<ui>>,
+    track : () -> <signal-read,pure> a,
+    publish : (value : a) -> <ui,exn> ())
+    : <signal-write,pure> disposer<<ui>>
+  create-effect-publication(root,track,fn(value)
+    val previous-phase = enter-pure-plane()
+    finally(
+      fn() restore-pure-plane(previous-phase),
+      fn() publish(value)
+    )
+  )
 
 fun commit-derived(root : root<e>, source : source<a>, value : a) : exn ()
   check-root(root,source.source-root)

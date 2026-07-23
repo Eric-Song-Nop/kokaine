@@ -44,7 +44,11 @@ fun unwrap-memo(value : memo<a>) : kokaine/reactive/internal/model/memo<a>
 pub fun dispatch(root : root<e>,
                  action : () -> <signal-read,signal-write,pure|e> a)
                 : <exn|e> a
-  runtime-dispatch(root.unwrap-root,action)
+  // Keep the abstract wrapper elimination out of the effect-polymorphic call.
+  // Koka 3.2.3 can otherwise lower the public and internal root constructors
+  // inconsistently in generated native code.
+  val inner = root.unwrap-root
+  runtime-dispatch(inner,action)
 
 pub fun create-root(action : (root<e>) -> <signal-write,pure|e> a)
                    : <exn|e> (root<e>,a)
@@ -53,7 +57,8 @@ pub fun create-root(action : (root<e>) -> <signal-write,pure|e> a)
   (Public-root(inner),result)
 
 pub fun root/dispose(root : root<e>) : <exn|e> ()
-  runtime-dispose-root(root.unwrap-root)
+  val inner = root.unwrap-root
+  runtime-dispose-root(inner)
 
 pub noinline fun root/is-disposed(root : root<e>) : bool
   runtime-root-is-disposed(root.unwrap-root)

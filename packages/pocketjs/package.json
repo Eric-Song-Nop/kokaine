@@ -1,0 +1,64 @@
+{
+  "name": "@kokaine/pocketjs",
+  "version": "0.1.0",
+  "description": "Experimental PocketJS retained-mode renderer for Kokaine",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Eric-Song-Nop/kokaine.git",
+    "directory": "packages/pocketjs"
+  },
+  "homepage": "https://github.com/Eric-Song-Nop/kokaine/tree/main/packages/pocketjs#readme",
+  "bugs": {
+    "url": "https://github.com/Eric-Song-Nop/kokaine/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "types": "./js/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./js/index.d.ts",
+      "default": "./js/index.js"
+    },
+    "./bridge": {
+      "types": "./js/bridge.d.ts",
+      "default": "./js/bridge.js"
+    },
+    "./mount": {
+      "types": "./js/mount.d.ts",
+      "default": "./js/mount.js"
+    }
+  },
+  "files": [
+    "src",
+    "js",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "bun test test/*.test.js"
+  },
+  "peerDependencies": {
+    "@kokaine/core": "^0.1.1",
+    "@pocketjs/framework": ">=0.6.0 <0.7.0"
+  },
+  "devDependencies": {
+    "@kokaine/core": "file:../..",
+    "@pocketjs/framework": "0.6.0"
+  },
+  "koka": {
+    "schemaVersion": 1,
+    "sources": [
+      "src"
+    ],
+    "compiler": ">=3.2.3 <3.3.0",
+    "targets": [
+      "jsweb"
+    ]
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  }
+}

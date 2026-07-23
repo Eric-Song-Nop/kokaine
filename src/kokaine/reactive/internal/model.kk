@@ -130,8 +130,10 @@ pub div type trace<e::E>
 
 pub type built-trace<e::E>
   Built-trace(
-    built-root    : trace<e>,
-    built-publish : () -> <div|e> error<()>
+    built-root                : trace<e>,
+    built-publication-current : maybe<continuation-gate>,
+    built-publication-frame   : frame<e>,
+    built-publication-action  : () -> <div,exn|e> ()
   )
 
 pub type scope-state

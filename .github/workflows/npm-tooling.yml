@@ -5,6 +5,29 @@ on:
   push:
 
 jobs:
+  pocketjs:
+    name: PocketJS bridge contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.0
+      - run: npm ci --ignore-scripts
+      - name: Install managed Koka 3.2.3
+        run: node --input-type=module -e "import { resolveCompiler } from './packages/cli/src/toolchain.js'; const { binary } = await resolveCompiler('3.2.3'); console.log('KOKA_BIN=' + binary);" >> "$GITHUB_ENV"
+      - name: Test generic host-event integration
+        run: |
+          "$KOKA_BIN" -j1 -i./src -e test/integration-event.kk
+      - name: Test Pocket Koka renderer
+        run: make test-pocketjs-runtime KOKA="$KOKA_BIN"
+      - run: bun test packages/pocketjs/test/bridge.test.js
+      - run: npm pack --dry-run --workspace @kokaine/pocketjs
+
   unit:
     name: ${{ matrix.os }} / ${{ matrix.client }}
     runs-on: ${{ matrix.os }}

@@ -3,9 +3,15 @@ KOKA ?= $(if $(HOMEBREW_KOKA),$(HOMEBREW_KOKA),koka)
 PYTHON ?= python3
 UV ?= uv
 NPM ?= npm
+BUN ?= bun
+NODE ?= node
 WRANGLER ?= npx wrangler
 PLAYGROUND_PAGES_PROJECT ?= kokaine-playground
 PLAYGROUND_PAGES_BRANCH ?= main
+POCKETJS_CHECKOUT ?=
+POCKETJS_WEB_PORT ?= 8130
+POCKETJS_VERSION := 0.6.0
+POCKETJS_COMMIT := 1f848dcdb2629e3c6373710cd0aa16d775ea2ad3
 
 PROJECT_ROOT := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 RUN_LOCKED := $(PROJECT_ROOT)/support/run_locked.py
@@ -13,10 +19,10 @@ KOKA_FLAGS := -j1 -i./src
 DIST_KOKA = $(PYTHON) "$(RUN_LOCKED)" dist/.koka-build.lock \
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist
 
-.PHONY: test test-native test-tooling test-all test-wasm test-report build-counter build-top-layer build-keyed build-report build-window-fixture build-browser-fixtures browser-install test-browser serve serve-top-layer serve-keyed serve-report
+.PHONY: test test-native test-pocketjs-runtime test-pocketjs-bundle test-pocketjs-wasm test-pocketjs-browser test-tooling test-all test-wasm test-report build-counter build-top-layer build-keyed build-report build-pocketjs-example compile-pocketjs-example build-window-fixture build-browser-fixtures browser-install test-browser serve serve-pocketjs-example serve-top-layer serve-keyed serve-report
 .PHONY: playground-install playground-precompile playground-sync-assets playground-build playground-preview playground-release playground-deploy serve-playground
 
-test: test-native
+test: test-native test-pocketjs-runtime
 
 test-tooling:
 	npm test
@@ -60,6 +66,8 @@ test-native:
 	$(KOKA) $(KOKA_FLAGS) -e test/lifetime-foundation.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/work-transaction.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/integration-boundaries.kk
+	$(KOKA) $(KOKA_FLAGS) -e test/publication-effect.kk
+	$(KOKA) $(KOKA_FLAGS) -e test/integration-event.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/async-host-turn.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/one-shot-task.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/cancellation-supervisor.kk
@@ -72,6 +80,7 @@ test-native:
 	$(KOKA) $(KOKA_FLAGS) -e test/smoke.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/continuation.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/final-control-rollback.kk
+	$(KOKA) $(KOKA_FLAGS) -e test/resume-transaction-regression.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/continuation-reentry.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/reactive.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/reactive-advanced.kk
@@ -84,8 +93,14 @@ test-native:
 	$(PYTHON) test/keyed_transaction_boundary.py
 	$(PYTHON) test/event_effect_boundary.py $(KOKA)
 	$(PYTHON) test/async_effect_boundary.py $(KOKA)
+	$(PYTHON) test/publication_effect_boundary.py $(KOKA)
 	$(PYTHON) test/run_locked.py
 	$(PYTHON) test/make_parallel.py
+
+test-pocketjs-runtime:
+	$(KOKA) $(KOKA_FLAGS) -i./packages/pocketjs/src \
+		--target=jsnode -e test/pocketjs-runtime.kk
+	$(PYTHON) test/pocketjs_boundary.py
 
 build-counter:
 	$(DIST_KOKA) \
@@ -102,6 +117,49 @@ build-keyed:
 build-report:
 	$(DIST_KOKA) \
 		--buildname=report examples/report.kk
+
+build-pocketjs-example:
+	$(KOKA) $(KOKA_FLAGS) -i./packages/pocketjs/src \
+		-i./examples/pocketjs --target=jsweb \
+		--outputdir=examples/pocketjs/generated \
+		--buildname=kokaine-pocket-demo examples/pocketjs/app.kk
+
+compile-pocketjs-example: build-pocketjs-example
+	@if [ -z "$(POCKETJS_CHECKOUT)" ]; then \
+		echo "Set POCKETJS_CHECKOUT to a PocketJS v0.6.0 checkout with bun install complete"; \
+		exit 2; \
+	fi
+	@if [ "$$(cd "$(POCKETJS_CHECKOUT)" && $(NODE) -p "require('./package.json').version")" != "$(POCKETJS_VERSION)" ]; then \
+		echo "POCKETJS_CHECKOUT must contain PocketJS $(POCKETJS_VERSION)"; \
+		exit 2; \
+	fi
+	@if [ "$$(git -C "$(POCKETJS_CHECKOUT)" rev-parse HEAD 2>/dev/null)" != "$(POCKETJS_COMMIT)" ]; then \
+		echo "POCKETJS_CHECKOUT must be the exact PocketJS v$(POCKETJS_VERSION) tag ($(POCKETJS_COMMIT))"; \
+		exit 2; \
+	fi
+	@if ! git -C "$(POCKETJS_CHECKOUT)" diff --quiet HEAD --; then \
+		echo "POCKETJS_CHECKOUT has tracked changes; exact verification requires a clean v$(POCKETJS_VERSION) checkout"; \
+		exit 2; \
+	fi
+	cd "$(POCKETJS_CHECKOUT)" && $(BUN) scripts/pocket.ts compile \
+		--target psp \
+		--project-root "$(PROJECT_ROOT)/examples/pocketjs" \
+		--manifest "$(PROJECT_ROOT)/examples/pocketjs/pocket.json" \
+		--outdir "$(PROJECT_ROOT)/examples/pocketjs/dist"
+
+test-pocketjs-bundle: compile-pocketjs-example
+	$(NODE) test/pocketjs-bundle-smoke.mjs \
+		"$(PROJECT_ROOT)/examples/pocketjs/dist/kokaine-pocket-demo.js"
+
+test-pocketjs-wasm: test-pocketjs-bundle
+	cd "$(POCKETJS_CHECKOUT)" && $(BUN) scripts/wasm.ts
+	$(BUN) test/pocketjs-wasm-smoke.mjs \
+		"$(PROJECT_ROOT)/examples/pocketjs/dist/kokaine-pocket-demo.js" \
+		"$(PROJECT_ROOT)/examples/pocketjs/dist/kokaine-pocket-demo.pak" \
+		"$(POCKETJS_CHECKOUT)"
+
+test-pocketjs-browser: test-pocketjs-bundle
+	$(UV) run --with playwright python test/browser_pocketjs.py
 
 build-window-fixture:
 	$(DIST_KOKA) \
@@ -150,10 +208,15 @@ test-report: build-report build-counter build-window-fixture
 	$(UV) run --with playwright python test/browser_window.py
 	$(UV) run --with playwright python test/browser_report.py
 
-test-all: test-tooling test-native test-browser test-wasm test-report
+test-all: test-tooling test test-browser test-wasm test-report
 
 serve: build-counter
 	$(PYTHON) -m http.server 4173 --bind 127.0.0.1
+
+serve-pocketjs-example: test-pocketjs-bundle
+	@echo "Kokaine PocketJS browser example: http://127.0.0.1:$(POCKETJS_WEB_PORT)/"
+	PORT="$(POCKETJS_WEB_PORT)" \
+		$(BUN) examples/pocketjs/serve.ts
 
 serve-top-layer: build-top-layer
 	@echo "Kokaine top-layer example: http://127.0.0.1:4173/examples/top-layer/"

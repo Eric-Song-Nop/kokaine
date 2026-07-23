@@ -489,10 +489,10 @@ export function _mlift_start_request_10371(active_ownership, generation, latest_
 export function _mlift_start_request_10372(active_ownership, generation, latest_ownership, latest_success, load, ownership, request_active, request_generation, root, snapshot, state_source, _y_x10097) /* forall<a,b> (active-ownership : ref<global,maybe<kokaine/reactive/async/internal/runtime/async-lease-group>>, generation : int, latest-ownership : ref<global,maybe<kokaine/reactive/async/internal/runtime/async-lease-group>>, latest-success : ref<global,maybe<a>>, load : (b) -> <kokaine/async/effects/async,ui,exn> a, ownership : kokaine/reactive/async/internal/runtime/async-lease-group, request-active : ref<global,bool>, request-generation : ref<global,int>, root : kokaine/reactive/root<ui>, snapshot : b, state-source : kokaine/reactive/signal<resource-state<a>>, hnd/ev-index) -> <kokaine/reactive/effects/signal-write,exn,ui> () */  {
   return $std_core_hnd._mask_at(_y_x10097, false, function() {
        
-      var root_0_10004 = $std_core_hnd._open_none1(function(value_3 /* kokaine/reactive/root<ui> */ ) {
+      var inner_0_0 = $std_core_hnd._open_none1(function(value_3 /* kokaine/reactive/root<ui> */ ) {
           return value_3;
         }, root);
-      return $kokaine_reactive_internal_handlers.dispatch_handled(root_0_10004, function() {
+      return $kokaine_reactive_internal_handlers.dispatch_handled(inner_0_0, function() {
           return $kokaine_reactive_async_internal_runtime.run_generation_async($std_core_hnd._open_none1(function(value_4 /* kokaine/reactive/root<ui> */ ) {
                 return value_4;
               }, root), function() {
@@ -931,7 +931,7 @@ export function resource_by(root, source, load, equals) /* forall<a,b> (root : k
           return value;
         }, root_0);
        
-      var x_0_10456 = $kokaine_reactive_internal_runtime.signal_by(root_1_10019, initial, function(___wildcard_x82__29 /* resource-state<2466> */ , ___wildcard_x82__31 /* resource-state<2466> */ ) {
+      var x_0_10456 = $kokaine_reactive_internal_runtime.signal_by(root_1_10019, initial, function(___wildcard_x87__29 /* resource-state<2466> */ , ___wildcard_x87__31 /* resource-state<2466> */ ) {
           return false;
         });
       if ($std_core_hnd._yielding()) {
