@@ -5,7 +5,8 @@ import { main } from "./generated/app.mjs";
 // Pocket's first pass scans TS/TSX rather than generated Koka modules. Keep
 // the finite glyph set visible here; real applications should generate this
 // sidecar together with image/sprite declarations.
-const KOKAINE_GLYPHS = "Kokaine + PocketJS Count 0123456789 Increment";
+const KOKAINE_GLYPHS =
+  "Kokaine + PocketJS Count 0123456789 Async idle waiting resumed Increment";
 void KOKAINE_GLYPHS;
 
 export const dispose = mountKokaine(main);

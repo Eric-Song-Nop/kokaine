@@ -1,4 +1,5 @@
 import { mount } from "@pocketjs/framework";
+import { createPocketAsyncScope } from "./async.js";
 import {
   createPocketRoot,
   discardPocketRoot,
@@ -16,12 +17,14 @@ export function mountKokaine(start, options) {
   }
 
   const restoreBridge = installPocketBridge();
+  let disposeAsync;
   let cleanup;
   let disposePocket;
   let root;
   try {
     disposePocket = mount(
       () => {
+        disposeAsync = createPocketAsyncScope();
         root = createPocketRoot(() => {
           cleanup = start();
           if (typeof cleanup !== "function") {
@@ -38,6 +41,7 @@ export function mountKokaine(start, options) {
     // mount error even if a finalizer also fails.
     for (const rollback of [
       typeof cleanup === "function" ? cleanup : undefined,
+      disposeAsync,
       root ? () => discardPocketRoot(root) : undefined,
       restoreBridge
     ]) {
@@ -57,7 +61,7 @@ export function mountKokaine(start, options) {
 
     let failed = false;
     let failure;
-    for (const dispose of [cleanup, disposePocket, restoreBridge]) {
+    for (const dispose of [cleanup, disposeAsync, disposePocket, restoreBridge]) {
       try {
         dispose();
       } catch (error) {

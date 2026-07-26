@@ -69,6 +69,7 @@ test-native:
 	$(KOKA) $(KOKA_FLAGS) -e test/publication-effect.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/integration-event.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/async-host-turn.kk
+	$(KOKA) $(KOKA_FLAGS) -e test/async-host-dispatcher.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/one-shot-task.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/cancellation-supervisor.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/trace-semantics.kk

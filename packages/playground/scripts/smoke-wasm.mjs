@@ -205,8 +205,8 @@ if (updateKokaineCache) {
   const cacheFiles = [...generated]
     .filter(([filePath]) => /^kokaine_[a-z0-9_]+\.(?:kki|mjs)$/.test(filePath.slice(filePath.lastIndexOf('/') + 1)))
     .sort(([left], [right]) => left.localeCompare(right));
-  if (cacheFiles.length !== 76) {
-    throw new Error(`Expected 76 Kokaine cache files, received ${cacheFiles.length}.`);
+  if (cacheFiles.length !== 78) {
+    throw new Error(`Expected 78 Kokaine cache files, received ${cacheFiles.length}.`);
   }
   await rm(KOKAINE_CACHE_DIR, { recursive: true, force: true });
   await mkdir(KOKAINE_CACHE_DIR, { recursive: true });

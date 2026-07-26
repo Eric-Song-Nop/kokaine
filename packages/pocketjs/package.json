@@ -22,6 +22,10 @@
       "types": "./js/index.d.ts",
       "default": "./js/index.js"
     },
+    "./async": {
+      "types": "./js/async.d.ts",
+      "default": "./js/async.js"
+    },
     "./bridge": {
       "types": "./js/bridge.d.ts",
       "default": "./js/bridge.js"

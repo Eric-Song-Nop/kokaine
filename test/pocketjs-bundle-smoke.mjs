@@ -81,6 +81,20 @@ try {
     calls.some(([name, , text]) => name === "replaceText" && text === "Count 1"),
     "Pocket onPress did not synchronously re-enter the Koka reactive root"
   );
+  assert.ok(
+    calls.some(
+      ([name, , text]) => name === "replaceText" && text === "Async waiting"
+    ),
+    "Pocket async press did not publish before its first suspension"
+  );
+
+  globalThis.frame(0, ANALOG_CENTER);
+  assert.ok(
+    calls.some(
+      ([name, , text]) => name === "replaceText" && text === "Async resumed"
+    ),
+    "Pocket frame queue did not resume the async press continuation"
+  );
 } finally {
   delete globalThis.ui;
   delete globalThis.frame;

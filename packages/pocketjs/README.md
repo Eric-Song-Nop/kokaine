@@ -1,8 +1,8 @@
 # `@kokaine/pocketjs`
 
 Experimental retained-mode PocketJS 0.6 adapter for Kokaine. It provides the
-Koka module `kokaine/pocket` and a small JavaScript bridge over PocketJS's
-public Solid renderer primitives.
+Koka modules `kokaine/pocket` and `kokaine/pocket/async`, plus small JavaScript
+bridges over PocketJS's public renderer and lifecycle primitives.
 
 PocketJS is a native UI runtime, not a DOM. This package therefore has its own
 `View`/`Text`/`Image` vocabulary and does not reinterpret `kokaine/html`.
@@ -58,8 +58,24 @@ export const dispose = mountKokaine(main);
 Import the adapter before generated Koka output. Its bridge includes the
 narrow `console`/`process.stdout` prelude required while Koka 3.2 modules are
 evaluated in Pocket's native QuickJS guest. Lower-level
-`installPocketBridge()` and `createPocketRoot()` exports remain available for
-hosts which need to compose Pocket's `mount` manually.
+`installPocketBridge()`, `createPocketRoot()`, and `createPocketAsyncScope()`
+exports remain available for hosts which need to compose Pocket's `mount`
+manually.
+
+`pressable-async` and `on-press-async` accept the same direct-style async
+actions used by `run-async`. `sleep`, `yield`, and `timeout` are backed by
+Pocket's normalized simulation-frame cadence; Pocket delay arguments are
+integer milliseconds, kept independent from Koka 3.2's generated
+`std/time/duration` module graph, which Pocket 0.6 cannot bundle correctly. Each
+completion first enters a mount-scoped FIFO frame turn, validates the owning
+reactive generation, and only then resumes the captured continuation in a fresh
+transaction. Multiple presses create independent structured strands; root
+cleanup cancels their timers and revokes the retained event continuation.
+
+This Pocket facade does not expose Web Async, direct Promise or Fetch interop,
+wall-clock timers, or `Resource`. Host I/O can be added later by completing the
+same generic await algebra and posting the accepted result through the Pocket
+frame dispatcher; it must not resume a Koka continuation directly.
 
 The entry must dispose a partially constructed Koka root if it throws before
 returning its cleanup; the committed `finally` above supplies that transaction.

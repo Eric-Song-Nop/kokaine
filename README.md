@@ -69,6 +69,9 @@ The experimental `@kokaine/pocketjs` adapter keeps Koka's `jsweb` compiler
 target while replacing the HTML renderer and browser packager with a separate
 native-UI vocabulary and [PocketJS](https://pocketjs.dev/) 0.6.0 integration.
 PocketJS here means a QuickJS + Rust retained UI stack, not a database or BaaS.
+The adapter includes generation-owned async press callbacks, structured
+concurrency, and `sleep`/`yield`/`timeout` over Pocket's deterministic virtual
+clock; it does not route continuations through browser promises.
 See [PocketJS feasibility and boundaries](docs/pocketjs.md) before choosing it;
 the first release is intentionally smaller than the DOM surface and has
 important build-time asset and runtime API constraints.
@@ -200,10 +203,11 @@ attempts.
   so event-created reactive work cannot escape to the root.
 - A listener's `run-async` delimiter executes direct-style code only through
   its first suspension. The initiating reactive batch then closes. Every
-  completion, including one reported synchronously during setup, continues in
-  a microtask which revalidates and re-enters the exact owning generation as a
-  fresh batched turn.
-- Every outstanding Web await is a one-shot, generation-owned capability.
+  completion, including one reported synchronously during setup, goes through
+  the active host dispatcher, which revalidates and re-enters the exact owning
+  generation as a fresh batched turn. The Web adapter posts microtasks; Pocket
+  flushes a mount-scoped FIFO during deterministic virtual frames.
+- Every outstanding host await is a one-shot, generation-owned capability.
   Completion and retirement first revoke the retained continuation and host
   callbacks. Cancellation is final control rather than an ordinary exception,
   so it cannot be caught as a failure and still unwinds the strand's `finally`
@@ -218,7 +222,8 @@ attempts.
   while a canceled child still has an outstanding await or finalizer. A queued
   completion keeps its host disposer until the child suffix accepts it, and a
   value made unreachable by a later group failure is discarded immediately.
-  Timer, Promise, and Fetch adapters all use the same revocable await protocol.
+  Web Timer, Promise, and Fetch adapters and Pocket virtual timers all use the
+  same revocable await protocol.
 - A Resource tracks only its synchronous source calculation. Its loader
   receives an immutable source snapshot and has no `signal-read` capability;
   equality can therefore preserve an active request, while refresh, source
@@ -736,8 +741,9 @@ src/kokaine/reactive/internal/work-transaction.kk deque and local work groups
 src/kokaine/reactive/internal/scheduler.kk invalidation, queues, targeted settle
 src/kokaine/reactive/internal/handlers.kk  signal interpreters and dispatch
 src/kokaine/reactive/async.kk             generation-owned Async integration
-src/kokaine/reactive/async/internal/host-turn.kk rank-2 retained-turn closure
-src/kokaine/reactive/async/internal/runtime.kk Web await interpreter
+src/kokaine/reactive/async/integration.kk host dispatcher facade
+src/kokaine/reactive/async/internal/host-turn.kk scheduling and rank-2 turn closure
+src/kokaine/reactive/async/internal/runtime.kk host-neutral await interpreter
 src/kokaine/reactive/internal/runtime.kk   roots and high-level reactive values
 src/kokaine/reactive/internal/bridge.kk    names used by the public facade
 src/kokaine/internal/key-index.kk          persistent balanced keyed-row index
@@ -756,6 +762,7 @@ src/kokaine/html.kk                        handled DOM/SSR-neutral HTML view DSL
 src/kokaine/dom.kk                         jsweb renderer and event boundary
 src/kokaine/ssr.kk                         escaped deterministic string renderer
 packages/pocketjs/                         experimental native renderer package
+packages/pocketjs/src/kokaine/pocket/async.kk Pocket virtual-time Async facade
 docs/pocketjs.md                           PocketJS feasibility and boundaries
 test/trace-semantics.kk                    exact suffix and branching semantics
 test/resource-finalization.kk              resource-K parking and finalization

@@ -216,6 +216,12 @@ try:
                 ([name, , text]) => name === 'replaceText' && text === 'Count 1'
             )"""
         )
+        page.wait_for_function(
+            """globalThis.__kokainePocketHostCalls.some(
+                ([name, , text]) =>
+                    name === 'replaceText' && text === 'Async resumed'
+            )"""
+        )
         hash_after_circle = page.locator("#screen").evaluate(application_hash_script)
         assert hash_after_circle != hash_after_down, (
             "Pocket replaceText reached HostOps but Count 1 did not reach the Canvas"
@@ -235,7 +241,8 @@ try:
         assert console_errors == [], console_errors
         assert response_errors == [], response_errors
         print(
-            "pocketjs-browser: rendered visible text and updated Count 1 "
+            "pocketjs-browser: rendered visible text, updated Count 1, and "
+            "resumed Pocket async "
             f"({screenshot})"
         )
 finally:

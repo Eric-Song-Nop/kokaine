@@ -64,8 +64,8 @@ export function Frame(frame_lifetime) /* forall<e> (frame-lifetime : lifetime-ow
   return frame_lifetime;
 }
 // type built-trace
-export function Built_trace(built_root, built_publish) /* forall<e> (built-root : trace<e>, built-publish : () -> <div|e> error<()>) -> built-trace<e> */  {
-  return { built_root: built_root, built_publish: built_publish };
+export function Built_trace(built_root, built_publication_current, built_publication_frame, built_publication_action) /* forall<e> (built-root : trace<e>, built-publication-current : maybe<continuation-gate>, built-publication-frame : frame<e>, built-publication-action : () -> <div,exn|e> ()) -> built-trace<e> */  {
+  return { built_root: built_root, built_publication_current: built_publication_current, built_publication_frame: built_publication_frame, built_publication_action: built_publication_action };
 }
 // type trace
 export const Trace_end = null; // forall<e> trace<e>
@@ -186,20 +186,20 @@ export function lift_div(action) /* forall<a,e> (action : () -> e a) -> <div|e> 
  
  
 // monadic lift
-export function _mlift_lift_exn_10073(action, _y_x10067) /* forall<a,e> (action : () -> e a, hnd/ev-index) -> <exn|e> a */  {
-  return $std_core_hnd._mask_at(_y_x10067, false, action);
+export function _mlift_lift_exn_10075(action, _y_x10069) /* forall<a,e> (action : () -> e a, hnd/ev-index) -> <exn|e> a */  {
+  return $std_core_hnd._mask_at(_y_x10069, false, action);
 }
  
 export function lift_exn(action) /* forall<a,e> (action : () -> e a) -> <exn|e> a */  {
    
-  var x_10076 = $std_core_hnd._evv_index($std_core_exn.exn_fs__tag);
+  var x_10078 = $std_core_hnd._evv_index($std_core_exn.exn_fs__tag);
   if ($std_core_hnd._yielding()) {
-    return $std_core_hnd.yield_extend(function(_y_x10067 /* hnd/ev-index */ ) {
-      return $std_core_hnd._mask_at(_y_x10067, false, action);
+    return $std_core_hnd.yield_extend(function(_y_x10069 /* hnd/ev-index */ ) {
+      return $std_core_hnd._mask_at(_y_x10069, false, action);
     });
   }
   else {
-    return $std_core_hnd._mask_at(x_10076, false, action);
+    return $std_core_hnd._mask_at(x_10078, false, action);
   }
 }
  
@@ -441,49 +441,97 @@ export function built_trace_fs_built_root(_this) /* forall<e> (built-trace<e>) -
 }
  
  
-// Automatically generated. Retrieves the `built-publish` constructor field of the `:built-trace` type.
-export function built_trace_fs_built_publish(_this) /* forall<e> (built-trace<e>) -> (() -> <div|e> error<()>) */  {
-  return _this.built_publish;
+// Automatically generated. Retrieves the `built-publication-current` constructor field of the `:built-trace` type.
+export function built_trace_fs_built_publication_current(_this) /* forall<e> (built-trace<e>) -> maybe<continuation-gate> */  {
+  return _this.built_publication_current;
+}
+ 
+ 
+// Automatically generated. Retrieves the `built-publication-frame` constructor field of the `:built-trace` type.
+export function built_trace_fs_built_publication_frame(_this) /* forall<e> (built-trace<e>) -> frame<e> */  {
+  return _this.built_publication_frame;
+}
+ 
+ 
+// Automatically generated. Retrieves the `built-publication-action` constructor field of the `:built-trace` type.
+export function built_trace_fs_built_publication_action(_this) /* forall<e> (built-trace<e>) -> (() -> <div,exn|e> ()) */  {
+  return _this.built_publication_action;
 }
  
  
 // monadic lift
-export function built_trace_fs__mlift_copy_10074(_this, built_root, _c_x10071) /* forall<e> (built-trace<e>, built-root : ? (trace<e>), () -> <div|e> error<()>) -> built-trace<e> */  {
+export function built_trace_fs__mlift_copy_10076(_this, built_publication_current, built_publication_frame, built_root, _c_x10073) /* forall<e> (built-trace<e>, built-publication-current : ? (maybe<continuation-gate>), built-publication-frame : ? (frame<e>), built-root : ? (trace<e>), () -> <div,exn|e> ()) -> built-trace<e> */  {
   if (built_root !== undefined) {
     var _x15 = built_root;
   }
   else {
     var _x15 = _this.built_root;
   }
-  return Built_trace(_x15, _c_x10071);
+  if (built_publication_current !== undefined) {
+    var _x16 = built_publication_current;
+  }
+  else {
+    var _x16 = _this.built_publication_current;
+  }
+  if (built_publication_frame !== undefined) {
+    var _x17 = built_publication_frame;
+  }
+  else {
+    var _x17 = _this.built_publication_frame;
+  }
+  return Built_trace(_x15, _x16, _x17, _c_x10073);
 }
  
-export function built_trace_fs__copy(_this, built_root, built_publish) /* forall<e> (built-trace<e>, built-root : ? (trace<e>), built-publish : ? (() -> <div|e> error<()>)) -> built-trace<e> */  {
+export function built_trace_fs__copy(_this, built_root, built_publication_current, built_publication_frame, built_publication_action) /* forall<e> (built-trace<e>, built-root : ? (trace<e>), built-publication-current : ? (maybe<continuation-gate>), built-publication-frame : ? (frame<e>), built-publication-action : ? (() -> <div,exn|e> ())) -> built-trace<e> */  {
   if ($std_core_hnd._yielding()) {
-    return $std_core_hnd.yield_extend(function(_c_x10071 /* () -> <div|1152> error<()> */ ) {
+    return $std_core_hnd.yield_extend(function(_c_x10073 /* () -> <div,exn|1216> () */ ) {
       if (built_root !== undefined) {
-        var _x16 = built_root;
+        var _x18 = built_root;
       }
       else {
-        var _x16 = _this.built_root;
+        var _x18 = _this.built_root;
       }
-      return Built_trace(_x16, _c_x10071);
+      if (built_publication_current !== undefined) {
+        var _x19 = built_publication_current;
+      }
+      else {
+        var _x19 = _this.built_publication_current;
+      }
+      if (built_publication_frame !== undefined) {
+        var _x20 = built_publication_frame;
+      }
+      else {
+        var _x20 = _this.built_publication_frame;
+      }
+      return Built_trace(_x18, _x19, _x20, _c_x10073);
     });
   }
   else {
     if (built_root !== undefined) {
-      var _x17 = built_root;
+      var _x21 = built_root;
     }
     else {
-      var _x17 = _this.built_root;
+      var _x21 = _this.built_root;
     }
-    if (built_publish !== undefined) {
-      var _x18 = built_publish;
+    if (built_publication_current !== undefined) {
+      var _x22 = built_publication_current;
     }
     else {
-      var _x18 = _this.built_publish;
+      var _x22 = _this.built_publication_current;
     }
-    return Built_trace(_x17, _x18);
+    if (built_publication_frame !== undefined) {
+      var _x23 = built_publication_frame;
+    }
+    else {
+      var _x23 = _this.built_publication_frame;
+    }
+    if (built_publication_action !== undefined) {
+      var _x24 = built_publication_action;
+    }
+    else {
+      var _x24 = _this.built_publication_action;
+    }
+    return Built_trace(_x21, _x22, _x23, _x24);
   }
 }
  
@@ -543,24 +591,24 @@ export function retirement_coordinator_fs_retirement_dispose_root(_this) /* fora
  
 export function retirement_coordinator_fs__copy(_this, retirement_depth, retirement_disposal_requested, retirement_dispose_root) /* forall<e> (retirement-coordinator<e>, retirement-depth : ? (ref<global,int>), retirement-disposal-requested : ? (ref<global,bool>), retirement-dispose-root : ? (ref<global,maybe<() -> <div,exn|e> ()>>)) -> retirement-coordinator<e> */  {
   if (retirement_depth !== undefined) {
-    var _x19 = retirement_depth;
+    var _x25 = retirement_depth;
   }
   else {
-    var _x19 = _this.retirement_depth;
+    var _x25 = _this.retirement_depth;
   }
   if (retirement_disposal_requested !== undefined) {
-    var _x20 = retirement_disposal_requested;
+    var _x26 = retirement_disposal_requested;
   }
   else {
-    var _x20 = _this.retirement_disposal_requested;
+    var _x26 = _this.retirement_disposal_requested;
   }
   if (retirement_dispose_root !== undefined) {
-    var _x21 = retirement_dispose_root;
+    var _x27 = retirement_dispose_root;
   }
   else {
-    var _x21 = _this.retirement_dispose_root;
+    var _x27 = _this.retirement_dispose_root;
   }
-  return Retirement_coordinator(_x19, _x20, _x21);
+  return Retirement_coordinator(_x25, _x26, _x27);
 }
  
  
@@ -589,30 +637,30 @@ export function lifetime_owner_fs_lifetime_retirement(_this) /* forall<e> (lifet
  
 export function lifetime_owner_fs__copy(_this, lifetime_token, lifetime_children, lifetime_finalizers, lifetime_retirement) /* forall<e> (lifetime-owner<e>, lifetime-token : ? (ref<global,scope-state>), lifetime-children : ? (kokaine/internal/registry/registry<retirement-work<e>>), lifetime-finalizers : ? (kokaine/internal/registry/registry<retirement-work<e>>), lifetime-retirement : ? (retirement-coordinator<e>)) -> lifetime-owner<e> */  {
   if (lifetime_token !== undefined) {
-    var _x22 = lifetime_token;
+    var _x28 = lifetime_token;
   }
   else {
-    var _x22 = _this.lifetime_token;
+    var _x28 = _this.lifetime_token;
   }
   if (lifetime_children !== undefined) {
-    var _x23 = lifetime_children;
+    var _x29 = lifetime_children;
   }
   else {
-    var _x23 = _this.lifetime_children;
+    var _x29 = _this.lifetime_children;
   }
   if (lifetime_finalizers !== undefined) {
-    var _x24 = lifetime_finalizers;
+    var _x30 = lifetime_finalizers;
   }
   else {
-    var _x24 = _this.lifetime_finalizers;
+    var _x30 = _this.lifetime_finalizers;
   }
   if (lifetime_retirement !== undefined) {
-    var _x25 = lifetime_retirement;
+    var _x31 = lifetime_retirement;
   }
   else {
-    var _x25 = _this.lifetime_retirement;
+    var _x31 = _this.lifetime_retirement;
   }
-  return Lifetime_owner(_x22, _x23, _x24, _x25);
+  return Lifetime_owner(_x28, _x29, _x30, _x31);
 }
  
  
@@ -629,18 +677,18 @@ export function cleanup_registration_fs_cleanup_resource(_this) /* forall<e> (cl
  
 export function cleanup_registration_fs__copy(_this, cleanup_node, cleanup_resource) /* forall<e> (cleanup-registration<e>, cleanup-node : ? (kokaine/internal/registry/registry-registration<retirement-work<e>>), cleanup-resource : ? (kokaine/reactive/internal/resource/resource-k<e>)) -> cleanup-registration<e> */  {
   if (cleanup_node !== undefined) {
-    var _x26 = cleanup_node;
+    var _x32 = cleanup_node;
   }
   else {
-    var _x26 = _this.cleanup_node;
+    var _x32 = _this.cleanup_node;
   }
   if (cleanup_resource !== undefined) {
-    var _x27 = cleanup_resource;
+    var _x33 = cleanup_resource;
   }
   else {
-    var _x27 = _this.cleanup_resource;
+    var _x33 = _this.cleanup_resource;
   }
-  return Cleanup_registration(_x26, _x27);
+  return Cleanup_registration(_x32, _x33);
 }
  
  
@@ -675,36 +723,36 @@ export function continuation_scope_fs_scope_unlink(_this) /* forall<e> (continua
  
 export function continuation_scope_fs__copy(_this, scope_lifetime, scope_body, scope_parent, scope_bootstrap_slot, scope_unlink) /* forall<e> (continuation-scope<e>, scope-lifetime : ? (lifetime-owner<e>), scope-body : ? (ref<global,trace<e>>), scope-parent : ? (maybe<continuation-gate>), scope-bootstrap-slot : ? (ref<global,maybe<() -> <div|e> error<()>>>), scope-unlink : ? (ref<global,maybe<() -> bool>>)) -> continuation-scope<e> */  {
   if (scope_lifetime !== undefined) {
-    var _x28 = scope_lifetime;
+    var _x34 = scope_lifetime;
   }
   else {
-    var _x28 = _this.scope_lifetime;
+    var _x34 = _this.scope_lifetime;
   }
   if (scope_body !== undefined) {
-    var _x29 = scope_body;
+    var _x35 = scope_body;
   }
   else {
-    var _x29 = _this.scope_body;
+    var _x35 = _this.scope_body;
   }
   if (scope_parent !== undefined) {
-    var _x30 = scope_parent;
+    var _x36 = scope_parent;
   }
   else {
-    var _x30 = _this.scope_parent;
+    var _x36 = _this.scope_parent;
   }
   if (scope_bootstrap_slot !== undefined) {
-    var _x31 = scope_bootstrap_slot;
+    var _x37 = scope_bootstrap_slot;
   }
   else {
-    var _x31 = _this.scope_bootstrap_slot;
+    var _x37 = _this.scope_bootstrap_slot;
   }
   if (scope_unlink !== undefined) {
-    var _x32 = scope_unlink;
+    var _x38 = scope_unlink;
   }
   else {
-    var _x32 = _this.scope_unlink;
+    var _x38 = _this.scope_unlink;
   }
-  return Scope(_x28, _x29, _x30, _x31, _x32);
+  return Scope(_x34, _x35, _x36, _x37, _x38);
 }
  
  
@@ -715,12 +763,12 @@ export function frame_fs_frame_lifetime(frame) /* forall<e> (frame : frame<e>) -
  
 export function frame_fs__copy(_this, frame_lifetime) /* forall<e> (frame<e>, frame-lifetime : ? (lifetime-owner<e>)) -> frame<e> */  {
   if (frame_lifetime !== undefined) {
-    var _x33 = frame_lifetime;
+    var _x39 = frame_lifetime;
   }
   else {
-    var _x33 = _this;
+    var _x39 = _this;
   }
-  return _x33;
+  return _x39;
 }
  
  
@@ -773,42 +821,42 @@ export function plane_fs_plane_retirement(plane) /* forall<e> (plane : plane<e>)
  
 export function plane_fs__copy(_this, plane_queue, plane_work_group, plane_current, plane_current_frame, plane_draft, plane_retirement) /* forall<e> (plane<e>, plane-queue : ? (kokaine/reactive/internal/work-transaction/work-queue<work<e>>), plane-work-group : ? (ref<global,maybe<kokaine/reactive/internal/work-transaction/work-group<work<e>>>>), plane-current : ? (ref<global,maybe<continuation-gate>>), plane-current-frame : ? (ref<global,frame<e>>), plane-draft : ? (ref<global,maybe<ref<global,list<trace<e>>>>>), plane-retirement : ? (retirement-coordinator<e>)) -> plane<e> */  {
   if (plane_queue !== undefined) {
-    var _x34 = plane_queue;
+    var _x40 = plane_queue;
   }
   else {
-    var _x34 = _this.plane_queue;
+    var _x40 = _this.plane_queue;
   }
   if (plane_work_group !== undefined) {
-    var _x35 = plane_work_group;
+    var _x41 = plane_work_group;
   }
   else {
-    var _x35 = _this.plane_work_group;
+    var _x41 = _this.plane_work_group;
   }
   if (plane_current !== undefined) {
-    var _x36 = plane_current;
+    var _x42 = plane_current;
   }
   else {
-    var _x36 = _this.plane_current;
+    var _x42 = _this.plane_current;
   }
   if (plane_current_frame !== undefined) {
-    var _x37 = plane_current_frame;
+    var _x43 = plane_current_frame;
   }
   else {
-    var _x37 = _this.plane_current_frame;
+    var _x43 = _this.plane_current_frame;
   }
   if (plane_draft !== undefined) {
-    var _x38 = plane_draft;
+    var _x44 = plane_draft;
   }
   else {
-    var _x38 = _this.plane_draft;
+    var _x44 = _this.plane_draft;
   }
   if (plane_retirement !== undefined) {
-    var _x39 = plane_retirement;
+    var _x45 = plane_retirement;
   }
   else {
-    var _x39 = _this.plane_retirement;
+    var _x45 = _this.plane_retirement;
   }
-  return Plane(_x34, _x35, _x36, _x37, _x38, _x39);
+  return Plane(_x40, _x41, _x42, _x43, _x44, _x45);
 }
  
  
@@ -861,54 +909,54 @@ export function root_fs_root_disposed(root) /* forall<e> (root : root<e>) -> ref
  
 export function root_fs__copy(_this, root_key, root_derive_plane, root_effect_plane, root_lifetime, root_batch_depth, root_flushing, root_disposing, root_disposed) /* forall<e> (root<e>, root-key : ? root-key, root-derive-plane : ? (plane<total>), root-effect-plane : ? (plane<e>), root-lifetime : ? (lifetime-owner<e>), root-batch-depth : ? (ref<global,int>), root-flushing : ? (ref<global,bool>), root-disposing : ? (ref<global,bool>), root-disposed : ? (ref<global,bool>)) -> root<e> */  {
   if (root_key !== undefined) {
-    var _x40 = root_key;
+    var _x46 = root_key;
   }
   else {
-    var _x40 = _this.root_key;
+    var _x46 = _this.root_key;
   }
   if (root_derive_plane !== undefined) {
-    var _x41 = root_derive_plane;
+    var _x47 = root_derive_plane;
   }
   else {
-    var _x41 = _this.root_derive_plane;
+    var _x47 = _this.root_derive_plane;
   }
   if (root_effect_plane !== undefined) {
-    var _x42 = root_effect_plane;
+    var _x48 = root_effect_plane;
   }
   else {
-    var _x42 = _this.root_effect_plane;
+    var _x48 = _this.root_effect_plane;
   }
   if (root_lifetime !== undefined) {
-    var _x43 = root_lifetime;
+    var _x49 = root_lifetime;
   }
   else {
-    var _x43 = _this.root_lifetime;
+    var _x49 = _this.root_lifetime;
   }
   if (root_batch_depth !== undefined) {
-    var _x44 = root_batch_depth;
+    var _x50 = root_batch_depth;
   }
   else {
-    var _x44 = _this.root_batch_depth;
+    var _x50 = _this.root_batch_depth;
   }
   if (root_flushing !== undefined) {
-    var _x45 = root_flushing;
+    var _x51 = root_flushing;
   }
   else {
-    var _x45 = _this.root_flushing;
+    var _x51 = _this.root_flushing;
   }
   if (root_disposing !== undefined) {
-    var _x46 = root_disposing;
+    var _x52 = root_disposing;
   }
   else {
-    var _x46 = _this.root_disposing;
+    var _x52 = _this.root_disposing;
   }
   if (root_disposed !== undefined) {
-    var _x47 = root_disposed;
+    var _x53 = root_disposed;
   }
   else {
-    var _x47 = _this.root_disposed;
+    var _x53 = _this.root_disposed;
   }
-  return Root(_x40, _x41, _x42, _x43, _x44, _x45, _x46, _x47);
+  return Root(_x46, _x47, _x48, _x49, _x50, _x51, _x52, _x53);
 }
  
  
@@ -931,24 +979,24 @@ export function derive_producer_fs_producer_settling(_this) /* (derive-producer)
  
 export function derive_producer_fs__copy(_this, producer_plane, producer_scope, producer_settling) /* (derive-producer, producer-plane : ? (plane<total>), producer-scope : ? (continuation-scope<total>), producer-settling : ? (ref<global,bool>)) -> derive-producer */  {
   if (producer_plane !== undefined) {
-    var _x48 = producer_plane;
+    var _x54 = producer_plane;
   }
   else {
-    var _x48 = _this.producer_plane;
+    var _x54 = _this.producer_plane;
   }
   if (producer_scope !== undefined) {
-    var _x49 = producer_scope;
+    var _x55 = producer_scope;
   }
   else {
-    var _x49 = _this.producer_scope;
+    var _x55 = _this.producer_scope;
   }
   if (producer_settling !== undefined) {
-    var _x50 = producer_settling;
+    var _x56 = producer_settling;
   }
   else {
-    var _x50 = _this.producer_settling;
+    var _x56 = _this.producer_settling;
   }
-  return Derive_producer(_x48, _x49, _x50);
+  return Derive_producer(_x54, _x55, _x56);
 }
  
  
@@ -965,16 +1013,16 @@ export function memo_fs_memo_producer(memo) /* forall<a> (memo : memo<a>) -> der
  
 export function memo_fs__copy(_this, memo_source, memo_producer) /* forall<a> (memo<a>, memo-source : ? (source<a>), memo-producer : ? derive-producer) -> memo<a> */  {
   if (memo_source !== undefined) {
-    var _x51 = memo_source;
+    var _x57 = memo_source;
   }
   else {
-    var _x51 = _this.memo_source;
+    var _x57 = _this.memo_source;
   }
   if (memo_producer !== undefined) {
-    var _x52 = memo_producer;
+    var _x58 = memo_producer;
   }
   else {
-    var _x52 = _this.memo_producer;
+    var _x58 = _this.memo_producer;
   }
-  return Memo(_x51, _x52);
+  return Memo(_x57, _x58);
 }

@@ -26,6 +26,7 @@ import * as $std_core_console from './std_core_console.mjs';
 import * as $kokaine_reactive_effects from './kokaine_reactive_effects.mjs';
 import * as $std_core from './std_core.mjs';
 import * as $kokaine_reactive from './kokaine_reactive.mjs';
+import * as $kokaine_reactive_internal_runtime from './kokaine_reactive_internal_runtime.mjs';
 import * as $kokaine_reactive_integration_internal_lifetime_dash_scope from './kokaine_reactive_integration_internal_lifetime_dash_scope.mjs';
 import * as $kokaine_reactive_integration_internal_provision from './kokaine_reactive_integration_internal_provision.mjs';
 import * as $kokaine_reactive_integration_internal_reentry from './kokaine_reactive_integration_internal_reentry.mjs';
@@ -135,43 +136,53 @@ export function unwrap_provision_lease(value) /* forall<e> (value : provision-le
  
  
 // monadic lift
-export function _mlift_open_lifetime_scope_10041(_y_x10008) /* forall<e> (kokaine/reactive/integration/internal/lifetime-scope/lifetime-scope<e>) -> exn lifetime-scope<e> */  {
+export function _mlift_open_lifetime_scope_10044(_y_x10008) /* forall<e> (kokaine/reactive/integration/internal/lifetime-scope/lifetime-scope<e>) -> exn lifetime-scope<e> */  {
   return _y_x10008;
 }
  
 export function open_lifetime_scope(root) /* forall<e> (root : kokaine/reactive/root<e>) -> exn lifetime-scope<e> */  {
    
-  var x_10045 = $kokaine_reactive_integration_internal_lifetime_dash_scope.open_lifetime_scope($std_core_hnd._open_none1(function(value /* kokaine/reactive/root<429> */ ) {
+  var x_10048 = $kokaine_reactive_integration_internal_lifetime_dash_scope.open_lifetime_scope($std_core_hnd._open_none1(function(value /* kokaine/reactive/root<444> */ ) {
       return value;
     }, root));
   if ($std_core_hnd._yielding()) {
-    return $std_core_hnd.yield_extend(function(_y_x10008 /* kokaine/reactive/integration/internal/lifetime-scope/lifetime-scope<429> */ ) {
+    return $std_core_hnd.yield_extend(function(_y_x10008 /* kokaine/reactive/integration/internal/lifetime-scope/lifetime-scope<444> */ ) {
       return _y_x10008;
     });
   }
   else {
-    return x_10045;
+    return x_10048;
   }
 }
  
 export function with_lifetime_scope(root, scope, action) /* forall<a,e,e1> (root : kokaine/reactive/root<e1>, scope : lifetime-scope<e1>, action : () -> <div,exn|e> a) -> <div,exn|e> a */  {
-  return $kokaine_reactive_integration_internal_lifetime_dash_scope.with_lifetime_scope($std_core_hnd._open_none1(function(value /* kokaine/reactive/root<483> */ ) {
+  return $kokaine_reactive_integration_internal_lifetime_dash_scope.with_lifetime_scope($std_core_hnd._open_none1(function(value /* kokaine/reactive/root<498> */ ) {
         return value;
-      }, root), $std_core_hnd._open_none1(function(value_0 /* lifetime-scope<483> */ ) {
+      }, root), $std_core_hnd._open_none1(function(value_0 /* lifetime-scope<498> */ ) {
         return value_0;
       }, scope), action);
 }
  
 export function lifetime_scope_fs_dispose(scope) /* forall<e> (scope : lifetime-scope<e>) -> <exn|e> () */  {
-  return $kokaine_reactive_integration_internal_lifetime_dash_scope.lifetime_scope_fs_dispose($std_core_hnd._open_none1(function(value /* lifetime-scope<518> */ ) {
+  return $kokaine_reactive_integration_internal_lifetime_dash_scope.lifetime_scope_fs_dispose($std_core_hnd._open_none1(function(value /* lifetime-scope<533> */ ) {
       return value;
     }, scope));
 }
  
  
+// A publication-only effect may mutate its host renderer but cannot mutate or
+// register reactive state. It retains the same exact tracked continuations and
+// lifetime semantics as `create-effect`.
+export function create_ui_publication_effect(root, track, publish) /* forall<a> (root : kokaine/reactive/root<ui>, track : () -> <kokaine/reactive/effects/signal-read,pure> a, publish : (value : a) -> <ui,exn> ()) -> <kokaine/reactive/effects/signal-write,pure> kokaine/reactive/disposer<ui> */  {
+  return $kokaine_reactive_internal_runtime.create_ui_publication_effect($std_core_hnd._open_none1(function(value /* kokaine/reactive/root<ui> */ ) {
+        return value;
+      }, root), track, publish);
+}
+ 
+ 
 // monadic lift
-export function _mlift_capture_reentry_10042(_y_x10011) /* forall<e> (kokaine/reactive/integration/internal/reentry/reentry<e>) -> exn reentry<e> */  {
-  return _y_x10011;
+export function _mlift_capture_reentry_10045(_y_x10012) /* forall<e> (kokaine/reactive/integration/internal/reentry/reentry<e>) -> exn reentry<e> */  {
+  return _y_x10012;
 }
  
  
@@ -179,79 +190,79 @@ export function _mlift_capture_reentry_10042(_y_x10011) /* forall<e> (kokaine/re
 // Work created during re-entry remains owned by that generation.
 export function capture_reentry(root) /* forall<e> (root : kokaine/reactive/root<e>) -> exn reentry<e> */  {
    
-  var x_10049 = $kokaine_reactive_integration_internal_reentry.capture_reentry($std_core_hnd._open_none1(function(value /* kokaine/reactive/root<553> */ ) {
+  var x_10052 = $kokaine_reactive_integration_internal_reentry.capture_reentry($std_core_hnd._open_none1(function(value /* kokaine/reactive/root<608> */ ) {
       return value;
     }, root));
   if ($std_core_hnd._yielding()) {
-    return $std_core_hnd.yield_extend(function(_y_x10011 /* kokaine/reactive/integration/internal/reentry/reentry<553> */ ) {
-      return _y_x10011;
+    return $std_core_hnd.yield_extend(function(_y_x10012 /* kokaine/reactive/integration/internal/reentry/reentry<608> */ ) {
+      return _y_x10012;
     });
   }
   else {
-    return x_10049;
+    return x_10052;
   }
 }
  
 export function reenter(value, action) /* forall<a,e> (value : reentry<e>, action : () -> <kokaine/reactive/effects/signal-read,kokaine/reactive/effects/signal-write,pure|e> a) -> <exn|e> a */  {
-  return $kokaine_reactive_integration_internal_reentry.run_reentry($std_core_hnd._open_none1(function(value_0 /* reentry<590> */ ) {
+  return $kokaine_reactive_integration_internal_reentry.run_reentry($std_core_hnd._open_none1(function(value_0 /* reentry<645> */ ) {
         return value_0;
       }, value), action);
 }
  
  
 // monadic lift
-export function _mlift_current_provision_10043(_y_x10013) /* forall<e> (maybe<kokaine/reactive/integration/internal/provision/provision<e>>) -> exn maybe<provision<e>> */  {
-  if (_y_x10013 === null) {
+export function _mlift_current_provision_10046(_y_x10014) /* forall<e> (maybe<kokaine/reactive/integration/internal/provision/provision<e>>) -> exn maybe<provision<e>> */  {
+  if (_y_x10014 === null) {
     return $std_core_types.Nothing;
   }
   else {
-    return $std_core_types.Just(_y_x10013.value);
+    return $std_core_types.Just(_y_x10014.value);
   }
 }
  
 export function current_provision(root) /* forall<e> (root : kokaine/reactive/root<e>) -> exn maybe<provision<e>> */  {
    
-  var x_10053 = $kokaine_reactive_integration_internal_provision.current_provision($std_core_hnd._open_none1(function(value /* kokaine/reactive/root<646> */ ) {
+  var x_10056 = $kokaine_reactive_integration_internal_provision.current_provision($std_core_hnd._open_none1(function(value /* kokaine/reactive/root<701> */ ) {
       return value;
     }, root));
   if ($std_core_hnd._yielding()) {
-    return $std_core_hnd.yield_extend(function(_y_x10013 /* maybe<kokaine/reactive/integration/internal/provision/provision<646>> */ ) {
-      if (_y_x10013 === null) {
+    return $std_core_hnd.yield_extend(function(_y_x10014 /* maybe<kokaine/reactive/integration/internal/provision/provision<701>> */ ) {
+      if (_y_x10014 === null) {
         return $std_core_types.Nothing;
       }
       else {
-        return $std_core_types.Just(_y_x10013.value);
+        return $std_core_types.Just(_y_x10014.value);
       }
     });
   }
   else {
-    if (x_10053 === null) {
+    if (x_10056 === null) {
       return $std_core_types.Nothing;
     }
     else {
-      return $std_core_types.Just(x_10053.value);
+      return $std_core_types.Just(x_10056.value);
     }
   }
 }
  
  
 // monadic lift
-export function _mlift_open_provision_10044(_y_x10015) /* forall<e> (kokaine/reactive/integration/internal/provision/provision-lease<e>) -> exn provision-lease<e> */  {
-  return _y_x10015;
+export function _mlift_open_provision_10047(_y_x10016) /* forall<e> (kokaine/reactive/integration/internal/provision/provision-lease<e>) -> exn provision-lease<e> */  {
+  return _y_x10016;
 }
  
 export function open_provision(root) /* forall<e> (root : kokaine/reactive/root<e>) -> exn provision-lease<e> */  {
    
-  var x_10057 = $kokaine_reactive_integration_internal_provision.open_provision($std_core_hnd._open_none1(function(value /* kokaine/reactive/root<683> */ ) {
+  var x_10060 = $kokaine_reactive_integration_internal_provision.open_provision($std_core_hnd._open_none1(function(value /* kokaine/reactive/root<738> */ ) {
       return value;
     }, root));
   if ($std_core_hnd._yielding()) {
-    return $std_core_hnd.yield_extend(function(_y_x10015 /* kokaine/reactive/integration/internal/provision/provision-lease<683> */ ) {
-      return _y_x10015;
+    return $std_core_hnd.yield_extend(function(_y_x10016 /* kokaine/reactive/integration/internal/provision/provision-lease<738> */ ) {
+      return _y_x10016;
     });
   }
   else {
-    return x_10057;
+    return x_10060;
   }
 }
  
@@ -267,19 +278,19 @@ export function provision_fs_same(left, right) /* forall<e> (left : provision<e>
 }
  
 export function drain_provision(lease) /* forall<e> (lease : provision-lease<e>) -> <div,exn|e> () */  {
-  return $kokaine_reactive_integration_internal_provision.drain_provision($std_core_hnd._open_none1(function(value /* provision-lease<786> */ ) {
+  return $kokaine_reactive_integration_internal_provision.drain_provision($std_core_hnd._open_none1(function(value /* provision-lease<841> */ ) {
       return value;
     }, lease));
 }
  
 export function promote_provision(lease) /* forall<e> (lease : provision-lease<e>) -> <div,exn|e> () */  {
-  return $kokaine_reactive_integration_internal_provision.promote_provision($std_core_hnd._open_none1(function(value /* provision-lease<811> */ ) {
+  return $kokaine_reactive_integration_internal_provision.promote_provision($std_core_hnd._open_none1(function(value /* provision-lease<866> */ ) {
       return value;
     }, lease));
 }
  
 export function discard_provision(lease) /* forall<e> (lease : provision-lease<e>) -> <exn|e> () */  {
-  return $kokaine_reactive_integration_internal_provision.discard_provision($std_core_hnd._open_none1(function(value /* provision-lease<836> */ ) {
+  return $kokaine_reactive_integration_internal_provision.discard_provision($std_core_hnd._open_none1(function(value /* provision-lease<891> */ ) {
       return value;
     }, lease));
 }

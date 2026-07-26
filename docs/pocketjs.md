@@ -54,10 +54,10 @@ retired region or disposed root cannot run a stale handler.
 The dependency direction remains one-way:
 
 ```text
-Pocket view algebra and renderer
+Pocket view algebra, renderer, and virtual-time dispatcher
               |
               v
-reactive integration (lifetime, re-entry, typed host event)
+reactive integration (lifetime, re-entry, typed event, Async host turn)
               |
               v
 reactive continuation kernel
@@ -71,9 +71,10 @@ Koka source adapter and the JavaScript bridge and declares PocketJS as a peer.
 A Pocket application needs a small `.ts` or `.tsx` entry. It imports
 `mountKokaine` before the generated application module and passes it a Koka
 entry which returns its root cleanup function. The wrapper installs the bridge,
-calls Pocket's `mount`, scopes Koka rendering through `createPocketRoot`, and on
-teardown disposes the Koka root before Pocket destroys the native mirror. Import
-the generated application module, not Koka's auto-running `__main` wrapper.
+calls Pocket's `mount`, installs one frame-bound async scope inside the Pocket
+owner, scopes Koka rendering through `createPocketRoot`, and on teardown
+disposes the Koka root and async queue before Pocket destroys the native mirror.
+Import the generated application module, not Koka's auto-running `__main` wrapper.
 Pocket's manifest still selects its supported framework adapter; Kokaine is
 composed beneath that entry rather than added as a third Pocket framework mode.
 
@@ -149,11 +150,29 @@ microtask shim, but that does not make browser scheduling APIs available. The
 adapter's tiny console/process compatibility prelude exists only for Koka's
 generated console ABI; it is not a general Node polyfill.
 
-The initial Pocket callback row is therefore synchronous: signal reads and
-writes, Kokaine UI lifetime work, and modeled exceptions are allowed; the Web
-Async adapter, timers, Fetch, and browser window operations are not. Native
-animation and future Pocket-specific effects should be modeled against Pocket's
-frame boundary rather than routed through `kokaine/async/web`.
+Synchronous `Press` remains a separate closed callback path. `Async-press`
+captures the same revocable algebraic-effect continuation used by DOM events,
+but each invocation starts a fresh Pocket `run-async` family inside the owning
+generation. Await completion never resumes that continuation from a Promise or
+timer callback. It posts a `ui`-only turn into a mount-scoped FIFO; the next
+Pocket frame validates generation ownership, restores re-entry, opens a fresh
+reactive transaction, and resumes the suffix.
+
+`sleep` and `timeout` take integer milliseconds and use a mount-scoped deadline
+queue driven by Pocket's deterministic lifecycle frames. Pocket 0.6 maps the
+public lifecycle subpath into compiled framework applications, but does not map
+the clock subpath for external adapters; importing that subpath can create a
+second clock singleton that the host never advances. The bridge instead latches
+Pocket's normalized simulation rate and counts deadlines in its lifecycle hook.
+This also keeps the bundle independent from Koka 3.2's generated
+`std/time/duration` module graph, which Pocket 0.6 cannot bundle correctly.
+
+Delays round upward to a simulation-frame boundary, with `yield()` and
+`sleep(0)` still waiting one frame. Each frame advances due deadlines before
+flushing the dispatcher, so a due timer can post and resume later in that same
+host frame. Work posted by a running async turn is snapshot-isolated until the
+next frame. Root cleanup runs before the frame scope closes, canceling timers
+and revoking every retained K.
 
 The browser example is a development preview, not a production Web backend. It
 serves the physical `host-web` directory and `pocketjs.wasm` shipped inside the
@@ -173,18 +192,21 @@ Included:
 
 - `View`, `Text`, `Image`, fragments, and dynamic regions;
 - reactive text and supported per-node inline style properties;
-- image sources, focusability, and synchronous `onPress`;
+- image sources, focusability, synchronous `onPress`, and async press;
+- generation-owned `run-async`, structured concurrency, virtual
+  `sleep`/`yield`, and `timeout`;
 - exact generation ownership, stale-callback revocation, and root disposal.
 
 Not included:
 
 - `kokaine/html`, DOM nodes/events/attributes, or trusted HTML;
-- Web Async, wall-clock timers, Fetch, or browser globals;
+- Web Async, direct Promise/Fetch interop, wall-clock timers, or browser globals;
+- generic Pocket host-I/O effects or async `Resource`;
 - keyed reconciliation, SSR, hydration, portals, or browser control helpers;
 - class-based dynamic styling from Koka-generated modules;
 - a claim of PSP memory or frame-rate parity with native Pocket demos.
 
-This split is intentional. Keyed rows and an async effect shell need native
+This split is intentional. Keyed rows and future host-I/O effects need native
 publication and frame-turn contracts of their own; copying the DOM transaction
 or Web scheduler would give them the wrong semantics.
 
@@ -211,14 +233,15 @@ one:
 5. A real PSP verifies the actual 8 MB budget, allocator pressure, display/input
    behavior, and sustained frame rate.
 
-The checked-in verification currently covers typed Koka callback/lifetime tests,
-the JavaScript bridge contract, an exact 0.6.0 `pocket compile`, a QuickJS-like
-no-console/no-process bundle smoke test with injected HostOps, and the upstream
-Rust/WASM layout/raster core. A real headless Chromium run loads Pocket's
-official Web host, verifies the baked font atlas and visible Canvas text, drives
-the DOWN/CIRCLE path through the on-screen controls, observes native focus, and
-checks that Koka live text becomes `Count 1` without page, console, or HTTP
-errors.
+The checked-in verification currently covers typed Koka callback/lifetime and
+dispatcher-rejection tests, virtual timer/timeout cancellation, queued-turn
+retirement, multi-shot async press, and the JavaScript bridge contract. An exact
+0.6.0 `pocket compile` runs the real async press through a QuickJS-like
+no-console/no-process bundle smoke and observes its synchronous `waiting` and
+next-frame `resumed` publications. The upstream Rust/WASM core and real headless
+Chromium host repeat that cross-frame check while also verifying layout, native
+focus, the baked font atlas, visible Canvas text, and `Count 1` without page,
+console, or HTTP errors.
 A controlled [PPSSPP microbenchmark](pocketjs-ppsspp-benchmark.md) has now run
 the Kokaine bridge inside the native PSP QuickJS host and compared seven
 byte-identical workloads with the experimental Vue VDOM, Vue Vapor, and Solid
