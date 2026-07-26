@@ -262,6 +262,23 @@ test("releases a detached Pocket root when Koka startup fails", () => {
   restore();
 });
 
+test("preserves a startup failure when root rollback also fails", () => {
+  const { renderer } = createRendererDouble();
+  const startupFailure = new Error("startup failed");
+  renderer.release = () => {
+    throw new Error("rollback failed");
+  };
+  const restore = installPocketBridge(renderer);
+
+  assert.throws(
+    () => createPocketRoot(() => {
+      throw startupFailure;
+    }),
+    (error) => error === startupFailure
+  );
+  restore();
+});
+
 test("sends complete independent style snapshots as next and previous values", () => {
   const { calls, renderer } = createRendererDouble();
   const restore = installPocketBridge(renderer);
@@ -519,6 +536,64 @@ test("keeps exact millisecond frame boundaries exact", () => {
   assert.deepEqual(events, []);
   runFrame();
   assert.deepEqual(events, ["exact"]);
+  dispose();
+});
+
+test("does not scan long-lived timers before the earliest deadline", () => {
+  let dispatcher;
+  const dispose = mountKokaine(() => {
+    dispatcher = globalThis[ASYNC_KEY].capture();
+    return () => {};
+  });
+
+  for (let index = 0; index < 1024; index += 1) {
+    dispatcher.afterMilliseconds(60_000 + index, () => {});
+  }
+
+  const setIterator = Set.prototype[Symbol.iterator];
+  let timerScans = 0;
+  Set.prototype[Symbol.iterator] = function timerIterator() {
+    timerScans += 1;
+    return setIterator.call(this);
+  };
+  try {
+    runFrames(120);
+  } finally {
+    Set.prototype[Symbol.iterator] = setIterator;
+  }
+
+  assert.equal(timerScans, 0);
+  dispose();
+});
+
+test("coalesces earliest-deadline scans across bulk timer cancellation", () => {
+  let dispatcher;
+  const dispose = mountKokaine(() => {
+    dispatcher = globalThis[ASYNC_KEY].capture();
+    return () => {};
+  });
+
+  const cancel = [];
+  for (let index = 0; index < 1024; index += 1) {
+    cancel.push(dispatcher.afterMilliseconds(60_000, () => {}));
+  }
+  dispatcher.afterMilliseconds(120_000, () => {});
+
+  const setIterator = Set.prototype[Symbol.iterator];
+  let timerScans = 0;
+  Set.prototype[Symbol.iterator] = function timerIterator() {
+    timerScans += 1;
+    return setIterator.call(this);
+  };
+  try {
+    for (const cancelTimer of cancel) cancelTimer();
+    assert.equal(timerScans, 0);
+    runFrames(1);
+    assert.equal(timerScans, 1);
+  } finally {
+    Set.prototype[Symbol.iterator] = setIterator;
+  }
+
   dispose();
 });
 

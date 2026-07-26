@@ -104,8 +104,29 @@ fun test-readonly-visit-preserves-registry-order()
   val _ = third.take
   ()
 
+fun test-readonly-find-skips-detached_entries()
+  val target = new-registry()
+  val first = target.insert(10)
+  val middle = target.insert(20)
+  val last = target.insert(30)
+
+  check(target.find-readonly(fn(value) value == 30) == Just(30),
+        "readonly find returns an existing newest entry")
+  check(target.find-readonly(fn(value) value == 99).is-nothing,
+        "readonly find reports a missing entry")
+  val _ = middle.take
+  check(target.find-readonly(fn(value) value == 20).is-nothing,
+        "readonly find skips a detached middle entry")
+  check(target.find-readonly(fn(value) value == 10) == Just(10),
+        "readonly find continues through the remaining chain")
+
+  val _ = first.take
+  val _ = last.take
+  ()
+
 pub fun main()
   test-removable-registrations-scale-linearly()
   test-seal-detaches-one-owned-snapshot()
   test-readonly-visit-preserves-registry-order()
+  test-readonly-find-skips-detached_entries()
   println("internal-registry: all checks passed")

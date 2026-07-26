@@ -242,21 +242,37 @@ export function one_shot_task_fs_accept(task, result) /* forall<a,b,c> (task : o
 }
  
  
+// Host dispatch may execute synchronously while the owning generation is
+// retiring. Inspecting the ready payload before claiming lets the generation
+// runtime select live result delivery or retirement cancellation atomically:
+// the predicate is pure and browser hosts are single-threaded.
+export function one_shot_task_fs_peek_ready_payload(task) /* forall<a,b,c> (task : one-shot-task<b,c,a>) -> maybe<b> */  {
+  var _x9 = task;
+  var _x8 = _x9.value;
+  if (_x8._tag === 2) {
+    return $std_core_types.Just(_x8.ready_payload);
+  }
+  else {
+    return $std_core_types.Nothing;
+  }
+}
+ 
+ 
 // `Nothing` means the disposer was retained by the task. `Just(disposer)`
 // transfers it back to setup code because another transition already won.
 export function one_shot_task_fs_install_disposer(task, disposer) /* forall<a,b,c> (task : one-shot-task<b,c,a>, disposer : a) -> maybe<a> */  {
-  var _x9 = task;
-  var _x8 = _x9.value;
-  if (_x8._tag === 1 && _x8.pending_disposer === null) {
+  var _x11 = task;
+  var _x10 = _x11.value;
+  if (_x10._tag === 1 && _x10.pending_disposer === null) {
      
-    var _x10 = task;
-    ((_x10).value = (Task_state_pending(_x8.pending_payload, $std_core_types.Just(disposer))));
+    var _x12 = task;
+    ((_x12).value = (Task_state_pending(_x10.pending_payload, $std_core_types.Just(disposer))));
     return $std_core_types.Nothing;
   }
-  else if (_x8._tag === 2 && _x8.ready_disposer === null) {
+  else if (_x10._tag === 2 && _x10.ready_disposer === null) {
      
-    var _x10 = task;
-    ((_x10).value = (Task_state_ready(_x8.ready_payload, _x8.ready_result, $std_core_types.Just(disposer))));
+    var _x12 = task;
+    ((_x12).value = (Task_state_ready(_x10.ready_payload, _x10.ready_result, $std_core_types.Just(disposer))));
     return $std_core_types.Nothing;
   }
   else {
@@ -265,32 +281,12 @@ export function one_shot_task_fs_install_disposer(task, disposer) /* forall<a,b,
 }
  
 export function one_shot_task_fs_claim_ready(task) /* forall<a,b,c> (task : one-shot-task<b,c,a>) -> maybe<task-claim<b,c,a>> */  {
-  var _x11 = task;
-  var _x10 = _x11.value;
-  if (_x10._tag === 2) {
-     
-    var _x12 = task;
-    ((_x12).value = Task_state_running);
-    return $std_core_types.Just(Task_claim(_x10.ready_payload, $std_core_types.Just(_x10.ready_result), _x10.ready_disposer));
-  }
-  else {
-    return $std_core_types.Nothing;
-  }
-}
- 
-export function one_shot_task_fs_claim_stop(task, reason) /* forall<a,b,c> (task : one-shot-task<b,c,a>, reason : task-stop-reason) -> maybe<task-claim<b,c,a>> */  {
   var _x13 = task;
   var _x12 = _x13.value;
-  if (_x12._tag === 1) {
+  if (_x12._tag === 2) {
      
     var _x14 = task;
-    ((_x14).value = (Task_state_terminal(Task_stopped(reason))));
-    return $std_core_types.Just(Task_claim(_x12.pending_payload, $std_core_types.Nothing, _x12.pending_disposer));
-  }
-  else if (_x12._tag === 2) {
-     
-    var _x14 = task;
-    ((_x14).value = (Task_state_terminal(Task_stopped(reason))));
+    ((_x14).value = Task_state_running);
     return $std_core_types.Just(Task_claim(_x12.ready_payload, $std_core_types.Just(_x12.ready_result), _x12.ready_disposer));
   }
   else {
@@ -298,13 +294,33 @@ export function one_shot_task_fs_claim_stop(task, reason) /* forall<a,b,c> (task
   }
 }
  
-export function one_shot_task_fs_finish(task) /* forall<a,b,c> (task : one-shot-task<b,c,a>) -> bool */  {
+export function one_shot_task_fs_claim_stop(task, reason) /* forall<a,b,c> (task : one-shot-task<b,c,a>, reason : task-stop-reason) -> maybe<task-claim<b,c,a>> */  {
   var _x15 = task;
   var _x14 = _x15.value;
-  if (_x14._tag === 3) {
+  if (_x14._tag === 1) {
      
     var _x16 = task;
-    ((_x16).value = (Task_state_terminal(Task_completed)));
+    ((_x16).value = (Task_state_terminal(Task_stopped(reason))));
+    return $std_core_types.Just(Task_claim(_x14.pending_payload, $std_core_types.Nothing, _x14.pending_disposer));
+  }
+  else if (_x14._tag === 2) {
+     
+    var _x16 = task;
+    ((_x16).value = (Task_state_terminal(Task_stopped(reason))));
+    return $std_core_types.Just(Task_claim(_x14.ready_payload, $std_core_types.Just(_x14.ready_result), _x14.ready_disposer));
+  }
+  else {
+    return $std_core_types.Nothing;
+  }
+}
+ 
+export function one_shot_task_fs_finish(task) /* forall<a,b,c> (task : one-shot-task<b,c,a>) -> bool */  {
+  var _x17 = task;
+  var _x16 = _x17.value;
+  if (_x16._tag === 3) {
+     
+    var _x18 = task;
+    ((_x18).value = (Task_state_terminal(Task_completed)));
     return true;
   }
   else {

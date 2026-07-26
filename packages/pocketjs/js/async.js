@@ -27,6 +27,14 @@ function normalizeSimulationHz(raw) {
   return best;
 }
 
+function earliestTimerAt(timers) {
+  let earliest = Number.POSITIVE_INFINITY;
+  for (const timer of timers) {
+    if (timer.pending && timer.at < earliest) earliest = timer.at;
+  }
+  return earliest;
+}
+
 function createDispatcher(state) {
   return Object.freeze({
     post(callback) {
@@ -58,6 +66,9 @@ function createDispatcher(state) {
         timer.pending = false;
         timer.callback = undefined;
         state.timers.delete(timer);
+        if (timer.at === state.nextTimerAt) {
+          state.timerDeadlineDirty = true;
+        }
       };
 
       const normalizedDelay = Math.max(0, delay);
@@ -76,6 +87,7 @@ function createDispatcher(state) {
       }
       timer.at = currentFrame + frames;
       state.timers.add(timer);
+      if (timer.at < state.nextTimerAt) state.nextTimerAt = timer.at;
       return cancel;
     }
   });
@@ -84,17 +96,32 @@ function createDispatcher(state) {
 function advanceTimers(state) {
   state.frame = state.frame < 0 ? 0 : state.frame + 1;
   if (!state.active || state.timers.size === 0) return;
+  if (state.timerDeadlineDirty) {
+    state.nextTimerAt = earliestTimerAt(state.timers);
+    state.timerDeadlineDirty = false;
+  }
+  if (state.nextTimerAt > state.frame) return;
 
-  const due = [...state.timers]
-    .filter((timer) => timer.at <= state.frame)
-    .sort((left, right) => left.at - right.at || left.sequence - right.sequence);
-  for (const timer of due) {
-    if (!state.active) return;
-    if (!timer.pending || !state.timers.delete(timer)) continue;
-    timer.pending = false;
-    const complete = timer.callback;
-    timer.callback = undefined;
-    if (complete) complete();
+  const due = [];
+  for (const timer of state.timers) {
+    if (timer.pending && timer.at <= state.frame) due.push(timer);
+  }
+  due.sort((left, right) => left.at - right.at || left.sequence - right.sequence);
+
+  try {
+    for (const timer of due) {
+      if (!state.active) return;
+      if (!timer.pending || !state.timers.delete(timer)) continue;
+      timer.pending = false;
+      const complete = timer.callback;
+      timer.callback = undefined;
+      if (complete) complete();
+    }
+  } finally {
+    // Include timers installed or canceled by a due callback. Recomputing only
+    // on due frames keeps long-lived sleeps at O(1) per frame.
+    state.nextTimerAt = earliestTimerAt(state.timers);
+    state.timerDeadlineDirty = false;
   }
 }
 
@@ -149,7 +176,9 @@ export function createPocketAsyncScope() {
     queue: [],
     simulationHz: normalizeSimulationHz(globalThis.__simHz),
     timers: new Set(),
-    timerSequence: 0
+    timerSequence: 0,
+    nextTimerAt: Number.POSITIVE_INFINITY,
+    timerDeadlineDirty: false
   };
   const dispatcher = createDispatcher(state);
   const bridge = Object.freeze({
@@ -195,6 +224,8 @@ export function createPocketAsyncScope() {
       timer.callback = undefined;
     }
     state.timers.clear();
+    state.nextTimerAt = Number.POSITIVE_INFINITY;
+    state.timerDeadlineDirty = false;
 
     const descriptor = Object.getOwnPropertyDescriptor(globalThis, ASYNC_KEY);
     if (descriptor && "value" in descriptor && descriptor.value === bridge) {

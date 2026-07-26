@@ -19,7 +19,7 @@ KOKA_FLAGS := -j1 -i./src
 DIST_KOKA = $(PYTHON) "$(RUN_LOCKED)" dist/.koka-build.lock \
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist
 
-.PHONY: test test-native test-pocketjs-runtime test-pocketjs-bundle test-pocketjs-wasm test-pocketjs-browser test-tooling test-all test-wasm test-report build-counter build-top-layer build-keyed build-report build-pocketjs-example compile-pocketjs-example build-window-fixture build-browser-fixtures browser-install test-browser serve serve-pocketjs-example serve-top-layer serve-keyed serve-report
+.PHONY: test test-native test-pocketjs-runtime test-pocketjs-bridge test-pocketjs-bundle test-pocketjs-wasm test-pocketjs-browser test-tooling test-all test-wasm test-report build-counter build-top-layer build-keyed build-report build-pocketjs-example compile-pocketjs-example build-window-fixture build-browser-fixtures browser-install test-browser serve serve-pocketjs-example serve-top-layer serve-keyed serve-report
 .PHONY: playground-install playground-precompile playground-sync-assets playground-build playground-preview playground-release playground-deploy serve-playground
 
 test: test-native test-pocketjs-runtime
@@ -102,6 +102,9 @@ test-pocketjs-runtime:
 	$(KOKA) $(KOKA_FLAGS) -i./packages/pocketjs/src \
 		--target=jsnode -e test/pocketjs-runtime.kk
 	$(PYTHON) test/pocketjs_boundary.py
+
+test-pocketjs-bridge:
+	$(BUN) test packages/pocketjs/test/bridge.test.js
 
 build-counter:
 	$(DIST_KOKA) \
@@ -209,7 +212,7 @@ test-report: build-report build-counter build-window-fixture
 	$(UV) run --with playwright python test/browser_window.py
 	$(UV) run --with playwright python test/browser_report.py
 
-test-all: test-tooling test test-browser test-wasm test-report
+test-all: test-tooling test test-pocketjs-bridge test-browser test-wasm test-report
 
 serve: build-counter
 	$(PYTHON) -m http.server 4173 --bind 127.0.0.1
