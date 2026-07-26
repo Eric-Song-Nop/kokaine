@@ -20,9 +20,8 @@ jobs:
       - run: npm ci --ignore-scripts
       - name: Install managed Koka 3.2.3
         run: node --input-type=module -e "import { resolveCompiler } from './packages/cli/src/toolchain.js'; const { binary } = await resolveCompiler('3.2.3'); console.log('KOKA_BIN=' + binary);" >> "$GITHUB_ENV"
-      - name: Test generic host-event integration
-        run: |
-          "$KOKA_BIN" -j1 -i./src -e test/integration-event.kk
+      - name: Test native Koka suite
+        run: make test-native KOKA="$KOKA_BIN"
       - name: Test Pocket Koka renderer
         run: make test-pocketjs-runtime KOKA="$KOKA_BIN"
       - run: bun test packages/pocketjs/test/bridge.test.js
