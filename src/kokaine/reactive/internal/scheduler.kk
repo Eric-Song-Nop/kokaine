@@ -10,6 +10,14 @@ import kokaine/internal/registry
 import kokaine/reactive/internal/work-transaction
 import std/core/undiv
 
+// One ref records which dynamic context a non-local exit must unwind. Keeping
+// this separate from lifetime state matters when publication disposes itself.
+type resume-phase
+  Resume-build
+  Resume-ambient
+  Resume-publication
+  Resume-complete
+
 // --------------------------------------------------------------------------
 // Source-local continuation indexing and invalidation
 // --------------------------------------------------------------------------
@@ -58,7 +66,9 @@ pub fun enqueue-trace(plane : plane<e>, current : trace<e>) : ()
         _ -> ()
 
 pub fun notify-source(source : source<a>) : ()
-  source.source-captures.snapshot.foreach(cut-capture)
+  // `cut-capture` only updates internal gates and queues existing tickets. It
+  // cannot invoke tracked or publication code, so the registry remains stable.
+  source.source-captures.visit-readonly(cut-capture)
 
 
 pub fun activate-trace-loop(plane : plane<e>, current : trace<e>) : <div> ()
@@ -149,6 +159,64 @@ pub fun abandon-draft-frame(current : frame<e>, drafts : list<trace<e>>) : e ()
   val _ = try-retire-lifetime-drafts(current.frame-lifetime,drafts)
   ()
 
+fun collect-replaced-generation(
+    old : trace<e>, old-frame : frame<e>) : list<retirement-work<e>>
+  pretend-no-div{
+    collect-retirement-work([
+      trace-retirement-work(old),
+      lifetime-retirement-work(old-frame.frame-lifetime)
+    ])
+  }
+
+fun retire-replaced-generation-raw(
+    old : trace<e>, old-frame : frame<e>) : <div,exn|e> ()
+  match old
+    Trace-end ->
+      if old-frame.frame-lifetime.try-retire-empty
+      then ()
+      else run-finalizers(
+        old-frame.frame-lifetime.lifetime-retirement,
+        collect-replaced-generation(old,old-frame))
+    _ -> run-finalizers(
+      old-frame.frame-lifetime.lifetime-retirement,
+      collect-replaced-generation(old,old-frame))
+
+pub fun built-trace/run-publication(
+    built : built-trace<e>, plane : plane<e>) : <div|e> error<()>
+  val action = built.built-publication-action
+  capture-error(fn() {
+    with-context(
+      plane,
+      built.built-publication-current,
+      built.built-publication-frame,
+      action)
+  })
+
+fun restore-resume-build-context(
+    plane : plane<e>,
+    previous-draft : maybe<ref<global,list<trace<e>>>>,
+    previous-current : maybe<continuation-gate>,
+    previous-frame : frame<e>) : ()
+  store(plane.plane-current-frame,previous-frame)
+  store(plane.plane-current,previous-current)
+  store(plane.plane-draft,previous-draft)
+
+fun restore-resume-publication-context(
+    plane : plane<e>,
+    previous-current : maybe<continuation-gate>,
+    previous-frame : frame<e>) : ()
+  store(plane.plane-current-frame,previous-frame)
+  store(plane.plane-current,previous-current)
+
+fun rollback-resume(
+    state : ref<global,capture-state>,
+    draft-frame : frame<e>,
+    drafts : ref<global,list<trace<e>>>) : e ()
+  match load(state)
+    Capture-running -> store(state,Capture-pending)
+    _ -> ()
+  abandon-draft-frame(draft-frame,load(drafts))
+
 pub fun resume-node(plane : plane<e>, current : trace<e>,
                 gate : continuation-gate,
                 child : ref<global,trace<e>>,
@@ -163,84 +231,75 @@ pub fun resume-node(plane : plane<e>, current : trace<e>,
       val draft-frame = Frame(new-lifetime-owner(
         Scope-starting,plane.plane-retirement))
       val drafts = cell([])
-      val completed = cell(False)
-      val resume-draft = fn() resume(draft-frame)
+      val previous-draft = load(plane.plane-draft)
+      val previous-current = load(plane.plane-current)
+      val previous-frame = load(plane.plane-current-frame)
+      val phase = cell(Resume-build)
       finally(
         fn() lift-div(fn(){
-          if load(completed) then () else
-            // An ambient final control never returns through capture-error. Keep
-            // the actual queued resumption Pending and synchronously retire
-            // every continuation/scope created by the abandoned generation.
-            match load(state)
-              Capture-running -> store(state,Capture-pending)
-              _ -> ()
-            abandon-draft-frame(draft-frame,load(drafts))
+          match load(phase)
+            Resume-build ->
+              restore-resume-build-context(
+                plane,previous-draft,previous-current,previous-frame)
+              rollback-resume(state,draft-frame,drafts)
+            Resume-ambient ->
+              rollback-resume(state,draft-frame,drafts)
+            Resume-publication ->
+              restore-resume-publication-context(
+                plane,previous-current,previous-frame)
+              rollback-resume(state,draft-frame,drafts)
+            Resume-complete -> ()
         }),
         fn() lift-div(fn()
           val attempt = pretend-no-div{
-            attempt-build(plane,drafts,{
-              with-current(plane,current,draft-frame,resume-draft)
-            })
-          }
-          val result = match attempt
-            Error(failure) ->
-              match load(state)
-                Capture-running -> store(state,Capture-pending)
-                _ -> ()
-              abandon-draft-frame(draft-frame,load(drafts))
-              Error(failure)
-            Ok(built) ->
-              val publish = built.built-publish
+            capture-error(fn() {
+              store(plane.plane-draft,Just(drafts))
+              store(plane.plane-current,Just(gate))
+              store(plane.plane-current-frame,draft-frame)
+              val built = resume(draft-frame)
+              store(plane.plane-current-frame,previous-frame)
+              store(plane.plane-current,previous-current)
+              store(plane.plane-draft,previous-draft)
+              store(phase,Resume-ambient)
+
               val old = load(child)
               store(child,Trace-end)
-              store(old-frame.frame-lifetime.lifetime-token,Scope-branch-dead)
+              store(
+                old-frame.frame-lifetime.lifetime-token,Scope-branch-dead)
               store(current-frame-slot,draft-frame)
-              val retirement = pretend-no-div{
-                collect-retirement-work([
-                  trace-retirement-work(old),
-                  lifetime-retirement-work(old-frame.frame-lifetime)
-                ])
-              }
-              val retired = pretend-no-div{
-                capture-error(fn() run-finalizers(
-                  old-frame.frame-lifetime.lifetime-retirement,retirement))
-              }
-              match retired
-                Error(failure) ->
+              retire-replaced-generation-raw(old,old-frame)
+
+              match load(state)
+                Capture-dead -> lift-div(fn() lift-exn(fn() ()))
+                _ ->
+                  store(phase,Resume-publication)
+                  store(
+                    plane.plane-current,built.built-publication-current)
+                  store(
+                    plane.plane-current-frame,
+                    built.built-publication-frame)
+                  val publication = built.built-publication-action
+                  publication()
+                  store(plane.plane-current-frame,previous-frame)
+                  store(plane.plane-current,previous-current)
+                  store(phase,Resume-ambient)
                   match load(state)
-                    Capture-running -> store(state,Capture-pending)
-                    _ -> ()
-                  abandon-draft-frame(draft-frame,load(drafts))
-                  Error(failure)
-                Ok(_) ->
-                  match load(state)
-                    Capture-dead ->
-                      abandon-draft-frame(draft-frame,load(drafts))
-                      Ok(())
+                    Capture-dead -> lift-div(fn() lift-exn(fn() ()))
                     _ ->
-                      val publication = pretend-no-div{ publish() }
-                      match publication
-                        Error(failure) ->
-                          match load(state)
-                            Capture-running -> store(state,Capture-pending)
-                            _ -> ()
-                          abandon-draft-frame(draft-frame,load(drafts))
-                          Error(failure)
-                        Ok(_) ->
-                          match load(state)
-                            Capture-dead ->
-                              abandon-draft-frame(draft-frame,load(drafts))
-                              Ok(())
-                            _ ->
-                              store(child,built.built-root)
-                              activate-trace(plane,built.built-root)
-                              store(draft-frame.frame-lifetime.lifetime-token,Scope-live)
-                              match load(state)
-                                Capture-running -> store(state,Capture-live)
-                                _ -> ()
-                              Ok(())
-          store(completed,True)
-          result
+                      store(child,built.built-root)
+                      activate-trace(plane,built.built-root)
+                      match load(state)
+                        Capture-running -> store(state,Capture-live)
+                        _ -> ()
+                      store(
+                        draft-frame.frame-lifetime.lifetime-token,Scope-live)
+                      store(phase,Resume-complete)
+                      lift-div(fn() lift-exn(fn() ()))
+            })
+          }
+          match attempt
+            Error(failure) -> Error(failure)
+            Ok(_) -> Ok(())
         )
       )
     _ -> Ok(())

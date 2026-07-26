@@ -193,7 +193,7 @@ export function registry_fs_has_linked_nodes(target) /* forall<a> (target : regi
  
  
 // monadic lift
-export function registry_fs__mlift_try_insert_10136(count, head, next, slot, _c_x10119) /* forall<_e,_e1,_e2,a> (count : ref<global,int>, head : ref<global,registry-link<a>>, next : ref<global,registry-link<a>>, slot : ref<global,maybe<a>>, ()) -> maybe<registry-registration<a>> */  {
+export function registry_fs__mlift_try_insert_10158(count, head, next, slot, _c_x10135) /* forall<_e,_e1,_e2,a> (count : ref<global,int>, head : ref<global,registry-link<a>>, next : ref<global,registry-link<a>>, slot : ref<global,maybe<a>>, ()) -> maybe<registry-registration<a>> */  {
    
   var back_0 = { value: head };
    
@@ -223,14 +223,14 @@ export function registry_fs_try_insert(target, value) /* forall<a> (target : reg
     var value_4_10030 = next.value;
      
     if (value_4_10030 === null) {
-      var x_10138 = $std_core_types.Unit;
+      var x_10160 = $std_core_types.Unit;
     }
     else {
-      var x_10138 = (((value_4_10030.link_back)).value = next);
+      var x_10160 = (((value_4_10030.link_back)).value = next);
     }
     if ($std_core_hnd._yielding()) {
-      return $std_core_hnd.yield_extend(function(_c_x10119 /* () */ ) {
-        return registry_fs__mlift_try_insert_10136(target.registry_count, target.registry_head, next, slot, _c_x10119);
+      return $std_core_hnd.yield_extend(function(_c_x10135 /* () */ ) {
+        return registry_fs__mlift_try_insert_10158(target.registry_count, target.registry_head, next, slot, _c_x10135);
       });
     }
     else {
@@ -261,7 +261,7 @@ export function registry_fs_insert(target, value) /* forall<a> (target : registr
  
  
 // monadic lift
-export function registry_registration_fs__mlift_take_10137(back, count, current, next, _c_x10124) /* forall<_e,_e1,a> (back : ref<global,ref<global,registry-link<a>>>, count : ref<global,int>, current : a, next : ref<global,registry-link<a>>, ()) -> maybe<a> */  {
+export function registry_registration_fs__mlift_take_10159(back, count, current, next, _c_x10140) /* forall<_e,_e1,a> (back : ref<global,ref<global,registry-link<a>>>, count : ref<global,int>, current : a, next : ref<global,registry-link<a>>, ()) -> maybe<a> */  {
    
   var x_10059 = count.value;
    
@@ -294,14 +294,14 @@ export function registry_registration_fs_take(registration) /* forall<a> (regist
     ((predecessor).value = successor);
      
     if (successor === null) {
-      var x_10141 = $std_core_types.Unit;
+      var x_10163 = $std_core_types.Unit;
     }
     else {
-      var x_10141 = (((successor.link_back)).value = predecessor);
+      var x_10163 = (((successor.link_back)).value = predecessor);
     }
     if ($std_core_hnd._yielding()) {
-      return $std_core_hnd.yield_extend(function(_c_x10124 /* () */ ) {
-        return registry_registration_fs__mlift_take_10137(registration.registration_back, registration.registration_count, value_0.value, registration.registration_next, _c_x10124);
+      return $std_core_hnd.yield_extend(function(_c_x10140 /* () */ ) {
+        return registry_registration_fs__mlift_take_10159(registration.registration_back, registration.registration_count, value_0.value, registration.registration_next, _c_x10140);
       });
     }
     else {
@@ -354,6 +354,82 @@ export function registry_fs_snapshot(target) /* forall<a> (target : registry<a>)
   return snapshot_loop((target.registry_head).value, $std_core_types.Nil);
 }
  
+ 
+// Allocation-free lookup for total predicates which neither enter user code
+// nor mutate this registry.
+export function find_readonly_loop(values, predicate) /* forall<a> (values : registry-link<a>, predicate : (a) -> bool) -> div maybe<a> */  { tailcall: while(1)
+{
+  if (values === null) {
+    return $std_core_types.Nothing;
+  }
+  else {
+    var _x14 = (values.link_value).value;
+    if (_x14 === null) {
+      {
+        // tail call
+        var _x15 = (values.link_next).value;
+        values = _x15;
+        continue tailcall;
+      }
+    }
+    else {
+      var _x16 = predicate(_x14.value);
+      if (_x16) {
+        return $std_core_types.Just(_x14.value);
+      }
+      else {
+        {
+          // tail call
+          var _x17 = (values.link_next).value;
+          values = _x17;
+          continue tailcall;
+        }
+      }
+    }
+  }
+}}
+ 
+export function registry_fs_find_readonly(target, predicate) /* forall<a> (target : registry<a>, predicate : (a) -> bool) -> maybe<a> */  {
+  return find_readonly_loop((target.registry_head).value, predicate);
+}
+ 
+ 
+// Allocation-free traversal for internal callbacks which neither enter user
+// code nor mutate this registry. Read the successor before invoking the
+// callback so traversal never depends on the current node afterward. This
+// deliberately has a narrower contract than `snapshot`.
+export function visit_readonly_loop(values, action) /* forall<a> (values : registry-link<a>, action : (a) -> ()) -> div () */  { tailcall: while(1)
+{
+  if (values === null) {
+    return $std_core_types.Unit;
+  }
+  else {
+     
+    var rest = (values.link_next).value;
+    var _x18 = (values.link_value).value;
+    if (_x18 === null) {
+      {
+        // tail call
+        values = rest;
+        continue tailcall;
+      }
+    }
+    else {
+       
+      action(_x18.value);
+      {
+        // tail call
+        values = rest;
+        continue tailcall;
+      }
+    }
+  }
+}}
+ 
+export function registry_fs_visit_readonly(target, action) /* forall<a> (target : registry<a>, action : (a) -> ()) -> () */  {
+  return visit_readonly_loop((target.registry_head).value, action);
+}
+ 
 export function detach_loop(values, collected) /* forall<a> (values : registry-link<a>, collected : list<a>) -> div list<a> */  { tailcall: while(1)
 {
   if (values === null) {
@@ -380,9 +456,9 @@ export function detach_loop(values, collected) /* forall<a> (values : registry-l
     else {
       {
         // tail call
-        var _x14 = $std_core_types.Cons(value_1.value, collected);
+        var _x19 = $std_core_types.Cons(value_1.value, collected);
         values = rest;
-        collected = _x14;
+        collected = _x19;
         continue tailcall;
       }
     }
@@ -390,8 +466,8 @@ export function detach_loop(values, collected) /* forall<a> (values : registry-l
 }}
  
 export function registry_fs_seal_detach(target) /* forall<a> (target : registry<a>) -> maybe<list<a>> */  {
-  var _x15 = (target.registry_is_sealed).value;
-  if (_x15) {
+  var _x20 = (target.registry_is_sealed).value;
+  if (_x20) {
     return $std_core_types.Nothing;
   }
   else {

@@ -4,6 +4,7 @@ import kokaine/async/effects
 import kokaine/reactive/internal/model
 import kokaine/reactive/internal/runtime
 import kokaine/reactive/async/internal/runtime
+import kokaine/reactive/async/internal/web-runtime
 import kokaine/internal/registry
 import std/core/undiv
 
@@ -72,7 +73,7 @@ tail fun install-pending(left : int, distinct-scopes : bool) : <async,div> ()
 fun cancel-pending-wave(distinct-scopes : bool) : <ui,exn> ()
   val (root,()) : (root<<ui>>,()) = create-root fn(_root) ()
   dispatch(root,fn()
-    run-generation-async(root,fn() {
+    run-web-generation-async(root,fn() {
       pretend-no-div{ install-pending(12000,distinct-scopes) }
       cancel-outstanding()
     })
@@ -126,7 +127,8 @@ pub fun main()
   exercise-lease-registry()
   val (root,()) : (root<<ui>>,()) = create-root fn(_root) ()
   dispatch(root,fn()
-    run-generation-async(root,fn() pretend-no-div{ schedule-many(12000) })
+    run-web-generation-async(
+      root,fn() pretend-no-div{ schedule-many(12000) })
   )
   start-scale-clock()
   after-microtasks(fn()

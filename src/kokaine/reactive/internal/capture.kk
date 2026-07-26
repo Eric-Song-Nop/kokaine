@@ -29,10 +29,9 @@ pub fun reify-trace(root : root<r>, plane : plane<e>,
           val checkpoint = load(plane.plane-current)
           Built-trace(
             Trace-end,
-            fn() capture-error(fn()
-              with-context(plane,checkpoint,terminal,
-                fn() publish(value))
-            )
+            checkpoint,
+            terminal,
+            fn() publish(value)
           )
         }
         raw ctl read-source(source,mode,producer) -> {
@@ -63,8 +62,11 @@ pub fun reify-trace(root : root<r>, plane : plane<e>,
                 current-frame-slot,
                 fn(_) rcontext.resume(load(source.source-cell)),
                 fn() {
+                  val terminal = load(plane.plane-current-frame)
+                  val checkpoint = load(plane.plane-current)
                   val _ = rcontext.finalize(
-                    Built-trace(Trace-end,fn() lift-div(fn() Ok(())))
+                    Built-trace(
+                      Trace-end,checkpoint,terminal,fn() ())
                   )
                   ()
                 },
@@ -78,7 +80,11 @@ pub fun reify-trace(root : root<r>, plane : plane<e>,
               val nested = with-current(plane,current,current-frame,
                 fn() rcontext.resume(load(source.source-cell)))
               store(child,nested.built-root)
-              Built-trace(current,nested.built-publish)
+              Built-trace(
+                current,
+                nested.built-publication-current,
+                nested.built-publication-frame,
+                nested.built-publication-action)
         }
   track()
 
@@ -126,8 +132,9 @@ pub fun prepare-trace(root : root<r>, plane : plane<e>,
                 val _ = try-retire-scope-drafts(current,load(drafts))
                 Error(failure)
               Ok(built) ->
-                val publish-built = built.built-publish
-                val publication = pretend-no-div{ publish-built() }
+                val publication = pretend-no-div{
+                  built.run-publication(plane)
+                }
                 match publication
                   Error(failure) ->
                     val _ = try-retire-scope-drafts(current,load(drafts))

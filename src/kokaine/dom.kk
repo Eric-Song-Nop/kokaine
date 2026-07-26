@@ -10,8 +10,9 @@ module kokaine/dom
 import kokaine/reactive
 import kokaine/reactive/integration
 import kokaine/reactive/async
+import kokaine/async/effects
 import kokaine/html
-import kokaine/internal/event-runtime
+import kokaine/reactive/integration/event
 import kokaine/internal/key-index
 import kokaine/internal/compat
 import kokaine/dom/internal/keyed-transaction
@@ -716,7 +717,7 @@ fun snapshot(value : raw-event) : <ui,exn> event
           raw-event-any(value))
 
 fun invoke-event(root : root<<ui>>, portal : reentry<<ui>>,
-                 continuation : event-continuation,
+                 continuation : event-continuation<async,event>,
                  value : raw-event)
                 : ui ()
   // A browser event runs after `main` has returned, so its dynamic exception
@@ -748,7 +749,7 @@ fun invoke-event(root : root<<ui>>, portal : reentry<<ui>>,
 
 fun retire-event-listener(
       target : element, name : string,
-      continuation : event-continuation,
+      continuation : event-continuation<async,event>,
       listener : ref<global,maybe<dom-listener>>)
     : <ui,exn> ()
   // Gate the continuation before detaching the host callback. Even if a
@@ -766,7 +767,7 @@ fun retire-event-listener(
   )
 
 fun capture-event-listener(root : root<<ui>>, action : callback)
-                          : <ui,exn> event-continuation
+                          : <ui,exn> event-continuation<async,event>
   val captured = transaction-cell(Nothing)
   dispatch(root,fn()
     run-async(root,fn()

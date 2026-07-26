@@ -1,12 +1,24 @@
 /*--------------------------------------------------------------------------
-  Rank-2 effect-row closure for retained browser turns.
+  Host scheduling and rank-2 effect-row closure for retained async turns.
 
-  The runner carries no callback payload. Async invokes it around each
-  complete completion or cancellation turn so a generic family row is closed
-  before the action becomes a `ui`-only host callback.
+  The dispatcher retains only a `ui` callback, while the runner closes the
+  generic family row around each complete completion or cancellation turn.
+  Keeping the two capabilities separate lets each host choose when callbacks
+  run without changing how a reactive continuation re-enters its generation.
 --------------------------------------------------------------------------*/
 module kokaine/reactive/async/internal/host-turn
 
+
+pub type host-turn-dispatcher
+  Host-turn-dispatcher(
+    dispatch-host-turn : (() -> ui ()) -> ui bool
+  )
+
+pub noinline fun host-turn-dispatcher/dispatch(
+    dispatcher : host-turn-dispatcher,
+    action : () -> ui ()) : ui bool
+  match dispatcher
+    Host-turn-dispatcher(dispatch-host-turn) -> dispatch-host-turn(action)
 
 pub type host-turn-runner<e::E,h::E>
   Host-turn-runner(

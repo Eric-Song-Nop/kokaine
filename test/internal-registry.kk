@@ -1,8 +1,18 @@
 module internal-registry
 
 import kokaine/internal/registry
+import std/core/unsafe
 import std/core/undiv
 
+
+fun hidden(value : a) : ref<global,a>
+  unsafe-total { ref(value) }
+
+fun load-hidden(value : ref<global,a>) : a
+  unsafe-total { !value }
+
+fun store-hidden(target : ref<global,a>, value : a) : ()
+  unsafe-total { target := value }
 
 fun check(ok : bool, message : string)
   if ok then () else throw("internal registry: " ++ message)
@@ -68,7 +78,55 @@ fun test-seal-detaches-one-owned-snapshot()
   check(target.try-insert(5).is-nothing,
         "non-throwing insertion reports a sealed registry atomically")
 
+fun test-readonly-visit-preserves-registry-order()
+  val target = new-registry()
+  val first = target.insert(1)
+  val second = target.insert(2)
+  val third = target.insert(3)
+  val seen = hidden([])
+
+  target.visit-readonly(fn(value) {
+    store-hidden(seen,Cons(value,load-hidden(seen)))
+  })
+  check(load-hidden(seen).reverse == [3,2,1],
+        "readonly visit preserves newest-first registration order")
+  check(target.count == 3,
+        "readonly visit leaves every registration linked")
+
+  val _ = second.take
+  store-hidden(seen,[])
+  target.visit-readonly(fn(value) {
+    store-hidden(seen,Cons(value,load-hidden(seen)))
+  })
+  check(load-hidden(seen).reverse == [3,1],
+        "readonly visit follows the remaining physical chain")
+  val _ = first.take
+  val _ = third.take
+  ()
+
+fun test-readonly-find-skips-detached_entries()
+  val target = new-registry()
+  val first = target.insert(10)
+  val middle = target.insert(20)
+  val last = target.insert(30)
+
+  check(target.find-readonly(fn(value) value == 30) == Just(30),
+        "readonly find returns an existing newest entry")
+  check(target.find-readonly(fn(value) value == 99).is-nothing,
+        "readonly find reports a missing entry")
+  val _ = middle.take
+  check(target.find-readonly(fn(value) value == 20).is-nothing,
+        "readonly find skips a detached middle entry")
+  check(target.find-readonly(fn(value) value == 10) == Just(10),
+        "readonly find continues through the remaining chain")
+
+  val _ = first.take
+  val _ = last.take
+  ()
+
 pub fun main()
   test-removable-registrations-scale-linearly()
   test-seal-detaches-one-owned-snapshot()
+  test-readonly-visit-preserves-registry-order()
+  test-readonly-find-skips-detached_entries()
   println("internal-registry: all checks passed")

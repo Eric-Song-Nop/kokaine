@@ -13,11 +13,11 @@
     }
   },
   "runtime": {
-    "files": 410,
-    "jsonBytes": 7995022,
-    "gzipBytes": 1250005,
-    "sha256": "3cb0f2111adef4051dd015b65337e241c14af70fc0287ab5b2a8b341c07389ca"
+    "files": 412,
+    "jsonBytes": 8054272,
+    "gzipBytes": 1258179,
+    "sha256": "b534282c319fbc3ff1f4c8412e806bad13efc123eefbf149d87f088dc2fa5202"
   },
-  "staticPrecompiledModules": 143,
-  "kokainePrecompiledFiles": 76
+  "staticPrecompiledModules": 144,
+  "kokainePrecompiledFiles": 78
 }

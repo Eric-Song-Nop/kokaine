@@ -118,12 +118,17 @@ pub fun one-shot-task/@copy[57,3,57,15] : forall<a,b,c> (@this : (one-shot-task 
 pub fun new-one-shot-task[60,9,60,25] : forall<a,b,c> (payload : b) -> (one-shot-task :: (V, V, V) -> V)<b,c,a>;
 pub fun one-shot-task/phase[63,18,63,36] : forall<a,b,c> (task : (one-shot-task :: (V, V, V) -> V)<b,c,a>) -> task-phase;
 pub fun one-shot-task/accept[71,9,71,28] : forall<a,b,c> (task : (one-shot-task :: (V, V, V) -> V)<b,c,a>, result : c) -> std/core/types/bool;
+// Host dispatch may execute synchronously while the owning generation is
+// retiring. Inspecting the ready payload before claiming lets the generation
+// runtime select live result delivery or retirement cancellation atomically:
+// the predicate is pure and browser hosts are single-threaded.
+pub fun one-shot-task/peek-ready-payload[83,9,83,40] : forall<a,b,c> (task : (one-shot-task :: (V, V, V) -> V)<b,c,a>) -> (std/core/types/maybe :: V -> V)<b>;
 // `Nothing` means the disposer was retained by the task. `Just(disposer)`
 // transfers it back to setup code because another transition already won.
-pub fun one-shot-task/install-disposer[81,9,81,38] : forall<a,b,c> (task : (one-shot-task :: (V, V, V) -> V)<b,c,a>, disposer : a) -> (std/core/types/maybe :: V -> V)<a>;
-pub fun one-shot-task/claim-ready[93,9,93,33] : forall<a,b,c> (task : (one-shot-task :: (V, V, V) -> V)<b,c,a>) -> (std/core/types/maybe :: V -> V)<(task-claim :: (V, V, V) -> V)<b,c,a>>;
-pub fun one-shot-task/claim-stop[103,9,103,32] : forall<a,b,c> (task : (one-shot-task :: (V, V, V) -> V)<b,c,a>, reason : task-stop-reason) -> (std/core/types/maybe :: V -> V)<(task-claim :: (V, V, V) -> V)<b,c,a>>;
-pub fun one-shot-task/finish[116,9,116,28] : forall<a,b,c> (task : (one-shot-task :: (V, V, V) -> V)<b,c,a>) -> std/core/types/bool;
+pub fun one-shot-task/install-disposer[91,9,91,38] : forall<a,b,c> (task : (one-shot-task :: (V, V, V) -> V)<b,c,a>, disposer : a) -> (std/core/types/maybe :: V -> V)<a>;
+pub fun one-shot-task/claim-ready[103,9,103,33] : forall<a,b,c> (task : (one-shot-task :: (V, V, V) -> V)<b,c,a>) -> (std/core/types/maybe :: V -> V)<(task-claim :: (V, V, V) -> V)<b,c,a>>;
+pub fun one-shot-task/claim-stop[113,9,113,32] : forall<a,b,c> (task : (one-shot-task :: (V, V, V) -> V)<b,c,a>, reason : task-stop-reason) -> (std/core/types/maybe :: V -> V)<(task-claim :: (V, V, V) -> V)<b,c,a>>;
+pub fun one-shot-task/finish[126,9,126,28] : forall<a,b,c> (task : (one-shot-task :: (V, V, V) -> V)<b,c,a>) -> std/core/types/bool;
  
 fun @kokaine-cache-phase[1,0,1,0] : () -> std/core/types/int;
  

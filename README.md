@@ -9,10 +9,11 @@ DOM.
 
 The core package supports Koka 3.2.x (`>=3.2.3 <3.3.0`). Generated applications
 currently pin Koka 3.2.3, while the browser Playground ships Koka 3.2.4. The
-source-local continuation index, two-plane scheduler, and HTML vocabulary are
-backend-neutral. The complete browser renderer targets `jsweb`; a smaller
-`wasmweb` proof separately verifies the retained-callback ABI used to cross an
-asynchronous host boundary.
+source-local continuation index, two-plane scheduler, lifetime model, and
+retained-host callback transport are renderer-neutral. The HTML vocabulary is
+shared by DOM and SSR, but is deliberately not the native-UI abstraction. The
+complete browser renderer targets `jsweb`; a smaller `wasmweb` proof separately
+verifies the retained-callback ABI used to cross an asynchronous host boundary.
 
 ## Start here
 
@@ -62,6 +63,28 @@ The package and editor contracts are documented in
 [npm packages and workspaces](docs/npm-packages.md). The online Playground
 remains the zero-install entry point.
 
+### PocketJS native UI (experimental)
+
+The experimental `@kokaine/pocketjs` adapter keeps Koka's `jsweb` compiler
+target while replacing the HTML renderer and browser packager with a separate
+native-UI vocabulary and [PocketJS](https://pocketjs.dev/) 0.6.0 integration.
+PocketJS here means a QuickJS + Rust retained UI stack, not a database or BaaS.
+The adapter includes generation-owned async press callbacks, structured
+concurrency, and `sleep`/`yield`/`timeout` over Pocket's deterministic virtual
+clock; it does not route continuations through browser promises.
+See [PocketJS feasibility and boundaries](docs/pocketjs.md) before choosing it;
+the first release is intentionally smaller than the DOM surface and has
+important build-time asset and runtime API constraints.
+
+The [PocketJS browser example](examples/pocketjs/README.md) runs the generated
+Koka application through Pocket's official Canvas/WASM host. With an exact
+PocketJS 0.6.0 checkout prepared as described there, use:
+
+```sh
+make serve-pocketjs-example POCKETJS_CHECKOUT=/absolute/path/to/pocketjs
+make test-pocketjs-browser POCKETJS_CHECKOUT=/absolute/path/to/pocketjs
+```
+
 ## Interactive report
 
 The Chinese report [代数效应与续体如何组成增量 UI](docs/algebraic-effects-ui-report/index.html)
@@ -94,7 +117,7 @@ other:
 | -------------- | ----------------------- | ----------------------------------------------------------------------- |
 | `signal-read`  | `count.get`             | Validate a producer and interpret the read as tracked or sampled.        |
 | `signal-write` | `count.set(1)`          | Apply equality, commit, invalidate, batch, and request settling.         |
-| `html<e>`      | `text`, `div`, `region` | Collect emitted nodes into a backend-neutral `view<e>`.                  |
+| `html<e>`      | `text`, `div`, `region` | Collect a DOM/SSR-neutral HTML `view<e>`.                                |
 
 The tracked-read handler installed by `reify-trace` is where the two ideas meet.
 It handles the `signal-read` operation with `raw ctl`, reifies the exact
@@ -180,10 +203,11 @@ attempts.
   so event-created reactive work cannot escape to the root.
 - A listener's `run-async` delimiter executes direct-style code only through
   its first suspension. The initiating reactive batch then closes. Every
-  completion, including one reported synchronously during setup, continues in
-  a microtask which revalidates and re-enters the exact owning generation as a
-  fresh batched turn.
-- Every outstanding Web await is a one-shot, generation-owned capability.
+  completion, including one reported synchronously during setup, goes through
+  the active host dispatcher, which revalidates and re-enters the exact owning
+  generation as a fresh batched turn. The Web adapter posts microtasks; Pocket
+  flushes a mount-scoped FIFO during deterministic virtual frames.
+- Every outstanding host await is a one-shot, generation-owned capability.
   Completion and retirement first revoke the retained continuation and host
   callbacks. Cancellation is final control rather than an ordinary exception,
   so it cannot be caught as a failure and still unwinds the strand's `finally`
@@ -198,7 +222,8 @@ attempts.
   while a canceled child still has an outstanding await or finalizer. A queued
   completion keeps its host disposer until the child suffix accepts it, and a
   value made unreachable by a later group failure is discarded immediately.
-  Timer, Promise, and Fetch adapters all use the same revocable await protocol.
+  Web Timer, Promise, and Fetch adapters and Pocket virtual timers all use the
+  same revocable await protocol.
 - A Resource tracks only its synchronous source calculation. Its loader
   receives an immutable source snapshot and has no `signal-read` capability;
   equality can therefore preserve an active request, while refresh, source
@@ -210,8 +235,8 @@ attempts.
 - `kokaine/control` provides memo-driven `branch`/`when` and keyed `for`
   overloads for lists and vectors. Browser reconciliation retains row DOM,
   listeners, local state, and row-owned reactive work by business key; SSR
-  walks the same backend-neutral plan as one deterministic snapshot. Duplicate
-  keys fail before publication in both backends.
+  walks the same HTML plan as one deterministic snapshot. Duplicate keys fail
+  before publication in both backends.
 
 ## npm application tooling
 
@@ -424,7 +449,7 @@ view which created them, so the existing owner, listener, cleanup, and SSR
 rules apply unchanged. The browser supplies modal inertness, focus placement,
 Escape handling, light dismiss, and popover stacking.
 
-The backend-neutral `kokaine/html` vocabulary includes:
+The DOM/SSR-neutral `kokaine/html` vocabulary includes:
 
 - `dialog { ... }` and `dialog("text")` builders;
 - `popover(Popover-auto|Popover-manual|Popover-hint)`;
@@ -693,6 +718,7 @@ examples/keyed.kk                           keyed control-flow specimen bench
 examples/keyed/                             interactive keyed example shell and styles
 examples/report.kk                          self-hosted report entry point
 examples/report/*.kk                        complete Kokaine report page and labs
+examples/pocketjs/                         Koka + Pocket manifest/TS composition
 examples/counter/model.kk                   sources and derived state
 examples/counter/actions.kk                 mutations, batches, child effects
 examples/counter/controls.kk                source controls and live properties
@@ -705,6 +731,7 @@ src/kokaine/reactive/integration.kk        host re-entry, provisions, and lifeti
 src/kokaine/reactive/integration/internal/lifetime-scope.kk persistent integration lifetimes
 src/kokaine/reactive/integration/internal/provision.kk provisional work orchestration
 src/kokaine/reactive/integration/internal/reentry.kk captured host re-entry
+src/kokaine/reactive/integration/event.kk typed revocable host event K
 src/kokaine/reactive/internal/model.kk     traces, planes, scopes, and capabilities
 src/kokaine/reactive/internal/capture.kk   exact read-suffix reification
 src/kokaine/internal/registry.kk           removable O(1) lifetime registrations
@@ -714,11 +741,11 @@ src/kokaine/reactive/internal/work-transaction.kk deque and local work groups
 src/kokaine/reactive/internal/scheduler.kk invalidation, queues, targeted settle
 src/kokaine/reactive/internal/handlers.kk  signal interpreters and dispatch
 src/kokaine/reactive/async.kk             generation-owned Async integration
-src/kokaine/reactive/async/internal/host-turn.kk rank-2 retained-turn closure
-src/kokaine/reactive/async/internal/runtime.kk Web await interpreter
+src/kokaine/reactive/async/integration.kk host dispatcher facade
+src/kokaine/reactive/async/internal/host-turn.kk scheduling and rank-2 turn closure
+src/kokaine/reactive/async/internal/runtime.kk host-neutral await interpreter
 src/kokaine/reactive/internal/runtime.kk   roots and high-level reactive values
 src/kokaine/reactive/internal/bridge.kk    names used by the public facade
-src/kokaine/internal/event-runtime.kk      guarded multi-shot browser event K
 src/kokaine/internal/key-index.kk          persistent balanced keyed-row index
 src/kokaine/dom/internal/keyed-transaction.kk renderer publication journal
 src/kokaine/control.kk                     branch, when, and list/vector keyed For
@@ -731,9 +758,12 @@ src/kokaine/async/internal/one-shot-task.kk atomic host-task state
 src/kokaine/async/internal/cancellation-supervisor.kk lexical cancellation
 src/kokaine/web/window.kk                  one-shot window awaits and geometry
 src/kokaine/resource.kk                    tracked-source async Resource
-src/kokaine/html.kk                        handled backend-neutral view DSL
+src/kokaine/html.kk                        handled DOM/SSR-neutral HTML view DSL
 src/kokaine/dom.kk                         jsweb renderer and event boundary
 src/kokaine/ssr.kk                         escaped deterministic string renderer
+packages/pocketjs/                         experimental native renderer package
+packages/pocketjs/src/kokaine/pocket/async.kk Pocket virtual-time Async facade
+docs/pocketjs.md                           PocketJS feasibility and boundaries
 test/trace-semantics.kk                    exact suffix and branching semantics
 test/resource-finalization.kk              resource-K parking and finalization
 test/structural-scopes.kk                  ownership and cleanup generations
@@ -746,6 +776,10 @@ test/reactive*.kk                          core, advanced, and stress suites
 test/control-flow.kk                       branch/when/For snapshots and duplicate keys
 test/key-index.kk                          balanced-index correctness and growth bound
 test/integration-boundaries.kk             retained lifetimes and provision leases
+test/integration-event.kk                  typed generic host-event transport
+test/pocketjs-runtime.kk                   retained native-tree lifecycle fixture
+test/pocketjs-bundle-smoke.mjs             compiled Pocket renderer contract
+test/pocketjs-wasm-smoke.mjs               upstream Rust/WASM render and input smoke
 test/html.kk                               builder, escaping, and validation checks
 test/dom-lifecycle.kk                      listener, region, and re-entry fixture
 test/dom-event-continuation.kk              nested synchronous event-K fixture

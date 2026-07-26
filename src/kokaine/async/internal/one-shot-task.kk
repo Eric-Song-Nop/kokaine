@@ -76,6 +76,16 @@ pub fun one-shot-task/accept(task : one-shot-task<p,r,d>, result : r) : bool
       True
     _ -> False
 
+// Host dispatch may execute synchronously while the owning generation is
+// retiring. Inspecting the ready payload before claiming lets the generation
+// runtime select live result delivery or retirement cancellation atomically:
+// the predicate is pure and browser hosts are single-threaded.
+pub fun one-shot-task/peek-ready-payload(task : one-shot-task<p,r,d>)
+                                         : maybe<p>
+  match load(task.task-cell)
+    Task-state-ready(payload,_,_) -> Just(payload)
+    _ -> Nothing
+
 // `Nothing` means the disposer was retained by the task. `Just(disposer)`
 // transfers it back to setup code because another transition already won.
 pub fun one-shot-task/install-disposer(task : one-shot-task<p,r,d>,

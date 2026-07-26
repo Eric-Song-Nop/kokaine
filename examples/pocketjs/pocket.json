@@ -1,0 +1,28 @@
+{
+  "$schema": "https://pocketjs.dev/schema/pocket-2.json",
+  "pocket": 2,
+  "id": "dev.kokaine.pocket-demo",
+  "name": "kokaine-pocket-demo",
+  "title": "Kokaine PocketJS Demo",
+  "version": "0.1.0",
+  "engine": {
+    "capabilities": {
+      "requires": [
+        "text.glyphs.baked",
+        "input.buttons"
+      ]
+    }
+  },
+  "app": {
+    "entry": "main.ts",
+    "output": "kokaine-pocket-demo",
+    "framework": "solid",
+    "viewport": {
+      "logical": [
+        480,
+        272
+      ],
+      "presentation": "integer-fit"
+    }
+  }
+}

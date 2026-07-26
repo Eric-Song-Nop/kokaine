@@ -124,6 +124,47 @@ pub fun registry/snapshot(target : registry<a>) : list<a>
   match target
     Registry(_,head,_) -> pretend-no-div{ snapshot-loop(load(head),[]) }
 
+// Allocation-free lookup for total predicates which neither enter user code
+// nor mutate this registry.
+tail fun find-readonly-loop(values : registry-link<a>,
+                            predicate : (a) -> bool) : <div> maybe<a>
+  match values
+    Registry-end -> Nothing
+    Registry-link(slot,_,next) ->
+      match load(slot)
+        Nothing -> find-readonly-loop(load(next),predicate)
+        Just(value) ->
+          if predicate(value) then Just(value)
+          else find-readonly-loop(load(next),predicate)
+
+pub fun registry/find-readonly(target : registry<a>,
+                               predicate : (a) -> bool) : maybe<a>
+  match target
+    Registry(_,head,_) ->
+      pretend-no-div{ find-readonly-loop(load(head),predicate) }
+
+// Allocation-free traversal for internal callbacks which neither enter user
+// code nor mutate this registry. Read the successor before invoking the
+// callback so traversal never depends on the current node afterward. This
+// deliberately has a narrower contract than `snapshot`.
+tail fun visit-readonly-loop(values : registry-link<a>,
+                             action : (a) -> ()) : <div> ()
+  match values
+    Registry-end -> ()
+    Registry-link(slot,_,next) ->
+      val rest = load(next)
+      match load(slot)
+        Nothing -> visit-readonly-loop(rest,action)
+        Just(value) ->
+          action(value)
+          visit-readonly-loop(rest,action)
+
+pub fun registry/visit-readonly(target : registry<a>,
+                                action : (a) -> ()) : ()
+  match target
+    Registry(_,head,_) ->
+      pretend-no-div{ visit-readonly-loop(load(head),action) }
+
 tail fun detach-loop(values : registry-link<a>,
                      collected : list<a>) : <div> list<a>
   match values

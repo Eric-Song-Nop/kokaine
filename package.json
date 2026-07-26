@@ -1,7 +1,7 @@
 {
   "name": "@kokaine/core",
-  "version": "0.1.0",
-  "description": "A fine-grained Web UI runtime for Koka",
+  "version": "0.1.1",
+  "description": "A fine-grained UI runtime for Koka",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
