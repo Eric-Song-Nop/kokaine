@@ -50,7 +50,7 @@ type task-cancellation
 
 type cancellation-reentry
   Cancellation-retirement
-  Cancellation-live
+  Cancellation-live-or-retirement
 
 type task-payload<a,e::E>
   Task-payload(
@@ -64,12 +64,31 @@ type task-payload<a,e::E>
 // before any cancel strand or host disposer can re-enter user code.
 type runtime-supervisor<e::E>
   Runtime-supervisor(
-    supervisor-scope  : async-scope,
-    supervisor-tasks  : cancellation-supervisor<task-cancellation>,
-    supervisor-reason : ref<global,task-stop-reason>,
-    supervisor-owner  : ref<global,maybe<cleanup-registration<<ui|e>>>>,
-    supervisor-family : ref<global,maybe<registry-registration<runtime-supervisor<e>>>>,
-    supervisor-index  : ref<global,maybe<int-index-registration<runtime-supervisor<e>>>>
+    supervisor-scope       : async-scope,
+    supervisor-tasks       : cancellation-supervisor<task-cancellation>,
+    supervisor-reason      : ref<global,task-stop-reason>,
+    supervisor-owner       : ref<global,maybe<cleanup-registration<<ui|e>>>>,
+    supervisor-family      : ref<global,maybe<registry-registration<runtime-supervisor<e>>>>,
+    supervisor-bucket-link : ref<global,maybe<runtime-supervisor-bucket-link<e>>>
+  )
+
+// Async scope identity selects a small bucket; exact structural frame identity
+// selects the supervisor within it. The outer index remains reclaimable when
+// the final frame for a long-lived scope detaches.
+type runtime-supervisor-bucket<e::E>
+  Runtime-supervisor-bucket(
+    bucket-supervisors : registry<runtime-supervisor<e>>,
+    bucket-index       : ref<global,maybe<int-index-registration<runtime-supervisor-bucket<e>>>>
+  )
+
+// A stale host completion retains its task and supervisor. Keep every edge
+// from that supervisor into structural frames or sibling buckets behind one
+// link which detach clears before running user cancellation.
+type runtime-supervisor-bucket-link<e::E>
+  Runtime-supervisor-bucket-link(
+    link-frame        : frame<<ui|e>>,
+    link-bucket       : runtime-supervisor-bucket<e>,
+    link-registration : registry-registration<runtime-supervisor<e>>
   )
 
 type generation-task<a,e::E>
@@ -85,7 +104,7 @@ type generation-task<a,e::E>
 type async-family<e::E>
   Async-family(
     family-supervisors : registry<runtime-supervisor<e>>,
-    family-index       : int-index<runtime-supervisor<e>>,
+    family-index       : int-index<runtime-supervisor-bucket<e>>,
     family-canceled    : ref<global,list<async-scope>>,
     family-root-scope  : async-scope,
     family-dispatcher  : host-turn-dispatcher,
@@ -234,15 +253,23 @@ noinline fun runtime/release-canceled(runtime : generation-runtime<e>,
   store(canceled,load(canceled).filter(fn(current) !(current == scope)))
 
 fun runtime-supervisor/detach(supervisor : runtime-supervisor<e>) : ()
-  // Break the direct scope lookup cycle before unlinking either enumeration
-  // owner. A completed scope therefore cannot retain its family or siblings.
-  val index = load(supervisor.supervisor-index)
-  store(supervisor.supervisor-index,Nothing)
-  match index
+  // Break the exact frame lookup cycle before unlinking either enumeration
+  // owner. Reclaim the scope bucket when its final frame supervisor leaves.
+  val link = load(supervisor.supervisor-bucket-link)
+  store(supervisor.supervisor-bucket-link,Nothing)
+  match link
     Nothing -> ()
-    Just(registration) ->
+    Just(Runtime-supervisor-bucket-link(_,bucket,registration)) ->
       val _ = registration.take
-      ()
+      if bucket.bucket-supervisors.count <= 0 then
+        val index = load(bucket.bucket-index)
+        store(bucket.bucket-index,Nothing)
+        match index
+          Nothing -> ()
+          Just(index-registration) ->
+            val _ = index-registration.take
+            ()
+      else ()
   val owner = load(supervisor.supervisor-owner)
   store(supervisor.supervisor-owner,Nothing)
   match owner
@@ -301,8 +328,23 @@ fun run-task-cancellations(actions : list<task-cancellation>) : ui ()
     fn() run-task-cancel-strands(actions)
   )
 
+fun new-runtime-supervisor-bucket() : runtime-supervisor-bucket<e>
+  Runtime-supervisor-bucket(new-registry(),cell(Nothing))
+
+fun runtime-supervisor-bucket/find-frame(
+    bucket : runtime-supervisor-bucket<e>, current : frame<<ui|e>>)
+    : maybe<runtime-supervisor<e>>
+  bucket.bucket-supervisors.find-readonly(
+    fn(supervisor)
+      match load(supervisor.supervisor-bucket-link)
+        Nothing -> False
+        Just(Runtime-supervisor-bucket-link(frame,_,_)) ->
+          same-frame(frame,current)
+  )
+
 fun new-runtime-supervisor(
-    root : root<<ui|e>>, family : async-family<e>, scope : async-scope)
+    root : root<<ui|e>>, family : async-family<e>, scope : async-scope,
+    current : frame<<ui|e>>, bucket : runtime-supervisor-bucket<e>)
     : <signal-write,pure,ui|e> runtime-supervisor<e>
   val supervisor = Runtime-supervisor(
     scope,new-cancellation-supervisor(),cell(Task-canceled),
@@ -316,19 +358,33 @@ fun new-runtime-supervisor(
   store(supervisor.supervisor-owner,Just(owner))
   val family-registration = family.family-supervisors.insert(supervisor)
   store(supervisor.supervisor-family,Just(family-registration))
-  // Publish keyed lookup only after both cleanup/enumeration owners exist.
-  val index-registration = family.family-index.insert(
-    scope.identity-key,supervisor)
-  store(supervisor.supervisor-index,Just(index-registration))
+  // Publish exact frame lookup only after cleanup/enumeration owners exist.
+  val bucket-registration = bucket.bucket-supervisors.insert(supervisor)
+  store(supervisor.supervisor-bucket-link,
+        Just(Runtime-supervisor-bucket-link(
+          current,bucket,bucket-registration)))
   supervisor
 
 fun runtime/supervisor(
     runtime : generation-runtime<e>, root : root<<ui|e>>, scope : async-scope)
     : <signal-write,pure,ui|e> runtime-supervisor<e>
   val family = runtime.runtime-family
+  val current = load(root.root-effect-plane.plane-current-frame)
   match family.family-index.lookup(scope.identity-key)
-    Just(supervisor) -> supervisor
-    Nothing -> new-runtime-supervisor(root,family,scope)
+    Just(bucket) ->
+      match bucket.find-frame(current)
+        Just(supervisor) -> supervisor
+        Nothing -> new-runtime-supervisor(root,family,scope,current,bucket)
+    Nothing ->
+      val bucket = new-runtime-supervisor-bucket()
+      val supervisor =
+        new-runtime-supervisor(root,family,scope,current,bucket)
+      // New buckets become discoverable only after their exact frame member
+      // has durable structural and family ownership.
+      val registration =
+        family.family-index.insert(scope.identity-key,bucket)
+      store(bucket.bucket-index,Just(registration))
+      supervisor
 
 fun task/detach-cancellation(task : generation-task<a,e>) : ()
   val registration = load(task.task-cancel)
@@ -349,37 +405,51 @@ fun task/detach-cancellation(task : generation-task<a,e>) : ()
 fun run-task-result(task : generation-task<a,e>, family : async-family<e>)
                    : <div,ui> ()
   lift-div fn()
-    match task.task-state.claim-ready
+    match task.task-state.peek-ready-payload
       Nothing -> ()
-      Just(Task-claim(payload,result,_disposer)) ->
-        // `claim-ready` has already replaced all retained fields with Running.
-        // Unlink both ownership indexes before the host-turn runner restores
-        // handlers or executes any continuation/user action.
-        task.detach-cancellation
-        decrement-outstanding()
-        match payload
-          Task-payload(portal,resume-action,label) ->
-            // Host turns have no ambient Koka exception stack. The runner
-            // closes the family row around the complete reactive turn; this
-            // outer boundary reports any remaining exn.
-            with catch fn(problem)
-              report-async-error("uncaught Kokaine async exception (" ++
-                                 label ++ "): " ++ problem.show)
-            finally(
-              fn() { val _ = task.task-state.finish; () },
-              fn()
-                match result
-                  Nothing -> ()
-                  Just(completion) ->
-                    val root = portal.root
-                    family.family-runner.run(fn()
-                      run-reentry(portal,fn() {
-                        resume-generation(root,family,fn() {
-                          resume-action(completion)
-                        })
-                      })
-                    )
-            )
+      Just(Task-payload(portal,_,_)) ->
+        // A conforming dispatcher posts a later turn, but the public host
+        // capability can execute synchronously. Retirement may therefore have
+        // closed this frame before its aggregate supervisor cleanup runs.
+        if !portal.can-run-live then
+          val retired =
+            pretend-no-div{ task.claim-retired-ready(family) }
+          match retired
+            Nothing -> ()
+            Just(cancellation) -> run-task-cancellations([cancellation])
+        else
+          match task.task-state.claim-ready
+            Nothing -> ()
+            Just(Task-claim(payload,result,_disposer)) ->
+              // `claim-ready` has already replaced every retained field with
+              // Running. No user code runs between the live preflight and this
+              // exact one-shot claim.
+              task.detach-cancellation
+              decrement-outstanding()
+              match payload
+                Task-payload(current-portal,resume-action,label) ->
+                  // Host turns have no ambient Koka exception stack. The
+                  // runner closes the family row around the complete reactive
+                  // turn; this boundary reports any remaining exn.
+                  with catch fn(problem)
+                    report-async-error(
+                      "uncaught Kokaine async exception (" ++
+                      label ++ "): " ++ problem.show)
+                  finally(
+                    fn() { val _ = task.task-state.finish; () },
+                    fn()
+                      match result
+                        Nothing -> ()
+                        Just(completion) ->
+                          val root = current-portal.root
+                          family.family-runner.run(fn()
+                            run-reentry(current-portal,fn() {
+                              resume-generation(root,family,fn() {
+                                resume-action(completion)
+                              })
+                            })
+                          )
+                  )
 
 fun accept-task-result(task : generation-task<a,e>, family : async-family<e>,
                        result : await-result<a>) : <div,ui> ()
@@ -426,8 +496,8 @@ fun stopped-task-cancellation(
             match reentry
               Cancellation-retirement ->
                 run-retirement-reentry(portal,unwind)
-              Cancellation-live ->
-                run-reentry(portal,unwind)
+              Cancellation-live-or-retirement ->
+                run-cancellation-reentry(portal,unwind)
           )
         val dispose-host = fn()
           match disposer
@@ -455,14 +525,27 @@ noinline fun task/claim-stop(task : generation-task<a,e>,
 noinline fun task/claim-dispatch-rejection(
     task : generation-task<a,e>, family : async-family<e>)
     : <div> maybe<task-cancellation>
-  match task.task-state.claim-stop(Task-canceled)
+  task.claim-detached-stop(
+    family,Task-canceled,Cancellation-live-or-retirement)
+
+noinline fun task/claim-retired-ready(
+    task : generation-task<a,e>, family : async-family<e>)
+    : <div> maybe<task-cancellation>
+  task.claim-detached-stop(
+    family,Task-retired,Cancellation-retirement)
+
+noinline fun task/claim-detached-stop(
+    task : generation-task<a,e>, family : async-family<e>,
+    reason : task-stop-reason, reentry : cancellation-reentry)
+    : <div> maybe<task-cancellation>
+  match task.task-state.claim-stop(reason)
     Nothing -> lift-div(fn() Nothing)
     Just(claim) ->
       // Unlike aggregate scope cancellation, this task is still linked into
       // its live supervisor. Remove that individual edge before user cleanup.
       task.detach-cancellation
       decrement-outstanding()
-      Just(stopped-task-cancellation(family,claim,Cancellation-live))
+      Just(stopped-task-cancellation(family,claim,reentry))
 
 
 // --------------------------------------------------------------------------

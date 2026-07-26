@@ -95,7 +95,7 @@ export function lifetime_scope_fs__copy(_this, scope_root, scope_checkpoint, sco
  
  
 // monadic lift
-export function _mlift_open_lifetime_scope_10063(lifetime, plane, root, registration) /* forall<_e,e1> (lifetime : kokaine/reactive/internal/model/lifetime-owner<e1>, plane : kokaine/reactive/internal/model/plane<e1>, root : kokaine/reactive/internal/model/root<e1>, registration : kokaine/internal/registry/registry-registration<kokaine/reactive/internal/model/retirement-work<e1>>) -> exn lifetime-scope<e1> */  {
+export function _mlift_open_lifetime_scope_10063(lifetime, plane, root, registration) /* forall<e,_e1> (lifetime : kokaine/reactive/internal/model/lifetime-owner<e>, plane : kokaine/reactive/internal/model/plane<e>, root : kokaine/reactive/internal/model/root<e>, registration : kokaine/internal/registry/registry-registration<kokaine/reactive/internal/model/retirement-work<e>>) -> exn lifetime-scope<e> */  {
    
   var value_0_10024 = $std_core_hnd._open_none1(function(plane_2 /* kokaine/reactive/internal/model/plane<307> */ ) {
       return plane_2.plane_current;
@@ -107,7 +107,7 @@ export function _mlift_open_lifetime_scope_10063(lifetime, plane, root, registra
  
  
 // monadic lift
-export function _mlift_open_lifetime_scope_10064(parent, plane, root, wild___0) /* forall<_e,e1> (parent : kokaine/reactive/internal/model/frame<e1>, plane : kokaine/reactive/internal/model/plane<e1>, root : kokaine/reactive/internal/model/root<e1>, wild_@0 : ()) -> exn lifetime-scope<e1> */  {
+export function _mlift_open_lifetime_scope_10064(parent, plane, root, wild___0) /* forall<e,_e1> (parent : kokaine/reactive/internal/model/frame<e>, plane : kokaine/reactive/internal/model/plane<e>, root : kokaine/reactive/internal/model/root<e>, wild_@0 : ()) -> exn lifetime-scope<e> */  {
    
   var _x_x2_10042 = $std_core_hnd._open_none1(function(plane_1 /* kokaine/reactive/internal/model/plane<307> */ ) {
       return plane_1.plane_retirement;
@@ -134,7 +134,7 @@ export function _mlift_open_lifetime_scope_10064(parent, plane, root, wild___0) 
  
  
 // monadic lift
-export function _mlift_open_lifetime_scope_10065(root, wild__) /* forall<_e,e1> (root : kokaine/reactive/internal/model/root<e1>, wild_ : ()) -> exn lifetime-scope<e1> */  {
+export function _mlift_open_lifetime_scope_10065(root, wild__) /* forall<e,_e1> (root : kokaine/reactive/internal/model/root<e>, wild_ : ()) -> exn lifetime-scope<e> */  {
    
   var plane = $std_core_hnd._open_none1(function(root_0 /* kokaine/reactive/internal/model/root<307> */ ) {
       return root_0.root_effect_plane;

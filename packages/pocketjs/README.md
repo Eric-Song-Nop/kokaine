@@ -48,6 +48,10 @@ Compile the Koka entry as ordinary JavaScript and import the generated module
 must use `host-entry` at each raw JavaScript boundary and return a cleanup
 function. `mountKokaine` composes that cleanup with Pocket's native teardown:
 
+The JavaScript adapter is a Bun/Pocket compiler input. It is not a Node runtime
+entry: PocketJS 0.6 intentionally exports TypeScript source modules which Node
+does not strip inside `node_modules`.
+
 ```ts
 import { mountKokaine } from "@kokaine/pocketjs";
 import { main } from "./generated/app.mjs";

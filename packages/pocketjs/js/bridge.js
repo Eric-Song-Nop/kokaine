@@ -139,7 +139,12 @@ function createBridge(renderer, roots) {
         start();
         return root;
       } catch (error) {
-        discardNode(root);
+        // Cleanup cannot replace the startup failure which caused rollback.
+        try {
+          discardNode(root);
+        } catch {
+          // Best-effort rollback only.
+        }
         throw error;
       } finally {
         const popped = roots.pop();
