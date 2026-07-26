@@ -9,6 +9,7 @@
 module kokaine/reactive/integration
 
 import kokaine/reactive
+import kokaine/reactive/internal/runtime
 import kokaine/reactive/integration/internal/lifetime-scope
 import kokaine/reactive/integration/internal/provision
 import kokaine/reactive/integration/internal/reentry
@@ -74,6 +75,17 @@ pub fun with-lifetime-scope(
 pub fun lifetime-scope/dispose(scope : lifetime-scope<e>) : <exn|e> ()
   kokaine/reactive/integration/internal/lifetime-scope/lifetime-scope/dispose(
     scope.unwrap-lifetime-scope)
+
+// A publication-only effect may mutate its host renderer but cannot mutate or
+// register reactive state. It retains the same exact tracked continuations and
+// lifetime semantics as `create-effect`.
+pub fun create-ui-publication-effect(
+    root : root<<ui>>,
+    track : () -> <signal-read,pure> a,
+    publish : (value : a) -> <ui,exn> ())
+    : <signal-write,pure> disposer<<ui>>
+  kokaine/reactive/internal/runtime/create-ui-publication-effect(
+    internal/root-handle(root),track,publish)
 
 // Host callbacks capture the continuation generation which registered them.
 // Work created during re-entry remains owned by that generation.

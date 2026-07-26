@@ -139,7 +139,7 @@ export function _mlift_interpret_write_10149(root, source, value_4, _y_x10012) /
      
     $std_core_hnd._open_none1(function(source_6 /* kokaine/reactive/internal/model/source<462> */ ) {
         var _x0 = source_6.source_captures;
-        return $std_core_list.foreach($kokaine_internal_registry.registry_fs_snapshot(_x0), $kokaine_reactive_internal_scheduler.cut_capture);
+        return $kokaine_internal_registry.registry_fs_visit_readonly(_x0, $kokaine_reactive_internal_scheduler.cut_capture);
       }, source);
     return $kokaine_reactive_internal_scheduler.flush(root);
   }
@@ -242,7 +242,7 @@ export function _mlift_interpret_write_10154(root, source_0_0, value_0_0, _y_x10
      
     $std_core_hnd._open_none1(function(source_13 /* kokaine/reactive/internal/model/source<654> */ ) {
         var _x0 = source_13.source_captures;
-        return $std_core_list.foreach($kokaine_internal_registry.registry_fs_snapshot(_x0), $kokaine_reactive_internal_scheduler.cut_capture);
+        return $kokaine_internal_registry.registry_fs_visit_readonly(_x0, $kokaine_reactive_internal_scheduler.cut_capture);
       }, source_0_0);
     return $kokaine_reactive_internal_scheduler.flush(root);
   }

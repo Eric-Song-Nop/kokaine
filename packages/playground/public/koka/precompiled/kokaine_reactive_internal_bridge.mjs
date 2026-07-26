@@ -57,21 +57,21 @@ export function runtime_update(root, action) /* forall<a,e> (root : kokaine/reac
  
  
 // monadic lift
-export function _mlift_runtime_sample_10030(action, _y_x10017) /* forall<a,e> (action : () -> <kokaine/reactive/effects/signal-read,pure|e> a, hnd/ev-index) -> <kokaine/reactive/effects/signal-write,div,exn,kokaine/reactive/effects/signal-read|e> a */  {
+export function _mlift_runtime_sample_10032(action, _y_x10017) /* forall<a,e> (action : () -> <kokaine/reactive/effects/signal-read,pure|e> a, hnd/ev-index) -> <kokaine/reactive/effects/signal-write,div,exn,kokaine/reactive/effects/signal-read|e> a */  {
   return $std_core_hnd._mask_at(_y_x10017, false, action);
 }
  
 export function runtime_sample(root, action) /* forall<a,e> (root : kokaine/reactive/internal/model/root<e>, action : () -> <kokaine/reactive/effects/signal-read,pure|e> a) -> <exn|e> a */  {
   return $kokaine_reactive_internal_handlers.dispatch_handled(root, function() {
        
-      var x_10032 = $std_core_hnd._evv_index($kokaine_reactive_effects.signal_write_fs__tag);
+      var x_10034 = $std_core_hnd._evv_index($kokaine_reactive_effects.signal_write_fs__tag);
       if ($std_core_hnd._yielding()) {
         return $std_core_hnd.yield_extend(function(_y_x10017 /* hnd/ev-index */ ) {
           return $std_core_hnd._mask_at(_y_x10017, false, action);
         });
       }
       else {
-        return $std_core_hnd._mask_at(x_10032, false, action);
+        return $std_core_hnd._mask_at(x_10034, false, action);
       }
     });
 }
@@ -109,18 +109,22 @@ export function runtime_memo_get(value) /* forall<a> (value : kokaine/reactive/i
 }
  
 export function runtime_create_effect(root, track, apply) /* forall<a,e> (root : kokaine/reactive/internal/model/root<e>, track : () -> <kokaine/reactive/effects/signal-read,pure> a, apply : (value : a) -> <kokaine/reactive/effects/signal-write,pure|e> ()) -> <kokaine/reactive/effects/signal-write,pure> kokaine/reactive/internal/model/disposer<e> */  {
-  return $kokaine_reactive_internal_runtime.create_effect_inner(root, track, apply);
+  return $kokaine_reactive_internal_runtime.create_effect_publication(root, track, function(value /* 554 */ ) {
+      return $kokaine_reactive_internal_handlers.interpret_write(root, function() {
+          return apply(value);
+        });
+    });
 }
  
  
 // monadic lift
-export function _mlift_runtime_on_cleanup_10031(_pat) /* forall<e> (kokaine/reactive/internal/model/cleanup-registration<e>) -> exn () */  {
+export function _mlift_runtime_on_cleanup_10033(_pat) /* forall<e> (kokaine/reactive/internal/model/cleanup-registration<e>) -> exn () */  {
   return $std_core_types.Unit;
 }
  
 export function runtime_on_cleanup(root, cleanup) /* forall<e> (root : kokaine/reactive/internal/model/root<e>, cleanup : () -> <kokaine/reactive/effects/signal-write,pure|e> ()) -> exn () */  {
    
-  var x_10036 = $kokaine_reactive_internal_runtime.register_cleanup(root, cleanup);
+  var x_10038 = $kokaine_reactive_internal_runtime.register_cleanup(root, cleanup);
   if ($std_core_hnd._yielding()) {
     return $std_core_hnd.yield_extend(function(_pat_1 /* kokaine/reactive/internal/model/cleanup-registration<579> */ ) {
       return $std_core_types.Unit;

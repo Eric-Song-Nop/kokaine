@@ -62,6 +62,22 @@ pub fun lifetime-owner/register-finalizer(owner : lifetime-owner<e>,
                                          : exn registry-registration<retirement-work<e>>
   owner.lifetime-finalizers.insert(work)
 
+// Empty generations still need an atomic structural close so stale frames
+// cannot accept later children or finalizers.
+pub fun lifetime-owner/try-retire-empty(owner : lifetime-owner<e>) : bool
+  match load(owner.lifetime-token)
+    Scope-dead -> True
+    Scope-branch-dead ->
+      if owner.lifetime-children.count != 0 ||
+         owner.lifetime-finalizers.count != 0
+      then False
+      else
+        store(owner.lifetime-token,Scope-dead)
+        val _ = owner.lifetime-children.seal-detach
+        val _ = owner.lifetime-finalizers.seal-detach
+        True
+    _ -> False
+
 fun unlink-scope-owner(current : continuation-scope<e>) : ()
   val unlink = load(current.scope-unlink)
   store(current.scope-unlink,Nothing)
@@ -329,16 +345,6 @@ pub fun attempt-build(plane : plane<e>,
       capture-error(action)
   )
 
-pub fun with-frame(plane : plane<r>, current : frame<r>,
-               action : () -> <div,exn|e> a) : <div,exn|e> a
-  val previous = load(plane.plane-current-frame)
-  finally(
-    fn() store(plane.plane-current-frame,previous),
-    fn()
-      store(plane.plane-current-frame,current)
-      action()
-  )
-
 pub fun with-current(plane : plane<e>, current : trace<e>, current-frame : frame<e>,
                  action : () -> <div,exn|e> a) : <div,exn|e> a
   match current.trace-gate-of
@@ -348,10 +354,16 @@ pub fun with-current(plane : plane<e>, current : trace<e>, current-frame : frame
 pub fun with-context(plane : plane<r>, current : maybe<continuation-gate>,
                  current-frame : frame<r>,
                  action : () -> <div,exn|e> a) : <div,exn|e> a
-  val previous = load(plane.plane-current)
+  val previous-current = load(plane.plane-current)
+  val previous-frame = load(plane.plane-current-frame)
   finally(
-    fn() store(plane.plane-current,previous),
-    fn()
+    fn(){
+      store(plane.plane-current-frame,previous-frame)
+      store(plane.plane-current,previous-current)
+    },
+    fn(){
       store(plane.plane-current,current)
-      with-frame(plane,current-frame,action)
+      store(plane.plane-current-frame,current-frame)
+      action()
+    }
   )

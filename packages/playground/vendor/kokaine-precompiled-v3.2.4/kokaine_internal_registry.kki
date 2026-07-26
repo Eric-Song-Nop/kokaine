@@ -95,16 +95,26 @@ pub fun registry/count[61,9,61,22] : forall<a> (target : (registry :: V -> V)<a>
 // `snapshot`, this detects an empty tombstone still retained by the registry.
 pub fun registry/has-linked-nodes[67,18,67,42] : forall<a> (target : (registry :: V -> V)<a>) -> std/core/types/bool;
 // monadic lift
-fun registry/@mlift-try-insert@10136[1,0,1,0] : forall<(_e :: E),(_e1 :: E),(_e2 :: E),a> (count : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>, head : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(registry-link :: V -> V)<a>>, next : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(registry-link :: V -> V)<a>>, slot : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<a>>, @c-x10119 : ()) -> (std/core/types/maybe :: V -> V)<(registry-registration :: V -> V)<a>>;
+fun registry/@mlift-try-insert@10158[1,0,1,0] : forall<(_e :: E),(_e1 :: E),(_e2 :: E),a> (count : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>, head : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(registry-link :: V -> V)<a>>, next : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(registry-link :: V -> V)<a>>, slot : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<a>>, @c-x10135 : ()) -> (std/core/types/maybe :: V -> V)<(registry-registration :: V -> V)<a>>;
 pub fun registry/try-insert[74,9,74,27] : forall<a> (target : (registry :: V -> V)<a>, value : a) -> (std/core/types/maybe :: V -> V)<(registry-registration :: V -> V)<a>>;
 pub fun registry/insert[88,9,88,23] : forall<a> (target : (registry :: V -> V)<a>, value : a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (registry-registration :: V -> V)<a>;
 // monadic lift
-fun registry-registration/@mlift-take@10137[1,0,1,0] : forall<(_e :: E),(_e1 :: E),a> (back : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(registry-link :: V -> V)<a>>>, count : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>, current : a, next : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(registry-link :: V -> V)<a>>, @c-x10124 : ()) -> (std/core/types/maybe :: V -> V)<a>;
+fun registry-registration/@mlift-take@10159[1,0,1,0] : forall<(_e :: E),(_e1 :: E),a> (back : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(registry-link :: V -> V)<a>>>, count : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>, current : a, next : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(registry-link :: V -> V)<a>>, @c-x10140 : ()) -> (std/core/types/maybe :: V -> V)<a>;
 pub fun registry-registration/take[94,9,94,34] : forall<a> (registration : (registry-registration :: V -> V)<a>) -> (std/core/types/maybe :: V -> V)<a>;
 tail fun snapshot-loop[114,10,114,22] : forall<a> (values : (registry-link :: V -> V)<a>, collected : (std/core/types/list :: V -> V)<a>) -> <(std/core/types/div :: X)> (std/core/types/list :: V -> V)<a>;
 pub fun registry/snapshot[123,9,123,25] : forall<a> (target : (registry :: V -> V)<a>) -> (std/core/types/list :: V -> V)<a>;
-tail fun detach-loop[127,10,127,20] : forall<a> (values : (registry-link :: V -> V)<a>, collected : (std/core/types/list :: V -> V)<a>) -> <(std/core/types/div :: X)> (std/core/types/list :: V -> V)<a>;
-pub fun registry/seal-detach[143,9,143,28] : forall<a> (target : (registry :: V -> V)<a>) -> (std/core/types/maybe :: V -> V)<(std/core/types/list :: V -> V)<a>>;
+// Allocation-free lookup for total predicates which neither enter user code
+// nor mutate this registry.
+tail fun find-readonly-loop[129,10,129,27] : forall<a> (values : (registry-link :: V -> V)<a>, predicate : (a) -> std/core/types/bool) -> <(std/core/types/div :: X)> (std/core/types/maybe :: V -> V)<a>;
+pub fun registry/find-readonly[140,9,140,30] : forall<a> (target : (registry :: V -> V)<a>, predicate : (a) -> std/core/types/bool) -> (std/core/types/maybe :: V -> V)<a>;
+// Allocation-free traversal for internal callbacks which neither enter user
+// code nor mutate this registry. Read the successor before invoking the
+// callback so traversal never depends on the current node afterward. This
+// deliberately has a narrower contract than `snapshot`.
+tail fun visit-readonly-loop[150,10,150,28] : forall<a> (values : (registry-link :: V -> V)<a>, action : (a) -> ()) -> <(std/core/types/div :: X)> ();
+pub fun registry/visit-readonly[162,9,162,31] : forall<a> (target : (registry :: V -> V)<a>, action : (a) -> ()) -> ();
+tail fun detach-loop[168,10,168,20] : forall<a> (values : (registry-link :: V -> V)<a>, collected : (std/core/types/list :: V -> V)<a>) -> <(std/core/types/div :: X)> (std/core/types/list :: V -> V)<a>;
+pub fun registry/seal-detach[184,9,184,28] : forall<a> (target : (registry :: V -> V)<a>) -> (std/core/types/maybe :: V -> V)<(std/core/types/list :: V -> V)<a>>;
  
 fun @kokaine-cache-phase[1,0,1,0] : () -> std/core/types/int;
  

@@ -143,7 +143,7 @@ with serve_project() as origin:
         row_seventeen.locator("input").fill("retained-note")
         page.locator("#keyed-reverse").click()
         expect(page.locator(".specimen-row h2")).to_have_text(
-            ["DOM range", "Structural owner", "Continuation"]
+            ["DOM range", "Lifetime scope", "Continuation"]
         )
         assert row_handle.evaluate(
             "node => node === document.querySelector('.specimen-row:last-child')"

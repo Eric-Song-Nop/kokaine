@@ -26,6 +26,19 @@ pub fun reentry/root(value : reentry<e>) : root<e>
   match value
     Reentry(root,_,_) -> root
 
+// Cancellation is allowed to unwind a parked strand after its structural
+// generation has retired, while ordinary host callbacks must still reject
+// stale entry. This pure preflight is consumed immediately by the one-shot
+// task runtime, before it invokes user or host code.
+pub fun reentry/can-run-live(value : reentry<e>) : bool
+  match value
+    Reentry(root,_,current) ->
+      if load(root.root-disposed) || load(root.root-disposing) then False else
+        match load(current.frame-lifetime.lifetime-token)
+          Scope-starting -> True
+          Scope-live -> True
+          _ -> False
+
 // Capture is non-resumptive: it records the lifetime capability already
 // established by the current exact-read continuation. The host callback may
 // be invoked repeatedly while that generation remains live.
@@ -80,3 +93,15 @@ pub fun run-retirement-reentry(
         with-context(plane,checkpoint,current,
           fn() lift-div(fn() dispatch-handled(root,action)))
       }
+
+// Dispatcher rejection normally needs a fresh live batch so cancellation
+// finalizer writes publish atomically. If retirement already closed the frame
+// or root, use the no-registration retirement path instead; trying live entry
+// after the one-shot task was detached would lose the parked strand forever.
+pub fun run-cancellation-reentry(
+    value : reentry<e>,
+    action : () -> <signal-read,signal-write,pure|e> a)
+    : <exn|e> a
+  if value.can-run-live
+  then run-reentry(value,action)
+  else run-retirement-reentry(value,action)

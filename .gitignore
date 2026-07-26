@@ -5,6 +5,8 @@ dist/
 node_modules/
 .kokaine/
 coverage/
+examples/pocketjs/generated/
+examples/pocketjs/.pocket/
 packages/create-kokaine/template/package-lock.json
 packages/playground/public/koka/releases/
 packages/playground/public/koka/release.json

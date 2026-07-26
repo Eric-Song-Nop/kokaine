@@ -130,8 +130,10 @@ pub div type trace<e::E>
 
 pub type built-trace<e::E>
   Built-trace(
-    built-root    : trace<e>,
-    built-publish : () -> <div|e> error<()>
+    built-root                : trace<e>,
+    built-publication-current : maybe<continuation-gate>,
+    built-publication-frame   : frame<e>,
+    built-publication-action  : () -> <div,exn|e> ()
   )
 
 pub type scope-state
@@ -191,6 +193,12 @@ pub type frame<e::E>
   Frame(
     frame-lifetime : lifetime-owner<e>
   )
+
+// Frames are structural capabilities. Their lifetime token is allocated once
+// with the frame and therefore provides identity without adding a hot-path ID.
+pub fun same-frame(left : frame<e>, right : frame<e>) : bool
+  unsafe-ptr-eq(left.frame-lifetime.lifetime-token,
+                right.frame-lifetime.lifetime-token)
 
 pub type work<e::E>
   Resume-work(resume-trace : trace<e>)

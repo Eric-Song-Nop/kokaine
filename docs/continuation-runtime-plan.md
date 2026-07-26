@@ -246,9 +246,11 @@ discard it, and persistent lifetime scopes for adapter-owned identities.
 
 Host publication is not a core concern. The DOM renderer associates an exact
 borrowed provision identity with its own keyed publication journal and owns the
-prepare/publish/rollback protocol. Generation-owned Web Async is likewise an
-integration in `kokaine/reactive/async`; the reactive core does not import its
-runtime or interpret the `async` effect.
+prepare/publish/rollback protocol. Generation-owned Async is likewise an
+integration in `kokaine/reactive/async`; its runtime receives a narrow host
+dispatcher, with Web binding it to microtasks and Pocket binding it to virtual
+frames. The reactive core does not import that runtime or interpret the
+`async` effect.
 
 ## HTML and UI consequence
 

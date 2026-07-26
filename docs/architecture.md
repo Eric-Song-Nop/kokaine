@@ -18,22 +18,29 @@ property; the previous Observer implementation already had such an API.
 The dependency direction is intentionally one-way:
 
 ```text
-DOM renderer / reactive Async adapter
-                 |
-                 v
-reactive integration capabilities
-                 |
-                 v
-reactive continuation kernel
+DOM renderer       PocketJS renderer       Host Async adapters
+      \                   |                      /
+       +------ reactive integration capabilities
+                             |
+                             v
+               reactive continuation kernel
 ```
 
 The kernel knows only sources, traces, planes, scheduling, and lifetime
 retirement. Integration owns capabilities needed by an external system:
 persistent lifetime scopes, provisional construction, and retained host
-re-entry. DOM owns renderer publication and browser event policy. Reactive
-Async owns host-turn closure, task leases, and cancellation policy. A lower
-layer must not import a higher one; a static boundary canary enforces this rule
-in addition to Koka's module graph.
+re-entry, including the typed and revocable continuation used to transport a
+host event. DOM owns HTML publication and browser event policy. PocketJS owns a
+separate native-UI vocabulary, renderer bridge, and virtual-time dispatcher.
+Reactive Async owns host-neutral turn closure, task leases, and cancellation
+policy; Web and Pocket supply only when a retained `ui` turn runs. A lower layer must not
+import a higher one; a static boundary canary enforces this rule in addition to
+Koka's module graph.
+
+The compiler target, renderer vocabulary, and host packager are separate axes.
+The experimental Pocket integration still compiles Koka to `jsweb`, then uses
+a Pocket-specific view algebra and Pocket's native bundle pipeline. See
+[PocketJS backend feasibility](pocketjs.md) for the boundary and current scope.
 
 ## Module boundaries
 
@@ -59,9 +66,10 @@ responsibility:
 | `kokaine/async/internal/one-shot-task.kk` | atomic host-task state and winning claims |
 | `kokaine/async/internal/cancellation-supervisor.kk` | claim-first lexical scope cancellation |
 | `reactive/async.kk` | public generation-owned Async integration |
-| `reactive/async/internal/host-turn.kk` | rank-2 closure of retained completion/cancellation turns |
-| `reactive/async/internal/runtime.kk` | generation-bound Web awaits and task leases |
-| `kokaine/internal/event-runtime.kk` | guarded multi-shot browser-event continuation |
+| `reactive/async/integration.kk` | narrow host-dispatcher facade |
+| `reactive/async/internal/host-turn.kk` | scheduling and rank-2 closure of retained turns |
+| `reactive/async/internal/runtime.kk` | generation-bound host awaits and task leases |
+| `reactive/integration/event.kk` | typed, guarded multi-shot host-event continuation |
 | `kokaine/internal/key-index.kk` | persistent balanced key lookup shared by renderers |
 | `kokaine/dom/internal/keyed-transaction.kk` | renderer-owned keyed publication journal |
 | `kokaine/control.kk` | memo branches and list/vector keyed control flow |
@@ -77,10 +85,13 @@ them in abstract public values so application code cannot inspect the runtime.
 
 ## Semantic division of labor
 
-`signal-read`, `signal-write`, `html<e>`, and `async` are algebraic effect interfaces.
-They let callers express requirements in effect rows and let scopes override
-interpretation: `untrack` changes tracked reads to samples, `batch` changes when
-writes settle, and nested HTML handlers collect only their own emitted children.
+`signal-read`, `signal-write`, `html<e>`, and `async` are algebraic effect
+interfaces. They let callers express requirements in effect rows and let
+scopes override interpretation: `untrack` changes tracked reads to samples,
+`batch` changes when writes settle, and nested HTML handlers collect only their
+own emitted children. `html<e>` is the DOM/SSR vocabulary, not a universal host
+tree; native renderers can define a smaller vocabulary without coupling the
+reactive kernel to either host.
 
 An effect row reports operations that escape a function after local handling.
 It does not attest that an operation was never performed inside the function,
@@ -107,7 +118,7 @@ The public effect rows distinguish capability from implementation:
 ```text
 signal-read   validate a producer; read a source
 signal-write  write/modify a source; enter/leave a batch; request a flush
-html<e>       emit backend-neutral view values
+html<e>       emit HTML view values shared by DOM and SSR
 ```
 
 `signal/get` performs `read-source(..., Track-read, ...)`. When a calculator or
@@ -321,9 +332,10 @@ during the callback are retired together.
 
 The `html<e>` effect is a synchronous, tail-resumptive view builder. `emit`
 operations are handled by `view` and nested tag helpers to construct a
-backend-neutral `view<e>` value. This makes ordinary Koka block syntax usable as
-an HTML DSL, but the builder continuation is not retained or parked to drive
-future UI updates.
+renderer-neutral HTML `view<e>` value shared by DOM and SSR. It is not the
+cross-platform abstraction for non-HTML native widgets. This makes ordinary
+Koka block syntax usable as an HTML DSL, but the builder continuation is not
+retained or parked to drive future UI updates.
 
 The DOM adapter gives live nodes their reactive semantics at mount time:
 
@@ -368,7 +380,7 @@ half-removed range merely by moving a later node elsewhere.
 
 ## Native control flow and keyed reconciliation
 
-`kokaine/control` builds two kinds of backend-neutral structure. `branch`
+`kokaine/control` builds two kinds of DOM/SSR-neutral HTML structure. `branch`
 accepts a memo and emits an ordinary dynamic region; `when` is its boolean
 specialization with an optional empty fallback. `for` has list and vector
 overloads. Each packages a tracked collection reader, native sequential walker,
@@ -500,45 +512,50 @@ retain row state, but it applies the same duplicate-key rule as the browser.
 
 ## Host callbacks, event continuations, and re-entry
 
-Listener installation captures both an opaque `reentry<<ui>>` and an opaque
-`event-continuation`. The latter is a real raw continuation parked at the
-handled `await-browser-event` operation; its suffix contains the user action.
-The retained JavaScript function is only the transport/ABI trampoline. When the
-browser invokes it, the adapter snapshots the event and `reenter`:
+A retained host callback captures both an opaque `reentry<<ui>>` and a typed
+`event-continuation<e,a>`. The latter is a real raw continuation parked at the
+handled host-event operation; its suffix contains the user action. The adapter
+chooses both the payload and the closed effect family: DOM uses a snapshotted
+`event` with Web Async, while Pocket has separate `()` paths for synchronous
+`Press` and virtual-time `Async-press`. The retained JavaScript function is
+only the transport/ABI
+trampoline. When a host invokes it, the adapter validates its payload and
+`reenter`:
 
 1. rejects a retired or disposed frame;
 2. restores the captured effect-plane gate and lifetime frame;
 3. installs fresh signal read/write handlers; and
 4. synchronously resumes the event continuation as one batch.
 
-Reactive work created inside the callback is therefore owned by the exact DOM
-generation that installed the listener and is retired with that region or
-mount.
+Reactive work created inside the callback is therefore owned by the exact
+renderer generation that installed it and is retired with that region, mount,
+or root.
 
 `reenter` does not itself advance a tracked-read K and remains non-resumptive.
 It supplies the lifetime/reactive handler context in which the separate event
 K is resumed. Signal writes made by the resumed action then invalidate and
 schedule tracked-read continuations in the usual way.
 
-The event master is multi-shot so repeated and synchronously nested DOM
-dispatches preserve native ordering. An opaque live/retired cell prevents a raw
+The event master is multi-shot so repeated and synchronously nested host
+delivery preserves native ordering. An opaque live/retired cell prevents a raw
 resumption after ownership retirement. Cleanup gates the capability before
-detaching the JavaScript listener, drops the only stored K, and clears the
+detaching the host callback, drops the only stored K, and clears the
 trampoline's mutable action cell. Thus even failed host removal leaves an inert
 function that no longer retains the root or portal. The parked suffix has not
 begun the user action and therefore owns no acquired cleanup.
 
-This boundary is intentionally precise. Browser delivery begins with an ABI
+This boundary is intentionally precise. Host delivery begins with an ABI
 callback, then performs generation re-entry and an actual event-continuation
 resume. It still cannot reconstruct arbitrary user-defined handlers whose
-lexical extent around `mount` has already returned. Accordingly, `callback` has
-the closed `<signal-read,signal-write,ui,async,pure>` capability row. An
-unsupported application effect must be handled inside the callback and is
-otherwise rejected during type checking; it cannot silently become a delayed
-missing-handler failure. DOM event delivery already has a closed public
-callback row and does not use the Async host-turn runner. Its ABI trampoline
-enters the integration-owned `reentry` capability directly before resuming the
-separate event continuation.
+lexical extent around `mount` has already returned. The browser `callback`
+therefore has the closed `<signal-read,signal-write,ui,async,pure>` capability
+row; Pocket's async callback uses the same row while its synchronous callback
+omits `async`. An unsupported application
+effect must be handled inside the callback and is otherwise rejected during
+type checking; it cannot silently become a delayed missing-handler failure.
+DOM event delivery already has a closed public callback row and does not use
+the Async host-turn runner. Its ABI trampoline enters the integration-owned
+`reentry` capability directly before resuming the separate event continuation.
 
 Koka's `pure` row includes modeled `exn`/`div`; such exceptions are reported by
 the event boundary and unwind the batch normally. A native JavaScript throw from
@@ -546,16 +563,21 @@ an extern declared only as `ui` is instead an FFI contract violation: it bypasse
 Koka handlers and `finally`. Adapter externs must catch native failures at their
 innermost boundary and translate them to Koka `exn`, as the DOM adapter does.
 
-## Browser async task leases
+## Generation-bound async task leases
 
-`kokaine/reactive/async.run-async(root, action)` is the explicit boundary for
-direct-style Web async. The reactive core does not import this integration
-module; it supplies only the root and generation capabilities used by it.
+`run-async(root, action)` is the explicit boundary for direct-style host async.
+The Web facade lives at `kokaine/reactive/async`; Pocket provides
+`kokaine/pocket/async`. Both enter the same host-neutral integration runtime.
+The reactive core does not import this integration module; it supplies only
+the root and generation capabilities used by it.
 An await parks only its suffix and returns from the initiating reactive turn.
-Even a synchronously reported setup result is queued as a microtask, so every
-continuation after an await enters a fresh reactive batch through the captured
-generation. Before that retained callback runs, the Async adapter closes the
-complete turn through its rank-2 `host-turn-runner`.
+Even a synchronously reported setup result is queued by the selected dispatcher,
+so every continuation after an await enters a fresh reactive batch through the
+captured generation. Web selects a microtask queue; Pocket selects a
+mount-scoped FIFO flushed during virtual frames. Before that retained callback
+runs, the Async adapter closes the complete turn through its rank-2
+`host-turn-runner`. A dispatcher rejection atomically claims and cancels the
+Ready task instead of retaining a continuation that can no longer run.
 
 Each host operation is a task lease backed by `one-shot-task`'s single state
 cell. Its only winning transitions are Pending to Ready, Ready to Running, and
@@ -605,8 +627,9 @@ an identity runtime function, but the rank-2 field is the type-level boundary
 which closes the whole completion or cancellation turn. Any attempt by a
 canceling `finally` to register fresh work is rejected by the dead frame.
 
-Promise, timer, Fetch, window-event, structured concurrency, and `Resource`
-adapters all use this protocol. The window adapter races revocable one-shot
+Web Promise, timer, Fetch, window-event, structured concurrency, and `Resource`
+adapters use this protocol. Pocket virtual timers and structured concurrency
+use it without importing Web scheduling. The window adapter races revocable one-shot
 `scroll` and `hashchange` awaits; its ABI callback only clears the subscription
 and completes the await, while application policy runs after generation
 re-entry. Host values which intentionally outlive one await use a separate
@@ -631,6 +654,8 @@ complete rollback snapshot, and stale handles no longer retain sibling values.
   parity; `key-index.kk` checks balanced lookup under adversarial insertion.
 - `final-control-rollback.kk` checks abandoned drafts and exact-K retry.
 - `continuation-reentry.kk` checks callback-created ownership and stale re-entry.
+- `integration-event.kk` checks typed host payloads, nested synchronous
+  delivery, and one-way revocation without a browser runtime.
 - `dom-lifecycle.kk` plus `browser_counter.py` check listener, region, and mount
   retirement in a real browser.
 - `dom-keyed.kk` exercises retained node identity, item/index publication,
@@ -656,6 +681,10 @@ complete rollback snapshot, and stale handles no longer retain sibling values.
   distinct-scope claims, explicit lease unlinks, and lease retirement without
   recursive cleanup or stale task scans; `browser_async.py` exercises the full
   host protocol.
+- `async-host-dispatcher.kk` checks injected turn ordering, posted-turn
+  retirement, and rejection cleanup. `pocketjs-runtime.kk` and the Pocket bridge
+  tests add virtual timers, timeout loser cancellation, queued-turn retirement,
+  multi-shot async press, and mount rollback.
 - `async-resource.kk` checks refresh, cancellation, stale results, and host
   value lease promotion/replacement.
 - `report_html.py` and `browser_report.py` require one Koka-owned document,

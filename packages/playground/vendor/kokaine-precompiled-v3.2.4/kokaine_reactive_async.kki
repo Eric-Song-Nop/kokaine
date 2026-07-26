@@ -34,8 +34,9 @@ import kokaine/reactive/effects = kokaine/reactive/effects pub = "";
 import std/core = std/core = "";
 import kokaine/reactive = kokaine/reactive = "";
 import kokaine/async/effects = kokaine/async/effects = "";
-import kokaine/reactive/async/internal/runtime = kokaine/reactive/async/internal/runtime = "";
-import kokaine/reactive/internal/model = kokaine/reactive/internal/model inline = "";
+import kokaine/async/internal/web-schedule = kokaine/async/internal/web-schedule = "";
+import kokaine/reactive/async/integration = kokaine/reactive/async/integration = "";
+import kokaine/reactive/async/internal/host-turn = kokaine/reactive/async/internal/host-turn inline = "";
  
 //------------------------------
 //#kki: external imports
@@ -59,7 +60,7 @@ local alias std/core/pure[55,1,55,26] :: E = <(std/core/types/handled :: ((E, V)
 //------------------------------
 //#kki: declarations
  
-pub fun run-async[14,9,14,17] : (root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, action : () -> <(std/core/pure :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/ui :: X)> ()) -> <(std/core/pure :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/ui :: X)> ();
+pub fun run-async[15,9,15,17] : (root : (kokaine/reactive/root :: E -> V)<<(std/core/ui :: X)>>, action : () -> <(std/core/pure :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/ui :: X)> ()) -> <(std/core/pure :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/ui :: X)> ();
  
 fun @kokaine-cache-phase[1,0,1,0] : () -> std/core/types/int;
  
@@ -69,7 +70,7 @@ fun @kokaine-cache-phase[1,0,1,0] : () -> std/core/types/int;
  
 //------------------------------
 //#kki: inline definitions
- 
+
 //.inline-section
 fun @kokaine-cache-phase // inline size: 1
   = fn(){ 0; };
