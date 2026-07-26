@@ -7,6 +7,7 @@ import kokaine/reactive/effects
 import kokaine/reactive/internal/resource
 import kokaine/reactive/internal/runtime
 import kokaine/reactive/async/internal/runtime
+import kokaine/reactive/async/internal/web-runtime
 import kokaine/internal/registry
 import std/core/undiv
 
@@ -130,7 +131,7 @@ fun exercise-supervisor-claim-order() : <ui,exn> ()
   select-claim-mode("retireFirst")
   val (retired-root,()) : (root<<ui>>,()) = create-root fn(_root) ()
   dispatch(retired-root,fn() {
-    run-generation-async(retired-root,fn() {
+    run-web-generation-async(retired-root,fn() {
       park-supervisor-siblings(retired-root,True,False)
     })
   })
@@ -139,7 +140,7 @@ fun exercise-supervisor-claim-order() : <ui,exn> ()
   select-claim-mode("completionFirst")
   val (completed-root,()) : (root<<ui>>,()) = create-root fn(_root) ()
   dispatch(completed-root,fn() {
-    run-generation-async(completed-root,fn() {
+    run-web-generation-async(completed-root,fn() {
       park-supervisor-siblings(completed-root,True,True)
     })
   })
@@ -157,7 +158,7 @@ fun complete-three() : async ()
 fun exercise-completed-owner-registration() : <ui,exn> ()
   val (root,()) : (root<<ui>>,()) = create-root fn(_root) ()
   dispatch(root,fn()
-    run-generation-async(root,fn()
+    run-web-generation-async(root,fn()
       complete-three()
       val release = async-own(fn() record-lease-disposal())
       val leased-owned = root-owned-resource-count(root)
@@ -179,7 +180,7 @@ fun start-completed-owner-registration() : ui ()
 fun exercise-snapshot-release-race() : <ui,exn> ()
   val (root,()) : (root<<ui>>,()) = create-root fn(_root) ()
   dispatch(root,fn()
-    run-generation-async(root,fn()
+    run-web-generation-async(root,fn()
       val release = async-own(fn() record-snapshot-lease-disposal())
       on-cleanup(root,fn() release())
     )
@@ -192,7 +193,7 @@ fun exercise-snapshot-release-race() : <ui,exn> ()
 fun exercise-structured-snapshot-release-race() : <ui,exn> ()
   val (root,()) : (root<<ui>>,()) = create-root fn(_root) ()
   dispatch(root,fn()
-    run-generation-async(root,fn()
+    run-web-generation-async(root,fn()
       val _ = parallel(
         fn() {
           val release = async-own(
@@ -229,7 +230,7 @@ fun start-reentrant-host(root : root<<ui>>) : <signal-write,pure,ui> ()
   mask<div>{
     mask<signal-write>{
       dispatch(root,fn()
-        run-generation-async(root,fn() park-reentrant-host(root))
+        run-web-generation-async(root,fn() park-reentrant-host(root))
       )
     }
   }
@@ -263,7 +264,7 @@ fun install-sibling(root : root<<ui>>, hostile : bool) : <async,ui> ()
 fun exercise-hostile-sibling-disposal() : <ui,exn> ()
   val (root,()) : (root<<ui>>,()) = create-root fn(_root) ()
   dispatch(root,fn()
-    run-generation-async(root,fn() {
+    run-web-generation-async(root,fn() {
       install-sibling(root,False)
       install-sibling(root,True)
       cancel-outstanding()
@@ -293,8 +294,8 @@ fun start-detached-families(root : root<<ui>>)
         // The hostile family is newer, hence first in the frame's detached
         // LIFO retirement snapshot. The older family must still unwind after
         // that disposer synchronously completes whole-root retirement.
-        run-generation-async(root,fn() park-family(root,False))
-        run-generation-async(root,fn() park-family(root,True))
+        run-web-generation-async(root,fn() park-family(root,False))
+        run-web-generation-async(root,fn() park-family(root,True))
       })
     }
   }
@@ -321,7 +322,7 @@ fun install-namespace-sibling(scope : async-scope,
 fun exercise-namespace-isolation() : <ui,exn> ()
   val (root,()) : (root<<ui>>,()) = create-root fn(_root) ()
   dispatch(root,fn()
-    run-generation-async(root,fn() {
+    run-web-generation-async(root,fn() {
       val foreign-root = new-runtime-scope-root()
       install-namespace-sibling(async-scope,False)
       install-namespace-sibling(new-child-scope(foreign-root),True)
@@ -360,7 +361,7 @@ fun install-deferred-retirement-siblings(root : root<<ui>>,
           marker.set(2)
           leases.dispose
         })
-        run-generation-async(root,fn() park-root-disposing-host(root))
+        run-web-generation-async(root,fn() park-root-disposing-host(root))
       })
     }
   }
@@ -384,7 +385,7 @@ fun install-cross-root-retirement(root : root<<ui>>,
           dispose-other()
           record-cross-root-a-cleanup()
         })
-        run-generation-async(root,fn() park-root-disposing-host(root))
+        run-web-generation-async(root,fn() park-root-disposing-host(root))
       })
     }
   }

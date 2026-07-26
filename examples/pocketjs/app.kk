@@ -2,6 +2,7 @@ module app
 
 import kokaine/reactive
 import kokaine/pocket
+import kokaine/pocket/async
 import std/core/unsafe
 
 
@@ -16,7 +17,8 @@ fun store(target : ref<global,a>, value : a) : ()
 
 pub fun main()
   host-entry fn()
-    val (root,count) = create-root fn(root) signal(root,0)
+    val (root,(count,async-phase)) = create-root fn(root)
+      (signal(root,0),signal(root,"idle"))
     val committed = cell(False)
     finally(
       fn() { if load(committed) then () else root.dispose() },
@@ -29,8 +31,16 @@ pub fun main()
             live/text(props=[text-color("#bfdbfe")]) {
               "Count " ++ count.get.show
             }
-            pressable-write(
-              fn() count.modify(fn(value) value + 1),
+            live/text(props=[text-color("#cbd5e1")]) {
+              "Async " ++ async-phase.get
+            }
+            pressable-async(
+              fn() {
+                count.modify(fn(value) value + 1)
+                async-phase.set("waiting")
+                yield()
+                async-phase.set("resumed")
+              },
               props=[width(144),height(40),justify-center(),align-center(),
                      background-color("#2563eb"),radius(6)])
               text("Increment",props=[text-color("#ffffff")])

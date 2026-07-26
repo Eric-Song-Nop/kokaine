@@ -1,9 +1,10 @@
 /*--------------------------------------------------------------------------
-  Rank-2 effect-row closure for retained browser turns.
+  Host scheduling and rank-2 effect-row closure for retained async turns.
 
-  The runner carries no callback payload. Async invokes it around each
-  complete completion or cancellation turn so a generic family row is closed
-  before the action becomes a `ui`-only host callback.
+  The dispatcher retains only a `ui` callback, while the runner closes the
+  generic family row around each complete completion or cancellation turn.
+  Keeping the two capabilities separate lets each host choose when callbacks
+  run without changing how a reactive continuation re-enters its generation.
 --------------------------------------------------------------------------*/
 module interface kokaine/reactive/async/internal/host-turn
  
@@ -48,21 +49,28 @@ import std/core = std/core = "";
 //------------------------------
 //#kki: type declarations
  
-pub value{0,1,8} type host-turn-runner[11,1,14,3] <(e :: E),(e1 :: E)> :: (E, E) -> V {
-  pub con Host-turn-runner[12,3,12,18](run-host-turn: forall<a> (() -> (e :: E) a) -> (e1 :: E) a){0,1,8} : forall<(e :: E),(e1 :: E)> (run-host-turn : forall<a> (() -> (e :: E) a) -> (e1 :: E) a) -> (host-turn-runner :: (E, E) -> V)<(e :: E),(e1 :: E)> = 1;
+pub value{0,1,8} type host-turn-dispatcher[12,1,15,3] {
+  pub con Host-turn-dispatcher[13,3,13,22](dispatch-host-turn: (() -> <(std/core/ui :: X)> ()) -> <(std/core/ui :: X)> std/core/types/bool){0,1,8} : (dispatch-host-turn : (() -> <(std/core/ui :: X)> ()) -> <(std/core/ui :: X)> std/core/types/bool) -> host-turn-dispatcher = 1;
+};
+pub value{0,1,8} type host-turn-runner[23,1,26,3] <(e :: E),(e1 :: E)> :: (E, E) -> V {
+  pub con Host-turn-runner[24,3,24,18](run-host-turn: forall<a> (() -> (e :: E) a) -> (e1 :: E) a){0,1,8} : forall<(e :: E),(e1 :: E)> (run-host-turn : forall<a> (() -> (e :: E) a) -> (e1 :: E) a) -> (host-turn-runner :: (E, E) -> V)<(e :: E),(e1 :: E)> = 1;
 };
  
 //------------------------------
 //#kki: declarations
  
+// Automatically generated. Retrieves the `dispatch-host-turn` constructor field of the `:host-turn-dispatcher` type.
+pub fun host-turn-dispatcher/dispatch-host-turn[14,5,14,22] : (^ @this : host-turn-dispatcher) -> ((() -> <(std/core/ui :: X)> ()) -> <(std/core/ui :: X)> std/core/types/bool);
+pub fun host-turn-dispatcher/@copy[13,3,13,22] : (@this : host-turn-dispatcher, dispatch-host-turn : (std/core/types/@optional :: V -> V)<(() -> <(std/core/ui :: X)> ()) -> <(std/core/ui :: X)> std/core/types/bool>) -> host-turn-dispatcher;
+pub fun host-turn-dispatcher/dispatch[17,18,17,46] : (dispatcher : host-turn-dispatcher, action : () -> <(std/core/ui :: X)> ()) -> <(std/core/ui :: X)> std/core/types/bool;
 // Automatically generated. Retrieves the `run-host-turn` constructor field of the `:host-turn-runner` type.
-pub fun host-turn-runner/run-host-turn[13,5,13,17] : forall<(e :: E),(e1 :: E),a> (^ @this : (host-turn-runner :: (E, E) -> V)<(e :: E),(e1 :: E)>) -> ((() -> (e :: E) a) -> (e1 :: E) a);
+pub fun host-turn-runner/run-host-turn[25,5,25,17] : forall<(e :: E),(e1 :: E),a> (^ @this : (host-turn-runner :: (E, E) -> V)<(e :: E),(e1 :: E)>) -> ((() -> (e :: E) a) -> (e1 :: E) a);
 // monadic lift
-fun host-turn-runner/@mlift-copy@10006[1,0,1,0] : forall<a,(e :: E),(e1 :: E)> (@c-x10002 : (() -> (e :: E) a) -> (e1 :: E) a) -> (forall<a> (() -> (e :: E) a) -> (e1 :: E) a);
+fun host-turn-runner/@mlift-copy@10007[1,0,1,0] : forall<a,(e :: E),(e1 :: E)> (@c-x10003 : (() -> (e :: E) a) -> (e1 :: E) a) -> (forall<a> (() -> (e :: E) a) -> (e1 :: E) a);
 // monadic lift
-fun host-turn-runner/@mlift-copy@10007[1,0,1,0] : forall<(e :: E),(e1 :: E)> (@c-x10003 : forall<a> (() -> (e :: E) a) -> (e1 :: E) a) -> (host-turn-runner :: (E, E) -> V)<(e :: E),(e1 :: E)>;
-pub fun host-turn-runner/@copy[12,3,12,18] : forall<(e :: E),(e1 :: E)> (@this : (host-turn-runner :: (E, E) -> V)<(e :: E),(e1 :: E)>, run-host-turn : (std/core/types/@optional :: V -> V)<forall<a> (() -> (e :: E) a) -> (e1 :: E) a>) -> (host-turn-runner :: (E, E) -> V)<(e :: E),(e1 :: E)>;
-pub fun host-turn-runner/run[16,18,16,37] : forall<a,(e :: E),(e1 :: E)> (runner : (host-turn-runner :: (E, E) -> V)<(e :: E),(e1 :: E)>, action : () -> (e :: E) a) -> (e1 :: E) a;
+fun host-turn-runner/@mlift-copy@10008[1,0,1,0] : forall<(e :: E),(e1 :: E)> (@c-x10004 : forall<a> (() -> (e :: E) a) -> (e1 :: E) a) -> (host-turn-runner :: (E, E) -> V)<(e :: E),(e1 :: E)>;
+pub fun host-turn-runner/@copy[24,3,24,18] : forall<(e :: E),(e1 :: E)> (@this : (host-turn-runner :: (E, E) -> V)<(e :: E),(e1 :: E)>, run-host-turn : (std/core/types/@optional :: V -> V)<forall<a> (() -> (e :: E) a) -> (e1 :: E) a>) -> (host-turn-runner :: (E, E) -> V)<(e :: E),(e1 :: E)>;
+pub fun host-turn-runner/run[28,18,28,37] : forall<a,(e :: E),(e1 :: E)> (runner : (host-turn-runner :: (E, E) -> V)<(e :: E),(e1 :: E)>, action : () -> (e :: E) a) -> (e1 :: E) a;
  
 fun @kokaine-cache-phase[1,0,1,0] : () -> std/core/types/int;
  

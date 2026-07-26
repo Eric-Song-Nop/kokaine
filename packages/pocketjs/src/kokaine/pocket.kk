@@ -11,6 +11,7 @@ module kokaine/pocket
 import kokaine/reactive
 import kokaine/reactive/integration
 import kokaine/reactive/integration/event
+import kokaine/pocket/async
 import std/core/unsafe
 
 
@@ -20,6 +21,8 @@ import std/core/unsafe
 
 pub alias press-effect = <signal-read,signal-write,ui,pure>
 pub alias press-callback = () -> press-effect ()
+pub alias async-press-effect = <signal-read,signal-write,ui,async,pure>
+pub alias async-press-callback = () -> async-press-effect ()
 
 abstract type property
   Style-number(name : string, value : int)
@@ -29,6 +32,7 @@ abstract type property
   Focusable(enabled : bool)
   Source(value : string)
   Press(action : press-callback)
+  Async-press(action : async-press-callback)
 
 abstract type view
   Empty
@@ -94,6 +98,11 @@ pub fun pressable-write(action : () -> signal-write (),
                         props : list<property> = []) : <pocket|e> ()
   layout(children,
     Cons(Focusable(True),Cons(on-press-write(action),props)))
+
+pub fun pressable-async(action : async-press-callback,
+                        children : () -> <pocket|e> (),
+                        props : list<property> = []) : <pocket|e> ()
+  layout(children,Cons(Focusable(True),Cons(Async-press(action),props)))
 
 
 // --------------------------------------------------------------------------
@@ -200,6 +209,9 @@ pub fun focusable(enabled : bool = True) : property
 
 pub fun on-press(action : press-callback) : property
   Press(action)
+
+pub fun on-press-async(action : async-press-callback) : property
+  Async-press(action)
 
 pub fun on-press-write(action : () -> signal-write ()) : property
   Press(fn()
@@ -469,6 +481,80 @@ fun install-press(root : root<<ui>>, target : node,
       store(committed,True)
   )
 
+fun invoke-async-press(
+    root : root<<ui>>, portal : reentry<<ui>>,
+    continuation : event-continuation<async,()>) : ui ()
+  with catch fn(problem)
+    pocket-report-error("uncaught Kokaine PocketJS async press exception: " ++
+                        problem.show)
+  if continuation.is-live then
+    reenter(portal,fn()
+      kokaine/pocket/async/run-async(root,fn()
+        val _ = continuation.resume(())
+        ()
+      )
+    )
+  else ()
+
+fun retire-async-press(
+    target : node,
+    continuation : event-continuation<async,()>) : <ui,exn> ()
+  continuation.close
+  pocket-attempt{
+    val bridge = pocket-bridge()
+    bridge-clear-press(bridge,target)
+  }
+
+fun capture-async-press(
+    root : root<<ui>>, action : async-press-callback)
+    : <ui,exn> event-continuation<async,()>
+  val captured = cell(Nothing)
+  dispatch(root,fn()
+    kokaine/pocket/async/run-async(root,fn()
+      store(captured,Just(capture-event(fn(_ : ()) action())))
+    )
+  )
+  match load(captured)
+    Just(continuation) -> continuation
+    Nothing ->
+      throw("PocketJS async press continuation did not capture synchronously")
+
+fun install-async-press(
+    root : root<<ui>>, target : node, action : async-press-callback)
+    : <signal-write,pure,ui> ()
+  val continuation : event-continuation<async,()> =
+    reactive-ui-exn{ capture-async-press(root,action) }
+  val portal = capture-reentry(root)
+  val listener = fn() invoke-async-press(root,portal,continuation)
+  val installed = cell(False)
+  val committed = cell(False)
+  finally(
+    fn() {
+      if load(committed) then () else
+        continuation.close
+        if load(installed) then
+          reactive-ui-exn{
+            pocket-attempt{
+              val bridge = pocket-bridge()
+              bridge-clear-press(bridge,target)
+            }
+          }
+        else ()
+    },
+    fn()
+      reactive-ui-exn{
+        pocket-attempt{
+          val bridge = pocket-bridge()
+          bridge-set-press(bridge,target,listener)
+        }
+      }
+      store(installed,True)
+      on-cleanup(root,fn()
+        reactive-ui-exn{ retire-async-press(target,continuation) }
+      )
+      store(committed,True)
+  )
+
 
 // --------------------------------------------------------------------------
 // Retained tree interpreter
@@ -522,6 +608,7 @@ fun mount-property(root : root<<ui>>, target : node,
       }
     }
     Press(action) -> install-press(root,target,action)
+    Async-press(action) -> install-async-press(root,target,action)
 
 fun mount-view(root : root<<ui>>, parent : node,
                before : maybe<node>, tree : view)

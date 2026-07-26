@@ -18,7 +18,7 @@ property; the previous Observer implementation already had such an API.
 The dependency direction is intentionally one-way:
 
 ```text
-DOM renderer       PocketJS renderer       Web Async adapter
+DOM renderer       PocketJS renderer       Host Async adapters
       \                   |                      /
        +------ reactive integration capabilities
                              |
@@ -31,8 +31,9 @@ retirement. Integration owns capabilities needed by an external system:
 persistent lifetime scopes, provisional construction, and retained host
 re-entry, including the typed and revocable continuation used to transport a
 host event. DOM owns HTML publication and browser event policy. PocketJS owns a
-separate native-UI vocabulary and renderer bridge. Reactive Async owns Web
-host-turn closure, task leases, and cancellation policy. A lower layer must not
+separate native-UI vocabulary, renderer bridge, and virtual-time dispatcher.
+Reactive Async owns host-neutral turn closure, task leases, and cancellation
+policy; Web and Pocket supply only when a retained `ui` turn runs. A lower layer must not
 import a higher one; a static boundary canary enforces this rule in addition to
 Koka's module graph.
 
@@ -65,8 +66,9 @@ responsibility:
 | `kokaine/async/internal/one-shot-task.kk` | atomic host-task state and winning claims |
 | `kokaine/async/internal/cancellation-supervisor.kk` | claim-first lexical scope cancellation |
 | `reactive/async.kk` | public generation-owned Async integration |
-| `reactive/async/internal/host-turn.kk` | rank-2 closure of retained completion/cancellation turns |
-| `reactive/async/internal/runtime.kk` | generation-bound Web awaits and task leases |
+| `reactive/async/integration.kk` | narrow host-dispatcher facade |
+| `reactive/async/internal/host-turn.kk` | scheduling and rank-2 closure of retained turns |
+| `reactive/async/internal/runtime.kk` | generation-bound host awaits and task leases |
 | `reactive/integration/event.kk` | typed, guarded multi-shot host-event continuation |
 | `kokaine/internal/key-index.kk` | persistent balanced key lookup shared by renderers |
 | `kokaine/dom/internal/keyed-transaction.kk` | renderer-owned keyed publication journal |
@@ -514,8 +516,9 @@ A retained host callback captures both an opaque `reentry<<ui>>` and a typed
 `event-continuation<e,a>`. The latter is a real raw continuation parked at the
 handled host-event operation; its suffix contains the user action. The adapter
 chooses both the payload and the closed effect family: DOM uses a snapshotted
-`event` with Web Async, while the initial Pocket `onPress` path uses `()` and no
-Web Async. The retained JavaScript function is only the transport/ABI
+`event` with Web Async, while Pocket has separate `()` paths for synchronous
+`Press` and virtual-time `Async-press`. The retained JavaScript function is
+only the transport/ABI
 trampoline. When a host invokes it, the adapter validates its payload and
 `reenter`:
 
@@ -546,7 +549,8 @@ callback, then performs generation re-entry and an actual event-continuation
 resume. It still cannot reconstruct arbitrary user-defined handlers whose
 lexical extent around `mount` has already returned. The browser `callback`
 therefore has the closed `<signal-read,signal-write,ui,async,pure>` capability
-row; Pocket's synchronous callback omits `async`. An unsupported application
+row; Pocket's async callback uses the same row while its synchronous callback
+omits `async`. An unsupported application
 effect must be handled inside the callback and is otherwise rejected during
 type checking; it cannot silently become a delayed missing-handler failure.
 DOM event delivery already has a closed public callback row and does not use
@@ -559,16 +563,21 @@ an extern declared only as `ui` is instead an FFI contract violation: it bypasse
 Koka handlers and `finally`. Adapter externs must catch native failures at their
 innermost boundary and translate them to Koka `exn`, as the DOM adapter does.
 
-## Browser async task leases
+## Generation-bound async task leases
 
-`kokaine/reactive/async.run-async(root, action)` is the explicit boundary for
-direct-style Web async. The reactive core does not import this integration
-module; it supplies only the root and generation capabilities used by it.
+`run-async(root, action)` is the explicit boundary for direct-style host async.
+The Web facade lives at `kokaine/reactive/async`; Pocket provides
+`kokaine/pocket/async`. Both enter the same host-neutral integration runtime.
+The reactive core does not import this integration module; it supplies only
+the root and generation capabilities used by it.
 An await parks only its suffix and returns from the initiating reactive turn.
-Even a synchronously reported setup result is queued as a microtask, so every
-continuation after an await enters a fresh reactive batch through the captured
-generation. Before that retained callback runs, the Async adapter closes the
-complete turn through its rank-2 `host-turn-runner`.
+Even a synchronously reported setup result is queued by the selected dispatcher,
+so every continuation after an await enters a fresh reactive batch through the
+captured generation. Web selects a microtask queue; Pocket selects a
+mount-scoped FIFO flushed during virtual frames. Before that retained callback
+runs, the Async adapter closes the complete turn through its rank-2
+`host-turn-runner`. A dispatcher rejection atomically claims and cancels the
+Ready task instead of retaining a continuation that can no longer run.
 
 Each host operation is a task lease backed by `one-shot-task`'s single state
 cell. Its only winning transitions are Pending to Ready, Ready to Running, and
@@ -618,8 +627,9 @@ an identity runtime function, but the rank-2 field is the type-level boundary
 which closes the whole completion or cancellation turn. Any attempt by a
 canceling `finally` to register fresh work is rejected by the dead frame.
 
-Promise, timer, Fetch, window-event, structured concurrency, and `Resource`
-adapters all use this protocol. The window adapter races revocable one-shot
+Web Promise, timer, Fetch, window-event, structured concurrency, and `Resource`
+adapters use this protocol. Pocket virtual timers and structured concurrency
+use it without importing Web scheduling. The window adapter races revocable one-shot
 `scroll` and `hashchange` awaits; its ABI callback only clears the subscription
 and completes the await, while application policy runs after generation
 re-entry. Host values which intentionally outlive one await use a separate
@@ -671,6 +681,10 @@ complete rollback snapshot, and stale handles no longer retain sibling values.
   distinct-scope claims, explicit lease unlinks, and lease retirement without
   recursive cleanup or stale task scans; `browser_async.py` exercises the full
   host protocol.
+- `async-host-dispatcher.kk` checks injected turn ordering, posted-turn
+  retirement, and rejection cleanup. `pocketjs-runtime.kk` and the Pocket bridge
+  tests add virtual timers, timeout loser cancellation, queued-turn retirement,
+  multi-shot async press, and mount rollback.
 - `async-resource.kk` checks refresh, cancellation, stale results, and host
   value lease promotion/replacement.
 - `report_html.py` and `browser_report.py` require one Koka-owned document,

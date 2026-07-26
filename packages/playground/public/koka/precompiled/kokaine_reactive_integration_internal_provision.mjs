@@ -816,7 +816,7 @@ export function prepend_bootstrap_retirements(values, collected) /* forall<e> (v
     if (values.head._tag === 2) {
       {
         // tail call
-        var _x70 = function(_scope69 /* kokaine/reactive/internal/model/continuation-scope<1950> */ ) {
+        var _x70 = function(_scope69 /* kokaine/reactive/internal/model/continuation-scope<1949> */ ) {
           return $std_core_types.Cons($kokaine_reactive_internal_model.Retirement_step(function() {
               return $kokaine_reactive_internal_lifetime.scope_retirement_expand(_scope69);
             }), collected);
@@ -869,10 +869,10 @@ export function prepend_pure_bootstrap_retirements(values, collected) /* forall<
 // monadic lift
 export function _mlift_retire_provision_bootstraps_10358(root, finalizers) /* forall<e> (root : kokaine/reactive/internal/model/root<e>, finalizers : list<kokaine/reactive/internal/model/retirement-work<e>>) -> <div,exn|e> () */  {
    
-  var _x_x1_2_10284 = $std_core_hnd._open_none1(function(root_0 /* kokaine/reactive/internal/model/root<2087> */ ) {
+  var _x_x1_2_10284 = $std_core_hnd._open_none1(function(root_0 /* kokaine/reactive/internal/model/root<2086> */ ) {
       return root_0.root_lifetime;
     }, root);
-  return $kokaine_reactive_internal_lifetime.run_finalizers($std_core_hnd._open_none1(function(_this /* kokaine/reactive/internal/model/lifetime-owner<2087> */ ) {
+  return $kokaine_reactive_internal_lifetime.run_finalizers($std_core_hnd._open_none1(function(_this /* kokaine/reactive/internal/model/lifetime-owner<2086> */ ) {
         return _this.lifetime_retirement;
       }, _x_x1_2_10284), finalizers);
 }
@@ -881,16 +881,16 @@ export function _mlift_retire_provision_bootstraps_10358(root, finalizers) /* fo
 // monadic lift
 export function _mlift_retire_provision_bootstraps_10359(root, structural) /* forall<e> (root : kokaine/reactive/internal/model/root<e>, structural : list<kokaine/reactive/internal/model/retirement-work<e>>) -> <div,exn|e> () */  {
    
-  var x_10390 = $std_core_hnd._open_none1(function(values /* list<kokaine/reactive/internal/model/retirement-work<2087>> */ ) {
+  var x_10390 = $std_core_hnd._open_none1(function(values /* list<kokaine/reactive/internal/model/retirement-work<2086>> */ ) {
       return $kokaine_reactive_internal_lifetime.collect_retirement_loop(values, $std_core_types.Nil);
     }, structural);
    
-  function next_10391(finalizers) /* (list<kokaine/reactive/internal/model/retirement-work<2087>>) -> <div,exn|2087> () */  {
+  function next_10391(finalizers) /* (list<kokaine/reactive/internal/model/retirement-work<2086>>) -> <div,exn|2086> () */  {
      
-    var _x_x1_2_10284 = $std_core_hnd._open_none1(function(root_0_0 /* kokaine/reactive/internal/model/root<2087> */ ) {
+    var _x_x1_2_10284 = $std_core_hnd._open_none1(function(root_0_0 /* kokaine/reactive/internal/model/root<2086> */ ) {
         return root_0_0.root_lifetime;
       }, root);
-    return $kokaine_reactive_internal_lifetime.run_finalizers($std_core_hnd._open_none1(function(_this /* kokaine/reactive/internal/model/lifetime-owner<2087> */ ) {
+    return $kokaine_reactive_internal_lifetime.run_finalizers($std_core_hnd._open_none1(function(_this /* kokaine/reactive/internal/model/lifetime-owner<2086> */ ) {
           return _this.lifetime_retirement;
         }, _x_x1_2_10284), finalizers);
   }
@@ -908,7 +908,7 @@ export function _mlift_retire_provision_bootstraps_10360(derive_owned, root, eff
    
   var x_10394 = $std_core_hnd._open_none2(prepend_pure_bootstrap_retirements, derive_owned, effect_structural);
   if ($std_core_hnd._yielding()) {
-    return $std_core_hnd.yield_extend(function(structural /* list<kokaine/reactive/internal/model/retirement-work<2087>> */ ) {
+    return $std_core_hnd.yield_extend(function(structural /* list<kokaine/reactive/internal/model/retirement-work<2086>> */ ) {
       return _mlift_retire_provision_bootstraps_10359(root, structural);
     });
   }
@@ -921,7 +921,7 @@ export function retire_provision_bootstraps(root, derive_owned, effect_owned) /*
    
   var x_10396 = $std_core_hnd._open_none2(prepend_bootstrap_retirements, effect_owned, $std_core_types.Nil);
   if ($std_core_hnd._yielding()) {
-    return $std_core_hnd.yield_extend(function(effect_structural /* list<kokaine/reactive/internal/model/retirement-work<2087>> */ ) {
+    return $std_core_hnd.yield_extend(function(effect_structural /* list<kokaine/reactive/internal/model/retirement-work<2086>> */ ) {
       return _mlift_retire_provision_bootstraps_10360(derive_owned, root, effect_structural);
     });
   }
@@ -929,32 +929,32 @@ export function retire_provision_bootstraps(root, derive_owned, effect_owned) /*
      
     var x_0_10399 = $std_core_hnd._open_none2(prepend_pure_bootstrap_retirements, derive_owned, x_10396);
     if ($std_core_hnd._yielding()) {
-      return $std_core_hnd.yield_extend(function(structural /* list<kokaine/reactive/internal/model/retirement-work<2087>> */ ) {
+      return $std_core_hnd.yield_extend(function(structural /* list<kokaine/reactive/internal/model/retirement-work<2086>> */ ) {
         return _mlift_retire_provision_bootstraps_10359(root, structural);
       });
     }
     else {
        
-      var x_1_10402 = $std_core_hnd._open_none1(function(values /* list<kokaine/reactive/internal/model/retirement-work<2087>> */ ) {
+      var x_1_10402 = $std_core_hnd._open_none1(function(values /* list<kokaine/reactive/internal/model/retirement-work<2086>> */ ) {
           return $kokaine_reactive_internal_lifetime.collect_retirement_loop(values, $std_core_types.Nil);
         }, x_0_10399);
       if ($std_core_hnd._yielding()) {
-        return $std_core_hnd.yield_extend(function(finalizers /* list<kokaine/reactive/internal/model/retirement-work<2087>> */ ) {
+        return $std_core_hnd.yield_extend(function(finalizers /* list<kokaine/reactive/internal/model/retirement-work<2086>> */ ) {
            
-          var _x_x1_2_10284 = $std_core_hnd._open_none1(function(root_0_0 /* kokaine/reactive/internal/model/root<2087> */ ) {
+          var _x_x1_2_10284 = $std_core_hnd._open_none1(function(root_0_0 /* kokaine/reactive/internal/model/root<2086> */ ) {
               return root_0_0.root_lifetime;
             }, root);
-          return $kokaine_reactive_internal_lifetime.run_finalizers($std_core_hnd._open_none1(function(_this /* kokaine/reactive/internal/model/lifetime-owner<2087> */ ) {
+          return $kokaine_reactive_internal_lifetime.run_finalizers($std_core_hnd._open_none1(function(_this /* kokaine/reactive/internal/model/lifetime-owner<2086> */ ) {
                 return _this.lifetime_retirement;
               }, _x_x1_2_10284), finalizers);
         });
       }
       else {
          
-        var _x_x1_2_10284_0 = $std_core_hnd._open_none1(function(root_0_1 /* kokaine/reactive/internal/model/root<2087> */ ) {
+        var _x_x1_2_10284_0 = $std_core_hnd._open_none1(function(root_0_1 /* kokaine/reactive/internal/model/root<2086> */ ) {
             return root_0_1.root_lifetime;
           }, root);
-        return $kokaine_reactive_internal_lifetime.run_finalizers($std_core_hnd._open_none1(function(_this_0 /* kokaine/reactive/internal/model/lifetime-owner<2087> */ ) {
+        return $kokaine_reactive_internal_lifetime.run_finalizers($std_core_hnd._open_none1(function(_this_0 /* kokaine/reactive/internal/model/lifetime-owner<2086> */ ) {
               return _this_0.lifetime_retirement;
             }, _x_x1_2_10284_0), x_1_10402);
       }
@@ -964,19 +964,19 @@ export function retire_provision_bootstraps(root, derive_owned, effect_owned) /*
  
 export function discard_provision(lease) /* forall<e> (lease : provision-lease<e>) -> <exn|e> () */  {
    
-  var current = $std_core_hnd._open_none1(function(lease_0 /* provision-lease<2312> */ ) {
+  var current = $std_core_hnd._open_none1(function(lease_0 /* provision-lease<2311> */ ) {
       return lease_0;
     }, lease);
    
-  var root = $std_core_hnd._open_none1(function(provision /* provision<2312> */ ) {
+  var root = $std_core_hnd._open_none1(function(provision /* provision<2311> */ ) {
       return provision.provision_root;
     }, current);
    
-  var derive_group = $std_core_hnd._open_none1(function(provision_0 /* provision<2312> */ ) {
+  var derive_group = $std_core_hnd._open_none1(function(provision_0 /* provision<2311> */ ) {
       return provision_0.provision_derive_group;
     }, current);
    
-  var effect_group = $std_core_hnd._open_none1(function(provision_1 /* provision<2312> */ ) {
+  var effect_group = $std_core_hnd._open_none1(function(provision_1 /* provision<2311> */ ) {
       return provision_1.provision_effect_group;
     }, current);
   var _x72 = $std_core_hnd._open_none1($kokaine_reactive_internal_work_dash_transaction.work_group_fs_state, derive_group);
@@ -985,13 +985,13 @@ export function discard_provision(lease) /* forall<e> (lease : provision-lease<e
   }
   else if (_x72._tag === 6) {
      
-    var _x_x1_4_10291 = $std_core_hnd._open_none1(function(root_0 /* kokaine/reactive/internal/model/root<2312> */ ) {
+    var _x_x1_4_10291 = $std_core_hnd._open_none1(function(root_0 /* kokaine/reactive/internal/model/root<2311> */ ) {
         return root_0.root_derive_plane;
       }, root);
      
     $std_core_hnd._open_none2(detach_matching_group, _x_x1_4_10291, derive_group);
      
-    var _x_x1_6_10294 = $std_core_hnd._open_none1(function(root_1 /* kokaine/reactive/internal/model/root<2312> */ ) {
+    var _x_x1_6_10294 = $std_core_hnd._open_none1(function(root_1 /* kokaine/reactive/internal/model/root<2311> */ ) {
         return root_1.root_effect_plane;
       }, root);
      
@@ -1006,13 +1006,13 @@ export function discard_provision(lease) /* forall<e> (lease : provision-lease<e
      
     var effect_owned = $std_core_hnd._open_none1($kokaine_reactive_internal_work_dash_transaction.work_group_fs_take_rollback, effect_group);
      
-    var _x_x1_12_10301 = $std_core_hnd._open_none1(function(root_2 /* kokaine/reactive/internal/model/root<2312> */ ) {
+    var _x_x1_12_10301 = $std_core_hnd._open_none1(function(root_2 /* kokaine/reactive/internal/model/root<2311> */ ) {
         return root_2.root_derive_plane;
       }, root);
      
     $std_core_hnd._open_none2(detach_matching_group, _x_x1_12_10301, derive_group);
      
-    var _x_x1_14_10304 = $std_core_hnd._open_none1(function(root_3 /* kokaine/reactive/internal/model/root<2312> */ ) {
+    var _x_x1_14_10304 = $std_core_hnd._open_none1(function(root_3 /* kokaine/reactive/internal/model/root<2311> */ ) {
         return root_3.root_effect_plane;
       }, root);
      
@@ -1149,7 +1149,7 @@ export function _mlift_drain_provision_10366(completed, current, derive_group, l
 // monadic lift
 export function _mlift_drain_provision_10367(current, lease, wild__) /* forall<_e,_e1,_e2,e3> (current : provision<e3>, lease : provision-lease<e3>, wild_ : ()) -> <exn,div|e3> () */  {
    
-  var derive_group = $std_core_hnd._open_none1(function(provision /* provision<2562> */ ) {
+  var derive_group = $std_core_hnd._open_none1(function(provision /* provision<2561> */ ) {
       return provision.provision_derive_group;
     }, current);
    
@@ -1178,7 +1178,7 @@ export function _mlift_drain_provision_10367(current, lease, wild__) /* forall<_
  
 export function drain_provision(lease) /* forall<e> (lease : provision-lease<e>) -> <div,exn|e> () */  {
    
-  var current = $std_core_hnd._open_none1(function(lease_0 /* provision-lease<2562> */ ) {
+  var current = $std_core_hnd._open_none1(function(lease_0 /* provision-lease<2561> */ ) {
       return lease_0;
     }, lease);
    
@@ -1190,7 +1190,7 @@ export function drain_provision(lease) /* forall<e> (lease : provision-lease<e>)
   }
   else {
      
-    var derive_group = $std_core_hnd._open_none1(function(provision /* provision<2562> */ ) {
+    var derive_group = $std_core_hnd._open_none1(function(provision /* provision<2561> */ ) {
         return provision.provision_derive_group;
       }, current);
      
@@ -1270,15 +1270,15 @@ export function drain_provision(lease) /* forall<e> (lease : provision-lease<e>)
 // monadic lift
 export function _mlift_promote_provision_10368(current, wild__) /* forall<e> (current : provision<e>, wild_ : ()) -> <exn|e> () */  {
    
-  var root = $std_core_hnd._open_none1(function(provision /* provision<2786> */ ) {
+  var root = $std_core_hnd._open_none1(function(provision /* provision<2785> */ ) {
       return provision.provision_root;
     }, current);
    
-  var derive_group = $std_core_hnd._open_none1(function(provision_0 /* provision<2786> */ ) {
+  var derive_group = $std_core_hnd._open_none1(function(provision_0 /* provision<2785> */ ) {
       return provision_0.provision_derive_group;
     }, current);
    
-  var effect_group = $std_core_hnd._open_none1(function(provision_1 /* provision<2786> */ ) {
+  var effect_group = $std_core_hnd._open_none1(function(provision_1 /* provision<2785> */ ) {
       return provision_1.provision_effect_group;
     }, current);
   var _x78 = $std_core_hnd._open_none1($kokaine_reactive_internal_work_dash_transaction.work_group_fs_state, derive_group);
@@ -1288,19 +1288,19 @@ export function _mlift_promote_provision_10368(current, wild__) /* forall<e> (cu
      
     var effect_residual = $std_core_hnd._open_none1($kokaine_reactive_internal_work_dash_transaction.work_group_fs_take_all, effect_group);
      
-    var _x_x1_7_10331 = $std_core_hnd._open_none1(function(root_0 /* kokaine/reactive/internal/model/root<2786> */ ) {
+    var _x_x1_7_10331 = $std_core_hnd._open_none1(function(root_0 /* kokaine/reactive/internal/model/root<2785> */ ) {
         return root_0.root_derive_plane;
       }, root);
      
     $std_core_hnd._open_none2(detach_matching_group, _x_x1_7_10331, derive_group);
      
-    var _x_x1_9_10334 = $std_core_hnd._open_none1(function(root_1 /* kokaine/reactive/internal/model/root<2786> */ ) {
+    var _x_x1_9_10334 = $std_core_hnd._open_none1(function(root_1 /* kokaine/reactive/internal/model/root<2785> */ ) {
         return root_1.root_effect_plane;
       }, root);
      
     $std_core_hnd._open_none2(detach_matching_group, _x_x1_9_10334, effect_group);
      
-    var _x_x1_12_10339 = $std_core_hnd._open_none1(function(root_2 /* kokaine/reactive/internal/model/root<2786> */ ) {
+    var _x_x1_12_10339 = $std_core_hnd._open_none1(function(root_2 /* kokaine/reactive/internal/model/root<2785> */ ) {
         return root_2.root_derive_plane;
       }, root);
      
@@ -1312,15 +1312,15 @@ export function _mlift_promote_provision_10368(current, wild__) /* forall<e> (cu
         return $kokaine_reactive_internal_work_dash_transaction.append_values_loop(target, values);
       }, _x_x1_11_10337, derive_residual);
      
-    var _x_x1_15_10343 = $std_core_hnd._open_none1(function(root_3 /* kokaine/reactive/internal/model/root<2786> */ ) {
+    var _x_x1_15_10343 = $std_core_hnd._open_none1(function(root_3 /* kokaine/reactive/internal/model/root<2785> */ ) {
         return root_3.root_effect_plane;
       }, root);
      
-    var _x_x1_14_10341 = $std_core_hnd._open_none1(function(plane_0 /* kokaine/reactive/internal/model/plane<2786> */ ) {
+    var _x_x1_14_10341 = $std_core_hnd._open_none1(function(plane_0 /* kokaine/reactive/internal/model/plane<2785> */ ) {
         return plane_0.plane_queue;
       }, _x_x1_15_10343);
      
-    $std_core_hnd._open_none2(function(target_0 /* kokaine/reactive/internal/work-transaction/work-queue<kokaine/reactive/internal/model/work<2786>> */ , values_0 /* list<kokaine/reactive/internal/model/work<2786>> */ ) {
+    $std_core_hnd._open_none2(function(target_0 /* kokaine/reactive/internal/work-transaction/work-queue<kokaine/reactive/internal/model/work<2785>> */ , values_0 /* list<kokaine/reactive/internal/model/work<2785>> */ ) {
         return $kokaine_reactive_internal_work_dash_transaction.append_values_loop(target_0, values_0);
       }, _x_x1_14_10341, effect_residual);
     var _x79 = $std_core_hnd._open_none1($kokaine_reactive_internal_work_dash_transaction.work_group_fs_mark_committed, derive_group);
@@ -1340,7 +1340,7 @@ export function _mlift_promote_provision_10368(current, wild__) /* forall<e> (cu
  
 export function promote_provision(lease) /* forall<e> (lease : provision-lease<e>) -> <div,exn|e> () */  {
    
-  var current = $std_core_hnd._open_none1(function(lease_0 /* provision-lease<2786> */ ) {
+  var current = $std_core_hnd._open_none1(function(lease_0 /* provision-lease<2785> */ ) {
       return lease_0;
     }, lease);
    

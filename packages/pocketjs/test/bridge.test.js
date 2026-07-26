@@ -3,15 +3,24 @@ import { afterEach, beforeEach, mock, test } from "bun:test";
 
 const defaultRenderer = createRendererDouble();
 const mountEvents = [];
+const frameCallbacks = [];
 let mountFailureAfterCode;
 mock.module("@pocketjs/framework/solid/renderer", () => defaultRenderer.renderer);
+mock.module("@pocketjs/framework/lifecycle", () => ({
+  onFrame(callback) {
+    frameCallbacks.push(callback);
+  }
+}));
 mock.module("@pocketjs/framework", () => ({
   mount(code, options) {
     mountEvents.push(["pocket:mount", options]);
     const root = code();
     if (mountFailureAfterCode) throw mountFailureAfterCode;
     mountEvents.push(["pocket:root", root]);
-    return () => mountEvents.push(["pocket:dispose"]);
+    return () => {
+      mountEvents.push(["pocket:dispose"]);
+      frameCallbacks.length = 0;
+    };
   }
 }));
 
@@ -19,20 +28,47 @@ const { createPocketRoot, installPocketBridge } = await import("../js/bridge.js"
 const { mountKokaine } = await import("../js/mount.js");
 
 const BRIDGE_KEY = Symbol.for("kokaine.pocketjs.bridge");
+const ASYNC_KEY = Symbol.for("kokaine.pocketjs.async");
 const originalDescriptor = Object.getOwnPropertyDescriptor(globalThis, BRIDGE_KEY);
+const originalAsyncDescriptor = Object.getOwnPropertyDescriptor(globalThis, ASYNC_KEY);
+const originalSimulationHzDescriptor =
+  Object.getOwnPropertyDescriptor(globalThis, "__simHz");
 
 beforeEach(() => {
   delete globalThis[BRIDGE_KEY];
+  delete globalThis[ASYNC_KEY];
+  delete globalThis.__simHz;
   mountEvents.length = 0;
+  frameCallbacks.length = 0;
   mountFailureAfterCode = undefined;
 });
 
 afterEach(() => {
   delete globalThis[BRIDGE_KEY];
+  delete globalThis[ASYNC_KEY];
   if (originalDescriptor) {
     Object.defineProperty(globalThis, BRIDGE_KEY, originalDescriptor);
   }
+  if (originalAsyncDescriptor) {
+    Object.defineProperty(globalThis, ASYNC_KEY, originalAsyncDescriptor);
+  }
+  delete globalThis.__simHz;
+  if (originalSimulationHzDescriptor) {
+    Object.defineProperty(
+      globalThis,
+      "__simHz",
+      originalSimulationHzDescriptor
+    );
+  }
 });
+
+function runFrame() {
+  for (const callback of [...frameCallbacks]) callback(0);
+}
+
+function runFrames(count) {
+  for (let index = 0; index < count; index += 1) runFrame();
+}
 
 function createRendererDouble() {
   const calls = [];
@@ -339,9 +375,19 @@ test("creates roots through a compatible bridge owned by another package copy", 
 
 test("composes Koka cleanup before Pocket teardown and bridge restoration", () => {
   const options = { pak: new ArrayBuffer(0) };
+  let cleanupPostAccepted;
+  let dispatcher;
+  let schedulerFrame;
   const dispose = mountKokaine(() => {
     mountEvents.push(["koka:start"]);
-    return () => mountEvents.push(["koka:dispose"]);
+    dispatcher = globalThis[ASYNC_KEY].capture();
+    schedulerFrame = frameCallbacks[0];
+    return () => {
+      mountEvents.push(["koka:dispose"]);
+      cleanupPostAccepted = dispatcher.post(
+        () => mountEvents.push(["async:cleanup"])
+      );
+    };
   }, options);
 
   assert.equal(globalThis[BRIDGE_KEY].version, 1);
@@ -361,7 +407,201 @@ test("composes Koka cleanup before Pocket teardown and bridge restoration", () =
     "koka:dispose",
     "pocket:dispose"
   ]);
+  assert.equal(cleanupPostAccepted, true);
+  schedulerFrame(0);
+  assert.equal(
+    mountEvents.some(([name]) => name === "async:cleanup"),
+    false
+  );
   assert.equal(Object.hasOwn(globalThis, BRIDGE_KEY), false);
+  assert.equal(Object.hasOwn(globalThis, ASYNC_KEY), false);
+});
+
+test("flushes mount-scoped async work before later frame hooks in FIFO turns", () => {
+  const events = [];
+  let dispatcher;
+  const dispose = mountKokaine(() => {
+    const bridge = globalThis[ASYNC_KEY];
+    assert.equal(bridge.version, 1);
+    dispatcher = bridge.capture();
+    frameCallbacks.push(() => events.push("app:frame"));
+    return () => events.push("koka:dispose");
+  });
+
+  assert.equal(dispatcher, globalThis[ASYNC_KEY].capture());
+  assert.equal(
+    dispatcher.post(() => {
+      events.push("async:first");
+      dispatcher.post(() => events.push("async:nested"));
+    }),
+    true
+  );
+  assert.equal(dispatcher.post(() => events.push("async:second")), true);
+
+  runFrame();
+  assert.deepEqual(events, ["async:first", "async:second", "app:frame"]);
+
+  runFrame();
+  assert.deepEqual(events, [
+    "async:first",
+    "async:second",
+    "app:frame",
+    "async:nested",
+    "app:frame"
+  ]);
+  dispose();
+});
+
+test("delivers virtual-clock timers through the frame queue and cancels them", () => {
+  const events = [];
+  let dispatcher;
+  const dispose = mountKokaine(() => {
+    dispatcher = globalThis[ASYNC_KEY].capture();
+    return () => {};
+  });
+
+  runFrame();
+  const cancelFirst = dispatcher.afterMilliseconds(
+    125,
+    () => dispatcher.post(() => events.push("timer:first"))
+  );
+  const cancelSecond = dispatcher.afterMilliseconds(
+    -10,
+    () => dispatcher.post(() => events.push("timer:second"))
+  );
+  cancelSecond();
+  cancelSecond();
+  runFrames(7);
+  assert.deepEqual(events, []);
+  runFrame();
+  assert.deepEqual(events, ["timer:first"]);
+
+  cancelFirst();
+  cancelFirst();
+  dispose();
+});
+
+test("rounds virtual delays upward at the normalized simulation rate", () => {
+  globalThis.__simHz = 29;
+  const events = [];
+  let dispatcher;
+  const dispose = mountKokaine(() => {
+    dispatcher = globalThis[ASYNC_KEY].capture();
+    return () => {};
+  });
+
+  dispatcher.afterMilliseconds(0, () => events.push("boot-zero"));
+  runFrame();
+  assert.deepEqual(events, []);
+  runFrame();
+  assert.deepEqual(events, ["boot-zero"]);
+
+  dispatcher.afterMilliseconds(40, () => events.push("forty"));
+  runFrame();
+  assert.deepEqual(events, ["boot-zero"]);
+  runFrame();
+  assert.deepEqual(events, ["boot-zero", "forty"]);
+  dispose();
+});
+
+test("keeps exact millisecond frame boundaries exact", () => {
+  globalThis.__simHz = 60;
+  const events = [];
+  let dispatcher;
+  const dispose = mountKokaine(() => {
+    dispatcher = globalThis[ASYNC_KEY].capture();
+    return () => {};
+  });
+
+  runFrame();
+  dispatcher.afterMilliseconds(4150, () => events.push("exact"));
+  runFrames(248);
+  assert.deepEqual(events, []);
+  runFrame();
+  assert.deepEqual(events, ["exact"]);
+  dispose();
+});
+
+test("rejects inexact virtual delays before allocating a Pocket timer", () => {
+  let dispatcher;
+  const dispose = mountKokaine(() => {
+    dispatcher = globalThis[ASYNC_KEY].capture();
+    return () => {};
+  });
+
+  for (const delay of [0.5, Number.MAX_SAFE_INTEGER + 1, Number.NaN]) {
+    assert.throws(
+      () => dispatcher.afterMilliseconds(delay, () => {}),
+      /safe-integer delay/
+    );
+  }
+  runFrames(10);
+  dispose();
+});
+
+test("makes queued work, timers, and captured dispatchers inert on disposal", () => {
+  const events = [];
+  let bridge;
+  let dispatcher;
+  const dispose = mountKokaine(() => {
+    bridge = globalThis[ASYNC_KEY];
+    dispatcher = bridge.capture();
+    return () => events.push("koka:dispose");
+  });
+  const schedulerFrame = frameCallbacks[0];
+  dispatcher.post(() => events.push("queued"));
+  dispatcher.afterMilliseconds(
+    100,
+    () => dispatcher.post(() => events.push("timer"))
+  );
+
+  dispose();
+  assert.deepEqual(events, ["koka:dispose"]);
+  assert.equal(Object.hasOwn(globalThis, ASYNC_KEY), false);
+  assert.equal(dispatcher.post(() => events.push("late")), false);
+  assert.equal(
+    dispatcher.afterMilliseconds(100, () => events.push("later")),
+    false
+  );
+  assert.equal(bridge.capture(), dispatcher);
+
+  for (let index = 0; index < 10; index += 1) schedulerFrame(0);
+  assert.deepEqual(events, ["koka:dispose"]);
+});
+
+test("makes async work inert when Pocket rolls back after Koka startup", () => {
+  const failure = new Error("post-start mount failure");
+  const events = [];
+  let cleanupPostAccepted;
+  let dispatcher;
+  let schedulerFrame;
+  mountFailureAfterCode = failure;
+
+  assert.throws(
+    () => mountKokaine(() => {
+      dispatcher = globalThis[ASYNC_KEY].capture();
+      schedulerFrame = frameCallbacks[0];
+      dispatcher.post(() => events.push("queued"));
+      dispatcher.afterMilliseconds(
+        100,
+        () => dispatcher.post(() => events.push("timer"))
+      );
+      return () => {
+        events.push("koka:dispose");
+        cleanupPostAccepted = dispatcher.post(
+          () => events.push("async:cleanup")
+        );
+      };
+    }),
+    (error) => error === failure
+  );
+
+  assert.deepEqual(events, ["koka:dispose"]);
+  assert.equal(cleanupPostAccepted, true);
+  assert.equal(Object.hasOwn(globalThis, ASYNC_KEY), false);
+  assert.equal(dispatcher.post(() => events.push("late")), false);
+  for (let index = 0; index < 10; index += 1) schedulerFrame(0);
+  assert.deepEqual(events, ["koka:dispose"]);
 });
 
 test("restores the bridge when a Koka entry omits its cleanup contract", () => {

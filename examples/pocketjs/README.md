@@ -25,7 +25,9 @@ make serve-pocketjs-example POCKETJS_CHECKOUT=/absolute/path/to/pocketjs
 
 Open <http://127.0.0.1:8130/>. The demo is selected automatically. Press DOWN
 then CIRCLE (or use the matching on-screen buttons) to change `Count 0` to
-`Count 1`.
+`Count 1`. The same async press publishes `Async waiting` synchronously, yields
+to Pocket's virtual frame schedule, and publishes `Async resumed` on the next
+frame.
 
 Run the same flow in headless Chromium:
 
@@ -36,4 +38,5 @@ make test-pocketjs-browser POCKETJS_CHECKOUT=/absolute/path/to/pocketjs
 
 The test asserts that Koka text is visibly rasterized into the real Canvas and
 that Pocket input moves native focus, reaches the Koka callback, and replaces
-the live text with `Count 1`. It also fails on page, console, or HTTP errors.
+the live text with `Count 1`. It also verifies the cross-frame async resumption
+and fails on page, console, or HTTP errors.

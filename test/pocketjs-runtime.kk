@@ -2,12 +2,40 @@ module pocketjs-runtime
 
 import kokaine/reactive
 import kokaine/pocket
+import kokaine/pocket/async
 import kokaine/reactive/effects
 import kokaine/reactive/internal/model
 
 
 extern install-test-host() : ui ()
   js inline "(function(){ var all=[]; var root={ kind:'root', children:[], parent:null, style:{} }; var visit=function(node,action){ action(node); for(var i=0;i<node.children.length;i++) visit(node.children[i],action); }; var create=function(kind,text){ var node={ kind:kind, text:text||'', children:[], parent:null, style:{}, focusable:false, source:'', press:undefined, discarded:false }; all.push(node); return node; }; var state={ root:root, all:all, visit:visit, failAfter:-1, failLiveAfter:-1, liveWrites:0, reboundWrites:0, previousBridge:null, discarded:0 }; var mutateLive=function(action){ if(state.failLiveAfter===0){ state.failLiveAfter=-1; throw new Error('injected live failure'); } if(state.failLiveAfter>0) state.failLiveAfter--; state.liveWrites++; action(); }; globalThis.__kokainePocketTest=state; globalThis[Symbol.for('kokaine.pocketjs.bridge')]={ version:1, getRoot:function(){ return root; }, createView:function(){ return create('view',''); }, createText:function(value){ return create('text',String(value)); }, createImage:function(){ return create('image',''); }, replaceText:function(node,value){ mutateLive(function(){ node.text=String(value); }); }, insertBefore:function(parent,node,anchor){ if(state.failAfter===0){ state.failAfter=-1; throw new Error('injected insert failure'); } if(state.failAfter>0) state.failAfter--; if(node.parent){ var old=node.parent.children.indexOf(node); if(old>=0) node.parent.children.splice(old,1); } var index=anchor==null ? parent.children.length : parent.children.indexOf(anchor); if(index<0) throw new Error('bad anchor'); parent.children.splice(index,0,node); node.parent=parent; }, remove:function(parent,node){ var index=parent.children.indexOf(node); if(index<0) throw new Error('not a child'); parent.children.splice(index,1); node.parent=null; }, discard:function(node){ if(node.parent) throw new Error('discarded attached node'); node.discarded=true; state.discarded++; }, setStyleNumber:function(node,name,value){ mutateLive(function(){ node.style[name]=Number(value); }); }, setStyleString:function(node,name,value){ mutateLive(function(){ node.style[name]=String(value); }); }, setFocusable:function(node,value){ node.focusable=!!value; }, setSource:function(node,value){ node.source=String(value); }, setPress:function(node,handler){ node.press=handler; }, clearPress:function(node){ node.press=undefined; } }; })()"
+
+extern install-test-async-host() : ui ()
+  js inline "(function(){ var state={ active:true, queue:[], timers:[], lateRuns:0 }; var dispatcher={ post:function(callback){ if(!state.active) return false; state.queue.push(callback); return true; }, afterMilliseconds:function(milliseconds,callback){ if(!state.active) return false; var timer={ active:true, delay:Number(milliseconds), callback:callback }; state.timers.push(timer); return function(){ if(!timer.active) return; timer.active=false; timer.callback=undefined; }; } }; state.dispatcher=dispatcher; globalThis.__kokainePocketAsyncTest=state; globalThis[Symbol.for('kokaine.pocketjs.async')]={ version:1, capture:function(){ return dispatcher; } }; })()"
+
+extern host-async-frame() : ui ()
+  js inline "(function(){ var state=globalThis.__kokainePocketAsyncTest; var batch=state.queue; state.queue=[]; for(var i=0;i<batch.length;i++) batch[i](); })()"
+
+extern host-drain-async(max-frames : int) : ui int
+  js inline "(function(maxFrames){ var state=globalThis.__kokainePocketAsyncTest; var frames=0; while(state.queue.length>0 && frames<maxFrames){ var batch=state.queue; state.queue=[]; for(var i=0;i<batch.length;i++) batch[i](); frames++; } return frames; })(#1)"
+
+extern host-fire-timer(delay : int) : ui bool
+  js inline "(function(delay){ var timers=globalThis.__kokainePocketAsyncTest.timers; for(var i=0;i<timers.length;i++){ var timer=timers[i]; if(timer.active && timer.delay===delay){ timer.active=false; var callback=timer.callback; timer.callback=undefined; callback(); return true; } } return false; })(#1)"
+
+extern host-active-timers() : ui int
+  js inline "globalThis.__kokainePocketAsyncTest.timers.filter(function(timer){ return timer.active; }).length"
+
+extern host-queued-async-turns() : ui int
+  js inline "globalThis.__kokainePocketAsyncTest.queue.length"
+
+extern host-record-late-run() : ui ()
+  js inline "globalThis.__kokainePocketAsyncTest.lateRuns++"
+
+extern host-late-runs() : ui int
+  js inline "globalThis.__kokainePocketAsyncTest.lateRuns"
+
+extern dispose-test-async-host() : ui ()
+  js inline "(function(){ var state=globalThis.__kokainePocketAsyncTest; state.active=false; state.queue.length=0; for(var i=0;i<state.timers.length;i++){ state.timers[i].active=false; state.timers[i].callback=undefined; } delete globalThis[Symbol.for('kokaine.pocketjs.async')]; })()"
 
 extern host-root-child-count() : ui int
   js inline "globalThis.__kokainePocketTest.root.children.length"
@@ -274,3 +302,125 @@ pub fun main()
   check(host-root-child-count() == 0,
         "failed mount removes its already-published anchor")
   root.dispose()
+
+  install-test-async-host()
+  val (async-root,async-phase) =
+    create-root fn(owner) signal(owner,"idle")
+  val dispose-async-page = mount(async-root,scene
+    live/text { "Async " ++ async-phase.get }
+    pressable-async(fn()
+      async-phase.set("before-yield")
+      yield()
+      async-phase.set("after-yield")
+      sleep(50)
+      async-phase.set("after-sleep")
+      match timeout(50,fn() {
+              sleep(500)
+              "late"
+            })
+        Nothing -> async-phase.set("timed-out")
+        Just(value) -> async-phase.set(value)
+    )
+      text("Run async")
+  )
+  check(host-fire-press(),"async press handler is retained independently")
+  check(host-texts() == "Async before-yield|Run async",
+        "async press publishes synchronously until its first await")
+  check(host-active-timers() == 1 && host-queued-async-turns() == 0,
+        "yield parks on the Pocket virtual clock without a Promise turn")
+  check(host-fire-timer(0),"the virtual zero timer is installed")
+  check(host-queued-async-turns() == 1,
+        "timer completion schedules one generation-bound host turn")
+  host-async-frame()
+  check(host-texts() == "Async after-yield|Run async" &&
+        host-active-timers() == 1,
+        "the next Pocket frame restores the owning reactive generation")
+  check(host-fire-timer(50),"the requested virtual sleep is installed")
+  host-async-frame()
+  check(host-texts() == "Async after-sleep|Run async",
+        "sleep resumes once and flushes its signal publication")
+  host-drain-async(20)
+  check(host-active-timers() == 2,
+        "timeout starts its virtual deadline and action as owned strands")
+  check(host-fire-timer(50),"the timeout deadline uses Pocket virtual time")
+  val timeout-settle-frames = host-drain-async(20)
+  check(timeout-settle-frames > 0 &&
+        host-texts() == "Async timed-out|Run async" &&
+        host-active-timers() == 0,
+        "timeout cancels the losing action timer before publishing Nothing")
+  unmount(dispose-async-page)
+  async-root.dispose()
+  check(host-root-child-count() == 0 && !host-retains-press(),
+        "normal async unmount retires its range and press continuation")
+
+  val (retired-root,retired-phase) =
+    create-root fn(owner) signal(owner,"idle")
+  val dispose-retired-page = mount(retired-root,scene
+    live/text { "Retired " ++ retired-phase.get }
+    pressable-async(fn()
+      retired-phase.set("waiting")
+      sleep(500)
+      retired-phase.set("late")
+    )
+      text("Wait")
+  )
+  check(host-fire-press() && host-active-timers() == 1,
+        "the retirement fixture owns one outstanding virtual timer")
+  retired-root.dispose()
+  check(host-active-timers() == 0 &&
+        host-root-child-count() == 0 &&
+        !host-retains-press(),
+        "root retirement cancels timers and revokes async press callbacks")
+  check(!host-fire-timer(500),
+        "a canceled Pocket timer cannot resume its parked continuation")
+
+  val (queued-root,queued-phase) =
+    create-root fn(owner) signal(owner,"idle")
+  val dispose-queued-page = mount(queued-root,scene
+    live/text { "Queued " ++ queued-phase.get }
+    pressable-async(fn()
+      queued-phase.set("waiting")
+      sleep(100)
+      host-record-late-run()
+      queued-phase.set("late")
+    )
+      text("Queue")
+  )
+  check(host-fire-press() && host-fire-timer(100) &&
+        host-queued-async-turns() == 1,
+        "a completed timer retains one generation-bound frame turn")
+  queued-root.dispose()
+  check(host-root-child-count() == 0 && !host-retains-press(),
+        "root retirement revokes the queued async fixture")
+  host-async-frame()
+  check(host-late-runs() == 0 && host-queued-async-turns() == 0,
+        "a timer turn queued before retirement cannot revive its continuation")
+
+  val (multi-root,multi-count) =
+    create-root fn(owner) signal(owner,0)
+  val dispose-multi-page = mount(multi-root,scene
+    live/text { "Multi " ++ multi-count.get.show }
+    pressable-async(fn()
+      multi-count.modify(fn(value) value + 1)
+      yield()
+      multi-count.modify(fn(value) value + 1)
+    )
+      text("Multi press")
+  )
+  check(host-fire-press() && host-fire-press() &&
+        host-texts() == "Multi 2|Multi press" &&
+        host-active-timers() == 2,
+        "multi-shot async press starts independent structured strands")
+  check(host-fire-timer(0) && host-fire-timer(0) &&
+        host-queued-async-turns() == 2,
+        "both async press strands post their own generation turn")
+  host-async-frame()
+  check(host-texts() == "Multi 4|Multi press" &&
+        host-active-timers() == 0,
+        "both multi-shot async press strands resume exactly once")
+  unmount(dispose-multi-page)
+  multi-root.dispose()
+  check(host-root-child-count() == 0 && !host-retains-press(),
+        "multi-shot async press fixture retires without retained callbacks")
+
+  dispose-test-async-host()

@@ -60,6 +60,18 @@ try {
     calls.some(([name, , text]) => name === "replaceText" && text === "Count 1"),
     "Pocket input did not deliver onPress into the Koka reactive root"
   );
+  assert.ok(
+    calls.some(
+      ([name, , text]) => name === "replaceText" && text === "Async waiting"
+    ),
+    "Pocket async press did not publish before its first suspension"
+  );
+  assert.ok(
+    calls.some(
+      ([name, , text]) => name === "replaceText" && text === "Async resumed"
+    ),
+    "Pocket virtual frame did not resume the async continuation"
+  );
 } finally {
   delete globalThis.ui;
   delete globalThis.__pak;
