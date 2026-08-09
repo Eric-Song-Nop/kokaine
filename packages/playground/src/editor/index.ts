@@ -1,4 +1,9 @@
-export { KokaEditor, type KokaEditorProps, type KokaLspStatus } from './KokaEditor';
+export { createKokaEditorController } from './controller';
+export type {
+  KokaEditorController,
+  KokaEditorControllerOptions,
+  KokaLspStatus,
+} from './controller';
 export {
   KOKA_LANGUAGE_CONFIGURATION,
   KOKA_LANGUAGE_ID,

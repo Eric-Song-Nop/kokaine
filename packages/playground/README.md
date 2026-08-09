@@ -1,13 +1,13 @@
 # Koka + Kokaine Playground
 
-A single-file, Solid-powered playground for editing and running Kokaine in the
-browser. It keeps the useful Solid Playground workbench shape: Monaco on the
-left, a persistent preview on the right, generated output, and embedded
-Chromium DevTools.
+A multi-file browser workbench whose complete application UI and reactive state
+are authored in Koka and rendered by Kokaine. Monaco, a persistent preview,
+generated output, Chromium DevTools, and a stateful Koka REPL remain narrow host
+capabilities behind that Koka-owned interface.
 
-The runtime is browser-only. Both the Koka compiler and Koka language server
-run as WebAssembly in dedicated Web Workers. There is no native `koka` child
-process, API route, WebSocket bridge, writable host filesystem, backend code
+The runtime is browser-only. The Koka compiler, language server, and persistent
+REPL run as WebAssembly in dedicated Web Workers. There is no native `koka`
+child process, API route, WebSocket bridge, writable host filesystem, backend code
 execution service, or container.
 
 ## Use it online
@@ -23,8 +23,8 @@ require a native Koka installation.
 From the repository root:
 
 ```sh
-npm install
-npm run dev --workspace @kokaine/playground
+pnpm install
+pnpm --filter @kokaine/playground dev
 ```
 
 Or use the Make target:
@@ -39,37 +39,53 @@ startup. Open the URL it prints and press Command/Control+Enter to compile.
 
 ## Included today
 
-- Monaco syntax highlighting for Koka, bracket matching, snippets, and a
-  light/dark editor theme.
+- An IndexedDB-backed Koka project with files, directories, rename/delete
+  operations, open tabs, automatic snapshots, and deterministic project share
+  links.
+- Monaco syntax highlighting for Koka, bracket matching, snippets, and
+  light/dark editor themes. Every project file is a separate text model.
 - The real Koka language server compiled to WebAssembly: diagnostics, hover,
   completion, signatures, definitions, symbols, folding, code actions, and
-  inlay hints.
-- Koka-to-JavaScript compilation in a Web Worker against an in-memory WASI
-  filesystem containing the pinned Koka libraries and this checkout's Kokaine
-  sources.
+  inlay hints across the complete project VFS.
+- Koka-to-JavaScript compilation in a Web Worker against an isolated,
+  immutable-at-request-boundary project snapshot containing the pinned Koka
+  libraries and this checkout's Kokaine sources.
+- A persistent, multi-line Koka REPL session in its own Web Worker. Expressions
+  and type queries use the same project snapshot as builds.
 - A sandboxed, opaque-origin preview iframe that retains the last successful
   build when a later edit fails.
-- Generated JavaScript, build diagnostics, and relayed runtime console output.
-- Self-hosted Chii/Chobitsu Chromium DevTools connected to the preview.
+- Generated JavaScript, build diagnostics, relayed runtime console output, and
+  self-hosted Chii/Chobitsu Chromium DevTools connected to the preview.
 - Resizable desktop panes, mobile panel navigation, responsive preview sizes,
-  local source persistence, and compressed share URLs.
+  project persistence, automatic snapshots, and compressed share URLs.
 
 No editor, compiler, preview, or DevTools resource is loaded from a CDN.
 
 ## Browser architecture
 
-The main thread owns Solid, Monaco, and the workbench state. A compiler Worker
-loads `/koka/releases/<release-id>/koka-playground.wasm`; a separate
-language-server Worker loads the matching `koka-lsp.wasm` from that release.
-`@bjorn3/browser_wasi_shim` exposes only the browser-side in-memory filesystem
-and standard streams that those programs need. The compressed
-`koka-runtime.json.gz` bundle supplies the Koka standard library and precompiled
-JavaScript modules, while Vite bundles the current `src/kokaine/**/*.kk` tree
-into the same virtual filesystem. Before development or production builds, the
-asset script validates and stages the runtime bundle, compiler WASM,
-language-server WASM, and complete precompiled module graph under a
-content-derived release ID. This keeps a core or compiler refactor from being
-mixed with browser-cached assets from another release.
+The main thread runs a Kokaine-owned workbench. Its Koka entry module owns the
+signals, derived state, event handlers, and complete workbench DOM. A narrow,
+framework-neutral TypeScript host owns capabilities that remain browser APIs:
+IndexedDB, Monaco, compiler/language-server/REPL Workers, preview and DevTools
+iframes, sharing, timers, and resizers. Browser notifications re-enter Koka
+through DOM custom events installed by the renderer; the host never calls an
+exported generated Koka function directly.
+
+Before Vite development or production builds, `scripts/compile-workbench.mjs`
+runs the pinned browser Koka compiler against `koka/playground/main.kk` and
+stages its generated ES-module graph for bundling. This path uses WebAssembly,
+not a native Koka installation. At runtime, a compiler Worker loads
+`/koka/releases/<release-id>/koka-playground.wasm`; a separate language-server
+Worker loads the matching `koka-lsp.wasm`, and the persistent session Worker
+loads the pinned `koka-browser-repl.wasm`. `@bjorn3/browser_wasi_shim` exposes
+only the browser-side in-memory filesystem and standard streams these programs
+need. The compressed `koka-runtime.json.gz` bundle supplies the Koka standard
+library and precompiled JavaScript modules, while Vite bundles the current
+`src/kokaine/**/*.kk` tree into the same virtual filesystem. The asset scripts
+validate and stage the runtime bundle, all three WASM programs, and the complete
+precompiled module graph under a content-derived release ID.
+This keeps a core or compiler refactor from being mixed with browser-cached
+assets from another release.
 
 Compilation returns an ES-module graph to the parent. The opaque preview
 receives that graph through a tokenized `postMessage` protocol, rewrites its
@@ -77,25 +93,27 @@ relative imports to short-lived Blob URLs, and imports pinned precompiled
 modules from `/koka/releases/<release-id>/precompiled/`. Replacing a build
 revokes the old generated URLs.
 
-Active compilation has a source-size limit and a timeout. Cancellation,
-timeout, or a compiler crash terminates and recreates the compiler Worker, so
-compiler state is not shared between abandoned runs.
+Compiler and REPL requests have source-size limits and timeouts. Cancellation,
+timeout, or a compiler crash terminates and recreates that Worker. The REPL
+keeps one explicit session until project reload/reset; source changes reload the
+same session rather than replaying browser-side history.
 
-The published `@kokaine/cli` package-resolution model can later extend the
-virtual filesystem with installed npm package contents without restoring a
-server or native compiler path.
+The project filesystem is the package-resolution boundary. The published
+`@kokaine/cli` resolution model can later extend that VFS with installed npm
+package contents without restoring a server or native compiler path.
 
 ## Pinned assets
 
 The checked-in browser toolchain is intentionally reproducible:
 
-- `scripts/sync-koka-assets.mjs` downloads the official Koka browser build from
-  the immutable commit recorded in that script, verifies both WASM files by
-  SHA-256, rebuilds the compressed standard-library VFS, and writes
-  `public/koka/assets.json`.
+- `scripts/sync-koka-assets.mjs` downloads the official Koka compiler and LSP
+  browser build from the immutable commit recorded in that script, verifies
+  their SHA-256 hashes, verifies the checked-in browser REPL built from its
+  separately recorded upstream fork commit, rebuilds the compressed
+  standard-library VFS, and writes `public/koka/assets.json`.
 - `scripts/sync-devtools-assets.mjs` copies Chii and Chobitsu from the exact npm
-  versions in the repository root `package-lock.json`, including their license
-  files, into `public/devtools/`.
+  versions pinned in `pnpm-lock.yaml`, including their license files, into
+  `public/devtools/`.
 
 After changing `src/kokaine/**`, rebuild the Kokaine precompiled cache and its
 runtime bundle from the repository root:
@@ -124,8 +142,9 @@ under `public/devtools/`.
 
 ## Cross-origin isolation
 
-The WASM language server uses `SharedArrayBuffer` and `Atomics`, so the page
-must be `crossOriginIsolated`. Local Vite development and preview send:
+The WASM language server and persistent REPL use `SharedArrayBuffer` and
+`Atomics`, so the page must be `crossOriginIsolated`. Local Vite development and
+preview send:
 
 ```text
 Cross-Origin-Opener-Policy: same-origin
@@ -192,8 +211,9 @@ toolchain inside Pages.
 
 ## Security boundary
 
-Compiler and LSP code execute in Workers against an in-memory WASI filesystem,
-not on a Kokaine server. Generated programs execute in an iframe with
+Compiler, LSP, and REPL code execute in Workers against in-memory WASI
+filesystems, not on a Kokaine server. Project persistence is confined to this
+origin's IndexedDB. Generated programs execute in an iframe with
 `sandbox="allow-scripts"` and therefore cannot read the parent DOM, origin
 storage, or cookies.
 
