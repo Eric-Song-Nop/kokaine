@@ -133,8 +133,10 @@ class ReplStdoutCapture extends WasiFdStubs {
       if (line.trim().length === 0) continue;
 
       const response = parseReplResponse(JSON.parse(line));
-      const generatedModules = Array.from(collectGeneratedFiles(this.root))
-        .filter(([path]) => path.endsWith('.mjs'));
+      const generatedModules = response.entryPath === null
+        ? []
+        : Array.from(collectGeneratedFiles(this.root))
+          .filter(([path]) => path.endsWith('.mjs'));
       post({ type: 'response', response, generatedModules });
     }
   }

@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const UPSTREAM_COMMIT = 'c0f1a10a60b8644fd6f08dfcec654fa815c06e3f';
 const COMPILER_VERSION = '3.2.4';
-const BROWSER_REPL_COMMIT = '8c974708c97645014a6a706e63524599f8da23c6';
+const BROWSER_REPL_COMMIT = '32fee7eda6397dee81f4752ff7cab4e4001d3eb2';
 const RAW_ROOT = `https://raw.githubusercontent.com/koka-lang/koka/${UPSTREAM_COMMIT}/playground`;
 const PACKAGE_ROOT = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const KOKA_DIR = path.join(PACKAGE_ROOT, 'public', 'koka');
@@ -17,7 +17,7 @@ const EXPECTED_WASM = {
   'koka-lsp.wasm': 'ce950710f27fda0f325d9046885d525f3e87daf30d93be1d45058d556c6039c0',
 };
 const BUNDLED_WASM = {
-  'koka-browser-repl.wasm': '7e158eec4362cd5cdb6954cb93ab62cf9e6e5981721eb2ef31e5de4e7301aaf7',
+  'koka-browser-repl.wasm': '5ee587122a58da95b4bbbaaee8d946ef3f2bec1c9da4a21d70fdb34e2ad80afd',
 };
 
 function sha256(bytes) {
