@@ -2,6 +2,7 @@ import json
 import os
 import re
 import sys
+from functools import partial
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -24,6 +25,10 @@ def step(label):
     print(f"[e2e] {label}", flush=True)
 
 
+def record_page_error(errors, error):
+    errors.append(error.stack or str(error))
+
+
 with sync_playwright() as playwright:
     launch_options = {"headless": True}
     if CHROMIUM and Path(CHROMIUM).is_file():
@@ -39,7 +44,7 @@ with sync_playwright() as playwright:
     failed_requests = []
     page.on("request", lambda request: requests.append(request.url))
     page.on("websocket", lambda socket: websocket_urls.append(socket.url))
-    page.on("pageerror", lambda error: page_errors.append(str(error)))
+    page.on("pageerror", partial(record_page_error, page_errors))
     page.on("console", lambda message: console_messages.append(
         f"{message.type}: {message.text}"
     ))
@@ -48,6 +53,8 @@ with sync_playwright() as playwright:
     ))
 
     page.goto(URL, wait_until="domcontentloaded")
+    page.locator('[data-workbench-runtime="kokaine"]').wait_for(state="visible")
+    step("Kokaine workbench ownership ready")
     repository_link = page.get_by_role("link", name="Kokaine on GitHub")
     expect(repository_link).to_have_attribute(
         "href", "https://github.com/Eric-Song-Nop/kokaine"
@@ -169,6 +176,8 @@ with sync_playwright() as playwright:
         for error in page_errors
         if "ResizeObserver loop" not in error
     ]
+    if critical_errors:
+        print("\n".join(critical_errors), flush=True)
     assert not critical_errors, f"Browser page errors: {critical_errors}"
 
     result = {

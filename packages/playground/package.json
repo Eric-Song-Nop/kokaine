@@ -6,15 +6,17 @@
   "scripts": {
     "assets:koka": "node scripts/sync-koka-assets.mjs",
     "assets:release": "node scripts/stage-runtime-release.mjs",
-    "precompile:kokaine": "node scripts/smoke-wasm.mjs --update-kokaine-cache && npm run assets:koka",
+    "compile:workbench": "node scripts/compile-workbench.mjs",
+    "precompile:kokaine": "node scripts/smoke-wasm.mjs --update-kokaine-cache && pnpm run assets:koka",
     "assets:devtools": "node scripts/sync-devtools-assets.mjs",
-    "predev": "npm run assets:devtools && npm run assets:release",
+    "predev": "pnpm run assets:devtools && pnpm run assets:release && pnpm run compile:workbench",
     "dev": "vite --host 127.0.0.1",
-    "prebuild": "npm run assets:devtools && npm run assets:release",
+    "prebuild": "pnpm run assets:devtools && pnpm run assets:release && pnpm run compile:workbench",
     "build": "tsc --noEmit && vite build",
     "postbuild": "node scripts/prune-stable-runtime.mjs",
     "preview": "vite preview --host 127.0.0.1",
     "test:wasm": "node scripts/smoke-wasm.mjs",
+    "test:architecture": "node scripts/test-kokaine-architecture.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -22,11 +24,9 @@
     "@codingame/monaco-vscode-editor-api": "25.1.2",
     "@fontsource-variable/ibm-plex-sans": "5.2.8",
     "@fontsource-variable/jetbrains-mono": "5.2.8",
-    "lucide-solid": "1.25.0",
     "lz-string": "1.5.0",
     "monaco-editor": "0.55.1",
     "monaco-languageclient": "10.7.0",
-    "solid-js": "1.9.12",
     "vscode": "npm:@codingame/monaco-vscode-extension-api@25.1.2",
     "vscode-jsonrpc": "8.2.1",
     "vscode-languageclient": "9.0.1"
@@ -36,8 +36,7 @@
     "chii": "1.15.0",
     "chobitsu": "1.8.6",
     "typescript": "6.0.3",
-    "vite": "8.0.0",
-    "vite-plugin-solid": "2.11.12"
+    "vite": "8.0.0"
   },
   "engines": {
     "node": "^20.19.0 || >=22.12.0"

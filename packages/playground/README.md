@@ -1,9 +1,9 @@
 # Koka + Kokaine Playground
 
-A single-file, Solid-powered playground for editing and running Kokaine in the
-browser. It keeps the useful Solid Playground workbench shape: Monaco on the
-left, a persistent preview on the right, generated output, and embedded
-Chromium DevTools.
+A single-file playground whose workbench UI and reactive state are authored in
+Koka and rendered by Kokaine. It keeps the useful Solid Playground workbench
+shape: Monaco on the left, a persistent preview on the right, generated output,
+and embedded Chromium DevTools.
 
 The runtime is browser-only. Both the Koka compiler and Koka language server
 run as WebAssembly in dedicated Web Workers. There is no native `koka` child
@@ -23,8 +23,8 @@ require a native Koka installation.
 From the repository root:
 
 ```sh
-npm install
-npm run dev --workspace @kokaine/playground
+pnpm install
+pnpm --filter @kokaine/playground dev
 ```
 
 Or use the Make target:
@@ -58,18 +58,28 @@ No editor, compiler, preview, or DevTools resource is loaded from a CDN.
 
 ## Browser architecture
 
-The main thread owns Solid, Monaco, and the workbench state. A compiler Worker
-loads `/koka/releases/<release-id>/koka-playground.wasm`; a separate
-language-server Worker loads the matching `koka-lsp.wasm` from that release.
-`@bjorn3/browser_wasi_shim` exposes only the browser-side in-memory filesystem
-and standard streams that those programs need. The compressed
-`koka-runtime.json.gz` bundle supplies the Koka standard library and precompiled
-JavaScript modules, while Vite bundles the current `src/kokaine/**/*.kk` tree
-into the same virtual filesystem. Before development or production builds, the
-asset script validates and stages the runtime bundle, compiler WASM,
-language-server WASM, and complete precompiled module graph under a
-content-derived release ID. This keeps a core or compiler refactor from being
-mixed with browser-cached assets from another release.
+The main thread runs a Kokaine-owned workbench. Its Koka entry module owns the
+signals, derived state, event handlers, and complete workbench DOM. A narrow,
+framework-neutral TypeScript host owns capabilities that remain browser APIs:
+Monaco, compiler and language-server Workers, preview and DevTools iframes,
+persistence, sharing, timers, and resizers. Browser notifications re-enter Koka
+through DOM custom events installed by the renderer; the host never calls an
+exported generated Koka function directly.
+
+Before Vite development or production builds, `scripts/compile-workbench.mjs`
+runs the pinned browser Koka compiler against `koka/playground/main.kk` and
+stages its generated ES-module graph for bundling. This path uses WebAssembly,
+not a native Koka installation. At runtime, a compiler Worker loads
+`/koka/releases/<release-id>/koka-playground.wasm`; a separate language-server
+Worker loads the matching `koka-lsp.wasm`. `@bjorn3/browser_wasi_shim` exposes
+only the browser-side in-memory filesystem and standard streams that those
+programs need. The compressed `koka-runtime.json.gz` bundle supplies the Koka
+standard library and precompiled JavaScript modules, while Vite bundles the
+current `src/kokaine/**/*.kk` tree into the same virtual filesystem. The asset
+scripts validate and stage the runtime bundle, compiler WASM, language-server
+WASM, and complete precompiled module graph under a content-derived release ID.
+This keeps a core or compiler refactor from being mixed with browser-cached
+assets from another release.
 
 Compilation returns an ES-module graph to the parent. The opaque preview
 receives that graph through a tokenized `postMessage` protocol, rewrites its
@@ -94,8 +104,8 @@ The checked-in browser toolchain is intentionally reproducible:
   SHA-256, rebuilds the compressed standard-library VFS, and writes
   `public/koka/assets.json`.
 - `scripts/sync-devtools-assets.mjs` copies Chii and Chobitsu from the exact npm
-  versions in the repository root `package-lock.json`, including their license
-  files, into `public/devtools/`.
+  versions pinned in `pnpm-lock.yaml`, including their license files, into
+  `public/devtools/`.
 
 After changing `src/kokaine/**`, rebuild the Kokaine precompiled cache and its
 runtime bundle from the repository root:
