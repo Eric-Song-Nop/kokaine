@@ -9,6 +9,8 @@ export const DEFAULT_COMPILER_WASM_PATH =
   `koka/releases/${RUNTIME_RELEASE}/koka-playground.wasm`;
 export const DEFAULT_LSP_WASM_PATH =
   `koka/releases/${RUNTIME_RELEASE}/koka-lsp.wasm`;
+export const DEFAULT_REPL_WASM_PATH =
+  `koka/releases/${RUNTIME_RELEASE}/koka-browser-repl.wasm`;
 
 const MAX_COMPRESSED_BUNDLE_BYTES = 64 * 1024 * 1024;
 const MAX_DECOMPRESSED_BUNDLE_BYTES = 256 * 1024 * 1024;
