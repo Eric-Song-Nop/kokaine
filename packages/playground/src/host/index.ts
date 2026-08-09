@@ -164,7 +164,8 @@ async function runWithCompiler(activeCompiler: BrowserCompiler): Promise<void> {
 
   try {
     const compiled = await activeCompiler.compile({
-      source: builtSource,
+      entryModule: 'main',
+      files: { 'main.kk': builtSource },
       signal: compileController.signal,
     });
     const generated = selectGeneratedOutput(compiled.moduleName, compiled.generatedModules);
@@ -451,10 +452,10 @@ async function startHost(): Promise<void> {
 
   const editorPromise = createKokaEditorController({
     container: editorContainer,
-    documentUri: DOCUMENT_URI,
-    value: source,
+    activePath: 'main.kk',
+    files: { 'main.kk': source },
     theme: dark ? 'dark' : 'light',
-    onChange: (value) => {
+    onChange: (_path, value) => {
       source = value;
       persistSource(source);
       dispatch('playground-source', { source });
