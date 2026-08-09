@@ -142,6 +142,8 @@ async function main() {
   };
   const runtimeJson = Buffer.from(JSON.stringify(runtime), 'utf8');
   const runtimeGzip = gzipSync(runtimeJson, { level: 9 });
+  // zlib records the host OS at byte 9; normalize it so macOS and Linux produce identical assets.
+  runtimeGzip[9] = 255;
   await writeFile(path.join(KOKA_DIR, 'koka-runtime.json.gz'), runtimeGzip);
 
   const metadata = {
