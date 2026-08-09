@@ -75,6 +75,33 @@ describe('ProjectFS', () => {
     fs.close();
   });
 
+  it('keeps Koka module declarations and imports aligned across renames', async () => {
+    const fs = await openFileSystem(databaseName());
+    await fs.createDirectory('feature');
+    await fs.createFile(
+      'feature/view.kk',
+      'module feature/view\n\npub val title = "Feature"\n',
+    );
+    await fs.createFile(
+      'proxy.kk',
+      'module proxy\n\npub import feature/view\n',
+    );
+    await fs.writeFile(
+      'main.kk',
+      'module main\n\nimport feature/view\n\npub fun main() title.println\n',
+    );
+
+    await fs.rename('feature', 'screen');
+    expect(fs.readFile('screen/view.kk')).toContain('module screen/view');
+    expect(fs.readFile('proxy.kk')).toContain('pub import screen/view');
+    expect(fs.readFile('main.kk')).toContain('import screen/view');
+
+    await fs.rename('main.kk', 'entry.kk');
+    expect(fs.snapshot().entryModule).toBe('entry');
+    expect(fs.readFile('entry.kk')).toContain('module entry');
+    fs.close();
+  });
+
   it('rejects unsafe paths and failed writes without changing revision', async () => {
     const fs = await openFileSystem(databaseName());
 

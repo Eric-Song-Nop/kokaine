@@ -74,8 +74,8 @@ pub fun main()
     main-tag(attrs=[attr("style","min-height:100%;display:grid;place-items:center;padding:40px 20px;font-family:system-ui,sans-serif")])
       section(attrs=[attr("style","width:min(100%,560px);padding:34px;border:1px solid #dbe2ea;border-radius:20px;box-shadow:0 24px 70px rgba(31,45,61,.12)")])
         p("KOKAINE / MULTI-FILE PROJECT",attrs=[attr("style","margin:0 0 12px;color:#526476;font:700 12px/1.2 ui-monospace,monospace;letter-spacing:.12em")])
-        h1(title,attrs=[attr("style","margin:0 0 12px;font-size:clamp(28px,7vw,46px);line-height:1.02;letter-spacing:-.04em")])
-        p(summary,attrs=[attr("style","margin:0 0 28px;color:#5d6b79;line-height:1.6")])
+        h1(demo-title,attrs=[attr("style","margin:0 0 12px;font-size:clamp(28px,7vw,46px);line-height:1.02;letter-spacing:-.04em")])
+        p(demo-summary,attrs=[attr("style","margin:0 0 28px;color:#5d6b79;line-height:1.6")])
         div(attrs=[attr("style","display:flex;align-items:center;gap:14px;flex-wrap:wrap")])
           button("Increment",attrs=[kind("button"),on-click(fn(_) count.modify(fn(value) value + 1))])
           strong(attrs=[aria("live","polite")])
@@ -88,8 +88,8 @@ pub fun main()
 
 const DEFAULT_COPY_SOURCE = `module app/copy
 
-pub val title = "Algebraic effects, one project at a time."
-pub val summary = "Edit main.kk and app/copy.kk, then run the selected entry module."
+pub val demo-title = "Algebraic effects, one project at a time."
+pub val demo-summary = "Edit main.kk and app/copy.kk, then run the selected entry module."
 `;
 
 export const DEFAULT_PROJECT: ProjectSnapshot = freezeSnapshot({
@@ -183,11 +183,14 @@ export class ProjectFS {
       if (sourceContent !== undefined) {
         const target = canonicalFilePath(to);
         assertPathAvailable(project, target, source);
+        const sourceModule = moduleNameFromPath(source);
+        const targetModule = moduleNameFromPath(target);
         delete project.files[source];
         project.files[target] = sourceContent;
+        rewriteProjectModules(project, new Map([[sourceModule, targetModule]]));
         addParentDirectories(project.directories, target);
-        if (moduleNameFromPath(source) === project.entryModule) {
-          project.entryModule = moduleNameFromPath(target);
+        if (sourceModule === project.entryModule) {
+          project.entryModule = targetModule;
         }
         return;
       }
@@ -202,6 +205,10 @@ export class ProjectFS {
         .filter(([path]) => path.startsWith(prefix));
       const movedDirectories = project.directories
         .filter((path) => path === source || path.startsWith(prefix));
+      const moduleRenames = new Map(movedFiles.map(([path]) => {
+        const movedPath = replacePathPrefix(path, source, target);
+        return [moduleNameFromPath(path), moduleNameFromPath(movedPath)];
+      }));
 
       for (const [path] of movedFiles) delete project.files[path];
       for (const path of movedDirectories) {
@@ -213,6 +220,7 @@ export class ProjectFS {
       for (const path of movedDirectories) {
         project.directories.push(replacePathPrefix(path, source, target));
       }
+      rewriteProjectModules(project, moduleRenames);
       const entryPath = modulePath(project.entryModule);
       if (entryPath.startsWith(prefix)) {
         project.entryModule = moduleNameFromPath(replacePathPrefix(entryPath, source, target));
@@ -305,6 +313,23 @@ function mutableSnapshot(snapshot: ProjectSnapshot): MutableProject {
     directories: [...snapshot.directories],
     files: Object.fromEntries(Object.entries(snapshot.files)),
   };
+}
+
+function rewriteProjectModules(
+  project: MutableProject,
+  renames: ReadonlyMap<string, string>,
+): void {
+  if (renames.size === 0) return;
+  const declaration = /^([ \t]*(?:module|(?:pub[ \t]+)?import)[ \t]+)([A-Za-z0-9_./-]+)(?=\s|$)/gm;
+  for (const [path, source] of Object.entries(project.files)) {
+    project.files[path] = source.replace(
+      declaration,
+      (statement, prefix: string, moduleName: string) => {
+        const renamed = renames.get(moduleName);
+        return renamed === undefined ? statement : `${prefix}${renamed}`;
+      },
+    );
+  }
 }
 
 function canonicalSnapshot(snapshot: ProjectSnapshot, revision: number): ProjectSnapshot {

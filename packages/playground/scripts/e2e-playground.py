@@ -76,6 +76,30 @@ with sync_playwright() as playwright:
         "() => document.querySelector('.signal-chip--ready')?.textContent?.includes('LSP ready')"
     )
     step("WASM LSP ready")
+
+    page.wait_for_function(
+        "() => document.querySelector('.console-status')?.textContent?.includes('ready')"
+    )
+    step("persistent WASM REPL ready")
+
+    expect(page.get_by_role("button", name="main.kk entry", exact=True)).to_be_visible()
+    expect(page.get_by_role("button", name="copy.kk", exact=True)).to_be_visible()
+    step("multi-file project ready")
+
+    repl_input = page.get_by_role("textbox", name="Koka REPL input")
+    repl_run = page.get_by_role("button", name="Run", exact=True)
+    repl_input.fill("demo-title")
+    repl_run.click()
+    page.wait_for_function(
+        "() => document.querySelector('.console-stream')?.textContent"
+        "?.includes('Algebraic effects, one project at a time.')"
+    )
+    repl_input.fill("1 +\n2")
+    repl_run.click()
+    page.wait_for_function(
+        "() => document.querySelector('.console-stream')?.textContent?.trim().endsWith('3')"
+    )
+    step("project-aware multi-line REPL ready")
     problem_chip = page.locator(".signal-chip--problem")
     try:
         problem_chip.wait_for(state="visible", timeout=10_000)
@@ -84,6 +108,8 @@ with sync_playwright() as playwright:
     initial_problem_count = 0
     if problem_chip.count() > 0:
         initial_problem_count = int(re.search(r"\d+", problem_chip.inner_text()).group())
+
+    page.get_by_role("tab", name=re.compile(r"^Preview")).click()
 
     preview_frame_element = page.locator(
         'iframe[title="Kokaine compiled application"]'
@@ -122,7 +148,33 @@ with sync_playwright() as playwright:
     expect(counter).to_have_text("1")
     step("preview increment and decrement ready")
 
-    page.get_by_role("tab", name=re.compile(r"^Output")).click()
+    page.get_by_role("button", name="copy.kk", exact=True).click()
+    editor_surface = page.locator(".monaco-editor").first
+    editor_surface.wait_for(state="visible")
+    editor_surface.click(position={"x": 240, "y": 120})
+    page.keyboard.press("Meta+A" if sys.platform == "darwin" else "Control+A")
+    page.keyboard.insert_text(
+        'module app/copy\n\n'
+        'pub val demo-title = "Multi-file compiler round trip."\n'
+        'pub val demo-summary = "The preview came from a second Koka project file."\n'
+    )
+    page.get_by_role("button", name=re.compile(r"^Run Project")).click()
+    expect(
+        preview.get_by_role("heading", name="Multi-file compiler round trip.")
+    ).to_be_visible(timeout=60_000)
+    expect(page.locator(".signal-chip--build")).to_contain_text("Built in")
+    step("multi-file editor and compiler round trip ready")
+
+    page.get_by_role("tab", name=re.compile(r"^Console")).click()
+    repl_input.fill("demo-title")
+    repl_run.click()
+    page.wait_for_function(
+        "() => document.querySelector('.console-stream')?.textContent"
+        "?.includes('Multi-file compiler round trip.')"
+    )
+    step("REPL project reload ready")
+
+    page.get_by_role("tab", name=re.compile(r"^Generated")).click()
     generated = page.locator(".code-output code")
     generated.wait_for(state="visible")
     generated_js_chars = len(generated.inner_text())
@@ -131,7 +183,6 @@ with sync_playwright() as playwright:
     step("generated output ready")
 
     editor_surface = page.locator(".monaco-editor").first
-    editor_surface.wait_for(state="visible")
     editor_surface.click(position={"x": 240, "y": 180})
     page.keyboard.press("Meta+ArrowDown" if sys.platform == "darwin" else "Control+End")
     page.keyboard.insert_text("\n\n// 中文 UTF-8 framing probe\nval broken = missing-name\n")
@@ -143,7 +194,7 @@ with sync_playwright() as playwright:
         arg=initial_problem_count,
         timeout=30_000,
     )
-    page.locator(".signal-chip--ready").wait_for(state="visible")
+    page.locator(".statusbar__lsp").wait_for(state="visible")
     diagnostic_problem_count = int(re.search(r"\d+", problem_chip.inner_text()).group())
     step(
         f"Unicode LSP diagnostic ready ({initial_problem_count} -> "
@@ -183,6 +234,8 @@ with sync_playwright() as playwright:
     result = {
         "crossOriginIsolated": page.evaluate("crossOriginIsolated"),
         "lsp": "ready",
+        "repl": "persistent project session",
+        "projectFiles": 2,
         "initialProblems": initial_problem_count,
         "counter": counter.inner_text().strip(),
         "generatedJsChars": generated_js_chars,

@@ -41,6 +41,20 @@ assert.equal(
   'browser-only services must live behind the playground host adapter',
 );
 
+for (const [relativePath, description] of [
+  ['src/project/project-fs.ts', 'persistent multi-file project filesystem'],
+  ['src/project/project-share.ts', 'whole-project share codec'],
+  ['src/repl/repl-worker.ts', 'persistent browser REPL Worker'],
+  ['src/repl/sandbox.ts', 'opaque-origin REPL execution sandbox'],
+  ['src/wasm/shared-stdin.ts', 'bounded WASI stdin transport'],
+]) {
+  assert.equal(
+    await exists(relativePath),
+    true,
+    `the migrated playground must include its ${description}`,
+  );
+}
+
 const manifest = JSON.parse(await readFile(path.join(packageRoot, 'package.json'), 'utf8'));
 for (const dependency of ['solid-js', 'lucide-solid', 'vite-plugin-solid']) {
   assert.equal(
