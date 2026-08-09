@@ -4,7 +4,7 @@ import {
   resolvePublicAssetUrl,
   type LoadedRuntimeAssets,
 } from './assets';
-import { normalizeModuleName } from './vfs';
+import { createProjectVfsSnapshot, type ProjectVfsSnapshot } from './vfs';
 
 export const DEFAULT_MAX_SOURCE_BYTES = 512 * 1024;
 export const DEFAULT_COMPILE_TIMEOUT_MS = 45_000;
@@ -16,6 +16,7 @@ export const DEFAULT_COMPILER_FLAGS = [
   '--builddir=/.koka',
   '--include=/share/lib',
   '--include=/src',
+  '--include=/workspace',
   '--include=/',
   '--console=ansi',
 ] as const;
@@ -40,8 +41,8 @@ export interface BrowserCompilerOptions {
 }
 
 export interface BrowserCompileInput {
-  source: string;
-  moduleName?: string;
+  entryModule: string;
+  files: Readonly<Record<string, string>>;
   entryFunction?: string;
   signal?: AbortSignal;
 }
@@ -71,7 +72,7 @@ export interface BrowserCompiler {
 interface PendingCompile {
   requestId: number;
   moduleName: string;
-  source: string;
+  files: [string, string][];
   entryFunction?: string;
   signal?: AbortSignal;
   abortListener?: () => void;
@@ -202,28 +203,30 @@ class BrowserCompilerRuntime implements BrowserCompiler {
     }
     if (input.signal?.aborted) return Promise.reject(abortError());
 
-    const sourceBytes = this.sourceEncoder.encode(input.source).byteLength;
-    if (sourceBytes > this.maxSourceBytes) {
-      return Promise.reject(new RangeError(
-        `Koka source is ${sourceBytes} bytes; the limit is ${this.maxSourceBytes} bytes`,
-      ));
-    }
-
-    let moduleName: string;
+    let project: ProjectVfsSnapshot;
     try {
-      moduleName = normalizeModuleName(input.moduleName ?? deriveModuleName(input.source));
+      project = createProjectVfsSnapshot(input.entryModule, input.files);
       validateEntryFunction(input.entryFunction);
     } catch (error) {
       return Promise.reject(error);
     }
 
+    let sourceBytes = 0;
+    for (const [, content] of project.files) {
+      sourceBytes += this.sourceEncoder.encode(content).byteLength;
+      if (sourceBytes > this.maxSourceBytes) {
+        return Promise.reject(new RangeError(
+          `Koka project is ${sourceBytes} bytes; the limit is ${this.maxSourceBytes} bytes`,
+        ));
+      }
+    }
+
     return new Promise<BrowserCompileResult>((resolve, reject) => {
       const pending: PendingCompile = {
         requestId: this.nextRequestId++,
-        moduleName,
-        source: input.source,
+        moduleName: project.entryModule,
+        files: Array.from(project.files),
         entryFunction: input.entryFunction,
-        signal: input.signal,
         resolve,
         reject,
       };
@@ -383,7 +386,7 @@ class BrowserCompilerRuntime implements BrowserCompiler {
       type: 'compile',
       requestId: pending.requestId,
       moduleName: pending.moduleName,
-      source: pending.source,
+      files: pending.files,
       entryFunction: pending.entryFunction,
     });
   }
@@ -461,10 +464,6 @@ class BrowserCompilerRuntime implements BrowserCompiler {
   }
 }
 
-function deriveModuleName(source: string): string {
-  const declaration = source.match(/^\s*module\s+([A-Za-z][A-Za-z0-9_./-]*)/m);
-  return declaration?.[1] ?? 'playground';
-}
 
 function validateEntryFunction(entryFunction: string | undefined): void {
   if (entryFunction === undefined) return;

@@ -15,6 +15,7 @@ import {
   resolvePublicAssetUrl,
 } from '../wasm/assets';
 import { DEFAULT_COMPILER_FLAGS } from '../wasm/runtime';
+import { createProjectVfsFiles } from '../wasm/vfs';
 
 export type KokaEditorTheme = 'dark' | 'light';
 
@@ -33,7 +34,9 @@ export const KOKA_INLAY_HINT_CONFIGURATION = {
 } as const;
 
 export interface ConnectKokaLspOptions {
-  documentUri: string;
+  workspaceUri: string;
+  documentUris: readonly string[];
+  files: Readonly<Record<string, string>>;
   theme: KokaEditorTheme;
   /** Override the bundled Koka WASI language-server module. */
   wasmUrl?: string | URL;
@@ -124,11 +127,6 @@ function describeError(error: unknown): string {
   return String(error);
 }
 
-function workspaceUriFor(documentUri: string, vscode: typeof import('vscode')): import('vscode').Uri {
-  const uri = vscode.Uri.parse(documentUri);
-  const path = uri.path.slice(0, Math.max(1, uri.path.lastIndexOf('/')));
-  return uri.with({ path, query: '', fragment: '' });
-}
 
 class WorkerMessageReader extends AbstractMessageReader implements MessageReader {
   private callback: DataCallback | undefined;
@@ -421,7 +419,7 @@ export async function connectKokaLanguageServer(
       worker.postMessage({
         type: 'init',
         wasmUrl: wasmUrl.href,
-        files: [...assets.files],
+        files: [...assets.files, ...createProjectVfsFiles(options.files)],
         compilerFlags: [...(options.compilerFlags ?? DEFAULT_COMPILER_FLAGS)],
         verbose: integerOption(options.verbose, 0, 0, 3, 'verbose'),
         maxMessageBytes,
@@ -452,7 +450,7 @@ export async function connectKokaLanguageServer(
         workspaceFolder: {
           index: 0,
           name: 'kokaine-playground',
-          uri: workspaceUriFor(options.documentUri, vscode),
+          uri: vscode.Uri.parse(options.workspaceUri),
         },
         markdown: {
           isTrusted: false,
@@ -556,9 +554,13 @@ export async function connectKokaLanguageServer(
     );
     await setTheme(options.theme);
 
-    // The model already exists, so this resolves it through the initialized VS
-    // Code document service and guarantees a textDocument/didOpen notification.
-    await vscode.workspace.openTextDocument(vscode.Uri.parse(options.documentUri));
+    // Resolve every project model through the VS Code document service before
+    // reporting readiness so cross-file imports have matching didOpen state.
+    await Promise.all(
+      options.documentUris.map((documentUri) => (
+        vscode.workspace.openTextDocument(vscode.Uri.parse(documentUri))
+      )),
+    );
 
     return { client, setTheme, dispose };
   } catch (error) {

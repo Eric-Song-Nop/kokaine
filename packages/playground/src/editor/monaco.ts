@@ -1,8 +1,13 @@
 import type * as Monaco from 'monaco-editor';
+import type * as VscodeMonaco from '@codingame/monaco-vscode-editor-api';
 import editorWorkerUrl from 'monaco-editor/esm/vs/editor/editor.worker?worker&url';
 import { registerKokaLanguage, registerKokaThemes } from './koka-language';
 
-export type MonacoApi = typeof Monaco;
+export type MonacoApi = typeof Monaco & {
+  editor: typeof Monaco.editor & {
+    createModelReference: typeof VscodeMonaco.editor.createModelReference;
+  };
+};
 
 let monacoPromise: Promise<MonacoApi> | undefined;
 

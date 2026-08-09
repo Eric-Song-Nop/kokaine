@@ -305,14 +305,16 @@ To open the single-file Koka + Kokaine playground, also install Node.js
 make serve-playground
 ```
 
-The playground itself does not need a native Koka installation. The Koka
-compiler and real Koka LSP both run as WebAssembly in browser Workers against
-an in-memory filesystem containing the Koka standard library and this
-checkout's Kokaine sources. It includes Monaco syntax highlighting, a
-sandboxed live preview, generated/build/runtime output, and self-hosted
-Chromium DevTools. The published `@kokaine/cli` package-resolution model can
-later extend the browser VFS with installed npm package contents without
-introducing a compiler server.
+The playground itself does not need a native Koka installation. Its workbench
+DOM, reactive state, and event handlers are authored in Koka and mounted with
+Kokaine; a framework-neutral TypeScript host owns Monaco and other browser-only
+capabilities. The Koka compiler and real Koka LSP both run as WebAssembly in
+browser Workers against an in-memory filesystem containing the Koka standard
+library and this checkout's Kokaine sources. The playground includes Monaco
+syntax highlighting, a sandboxed live preview, generated/build/runtime output,
+and self-hosted Chromium DevTools. The published `@kokaine/cli`
+package-resolution model can later extend the browser VFS with installed npm
+package contents without introducing a compiler server.
 
 The app is fully static and deploys to Cloudflare Pages without a container,
 Cloudflare Worker, or Pages Function. Vite and `public/_headers` provide the

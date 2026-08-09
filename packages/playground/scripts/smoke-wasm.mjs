@@ -32,6 +32,7 @@ const SOURCE = `module playground
 import kokaine/reactive
 import kokaine/html
 import kokaine/dom
+import fixture/copy
 ${updateKokaineCache ? `import kokaine/control
 import kokaine/async
 import kokaine/async/web
@@ -43,12 +44,17 @@ pub fun main()
   val (root,count) = create-root fn(root)
     signal(root,0)
   val page = view
-    button("Increment",attrs=[
+    button(button-label,attrs=[
       on("click",fn(_) count.modify(fn(value) value + 1))
     ])
     strong { text { count.get.show } }
   val dispose = mount(root,query("#app"),page)
   ()
+`;
+
+const HELPER_SOURCE = `module fixture/copy
+
+pub val button-label = "Increment"
 `;
 
 async function readSources(directory, prefix = '/share/lib/kokaine') {
@@ -147,7 +153,11 @@ const runtimeFiles = updateKokaineCache
   : runtime.files;
 // Sources are inserted first; verified precompiled interfaces are inserted last
 // so WASI file timestamps make the cache the freshest copy.
-const files = new Map([...kokaineSources, ...runtimeFiles]);
+const files = new Map([
+  ...kokaineSources,
+  ...runtimeFiles,
+  ['/workspace/fixture/copy.kk', HELPER_SOURCE],
+]);
 const root = buildTree(files);
 const stdout = [];
 const stderr = [];
@@ -161,6 +171,7 @@ const wasi = new WASI(
     '--include=/share/lib',
     '--include=/src',
     '--include=/',
+    '--include=/workspace',
     '--console=raw',
     '-v1',
     'playground',

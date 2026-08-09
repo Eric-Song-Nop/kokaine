@@ -15,6 +15,12 @@ import {
 } from '@bjorn3/browser_wasi_shim';
 
 import { buildUnifiedTree } from './wasi-fs';
+import {
+  BlockingStdinFile,
+  WasiFdStubs,
+  createSharedInputBuffer,
+  installBlockingStdinPoll,
+} from './shared-stdin';
 
 interface InitRequest {
   type: 'init';
@@ -51,8 +57,6 @@ const MAX_LSP_WASM_BYTES = 32 * 1024 * 1024;
 const MIN_MESSAGE_BYTES = 64 * 1024;
 const MAX_MESSAGE_BYTES = 8 * 1024 * 1024;
 const MAX_HEADER_BYTES = 8 * 1024;
-const SHARED_HEADER_BYTES = 8;
-const SHARED_FRAME_OVERHEAD_BYTES = 256;
 const MAX_LOG_BYTES = 64 * 1024;
 const HEADER_TERMINATOR = new Uint8Array([13, 10, 13, 10]);
 const scope = self as unknown as DedicatedWorkerGlobalScope;
@@ -92,9 +96,7 @@ async function initialize(request: InitRequest): Promise<void> {
 
     const module = await WebAssembly.compile(wasmBytes);
     const root = buildUnifiedTree(new Map(request.files));
-    const sharedBuffer = new SharedArrayBuffer(
-      SHARED_HEADER_BYTES + maxMessageBytes + SHARED_FRAME_OVERHEAD_BYTES,
-    );
+    const sharedBuffer = createSharedInputBuffer(maxMessageBytes);
     const stdin = new BlockingStdinFile(sharedBuffer, maxMessageBytes);
     const stdout = new LspStdoutCapture(maxMessageBytes);
 
@@ -115,6 +117,7 @@ async function initialize(request: InitRequest): Promise<void> {
       ],
       { debug: false },
     );
+    installBlockingStdinPoll(wasi, stdin);
 
     post({ type: 'ready', sharedBuffer });
 
@@ -137,107 +140,6 @@ async function initialize(request: InitRequest): Promise<void> {
   }
 }
 
-/** Minimal fd surface required by browser_wasi_shim. */
-class WasiFdStubs {
-  fd_fdstat_get() { return { ret: 0, fdstat: null }; }
-  fd_close() { return 0; }
-  fd_read(_length: number): { ret: number; data: Uint8Array<ArrayBufferLike> } {
-    return { ret: 8, data: new Uint8Array() };
-  }
-  fd_write(_data: Uint8Array) { return { ret: 8, nwritten: 0 }; }
-  fd_seek(_offset: bigint, _whence: number) { return { ret: 8, offset: 0n }; }
-  fd_tell() { return { ret: 0, offset: 0n }; }
-  fd_sync() { return 0; }
-  fd_filestat_get() { return { ret: 0, filestat: null }; }
-  fd_pread(_length: number, _offset: bigint) {
-    return { ret: 8, data: new Uint8Array() };
-  }
-  fd_pwrite(_data: Uint8Array, _offset: bigint) { return { ret: 8, nwritten: 0 }; }
-  fd_allocate(_offset: bigint, _length: bigint) { return 0; }
-  fd_fdstat_set_flags(_flags: number) { return 0; }
-  fd_fdstat_set_rights(_base: bigint, _inheriting: bigint) { return 0; }
-  fd_filestat_set_size(_size: bigint) { return 0; }
-  fd_filestat_set_times(_access: bigint, _modified: bigint, _flags: number) { return 0; }
-  fd_prestat_get() { return { ret: 8, prestat: null }; }
-  fd_readdir_single(_cookie: bigint) { return { ret: 8, dirent: null }; }
-  path_create_directory(_path: string) { return 8; }
-  path_filestat_get(_flags: number, _path: string) { return { ret: 8, filestat: null }; }
-  path_filestat_set_times(
-    _flags: number,
-    _path: string,
-    _access: bigint,
-    _modified: bigint,
-    _timeFlags: number,
-  ) { return 8; }
-  path_lookup(_path: string, _flags: number) { return { ret: 8, inode_obj: null }; }
-  path_link(_path: string, _inode: unknown, _force: boolean) { return 8; }
-  path_open(..._arguments: unknown[]) { return { ret: 8, fd_obj: null }; }
-  path_readlink(_path: string) { return { ret: 8, data: null }; }
-  path_remove_directory(_path: string) { return 8; }
-  path_unlink(_path: string) { return { ret: 8, inode_obj: null }; }
-  path_unlink_file(_path: string) { return 8; }
-}
-
-class BlockingStdinFile extends WasiFdStubs {
-  private readonly state: Int32Array;
-  private readonly bytes: Uint8Array;
-  private pending = new Uint8Array();
-  private offset = 0;
-
-  constructor(sharedBuffer: SharedArrayBuffer, private readonly maxMessageBytes: number) {
-    super();
-    this.state = new Int32Array(sharedBuffer, 0, 2);
-    this.bytes = new Uint8Array(sharedBuffer, SHARED_HEADER_BYTES);
-  }
-
-  override fd_read(length: number): { ret: number; data: Uint8Array<ArrayBufferLike> } {
-    if (!Number.isSafeInteger(length) || length <= 0) {
-      return { ret: 0, data: new Uint8Array() };
-    }
-
-    if (this.offset < this.pending.byteLength) return this.readPending(length);
-
-    let flag = Atomics.load(this.state, 0);
-    if (flag !== 1) {
-      // Koka's WASI runtime multiplexes server work on one worker. A short
-      // wait mirrors upstream and yields back to that runtime between reads.
-      Atomics.wait(this.state, 0, 0, 10);
-      flag = Atomics.load(this.state, 0);
-      if (flag !== 1) return { ret: 0, data: new Uint8Array() };
-    }
-
-    const dataLength = Atomics.load(this.state, 1);
-    if (
-      !Number.isSafeInteger(dataLength) ||
-      dataLength <= 0 ||
-      dataLength > this.maxMessageBytes + SHARED_FRAME_OVERHEAD_BYTES ||
-      dataLength > this.bytes.byteLength
-    ) {
-      Atomics.store(this.state, 1, 0);
-      Atomics.store(this.state, 0, 0);
-      Atomics.notify(this.state, 0);
-      throw new Error(`Invalid Koka LSP stdin frame length: ${dataLength}`);
-    }
-
-    this.pending = this.bytes.slice(0, dataLength);
-    this.offset = 0;
-    Atomics.store(this.state, 1, 0);
-    Atomics.store(this.state, 0, 0);
-    Atomics.notify(this.state, 0);
-    return this.readPending(length);
-  }
-
-  private readPending(length: number): { ret: number; data: Uint8Array<ArrayBufferLike> } {
-    const end = Math.min(this.offset + length, this.pending.byteLength);
-    const data = this.pending.slice(this.offset, end);
-    this.offset = end;
-    if (this.offset >= this.pending.byteLength) {
-      this.pending = new Uint8Array();
-      this.offset = 0;
-    }
-    return { ret: 0, data };
-  }
-}
 
 class LspStdoutCapture extends WasiFdStubs {
   private buffer = new Uint8Array();

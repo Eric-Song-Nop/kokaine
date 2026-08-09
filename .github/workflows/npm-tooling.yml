@@ -100,8 +100,6 @@ jobs:
           node-version: 22
       - if: matrix.client == 'pnpm'
         uses: pnpm/action-setup@v4
-        with:
-          version: 10
       - if: matrix.client == 'npm'
         run: npm ci --ignore-scripts
       - if: matrix.client == 'pnpm'

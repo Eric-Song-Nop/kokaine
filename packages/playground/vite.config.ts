@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
-import solid from 'vite-plugin-solid';
 
 const playgroundRoot = fileURLToPath(new URL('.', import.meta.url));
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
@@ -22,7 +21,6 @@ const isolationHeaders = {
 export default defineConfig({
   root: playgroundRoot,
   appType: 'mpa',
-  plugins: [solid()],
   define: {
     __KOKAINE_RUNTIME_RELEASE__: JSON.stringify(runtimeRelease),
   },

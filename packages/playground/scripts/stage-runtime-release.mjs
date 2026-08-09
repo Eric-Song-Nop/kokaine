@@ -10,9 +10,13 @@ const releasesRoot = path.join(kokaRoot, 'releases');
 const manifestPath = path.join(kokaRoot, 'assets.json');
 const runtimePath = path.join(kokaRoot, 'koka-runtime.json.gz');
 const releaseManifestPath = path.join(kokaRoot, 'release.json');
-const wasmFilenames = ['koka-playground.wasm', 'koka-lsp.wasm'];
+const wasmFilenames = ['koka-playground.wasm', 'koka-lsp.wasm', 'koka-browser-repl.wasm'];
 
 const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+const browserReplCommit = manifest?.browserReplCommit;
+if (typeof browserReplCommit !== 'string' || !/^[0-9a-f]{40}$/i.test(browserReplCommit)) {
+  throw new Error(`Invalid browser REPL commit in ${manifestPath}`);
+}
 const expectedRuntimeHash = manifest?.runtime?.sha256;
 if (typeof expectedRuntimeHash !== 'string' || !/^[0-9a-f]{64}$/i.test(expectedRuntimeHash)) {
   throw new Error(`Invalid runtime SHA-256 in ${manifestPath}`);
@@ -38,6 +42,7 @@ const releaseDescriptor = {
   schemaVersion: 1,
   compilerVersion: manifest.compilerVersion,
   upstreamCommit: manifest.upstreamCommit,
+  browserReplCommit,
   runtimeSha256: runtimeHash,
   wasmSha256: Object.fromEntries(wasmAssets.map(({ filename, sha256 }) => [filename, sha256])),
 };

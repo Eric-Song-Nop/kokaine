@@ -17,9 +17,11 @@ import {
 
 import { buildUnifiedTree, collectGeneratedFiles } from './wasi-fs';
 import {
-  cloneVfsFiles,
+  mergeVfsFiles,
   moduleSourcePath,
   normalizeModuleName,
+  normalizeVfsPath,
+  PROJECT_VFS_ROOT,
   type VfsFiles,
 } from './vfs';
 
@@ -36,7 +38,7 @@ interface CompileRequest {
   type: 'compile';
   requestId: number;
   moduleName: string;
-  source: string;
+  files: [string, string][];
   entryFunction?: string;
 }
 
@@ -111,25 +113,36 @@ function compile(request: CompileRequest): void {
     return;
   }
 
-  const sourceBytes = sourceEncoder.encode(request.source).byteLength;
-  if (sourceBytes > maxSourceBytes) {
-    postCompileFailure(
-      request,
-      startedAt,
-      `Source is ${sourceBytes} bytes; the limit is ${maxSourceBytes} bytes`,
-    );
-    return;
+  let sourceBytes = 0;
+  for (const [, content] of request.files) {
+    sourceBytes += sourceEncoder.encode(content).byteLength;
+    if (sourceBytes > maxSourceBytes) {
+      postCompileFailure(
+        request,
+        startedAt,
+        `Project source is ${sourceBytes} bytes; the limit is ${maxSourceBytes} bytes`,
+      );
+      return;
+    }
   }
 
   try {
     const moduleName = normalizeModuleName(request.moduleName);
-    const files = cloneVfsFiles(runtimeFiles);
-    files.set(moduleSourcePath(moduleName), request.source);
+    const projectFiles = new Map(
+      request.files.map(([path, content]) => [normalizeVfsPath(path), content]),
+    );
+    if ([...projectFiles.keys()].some((path) => !path.startsWith(`${PROJECT_VFS_ROOT}/`))) {
+      throw new Error('Project source escaped the compiler workspace');
+    }
+    const entryPath = `${PROJECT_VFS_ROOT}${moduleSourcePath(moduleName)}`;
+    const entrySource = projectFiles.get(entryPath);
+    if (entrySource === undefined) throw new Error(`Entry module source is missing: ${moduleName}`);
+    const files = mergeVfsFiles(runtimeFiles, projectFiles);
 
     const output = runCompiler(
       compilerModule,
       moduleName,
-      request.source,
+      entrySource,
       files,
       request.entryFunction,
       request.requestId,

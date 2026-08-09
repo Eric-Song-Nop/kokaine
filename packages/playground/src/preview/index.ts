@@ -1,15 +1,13 @@
-export { DragResizer } from './DragResizer';
-export type { DragResizerProps, ResizerOrientation } from './DragResizer';
-export { Preview } from './Preview';
+export { createPreviewController } from './controller';
 export type {
-  PreviewDevtoolsAssets,
+  PreviewController,
+  PreviewControllerOptions,
   PreviewDeviceWidth,
   PreviewLogLevel,
+  PreviewModule,
   PreviewModuleBundle,
-  PreviewModuleFile,
-  PreviewProps,
   PreviewReadyInfo,
   PreviewRevision,
   PreviewRuntimeError,
   PreviewRuntimeLog,
-} from './Preview';
+} from './controller';

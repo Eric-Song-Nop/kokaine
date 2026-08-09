@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const UPSTREAM_COMMIT = 'c0f1a10a60b8644fd6f08dfcec654fa815c06e3f';
 const COMPILER_VERSION = '3.2.4';
+const BROWSER_REPL_COMMIT = '32fee7eda6397dee81f4752ff7cab4e4001d3eb2';
 const RAW_ROOT = `https://raw.githubusercontent.com/koka-lang/koka/${UPSTREAM_COMMIT}/playground`;
 const PACKAGE_ROOT = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const KOKA_DIR = path.join(PACKAGE_ROOT, 'public', 'koka');
@@ -14,6 +15,9 @@ const KOKAINE_PRECOMPILED_DIR = path.join(PACKAGE_ROOT, 'vendor', 'kokaine-preco
 const EXPECTED_WASM = {
   'koka-playground.wasm': 'e4c77ffd06391435865d7e6aef7d7ecabb211601dfa181e1c6b819633959c660',
   'koka-lsp.wasm': 'ce950710f27fda0f325d9046885d525f3e87daf30d93be1d45058d556c6039c0',
+};
+const BUNDLED_WASM = {
+  'koka-browser-repl.wasm': '5ee587122a58da95b4bbbaaee8d946ef3f2bec1c9da4a21d70fdb34e2ad80afd',
 };
 
 function sha256(bytes) {
@@ -85,6 +89,14 @@ async function main() {
     await writeFile(path.join(KOKA_DIR, filename), bytes);
     wasmMetadata[filename] = { bytes: bytes.byteLength, sha256: actualHash };
   }
+  for (const [filename, expectedHash] of Object.entries(BUNDLED_WASM)) {
+    const bytes = await readFile(path.join(KOKA_DIR, filename));
+    const actualHash = sha256(bytes);
+    if (actualHash !== expectedHash) {
+      throw new Error(`${filename} SHA-256 mismatch: expected ${expectedHash}, received ${actualHash}`);
+    }
+    wasmMetadata[filename] = { bytes: bytes.byteLength, sha256: actualHash };
+  }
 
   const stdlibFiles = await mapConcurrent(stdlibManifest.map(assertRelativeAsset), 12, async (filename) => {
     const source = (await fetchBytes(`lib/${filename}`)).toString('utf8');
@@ -130,12 +142,15 @@ async function main() {
   };
   const runtimeJson = Buffer.from(JSON.stringify(runtime), 'utf8');
   const runtimeGzip = gzipSync(runtimeJson, { level: 9 });
+  // zlib records the host OS at byte 9; normalize it so macOS and Linux produce identical assets.
+  runtimeGzip[9] = 255;
   await writeFile(path.join(KOKA_DIR, 'koka-runtime.json.gz'), runtimeGzip);
 
   const metadata = {
     schemaVersion: 1,
     compilerVersion: COMPILER_VERSION,
     upstreamCommit: UPSTREAM_COMMIT,
+    browserReplCommit: BROWSER_REPL_COMMIT,
     wasm: wasmMetadata,
     runtime: {
       files: runtime.files.length,

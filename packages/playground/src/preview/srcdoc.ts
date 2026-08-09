@@ -8,6 +8,8 @@ export interface PreviewDocumentOptions {
   revision: string | number;
   appOrigin: string;
   chobitsuUrl: string;
+  captureOutput?: boolean;
+  devtools?: boolean;
 }
 
 export interface DevtoolsDocumentAssets {
@@ -245,7 +247,7 @@ const PREVIEW_BOOT_SOURCE = String.raw`
     send('cdp', JSON.stringify({ method, params: params || {} }));
   };
 
-  if (chobitsu && typeof chobitsu.setOnMessage === 'function') {
+  if (CONFIG.devtools !== false && chobitsu && typeof chobitsu.setOnMessage === 'function') {
     chobitsu.setOnMessage((message) => {
       if (!isCdpMessage(message)) return;
       if (message.includes('"id":"__kokaine_internal_')) return;
@@ -263,7 +265,7 @@ const PREVIEW_BOOT_SOURCE = String.raw`
     } catch (error) {
       console.warn('Kokaine DevTools could not install its source bridge.', error);
     }
-  } else {
+  } else if (CONFIG.devtools !== false) {
     console.warn('Kokaine DevTools are unavailable because Chobitsu did not load.');
   }
 
@@ -428,10 +430,14 @@ const PREVIEW_BOOT_SOURCE = String.raw`
 
       const loader = document.getElementById('kokaine-preview-loader');
       if (loader) loader.remove();
+      const output = CONFIG.captureOutput === true
+        ? (document.body?.innerText || document.body?.textContent || '').slice(0, 1000000)
+        : undefined;
       send('ready', {
         entryPath: payload.entryPath,
         revision: CONFIG.revision,
         timestamp: Date.now(),
+        output,
       });
     } catch (error) {
       if (generation === loadGeneration) showModuleError(error);
@@ -540,6 +546,8 @@ export function buildPreviewDocument(options: PreviewDocumentOptions): string {
     entryPath: options.entryPath,
     revision: options.revision,
     appOrigin: options.appOrigin,
+    captureOutput: options.captureOutput === true,
+    devtools: options.devtools !== false,
   });
   const boot = PREVIEW_BOOT_SOURCE.replace('__KOKAINE_PREVIEW_CONFIG__', config);
 
