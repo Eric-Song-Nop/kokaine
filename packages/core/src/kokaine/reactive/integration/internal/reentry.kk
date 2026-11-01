@@ -48,9 +48,17 @@ pub fun capture-reentry(root : root<e>) : exn reentry<e>
   val current = load(plane.plane-current-frame)
   Reentry(root,load(plane.plane-current),current)
 
+// Debug-only observability for host-turn cost tests: one count per fresh
+// re-entry batch. It is never consulted by scheduling or ownership.
+val reentry-batches : ref<global,int> = cell(0)
+
+pub fun reentry-batch-count() : int
+  load(reentry-batches)
+
 fun reentry-turn(root : root<e>,
                  action : () -> <signal-read,signal-write,pure|e> a)
                 : <signal-read,signal-write,pure|e> a
+  store(reentry-batches,load(reentry-batches) + 1)
   // A callback may invalidate the very generation it entered. Defer settling
   // until the whole callback has registered its children; batch exit then
   // retires that complete generation atomically.

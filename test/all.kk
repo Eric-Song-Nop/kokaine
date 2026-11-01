@@ -19,6 +19,7 @@ import test/publication-effect
 import test/integration-event
 import test/async-host-turn
 import test/async-host-dispatcher
+import test/async-runtime-cost
 import test/one-shot-task
 import test/cancellation-supervisor
 import test/trace-semantics
@@ -68,6 +69,7 @@ pub fun main()
   suite("integration-event",fn() test/integration-event/main())
   suite("async-host-turn",fn() test/async-host-turn/main())
   suite("async-host-dispatcher",fn() test/async-host-dispatcher/main())
+  suite("async-runtime-cost",fn() test/async-runtime-cost/main())
   suite("one-shot-task",fn() test/one-shot-task/main())
   suite("cancellation-supervisor",fn() test/cancellation-supervisor/main())
   suite("trace-semantics",fn() test/trace-semantics/main())
@@ -91,7 +93,7 @@ pub fun main()
   suite("async-effects",fn() test/async-effects/main())
   suite("structured-async",fn() test/structured-async/main())
   val failed = unsafe-total { !failures }
-  if failed == 0 then println("native suite: 34 suites passed")
+  if failed == 0 then println("native suite: 35 suites passed")
   else
     println("native suite: " ++ failed.show ++ " suite(s) failed")
     exit-failure()

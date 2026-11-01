@@ -579,7 +579,11 @@ An await parks only its suffix and returns from the initiating reactive turn.
 Even a synchronously reported setup result is queued by the selected dispatcher,
 so every continuation after an await enters a fresh reactive batch through the
 captured generation. Web selects a microtask queue; Pocket selects a
-mount-scoped FIFO flushed during virtual frames. Before that retained callback
+mount-scoped FIFO flushed during virtual frames. The Web dispatcher is one
+process-wide `host-turn-coalescer`: turns accepted before its next drain share
+one microtask and still run in acceptance order, each in its own re-entry
+batch. A turn accepted while a drain runs posts a fresh microtask, so it lands
+exactly where an uncoalesced post would relative to host work queued meanwhile. Before that retained callback
 runs, the Async adapter closes the complete turn through its rank-2
 `host-turn-runner`. A dispatcher rejection atomically claims and cancels the
 Ready task instead of retaining a continuation that can no longer run.
