@@ -18,6 +18,7 @@ import kokaine/reactive/effects
 import kokaine/reactive/internal/model
 import kokaine/reactive/integration/internal/reentry
 import kokaine/reactive/internal/runtime
+import kokaine/reactive/internal/scheduler
 import kokaine/reactive/async/internal/host-turn
 import kokaine/async/internal/one-shot-task
 import kokaine/async/internal/cancellation-supervisor
@@ -377,6 +378,44 @@ fun new-runtime-supervisor(
           current,bucket,bucket-registration)))
   supervisor
 
+fun new-indexed-runtime-supervisor(
+    root : root<<ui|e>>, family : async-family<e>, scope : async-scope,
+    current : frame<<ui|e>>)
+    : <signal-write,pure,ui|e> runtime-supervisor<e>
+  val bucket = new-runtime-supervisor-bucket()
+  val supervisor =
+    new-runtime-supervisor(root,family,scope,current,bucket)
+  // New buckets become discoverable only after their exact frame member
+  // has durable structural and family ownership.
+  val registration =
+    family.family-index.insert(scope.identity-key,bucket)
+  store(bucket.bucket-index,Just(registration))
+  supervisor
+
+// A live completion turn leaves its emptied supervisor attached until the
+// resumed suffix returns (see `run-task-result`), so a suffix which awaits
+// again in the same scope and frame can reuse it instead of rebuilding six
+// cells, a cleanup registration, and two index entries. Reuse is allowed only
+// where a rebuild would be indistinguishable: the owner cleanup is still the
+// newest finalizer of its frame, and the supervisor is still the newest family
+// member. Retirement (LIFO finalizers) and family cancellation (registry
+// snapshot order) therefore visit it exactly where a fresh supervisor would
+// have been registered. Otherwise it is detached and rebuilt as before.
+fun runtime-supervisor/reusable-when-idle(supervisor : runtime-supervisor<e>,
+                                          family : async-family<e>) : bool
+  match load(supervisor.supervisor-bucket-link)
+    Nothing -> False
+    Just(Runtime-supervisor-bucket-link(frame,_,_)) ->
+      match load(supervisor.supervisor-owner)
+        Nothing -> False
+        Just(owner) ->
+          match load(supervisor.supervisor-family)
+            Nothing -> False
+            Just(member) ->
+              frame.frame-lifetime.lifetime-finalizers.is-newest(
+                owner.cleanup-node) &&
+              family.family-supervisors.is-newest(member)
+
 fun runtime/supervisor(
     runtime : generation-runtime<e>, root : root<<ui|e>>, scope : async-scope)
     : <signal-write,pure,ui|e> runtime-supervisor<e>
@@ -385,20 +424,29 @@ fun runtime/supervisor(
   match family.family-index.lookup(scope.identity-key)
     Just(bucket) ->
       match bucket.find-frame(current)
-        Just(supervisor) -> supervisor
+        Just(supervisor) ->
+          if supervisor.supervisor-tasks.count > 0 then supervisor
+          elif supervisor.reusable-when-idle(family) then
+            // A rebuild would validate the frame in `register-cleanup`; keep
+            // that failure identical for a reused supervisor.
+            check-frame-registration(root,current)
+            supervisor
+          else
+            supervisor.detach
+            match load(bucket.bucket-index)
+              Just(_) ->
+                new-runtime-supervisor(root,family,scope,current,bucket)
+              Nothing ->
+                new-indexed-runtime-supervisor(root,family,scope,current)
         Nothing -> new-runtime-supervisor(root,family,scope,current,bucket)
-    Nothing ->
-      val bucket = new-runtime-supervisor-bucket()
-      val supervisor =
-        new-runtime-supervisor(root,family,scope,current,bucket)
-      // New buckets become discoverable only after their exact frame member
-      // has durable structural and family ownership.
-      val registration =
-        family.family-index.insert(scope.identity-key,bucket)
-      store(bucket.bucket-index,Just(registration))
-      supervisor
+    Nothing -> new-indexed-runtime-supervisor(root,family,scope,current)
 
-fun task/detach-cancellation(task : generation-task<a,e>) : ()
+fun runtime-supervisor/detach-if-idle(supervisor : runtime-supervisor<e>) : ()
+  if supervisor.supervisor-tasks.count <= 0
+  then supervisor.detach
+  else ()
+
+fun task/unlink-cancellation(task : generation-task<a,e>) : ()
   val registration = load(task.task-cancel)
   store(task.task-cancel,Nothing)
   match registration
@@ -406,9 +454,10 @@ fun task/detach-cancellation(task : generation-task<a,e>) : ()
     Just(current) ->
       val _ = current.unregister
       ()
-  if task.task-supervisor.supervisor-tasks.count <= 0
-  then task.task-supervisor.detach
-  else ()
+
+fun task/detach-cancellation(task : generation-task<a,e>) : ()
+  task.unlink-cancellation
+  task.task-supervisor.detach-if-idle
 
 // --------------------------------------------------------------------------
 // Completion and retirement
@@ -435,8 +484,10 @@ fun run-task-result(task : generation-task<a,e>, family : async-family<e>)
             Just(Task-claim(payload,result,_disposer)) ->
               // `claim-ready` has already replaced every retained field with
               // Running. No user code runs between the live preflight and this
-              // exact one-shot claim.
-              task.detach-cancellation
+              // exact one-shot claim. An emptied supervisor stays attached
+              // while the suffix runs and is detached after it returns unless
+              // the suffix registered another task in it.
+              task.unlink-cancellation
               decrement-outstanding()
               match payload
                 Task-payload(current-portal,resume-action,label) ->
@@ -448,7 +499,10 @@ fun run-task-result(task : generation-task<a,e>, family : async-family<e>)
                       "uncaught Kokaine async exception (" ++
                       label ++ "): " ++ problem.show)
                   finally(
-                    fn() { val _ = task.task-state.finish; () },
+                    fn() {
+                      val _ = task.task-state.finish
+                      task.task-supervisor.detach-if-idle
+                    },
                     fn()
                       match result
                         Nothing -> ()
