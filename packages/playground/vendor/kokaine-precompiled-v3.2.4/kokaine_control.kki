@@ -53,7 +53,7 @@ import kokaine/reactive/internal/runtime = kokaine/reactive/internal/runtime inl
 // application item/key types.  Backends receive only a sequential walker; the
 // DOM reconciler therefore cannot accidentally depend on random access and the
 // list entry point never detours through a vector.
-local alias kokaine/html/accessor[146,1,146,43]<a> :: V -> V = () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> a = 1;
+local alias kokaine/html/accessor[223,1,223,43]<a> :: V -> V = () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> a = 1;
  
 //------------------------------
 //#kki: type declarations

@@ -33,27 +33,27 @@ import * as $std_core from './std_core.mjs';
  
  
 // monadic lift
-export function _mlift_capture_error_10004(_y_x10002) /* forall<a,e> (a) -> <exn|e> result<a,exception> */  {
-  return $std_core_types.Ok(_y_x10002);
+export function _mlift_capture_error_10002(_y_x10000) /* forall<a,e> (a) -> <exn|e> result<a,exception> */  {
+  return $std_core_types.Ok(_y_x10000);
 }
  
 export function capture_error(action) /* forall<a,e> (action : () -> <exn|e> a) -> e error<a> */  {
-  return $std_core_exn.exn_fs__handle($std_core_exn._Hnd_exn(0, function(m /* hnd/marker<65,error<64>> */ , ___wildcard_x654__16 /* hnd/ev<exn> */ , x /* exception */ ) {
-        return $std_core_hnd.yield_to_final(m, function(___wildcard_x654__45 /* (hnd/resume-result<10004,error<64>>) -> 65 error<64> */ ) {
+  return $std_core_exn.exn_fs__handle($std_core_exn._Hnd_exn(0, function(m /* hnd/marker<123,result<122,exception>> */ , ___wildcard_x654__16 /* hnd/ev<exn> */ , x /* exception */ ) {
+        return $std_core_hnd.yield_to_final(m, function(___wildcard_x654__45 /* (hnd/resume-result<94,result<122,exception>>) -> 123 result<122,exception> */ ) {
             return $std_core_types.$Error(x);
           });
-      }), function(_res /* error<64> */ ) {
+      }), function(_res /* result<122,exception> */ ) {
       return _res;
     }, function() {
        
-      var x_0_10006 = action();
+      var x_0_10004 = action();
       if ($std_core_hnd._yielding()) {
-        return $std_core_hnd.yield_extend(function(_y_x10002 /* 64 */ ) {
-          return $std_core_types.Ok(_y_x10002);
+        return $std_core_hnd.yield_extend(function(_y_x10000 /* 122 */ ) {
+          return $std_core_types.Ok(_y_x10000);
         });
       }
       else {
-        return $std_core_types.Ok(x_0_10006);
+        return $std_core_types.Ok(x_0_10004);
       }
     });
 }

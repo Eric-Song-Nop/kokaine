@@ -202,23 +202,69 @@ export function work_group_fs_pop(group) /* forall<a> (group : work-group<a>) ->
  
 export function work_queue_fs_values(target) /* forall<a> (target : work-queue<a>) -> list<a> */  {
    
-  var target_0_10139 = target.value;
+  var target_0_10145 = target.value;
    
-  var _x21 = target_0_10139.deque_back;
+  var _x21 = target_0_10145.deque_back;
   var ys_10016 = $std_core_list.reverse_acc($std_core_types.Nil, _x21);
-  var _x21 = target_0_10139.deque_front;
+  var _x21 = target_0_10145.deque_front;
   return $std_core_list.append(_x21, ys_10016);
 }
  
 export function work_group_fs_values(group) /* forall<a> (group : work-group<a>) -> list<a> */  {
    
   var _x22 = group.group_queue;
-  var target_10140 = _x22.value;
+  var target_10146 = _x22.value;
    
-  var _x23 = target_10140.deque_back;
+  var _x23 = target_10146.deque_back;
   var ys_10016 = $std_core_list.reverse_acc($std_core_types.Nil, _x23);
-  var _x22 = target_10140.deque_front;
+  var _x22 = target_10146.deque_front;
   return $std_core_list.append(_x22, ys_10016);
+}
+ 
+export function _trmc_remove_first(values, matches, _acc) /* forall<a> (values : list<a>, matches : (a) -> bool, ctx<list<a>>) -> div list<a> */  { tailcall: while(1)
+{
+  if (values === null) {
+    return $std_core_types._cctx_apply(_acc,($std_core_types.Nil));
+  }
+  else {
+    var _x23 = matches(values.head);
+    if (_x23) {
+      return $std_core_types._cctx_apply(_acc,(values.tail));
+    }
+    else {
+       
+      var _trmc_x10149 = undefined;
+       
+      var _trmc_x10150 = $std_core_types.Cons(values.head, _trmc_x10149);
+      {
+        // tail call
+        var _x24 = $std_core_types._cctx_extend(_acc,_trmc_x10150,({obj: _trmc_x10150, field_name: "tail"}));
+        values = values.tail;
+        _acc = _x24;
+        continue tailcall;
+      }
+    }
+  }
+}}
+ 
+export function remove_first(values_0, matches_0) /* forall<a> (values : list<a>, matches : (a) -> bool) -> div list<a> */  {
+  return _trmc_remove_first(values_0, matches_0, $std_core_types._cctx_empty());
+}
+ 
+ 
+// O(n); used only on the failure path.
+export function work_queue_fs_remove(target, matches) /* forall<a> (target : work-queue<a>, matches : (a) -> bool) -> () */  {
+   
+  var target_0_10147 = target.value;
+   
+  var _x25 = target_0_10147.deque_back;
+  var ys_10016 = $std_core_list.reverse_acc($std_core_types.Nil, _x25);
+   
+  var _x26 = target_0_10147.deque_front;
+  var values = $std_core_list.append(_x26, ys_10016);
+   
+  var value_0_10057 = Deque(_trmc_remove_first(values, matches, $std_core_types._cctx_empty()), $std_core_types.Nil);
+  return ((target).value = value_0_10057);
 }
  
 export function work_queue_fs_clear(target) /* forall<a> (target : work-queue<a>) -> () */  {
@@ -289,24 +335,24 @@ export function work_group_fs_group_rollback(_this) /* forall<a> (work-group<a>)
  
 export function work_group_fs__copy(_this, group_state, group_queue, group_rollback) /* forall<a> (work-group<a>, group-state : ? (ref<global,work-transaction-state>), group-queue : ? (work-queue<a>), group-rollback : ? (work-queue<a>)) -> work-group<a> */  {
   if (group_state !== undefined) {
-    var _x23 = group_state;
+    var _x25 = group_state;
   }
   else {
-    var _x23 = _this.group_state;
+    var _x25 = _this.group_state;
   }
   if (group_queue !== undefined) {
-    var _x24 = group_queue;
+    var _x26 = group_queue;
   }
   else {
-    var _x24 = _this.group_queue;
+    var _x26 = _this.group_queue;
   }
   if (group_rollback !== undefined) {
-    var _x25 = group_rollback;
+    var _x27 = group_rollback;
   }
   else {
-    var _x25 = _this.group_rollback;
+    var _x27 = _this.group_rollback;
   }
-  return Work_group(_x23, _x24, _x25);
+  return Work_group(_x25, _x26, _x27);
 }
  
 export function new_work_transaction_state() /* () -> ref<global,work-transaction-state> */  {
@@ -318,14 +364,14 @@ export function new_work_group(state) /* forall<a> (state : ref<global,work-tran
 }
  
 export function work_group_fs_state(group) /* forall<a> (group : work-group<a>) -> work-transaction-state */  {
-  var _x26 = group.group_state;
-  return _x26.value;
+  var _x28 = group.group_state;
+  return _x28.value;
 }
  
 export function work_group_fs_same_transaction(left, right) /* forall<a,b> (left : work-group<a>, right : work-group<b>) -> bool */  {
-  var _x27 = left.group_state;
-  var _x28 = right.group_state;
-  return Object.is(_x27,_x28);
+  var _x29 = left.group_state;
+  var _x30 = right.group_state;
+  return Object.is(_x29,_x30);
 }
  
  
@@ -334,71 +380,71 @@ export function work_group_fs_same_transaction(left, right) /* forall<a,b> (left
 // use `append`/`prepend` and therefore cannot duplicate transaction ownership.
 export function work_group_fs_track(group, value) /* forall<a> (group : work-group<a>, value : a) -> () */  {
    
-  var _x29 = group.group_rollback;
-  var target_1_10034 = _x29.value;
+  var _x31 = group.group_rollback;
+  var target_1_10034 = _x31.value;
    
-  var _x30 = group.group_rollback;
-  var _x31 = target_1_10034.deque_front;
-  var _x32 = target_1_10034.deque_back;
-  ((_x30).value = (Deque(_x31, $std_core_types.Cons(value, _x32))));
+  var _x32 = group.group_rollback;
+  var _x33 = target_1_10034.deque_front;
+  var _x34 = target_1_10034.deque_back;
+  ((_x32).value = (Deque(_x33, $std_core_types.Cons(value, _x34))));
    
-  var _x33 = group.group_queue;
-  var target_1_10034_0 = _x33.value;
-  var _x29 = group.group_queue;
-  var _x30 = target_1_10034_0.deque_front;
-  var _x31 = target_1_10034_0.deque_back;
-  return ((_x29).value = (Deque(_x30, $std_core_types.Cons(value, _x31))));
+  var _x35 = group.group_queue;
+  var target_1_10034_0 = _x35.value;
+  var _x31 = group.group_queue;
+  var _x32 = target_1_10034_0.deque_front;
+  var _x33 = target_1_10034_0.deque_back;
+  return ((_x31).value = (Deque(_x32, $std_core_types.Cons(value, _x33))));
 }
  
 export function work_group_fs_append_values(group, values) /* forall<a> (group : work-group<a>, values : list<a>) -> () */  {
-  var _x32 = group.group_queue;
-  return append_values_loop(_x32, values);
+  var _x34 = group.group_queue;
+  return append_values_loop(_x34, values);
 }
  
 export function work_group_fs_clear(group) /* forall<a> (group : work-group<a>) -> () */  {
    
-  var _x33 = group.group_queue;
-  ((_x33).value = (Deque($std_core_types.Nil, $std_core_types.Nil)));
-  var _x33 = group.group_rollback;
-  return ((_x33).value = (Deque($std_core_types.Nil, $std_core_types.Nil)));
+  var _x35 = group.group_queue;
+  ((_x35).value = (Deque($std_core_types.Nil, $std_core_types.Nil)));
+  var _x35 = group.group_rollback;
+  return ((_x35).value = (Deque($std_core_types.Nil, $std_core_types.Nil)));
 }
  
 export function work_group_fs_take_all(group) /* forall<a> (group : work-group<a>) -> list<a> */  {
    
   var values = work_group_fs_values(group);
    
-  var _x34 = group.group_queue;
-  ((_x34).value = (Deque($std_core_types.Nil, $std_core_types.Nil)));
+  var _x36 = group.group_queue;
+  ((_x36).value = (Deque($std_core_types.Nil, $std_core_types.Nil)));
   return values;
 }
  
 export function work_group_fs_take_rollback(group) /* forall<a> (group : work-group<a>) -> list<a> */  {
    
-  var _x34 = group.group_rollback;
-  var target_10141 = _x34.value;
+  var _x36 = group.group_rollback;
+  var target_10148 = _x36.value;
    
-  var _x35 = target_10141.deque_back;
-  var ys_10016 = $std_core_list.reverse_acc($std_core_types.Nil, _x35);
+  var _x37 = target_10148.deque_back;
+  var ys_10016 = $std_core_list.reverse_acc($std_core_types.Nil, _x37);
    
-  var _x36 = target_10141.deque_front;
-  var values = $std_core_list.append(_x36, ys_10016);
+  var _x38 = target_10148.deque_front;
+  var values = $std_core_list.append(_x38, ys_10016);
    
-  var _x37 = group.group_rollback;
-  ((_x37).value = (Deque($std_core_types.Nil, $std_core_types.Nil)));
+  var _x39 = group.group_rollback;
+  ((_x39).value = (Deque($std_core_types.Nil, $std_core_types.Nil)));
   return values;
 }
  
 export function work_group_fs_release_rollback(group) /* forall<a> (group : work-group<a>) -> () */  {
-  var _x34 = group.group_rollback;
-  return ((_x34).value = (Deque($std_core_types.Nil, $std_core_types.Nil)));
+  var _x36 = group.group_rollback;
+  return ((_x36).value = (Deque($std_core_types.Nil, $std_core_types.Nil)));
 }
  
 export function work_group_fs_begin_drain(group) /* forall<a> (group : work-group<a>) -> bool */  {
-  var _x35 = work_group_fs_state(group);
-  if (_x35._tag === 1) {
+  var _x37 = work_group_fs_state(group);
+  if (_x37._tag === 1) {
      
-    var _x36 = group.group_state;
-    ((_x36).value = Work_draining);
+    var _x38 = group.group_state;
+    ((_x38).value = Work_draining);
     return true;
   }
   else {
@@ -407,11 +453,11 @@ export function work_group_fs_begin_drain(group) /* forall<a> (group : work-grou
 }
  
 export function work_group_fs_mark_ready(group) /* forall<a> (group : work-group<a>) -> bool */  {
-  var _x36 = work_group_fs_state(group);
-  if (_x36._tag === 2) {
+  var _x38 = work_group_fs_state(group);
+  if (_x38._tag === 2) {
      
-    var _x37 = group.group_state;
-    ((_x37).value = Work_ready);
+    var _x39 = group.group_state;
+    ((_x39).value = Work_ready);
     return true;
   }
   else {
@@ -420,17 +466,17 @@ export function work_group_fs_mark_ready(group) /* forall<a> (group : work-group
 }
  
 export function work_group_fs_mark_failed(group, failure) /* forall<a> (group : work-group<a>, failure : exception) -> bool */  {
-  var _x37 = work_group_fs_state(group);
-  if (_x37._tag === 1) {
+  var _x39 = work_group_fs_state(group);
+  if (_x39._tag === 1) {
      
-    var _x38 = group.group_state;
-    ((_x38).value = (Work_failed(failure)));
+    var _x40 = group.group_state;
+    ((_x40).value = (Work_failed(failure)));
     return true;
   }
-  else if (_x37._tag === 2) {
+  else if (_x39._tag === 2) {
      
-    var _x38 = group.group_state;
-    ((_x38).value = (Work_failed(failure)));
+    var _x40 = group.group_state;
+    ((_x40).value = (Work_failed(failure)));
     return true;
   }
   else {
@@ -439,11 +485,11 @@ export function work_group_fs_mark_failed(group, failure) /* forall<a> (group : 
 }
  
 export function work_group_fs_mark_committed(group) /* forall<a> (group : work-group<a>) -> bool */  {
-  var _x38 = work_group_fs_state(group);
-  if (_x38._tag === 3) {
+  var _x40 = work_group_fs_state(group);
+  if (_x40._tag === 3) {
      
-    var _x39 = group.group_state;
-    ((_x39).value = Work_committed);
+    var _x41 = group.group_state;
+    ((_x41).value = Work_committed);
     return true;
   }
   else {
@@ -452,17 +498,17 @@ export function work_group_fs_mark_committed(group) /* forall<a> (group : work-g
 }
  
 export function work_group_fs_mark_aborted(group) /* forall<a> (group : work-group<a>) -> bool */  {
-  var _x39 = work_group_fs_state(group);
-  if (_x39._tag === 5) {
+  var _x41 = work_group_fs_state(group);
+  if (_x41._tag === 5) {
     return false;
   }
-  else if (_x39._tag === 6) {
+  else if (_x41._tag === 6) {
     return false;
   }
   else {
      
-    var _x40 = group.group_state;
-    ((_x40).value = Work_aborted);
+    var _x42 = group.group_state;
+    ((_x42).value = Work_aborted);
      
     work_group_fs_clear(group);
     return true;
@@ -475,40 +521,40 @@ export function route_resume(global, value) /* forall<a> (global : work-queue<a>
  
 export function route_bootstrap(global, active, value) /* forall<a> (global : work-queue<a>, active : maybe<work-group<a>>, value : a) -> () */  {
   if (active !== null) {
-    var _x40 = work_group_fs_state(active.value);
-    if (_x40._tag === 1) {
+    var _x42 = work_group_fs_state(active.value);
+    if (_x42._tag === 1) {
        
-      var _x41 = active.value.group_rollback;
-      var target_1_10034 = _x41.value;
-       
-      var _x42 = active.value.group_rollback;
-      var _x43 = target_1_10034.deque_front;
-      var _x44 = target_1_10034.deque_back;
-      ((_x42).value = (Deque(_x43, $std_core_types.Cons(value, _x44))));
-       
-      var _x45 = active.value.group_queue;
-      var target_1_10034_0 = _x45.value;
-      var _x41 = active.value.group_queue;
-      var _x42 = target_1_10034_0.deque_front;
-      var _x43 = target_1_10034_0.deque_back;
-      return ((_x41).value = (Deque(_x42, $std_core_types.Cons(value, _x43))));
-    }
-    else if (_x40._tag === 2) {
+      var _x43 = active.value.group_rollback;
+      var target_1_10034 = _x43.value;
        
       var _x44 = active.value.group_rollback;
-      var target_1_10034_1 = _x44.value;
+      var _x45 = target_1_10034.deque_front;
+      var _x46 = target_1_10034.deque_back;
+      ((_x44).value = (Deque(_x45, $std_core_types.Cons(value, _x46))));
        
-      var _x45 = active.value.group_rollback;
-      var _x46 = target_1_10034_1.deque_front;
-      var _x47 = target_1_10034_1.deque_back;
-      ((_x45).value = (Deque(_x46, $std_core_types.Cons(value, _x47))));
+      var _x47 = active.value.group_queue;
+      var target_1_10034_0 = _x47.value;
+      var _x43 = active.value.group_queue;
+      var _x44 = target_1_10034_0.deque_front;
+      var _x45 = target_1_10034_0.deque_back;
+      return ((_x43).value = (Deque(_x44, $std_core_types.Cons(value, _x45))));
+    }
+    else if (_x42._tag === 2) {
        
-      var _x48 = active.value.group_queue;
-      var target_1_10034_2 = _x48.value;
-      var _x44 = active.value.group_queue;
-      var _x45 = target_1_10034_2.deque_front;
-      var _x46 = target_1_10034_2.deque_back;
-      return ((_x44).value = (Deque(_x45, $std_core_types.Cons(value, _x46))));
+      var _x46 = active.value.group_rollback;
+      var target_1_10034_1 = _x46.value;
+       
+      var _x47 = active.value.group_rollback;
+      var _x48 = target_1_10034_1.deque_front;
+      var _x49 = target_1_10034_1.deque_back;
+      ((_x47).value = (Deque(_x48, $std_core_types.Cons(value, _x49))));
+       
+      var _x50 = active.value.group_queue;
+      var target_1_10034_2 = _x50.value;
+      var _x46 = active.value.group_queue;
+      var _x47 = target_1_10034_2.deque_front;
+      var _x48 = target_1_10034_2.deque_back;
+      return ((_x46).value = (Deque(_x47, $std_core_types.Cons(value, _x48))));
     }
     else {
       return work_queue_fs_append(global, value);

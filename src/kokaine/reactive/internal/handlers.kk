@@ -56,6 +56,7 @@ pub fun interpret-write(root : root<e>,
     fun request-flush(key)
       check-not-pure-plane("reactive flush")
       check-root(root,key)
+      readmit-failed(root.root-effect-plane)
       flush(root)
 
   action()

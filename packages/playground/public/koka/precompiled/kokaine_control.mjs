@@ -106,7 +106,7 @@ export function when(condition, children, fallback) /* forall<e> (condition : ko
  
 export function list_fs_for(each, key, children, _implicit_fs_cmp, _implicit_fs__lp__eq__eq__rp_) /* forall<a,e,b> (each : () -> kokaine/reactive/effects/signal-read list<a>, key : (a) -> b, children : (item : kokaine/html/accessor<a>, index : kokaine/html/accessor<int>) -> <kokaine/html/html<e>,kokaine/reactive/effects/signal-read> (), ?cmp : (b, b) -> order, ?(==) : (a, a) -> bool) -> (kokaine/html/html<e>) () */  {
   return $kokaine_html.keyed($std_core_hnd._open_none0(function() {
-    return $kokaine_html.Keyed_plan($kokaine_html.Keyed_spec(each, function(items /* list<377> */ , action /* (377) -> 219 () */ ) {
+    return $kokaine_html.Keyed_plan($kokaine_html.Keyed_spec(each, function(items /* list<378> */ , action /* (378) -> 220 () */ ) {
         return $std_core_list.foreach(items, action);
       }, key, _implicit_fs_cmp, _implicit_fs__lp__eq__eq__rp_, children));
   }));
@@ -114,7 +114,7 @@ export function list_fs_for(each, key, children, _implicit_fs_cmp, _implicit_fs_
  
 export function vector_fs_for(each, key, children, _implicit_fs_cmp, _implicit_fs__lp__eq__eq__rp_) /* forall<a,e,b> (each : () -> kokaine/reactive/effects/signal-read vector<a>, key : (a) -> b, children : (item : kokaine/html/accessor<a>, index : kokaine/html/accessor<int>) -> <kokaine/html/html<e>,kokaine/reactive/effects/signal-read> (), ?cmp : (b, b) -> order, ?(==) : (a, a) -> bool) -> (kokaine/html/html<e>) () */  {
   return $kokaine_html.keyed($std_core_hnd._open_none0(function() {
-    return $kokaine_html.Keyed_plan($kokaine_html.Keyed_spec(each, function(items /* vector<606> */ , action /* (606) -> 448 () */ ) {
+    return $kokaine_html.Keyed_plan($kokaine_html.Keyed_spec(each, function(items /* vector<607> */ , action /* (607) -> 449 () */ ) {
         return $std_core_vector.foreach(items, action);
       }, key, _implicit_fs_cmp, _implicit_fs__lp__eq__eq__rp_, children));
   }));

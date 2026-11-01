@@ -44,6 +44,10 @@ pub fun reify-trace(root : root<r>, plane : plane<e>,
               val gate = Continuation-gate(
                 state,load(plane.plane-current),producer)
               val child = cell(Trace-end)
+              // Every resume of this suffix runs synchronously to completion
+              // (or unwinds), so its `finally` frames have already run. Only a
+              // continuation that was never resumed still owns them.
+              val resumed = cell(False)
               val current-frame = Frame(new-lifetime-owner(
                 Scope-starting,plane.plane-retirement))
               val current-frame-slot = cell(current-frame)
@@ -62,13 +66,15 @@ pub fun reify-trace(root : root<r>, plane : plane<e>,
                 current-frame-slot,
                 fn(_) rcontext.resume(load(source.source-cell)),
                 fn() {
-                  val terminal = load(plane.plane-current-frame)
-                  val checkpoint = load(plane.plane-current)
-                  val _ = rcontext.finalize(
-                    Built-trace(
-                      Trace-end,checkpoint,terminal,fn() ())
-                  )
-                  ()
+                  if load(resumed) then () else {
+                    val terminal = load(plane.plane-current-frame)
+                    val checkpoint = load(plane.plane-current)
+                    val _ = rcontext.finalize(
+                      Built-trace(
+                        Trace-end,checkpoint,terminal,fn() ())
+                    )
+                    ()
+                  }
                 },
                 unlink,
                 fn() load(source.source-version) != version
@@ -78,7 +84,7 @@ pub fun reify-trace(root : root<r>, plane : plane<e>,
                 pack-capture(plane,current))
               store(registration,Just(registered))
               val nested = with-current(plane,current,current-frame,
-                fn() rcontext.resume(load(source.source-cell)))
+                fn() { store(resumed,True); rcontext.resume(load(source.source-cell)) })
               store(child,nested.built-root)
               Built-trace(
                 current,

@@ -9,6 +9,7 @@ import kokaine/internal/compat
 import kokaine/internal/registry
 import kokaine/reactive/internal/work-transaction
 import std/core/undiv
+import std/core/unsafe
 
 // One ref records which dynamic context a non-local exit must unwind. Keeping
 // this separate from lifetime state matters when publication disposes itself.
@@ -63,6 +64,7 @@ pub fun enqueue-trace(plane : plane<e>, current : trace<e>) : ()
           // A self-write only changes the capability state; success/failure or
           // an effect-plane final-control unwind preserves that exact ticket.
           store(state,Capture-pending)
+        Capture-pending -> readmit-failed-gate(plane,gate)
         _ -> ()
 
 pub fun notify-source(source : source<a>) : ()
@@ -91,6 +93,57 @@ pub fun activate-trace(plane : plane<e>, current : trace<e>) : ()
 // --------------------------------------------------------------------------
 // Frontier scheduling
 // --------------------------------------------------------------------------
+
+pub fun same-work(left : work<e>, right : work<e>) : bool
+  match left
+    Resume-work(Trace-read(left-gate,_,_,_,_,_,_,_)) ->
+      match right
+        Resume-work(Trace-read(right-gate,_,_,_,_,_,_,_)) ->
+          unsafe-ptr-eq(left-gate.gate-state,right-gate.gate-state)
+        _ -> False
+    Bootstrap-work(left-scope,_) ->
+      match right
+        Bootstrap-work(right-scope,_) ->
+          unsafe-ptr-eq(left-scope.scope-lifetime.lifetime-token,
+                        right-scope.scope-lifetime.lifetime-token)
+        _ -> False
+    _ -> False
+
+fun take-failed-loop(failed : list<failed-ticket>, state : ref<global,capture-state>,
+                     kept : list<failed-ticket>) : <div> maybe<(failed-ticket,list<failed-ticket>)>
+  match failed
+    Nil -> Nothing
+    Cons(ticket,rest) ->
+      if unsafe-ptr-eq(ticket.failed-state,state)
+      then Just((ticket,kept.reverse ++ rest))
+      else take-failed-loop(rest,state,Cons(ticket,kept))
+
+// A quarantined ticket is still Pending, so an ordinary invalidation would
+// not queue it again. Move it back when its own input changes.
+fun readmit-failed-gate(plane : plane<e>, gate : continuation-gate) : ()
+  match load(plane.plane-failed)
+    Nil -> ()
+    failed ->
+      val taken = pretend-no-div{ take-failed-loop(failed,gate.gate-state,[]) }
+      match taken
+        Nothing -> ()
+        Just(found) ->
+          store(plane.plane-failed,found.snd)
+          val requeue = found.fst.failed-requeue
+          requeue(True)
+
+// Explicit update boundaries give every quarantined ticket one recovery turn,
+// queued behind the work that is already runnable.
+pub fun readmit-failed(plane : plane<e>) : ()
+  match load(plane.plane-failed)
+    Nil -> ()
+    failed ->
+      store(plane.plane-failed,[])
+      pretend-no-div{ failed.reverse.foreach(requeue-behind) }
+
+fun requeue-behind(ticket : failed-ticket) : ()
+  val requeue = ticket.failed-requeue
+  requeue(False)
 
 pub fun work-runnable(current : work<e>) : bool
   match current
@@ -394,6 +447,10 @@ pub fun run-next-derived-loop(plane : plane<total>,
 pub fun run-next-derived(plane : plane<total>) : div error<bool>
   run-next-derived-loop(plane,[])
 
+fun requeue-work(queue : work-queue<work<e>>, current : work<e>) : ((front : bool) -> ())
+  fn(front)
+    if front then route-resume(queue,current) else queue.append(current)
+
 pub fun run-next-effect(plane : plane<e>) : <div|e> error<bool>
   val next = take-queued-work(plane.plane-queue)
   match next
@@ -401,10 +458,21 @@ pub fun run-next-effect(plane : plane<e>) : <div|e> error<bool>
     Just(current) ->
       // Effect work can be abandoned by an ambient final control operation,
       // so its actual ticket stays queued across invocation. A normal success
-      // makes it stale; abort/failure leaves the Pending capability recoverable.
+      // makes it stale; an abort leaves the Pending capability recoverable.
       plane.plane-queue.prepend(current)
       match run-work-raw(plane,current)
-        Error(failure) -> Error(failure)
+        Error(failure) ->
+          // A failed ticket must not stay at the queue front: it would starve
+          // everything behind it and rerun on every later flush. Quarantine
+          // it until its own input changes or an update boundary retries it.
+          plane.plane-queue.remove(fn(other) same-work(other,current))
+          match current
+            Resume-work(Trace-read(gate,_,_,_,_,_,_,_)) | !current.work-stale ->
+              val ticket = Failed-ticket(gate.gate-state,
+                                         requeue-work(plane.plane-queue,current))
+              store(plane.plane-failed,Cons(ticket,load(plane.plane-failed)))
+            _ -> ()
+          Error(failure)
         Ok(_) -> Ok(True)
 
 pub fun run-next-pure(plane : plane<total>) : error<bool>
@@ -529,13 +597,20 @@ pub fun settle-producer-body(producer : derive-producer) : <div> settle-result
 
 pub fun settle-producer-result(producer : derive-producer) : <div> settle-result
   val previous-phase = enter-pure-plane()
-  finally(fn() restore-pure-plane(previous-phase),fn()
+  val walk = enter-settle-walk()
+  finally(fn() { leave-settle-walk(); restore-pure-plane(previous-phase) },fn()
     if load(producer.producer-settling)
     then settle-failure("cyclic derived continuation")
+    elif load(producer.producer-clean) == walk &&
+         load(producer.producer-scope.scope-lifetime.lifetime-token).is-scope-live
+    then Settle-ok
     else
       store(producer.producer-settling,True)
       val result = settle-producer-body(producer)
       store(producer.producer-settling,False)
+      match result
+        Settle-ok -> store(producer.producer-clean,walk)
+        _ -> ()
       result
   )
 
@@ -549,18 +624,28 @@ pub fun settle-producer(producer : derive-producer) : exn ()
     Settle-deferred -> throw("derived value is waiting for its effect owner")
     Settle-failed(failure) -> throw-exn(failure)
 
-pub fun drain-loop(root : root<e>) : <div|e> error<()>
+pub fun drain-loop(root : root<e>, first-failure : maybe<exception>)
+                  : <div|e> error<()>
   // Only the raw continuation machinery contributes `div`; the pure plane
   // has no ambient user effect to erase or coerce.
   val derivation = run-next-pure(root.root-derive-plane)
   match derivation
     Error(failure) -> Error(failure)
-    Ok(True) -> drain-loop(root)
+    Ok(True) -> drain-loop(root,first-failure)
     Ok(False) ->
       match run-next-effect(root.root-effect-plane)
-        Error(failure) -> Error(failure)
-        Ok(True) -> drain-loop(root)
-        Ok(False) -> Ok(())
+        // The failed ticket is quarantined; keep draining unrelated work and
+        // report the first failure once the queue is empty.
+        Error(failure) ->
+          val first = match first-failure
+            Nothing -> Just(failure)
+            _ -> first-failure
+          drain-loop(root,first)
+        Ok(True) -> drain-loop(root,first-failure)
+        Ok(False) ->
+          match first-failure
+            Nothing -> Ok(())
+            Just(failure) -> Error(failure)
 
 pub fun flush(root : root<e>) : <div,exn|e> ()
   if load(root.root-disposed) || load(root.root-disposing) ||
@@ -571,7 +656,7 @@ pub fun flush(root : root<e>) : <div,exn|e> ()
     val result = lift-exn(fn()
       finally(
         fn() store(root.root-flushing,False),
-        fn() drain-loop(root)
+        fn() drain-loop(root,Nothing)
       )
     )
     result.untry

@@ -28,7 +28,6 @@ import * as $kokaine_reactive_internal_model from './kokaine_reactive_internal_m
 import * as $kokaine_internal_compat from './kokaine_internal_compat.mjs';
 import * as $kokaine_internal_registry from './kokaine_internal_registry.mjs';
 import * as $std_core_undiv from './std_core_undiv.mjs';
-import * as $std_core_unsafe from './std_core_unsafe.mjs';
 import * as $kokaine_reactive_internal_work_dash_transaction from './kokaine_reactive_internal_work_dash_transaction.mjs';
  
 // externals
@@ -37,6 +36,11 @@ import * as $kokaine_reactive_internal_work_dash_transaction from './kokaine_rea
  
 // declarations
  
+ 
+// `noinline`: Koka 3.2.8+ exports this body's inlined `unsafe-total` with a
+// fresh `_e1` effect variable that its own `.kki` parser rejects, so every
+// incremental build after the first fails. Keeping it out of the interface's
+// inline section is stable on 3.2.3 through 3.2.9.
 export function trace_state_of(current) /* forall<e> (current : kokaine/reactive/internal/model/trace<e>) -> kokaine/reactive/internal/model/capture-state */  {
   if (current === null) {
     return $kokaine_reactive_internal_model.Capture_dead;

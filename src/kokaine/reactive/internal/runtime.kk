@@ -28,7 +28,7 @@ pub fun dispatch(root : root<e>,
 fun fresh-plane(current-frame : frame<e>,
                 retirement : retirement-coordinator<e>) : plane<e>
   Plane(new-work-queue(),cell(Nothing),cell(Nothing),
-        cell(current-frame),cell(Nothing),retirement)
+        cell(current-frame),cell(Nothing),retirement,cell([]))
 
 fun fresh-root() : root<e>
   val effect-retirement : retirement-coordinator<e> =
@@ -82,6 +82,8 @@ fun retire-root-now(root : root<e>) : <div,exn|e> ()
       store(root.root-disposing,False)
       root.root-derive-plane.plane-queue.clear
       root.root-effect-plane.plane-queue.clear
+      store(root.root-derive-plane.plane-failed,[])
+      store(root.root-effect-plane.plane-failed,[])
       store(root.root-derive-plane.plane-work-group,Nothing)
       store(root.root-effect-plane.plane-work-group,Nothing)
       store(root.root-derive-plane.plane-current,Nothing)
@@ -264,7 +266,7 @@ fun derive-by-inner(root : root<e>, initial : a,
     root,derive-plane,owner-slot,load(effect-plane.plane-current),calculate,
     fn(value) commit-derived(root,source,value)
   )
-  val producer = Derive-producer(derive-plane,current,cell(False))
+  val producer = Derive-producer(derive-plane,current,cell(False),cell(0))
   store(owner-slot,Just(producer))
   val structural = pretend-no-div{
     widen-pure-retirement(scope-retirement-work(current))

@@ -44,6 +44,25 @@ pub fun check-not-pure-plane(operation : string) : exn ()
   if load(pure-plane-depth) <= 0 then ()
   else throw(operation ++ " is forbidden while a pure derivation is running")
 
+// Settle walks. One outermost `settle-producer-result` call is one walk; the
+// calls nested inside it (through shared upstreams or memo reads made while
+// recomputing) belong to the same walk. Within a walk upstream producers are
+// always settled before their readers, so a producer that settled `Ok` stays
+// clean for the rest of the walk and can be skipped. Without this a chain of
+// diamonds is re-validated once per path, 2^depth times per read.
+val settle-walk-depth : ref<global,int> = cell(0)
+val settle-walk-serial : ref<global,int> = cell(0)
+
+pub fun enter-settle-walk() : int
+  val depth = load(settle-walk-depth)
+  if depth == 0 then store(settle-walk-serial,load(settle-walk-serial) + 1)
+  else ()
+  store(settle-walk-depth,depth + 1)
+  load(settle-walk-serial)
+
+pub fun leave-settle-walk() : ()
+  store(settle-walk-depth,load(settle-walk-depth) - 1)
+
 pub fun lift-div(action : () -> e a) : <div|e> a
   mask<div>{ action() }
 
@@ -215,7 +234,20 @@ pub type plane<e::E>
     plane-current       : ref<global,maybe<continuation-gate>>,
     plane-current-frame : ref<global,frame<e>>,
     plane-draft         : ref<global,maybe<ref<global,list<trace<e>>>>>,
-    plane-retirement    : retirement-coordinator<e>
+    plane-retirement    : retirement-coordinator<e>,
+    // Effect tickets whose last run failed. They wait here, out of the run
+    // queue, until their own input changes or an explicit update boundary.
+    plane-failed        : ref<global,list<failed-ticket>>
+  )
+
+// A quarantined ticket, keyed by its gate's state cell. `requeue(front)`
+// puts the concrete ticket back on its plane's queue. The closure keeps the
+// plane type free of `work<e>`, which Koka 3.2.3's jsweb pipeline rejects
+// when inlined through the rank-2 `packed-capture`.
+pub value type failed-ticket
+  Failed-ticket(
+    failed-state   : ref<global,capture-state>,
+    failed-requeue : (front : bool) -> ()
   )
 
 pub type root<e::E>
@@ -234,7 +266,9 @@ pub type derive-producer
   Derive-producer(
     producer-plane    : plane<total>,
     producer-scope    : continuation-scope<total>,
-    producer-settling : ref<global,bool>
+    producer-settling : ref<global,bool>,
+    // The settle walk in which this producer last settled `Ok`.
+    producer-clean    : ref<global,int>
   )
 
 pub value type memo<a>

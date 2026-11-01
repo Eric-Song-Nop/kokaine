@@ -70,6 +70,17 @@ pub fun work-queue/pop(target : work-queue<a>) : maybe<a>
 pub fun work-queue/values(target : work-queue<a>) : list<a>
   load(target).values
 
+fun remove-first(values : list<a>, matches : a -> bool) : <div> list<a>
+  match values
+    Nil -> Nil
+    Cons(value,rest) ->
+      if matches(value) then rest else Cons(value,remove-first(rest,matches))
+
+// O(n); used only on the failure path.
+pub fun work-queue/remove(target : work-queue<a>, matches : a -> bool) : ()
+  val values = load(target).values
+  store(target,Deque(pretend-no-div{ remove-first(values,matches) },[]))
+
 pub fun work-queue/clear(target : work-queue<a>) : ()
   store(target,empty-deque())
 
