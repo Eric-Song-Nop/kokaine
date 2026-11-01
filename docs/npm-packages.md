@@ -20,7 +20,7 @@ part of the initial contract.
 
 ## CLI and managed compiler
 
-The generated project pins Koka 3.2.3 in its `kokaine` manifest. The
+The generated project pins Koka 3.2.9 in its `kokaine` manifest. The
 `@kokaine/cli` downloads the matching official compiler into a checksummed,
 platform-specific user cache, or validates an explicit `--koka`/`KOKA_BIN`
 override. `kokaine doctor --json` reports the resolved npm dependency paths,
@@ -62,7 +62,7 @@ An application pins one exact Koka compiler and the `jsweb` target:
     "schemaVersion": 1,
     "entry": "src/app/main.kk",
     "sources": ["src"],
-    "compiler": "3.2.3",
+    "compiler": "3.2.9",
     "target": "jsweb",
     "outDir": ".kokaine/generated",
     "buildDir": ".kokaine/build"
@@ -91,7 +91,7 @@ Any npm package can expose Koka sources with a `koka` field:
   "koka": {
     "schemaVersion": 1,
     "sources": ["src"],
-    "compiler": ">=3.2.3 <3.2.8",
+    "compiler": ">=3.2.3 <3.3.0",
     "targets": ["jsweb"]
   }
 }
