@@ -1,0 +1,28 @@
+name: Bug report
+description: Something in Kokaine, its CLI, or the Playground behaves incorrectly
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Smallest Koka program or steps that reproduce it
+      description: A Playground share link is ideal.
+      render: koka
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `npx kokaine doctor --json`
+      description: Skip this for Playground-only issues.
+      render: json
+  - type: input
+    id: env
+    attributes:
+      label: Browser / OS / Node version
