@@ -13,7 +13,7 @@ const plain = (value) => ({ ...value });
 
 function setup(options) {
   const fake = createFakeRealm(options);
-  const { fns, realm } = loadSidecar(SIDECARS.dom.js, { document: fake.document });
+  const { fns, realm } = loadSidecar(SIDECARS.dom.js, { document: fake.document, Node: fake.view.Node });
   return { ...fake, fns, realm };
 }
 
@@ -263,5 +263,92 @@ describe('owner registry', () => {
     fns.kokaineDomRecordOwner(node, root, {});
     assert.ok(realm[OWNERS_KEY].owners instanceof realm.WeakMap);
     assert.equal(fns.kokaineDomFindOwner(node, root).state, 1);
+  });
+});
+
+describe('range cleanup', () => {
+  // body: before, first, a(b(c), shadow(s)), t, last, after
+  function range() {
+    const context = setup();
+    const { document, body } = context;
+    const make = (name) => document.createElement(name);
+    const before = body.appendChild(make('header'));
+    const first = body.appendChild(make('i'));
+    const a = body.appendChild(make('div'));
+    const b = a.appendChild(make('p'));
+    const c = b.appendChild(make('span'));
+    const s = a.attachShadow({ mode: 'open' }).appendChild(make('em'));
+    const t = body.appendChild(make('b'));
+    const last = body.appendChild(make('i'));
+    const after = body.appendChild(make('footer'));
+    const park = body.appendChild(make('aside'));
+    return { ...context, before, first, a, b, c, s, t, last, after, park };
+  }
+
+  it('detaches the range roots and keeps their subtrees whole', () => {
+    const { fns, body, before, first, a, b, c, s, t, last, after, park } = range();
+    fns.kokaineDomCleanRange(first, last, false);
+    assert.deepEqual(body.childNodes, [before, first, last, after, park]);
+    assert.equal(a.parentNode, null);
+    assert.equal(t.parentNode, null);
+    assert.equal(b.parentNode, a);
+    assert.equal(c.parentNode, b);
+    assert.equal(s.parentNode, a.shadowRoot);
+
+    const inclusive = range();
+    inclusive.fns.kokaineDomCleanRange(inclusive.first, inclusive.last, true);
+    assert.deepEqual(inclusive.body.childNodes, [inclusive.before, inclusive.after, inclusive.park]);
+  });
+
+  it('detaches descendants a removal callback moved out of the range, connected or not', () => {
+    const { fns, document, body, first, a, b, c, s, last, park } = range();
+    const detached = document.createElement('div');
+    a.onRemoved = () => {
+      park.appendChild(b);
+      detached.appendChild(s);
+    };
+    fns.kokaineDomCleanRange(first, last, false);
+    assert.deepEqual(park.childNodes, []);
+    assert.deepEqual(detached.childNodes, []);
+    // An escaped subtree is taken apart: none of its nodes stays attached.
+    assert.equal(b.parentNode, null);
+    assert.equal(c.parentNode, null);
+    assert.equal(s.parentNode, null);
+    assert.deepEqual(a.childNodes, []);
+    assert.equal(body.childNodes.includes(a), false);
+  });
+
+  it('keeps a descendant a callback moved to another place inside the range', () => {
+    const { fns, first, a, b, c, t, last } = range();
+    a.onRemoved = () => t.appendChild(c);
+    fns.kokaineDomCleanRange(first, last, false);
+    assert.equal(c.parentNode, t);
+    assert.equal(b.parentNode, a);
+  });
+
+  it('fails when a callback keeps reinserting a removed root', () => {
+    const { fns, body, first, a, last } = range();
+    a.onRemoved = () => body.appendChild(a);
+    assert.throws(
+      () => fns.kokaineDomCleanRange(first, last, false),
+      /a removed node was synchronously reinserted/,
+    );
+  });
+
+  it('retires nodes moved out of a staged range before it runs', () => {
+    const { fns, body, before, first, a, b, c, last, after, park } = range();
+    const handle = fns.kokaineDomStageRetirement(first, last);
+    park.appendChild(b);
+    fns.kokaineDomRunRetirement(handle);
+    assert.deepEqual(body.childNodes, [before, after, park]);
+    assert.deepEqual(park.childNodes, []);
+    assert.equal(b.parentNode, null);
+    assert.equal(c.parentNode, null);
+    assert.equal(a.parentNode, null);
+    fns.kokaineDomReleaseRetirement(handle);
+    assert.equal(handle.roots, null);
+    assert.equal(handle.parents, null);
+    // A released handle is inert.
+    assert.doesNotThrow(() => fns.kokaineDomRunRetirement(handle));
   });
 });
