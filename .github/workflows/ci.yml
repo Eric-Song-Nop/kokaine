@@ -146,7 +146,7 @@ jobs:
       # keeps them in a content-addressed cache under ~/.cache/kokaine/playground
       # and verifies every file against the pins in public/koka/assets.json.
       - name: Cache pinned Koka browser assets
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.cache/kokaine/playground
           key: koka-playground-assets-${{ hashFiles('packages/playground/public/koka/assets.json', 'packages/playground/scripts/sync-koka-assets.mjs') }}
