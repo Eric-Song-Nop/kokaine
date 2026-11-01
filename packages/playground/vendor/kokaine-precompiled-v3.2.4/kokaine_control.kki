@@ -62,12 +62,39 @@ local alias kokaine/html/accessor[223,1,223,43]<a> :: V -> V = () -> <(std/core/
 //------------------------------
 //#kki: declarations
  
-pub fun branch[14,9,14,14] : forall<a,(e :: E)> (value : (kokaine/reactive/memo :: V -> V)<a>, children : (a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e :: E)>>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e :: E)>>> ();
+// Emit a dynamic region that is rebuilt with `children(v)` each time the memo
+// `value` publishes a new value `v`. The region's previous generation (its
+// DOM, listeners, effects, and cleanups) is retired on every rebuild. Effect:
+// `html<e>`; `children` may emit HTML and read signals.
+//
+// Gotcha: any tracked read performed directly in `children` (not inside a live
+// binding such as `text { ... }`) also rebuilds the whole region. Keep
+// fine-grained values in live bindings, and rely on the memo's equality to
+// avoid needless rebuilds.
+pub fun branch[23,9,23,14] : forall<a,(e :: E)> (value : (kokaine/reactive/memo :: V -> V)<a>, children : (a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e :: E)>>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e :: E)>>> ();
 // monadic lift
 fun @mlift-when@10052[1,0,1,0] : forall<(e :: E)> (children : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e :: E)>>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> (), fallback : (std/core/types/@optional :: V -> V)<() -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e :: E)>>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> ()>, visible@10002 : std/core/types/bool) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e :: E)>>> ();
-pub fun when[19,9,19,12] : forall<(e :: E)> (condition : (kokaine/reactive/memo :: V -> V)<std/core/types/bool>, children : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e :: E)>>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> (), fallback : (std/core/types/@optional :: V -> V)<() -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e :: E)>>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> ()>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e :: E)>>> ();
-pub fun list/for[26,9,26,16] : forall<a,(e :: E),b> (each : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> (std/core/types/list :: V -> V)<a>, key : (a) -> b, children : (item : (kokaine/html/accessor :: V -> V)<a>, index : (kokaine/html/accessor :: V -> V)<std/core/types/int>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e :: E)>>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> (), ?cmp : (b, b) -> std/core/types/order, ?(==) : (a, a) -> std/core/types/bool) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e :: E)>>> ();
-pub fun vector/for[39,9,39,18] : forall<a,(e :: E),b> (each : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> (std/core/types/vector :: V -> V)<a>, key : (a) -> b, children : (item : (kokaine/html/accessor :: V -> V)<a>, index : (kokaine/html/accessor :: V -> V)<std/core/types/int>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e :: E)>>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> (), ?cmp : (b, b) -> std/core/types/order, ?(==) : (a, a) -> std/core/types/bool) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e :: E)>>> ();
+// Boolean form of `branch`: render `children` while `condition` is `True` and
+// `fallback` (default: nothing) while it is `False`. Effect: `html<e>`. The
+// condition must be a memo, for example `derive(root, False, fn() ...)`, not a
+// plain boolean or signal.
+pub fun when[32,9,32,12] : forall<(e :: E)> (condition : (kokaine/reactive/memo :: V -> V)<std/core/types/bool>, children : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e :: E)>>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> (), fallback : (std/core/types/@optional :: V -> V)<() -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e :: E)>>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> ()>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e :: E)>>> ();
+// Keyed list rendering. `each` reads the current list (tracked), `key` maps an
+// item to a stable business key, and `children` builds one row from read-only
+// `item()` and `index()` accessors. Effect: `html<e>`. Optional implicit `cmp`
+// orders keys and `(==)` suppresses publishing unchanged items.
+//
+// A row whose key survives keeps its DOM nodes, listeners, local form state,
+// and owned reactive work; only its accessors publish new values. Removed keys
+// retire their rows. Gotcha: keys must be unique within one snapshot; a
+// duplicate throws and leaves the last committed rows unchanged (SSR rejects
+// it as well). Read row data through `item()` and `index()` inside live
+// bindings so a moved or updated row does not rebuild.
+pub fun list/for[50,9,50,16] : forall<a,(e :: E),b> (each : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> (std/core/types/list :: V -> V)<a>, key : (a) -> b, children : (item : (kokaine/html/accessor :: V -> V)<a>, index : (kokaine/html/accessor :: V -> V)<std/core/types/int>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e :: E)>>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> (), ?cmp : (b, b) -> std/core/types/order, ?(==) : (a, a) -> std/core/types/bool) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e :: E)>>> ();
+// Keyed vector rendering. Same contract as `list/for`, walking the vector in
+// order: `each` (tracked), `key`, and a `children(item, index)` row builder
+// with read-only accessors. Effect: `html<e>`. Keys must be unique.
+pub fun vector/for[66,9,66,18] : forall<a,(e :: E),b> (each : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> (std/core/types/vector :: V -> V)<a>, key : (a) -> b, children : (item : (kokaine/html/accessor :: V -> V)<a>, index : (kokaine/html/accessor :: V -> V)<std/core/types/int>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e :: E)>>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> (), ?cmp : (b, b) -> std/core/types/order, ?(==) : (a, a) -> std/core/types/bool) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/html/html :: (E, E, V) -> V)<(e :: E)>>> ();
  
 fun @kokaine-cache-phase[1,0,1,0] : () -> std/core/types/int;
  
