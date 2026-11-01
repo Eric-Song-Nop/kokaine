@@ -44,7 +44,9 @@ From the repository root, the same development server is also available as:
 make serve-playground
 ```
 
-The playground itself does not need a native Koka installation. Its workbench
+The first run downloads about 38 MiB of hash-pinned Koka browser assets into
+`~/.cache/kokaine/playground` (they are not tracked in git); later runs reuse
+that cache. The playground itself does not need a native Koka installation. Its workbench
 DOM, reactive state, and event handlers are authored in Koka and mounted with
 Kokaine; a framework-neutral TypeScript host owns Monaco and other browser-only
 capabilities. The Koka compiler and real Koka LSP both run as WebAssembly in
