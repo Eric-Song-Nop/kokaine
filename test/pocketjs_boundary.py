@@ -16,7 +16,7 @@ def main() -> int:
     async_bridge = (ROOT / "packages/pocketjs/js/async.js").read_text()
     guest = (ROOT / "packages/pocketjs/js/guest.js").read_text()
     manifest = json.loads((ROOT / "packages/pocketjs/package.json").read_text())
-    core_manifest = json.loads((ROOT / "package.json").read_text())
+    core_manifest = json.loads((ROOT / "packages/core/package.json").read_text())
 
     forbidden_modules = {
         "kokaine/html",
