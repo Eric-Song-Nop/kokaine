@@ -61,63 +61,63 @@ local alias kokaine/async/effects/dispose-fn[29,1,29,34] = () -> <(std/core/ui :
 //------------------------------
 //#kki: type declarations
  
-pub value{0,1,8} type fetch-subscription[158,1,159,33] {
-  con Fetch-subscription[159,3,159,20](value: std/core/types/any){0,1,8} : (value : std/core/types/any) -> fetch-subscription = 1;
+pub value{0,1,8} type fetch-subscription[161,1,162,33] {
+  con Fetch-subscription[162,3,162,20](value: std/core/types/any){0,1,8} : (value : std/core/types/any) -> fetch-subscription = 1;
 };
 // One-field browser wrappers erase to their JavaScript values on `jsweb`.
-pub value{0,1,8} type promise[96,1,97,30] <a> :: V -> V {
-  con Browser-promise[97,3,97,17](value: std/core/types/any){0,1,8} : forall<a> (value : std/core/types/any) -> (promise :: V -> V)<a> = 1;
+pub value{0,1,8} type promise[99,1,100,30] <a> :: V -> V {
+  con Browser-promise[100,3,100,17](value: std/core/types/any){0,1,8} : forall<a> (value : std/core/types/any) -> (promise :: V -> V)<a> = 1;
 };
-pub value{0,1,8} type promise-subscription[99,1,100,35] {
-  con Promise-subscription[100,3,100,22](value: std/core/types/any){0,1,8} : (value : std/core/types/any) -> promise-subscription = 1;
+pub value{0,1,8} type promise-subscription[102,1,103,35] {
+  con Promise-subscription[103,3,103,22](value: std/core/types/any){0,1,8} : (value : std/core/types/any) -> promise-subscription = 1;
 };
-pub value{0,1,8} type request[152,1,153,30] {
-  con Browser-request[153,3,153,17](value: std/core/types/any){0,1,8} : (value : std/core/types/any) -> request = 1;
+pub value{0,1,8} type request[155,1,156,30] {
+  con Browser-request[156,3,156,17](value: std/core/types/any){0,1,8} : (value : std/core/types/any) -> request = 1;
 };
-pub value{0,1,8} type response[155,1,156,31] {
-  con Browser-response[156,3,156,18](value: std/core/types/any){0,1,8} : (value : std/core/types/any) -> response = 1;
+pub value{0,1,8} type response[158,1,159,31] {
+  con Browser-response[159,3,159,18](value: std/core/types/any){0,1,8} : (value : std/core/types/any) -> response = 1;
 };
-pub value{0,1,8} type response-body-subscription[253,1,254,41] {
-  con Response-body-subscription[254,3,254,28](value: std/core/types/any){0,1,8} : (value : std/core/types/any) -> response-body-subscription = 1;
+pub value{0,1,8} type response-body-subscription[256,1,257,41] {
+  con Response-body-subscription[257,3,257,28](value: std/core/types/any){0,1,8} : (value : std/core/types/any) -> response-body-subscription = 1;
 };
-pub value{0,1,8} type timer-subscription[23,1,24,33] {
-  con Timer-subscription[24,3,24,20](value: std/core/types/any){0,1,8} : (value : std/core/types/any) -> timer-subscription = 1;
+pub value{0,1,8} type timer-subscription[26,1,27,33] {
+  con Timer-subscription[27,3,27,20](value: std/core/types/any){0,1,8} : (value : std/core/types/any) -> timer-subscription = 1;
 };
  
 //------------------------------
 //#kki: declarations
  
 // Automatically generated. Retrieves the `value` constructor field of the `:timer-subscription` type.
-fun timer-subscription/value[24,22,24,26] : (^ @this : timer-subscription) -> std/core/types/any;
-pub fun timer-subscription/@copy[24,3,24,20] : (@this : timer-subscription, value : (std/core/types/@optional :: V -> V)<std/core/types/any>) -> timer-subscription;
+fun timer-subscription/value[27,22,27,26] : (^ @this : timer-subscription) -> std/core/types/any;
+pub fun timer-subscription/@copy[27,3,27,20] : (@this : timer-subscription, value : (std/core/types/@optional :: V -> V)<std/core/types/any>) -> timer-subscription;
 // Browsers coerce one timeout delay through a signed 32-bit representation.
 // Keep the exact total as a safe integer, schedule bounded chunks, and use a
 // short monotonic deadline per chunk to absorb both early and late callbacks.
-fun timer-setup-raw[29,8,29,22] : (milliseconds : std/core/types/int, fulfill : () -> <(std/core/ui :: X)> (), reject : (std/core/types/any) -> <(std/core/ui :: X)> ()) -> <(std/core/ui :: X)> std/core/types/any;
-fun host-result-ok[34,8,34,21] : (value : std/core/types/any) -> std/core/types/bool;
-fun host-result-error[37,8,37,24] : (value : std/core/types/any) -> std/core/types/any;
+fun timer-setup-raw[32,8,32,22] : (milliseconds : std/core/types/int, fulfill : () -> <(std/core/ui :: X)> (), reject : (std/core/types/any) -> <(std/core/ui :: X)> ()) -> <(std/core/ui :: X)> std/core/types/any;
+fun host-result-ok[37,8,37,21] : (value : std/core/types/any) -> std/core/types/bool;
+fun host-result-error[40,8,40,24] : (value : std/core/types/any) -> std/core/types/any;
 // JavaScript promises may reject with any value, including a Proxy or object
 // whose `message` getter/string conversion throws. Formatting must never keep
 // the Koka completion callback from observing that rejection.
-fun host-error-message[43,8,43,25] : (value : std/core/types/any) -> std/core/types/string;
-fun host-result-state[46,8,46,24] : (value : std/core/types/any) -> timer-subscription;
-fun timer-retire[49,8,49,19] : (value : timer-subscription) -> <(std/core/ui :: X)> ();
+fun host-error-message[46,8,46,25] : (value : std/core/types/any) -> std/core/types/string;
+fun host-result-state[49,8,49,24] : (value : std/core/types/any) -> timer-subscription;
+fun timer-retire[52,8,52,19] : (value : timer-subscription) -> <(std/core/ui :: X)> ();
 // Automatically generated. Retrieves the `value` constructor field of the `:promise` type.
-fun promise/value[97,19,97,23] : forall<a> (^ promise : (promise :: V -> V)<a>) -> std/core/types/any;
-pub fun promise/@copy[97,3,97,17] : forall<a> (@this : (promise :: V -> V)<a>, value : (std/core/types/@optional :: V -> V)<std/core/types/any>) -> (promise :: V -> V)<a>;
+fun promise/value[100,19,100,23] : forall<a> (^ promise : (promise :: V -> V)<a>) -> std/core/types/any;
+pub fun promise/@copy[100,3,100,17] : forall<a> (@this : (promise :: V -> V)<a>, value : (std/core/types/@optional :: V -> V)<std/core/types/any>) -> (promise :: V -> V)<a>;
 // Automatically generated. Retrieves the `value` constructor field of the `:promise-subscription` type.
-fun promise-subscription/value[100,24,100,28] : (^ @this : promise-subscription) -> std/core/types/any;
-pub fun promise-subscription/@copy[100,3,100,22] : (@this : promise-subscription, value : (std/core/types/@optional :: V -> V)<std/core/types/any>) -> promise-subscription;
-fun promise-subscribe[113,8,113,24] : forall<a> (value : (promise :: V -> V)<a>, fulfill : (a) -> <(std/core/ui :: X)> (), reject : (std/core/types/any) -> <(std/core/ui :: X)> ()) -> <(std/core/ui :: X)> std/core/types/any;
-fun promise-result-state[118,8,118,27] : (value : std/core/types/any) -> promise-subscription;
+fun promise-subscription/value[103,24,103,28] : (^ @this : promise-subscription) -> std/core/types/any;
+pub fun promise-subscription/@copy[103,3,103,22] : (@this : promise-subscription, value : (std/core/types/@optional :: V -> V)<std/core/types/any>) -> promise-subscription;
+fun promise-subscribe[116,8,116,24] : forall<a> (value : (promise :: V -> V)<a>, fulfill : (a) -> <(std/core/ui :: X)> (), reject : (std/core/types/any) -> <(std/core/ui :: X)> ()) -> <(std/core/ui :: X)> std/core/types/any;
+fun promise-result-state[121,8,121,27] : (value : std/core/types/any) -> promise-subscription;
 // Drop both Koka callbacks before touching any host object. A non-cancelable
 // Promise may still settle, but its JavaScript closure then sees an inert cell.
-fun promise-retire[123,8,123,21] : (value : promise-subscription) -> <(std/core/ui :: X)> ();
+fun promise-retire[126,8,126,21] : (value : promise-subscription) -> <(std/core/ui :: X)> ();
 // Wait for a JavaScript promise in direct style. Effect: `<async,exn>`;
 // rejection becomes an `exn`. Gotcha: cancellation only drops the Koka
 // continuation; the underlying promise (and whatever started it) keeps
 // running.
-pub fun promise/await[130,9,130,21] : forall<a> (value : (promise :: V -> V)<a>) -> <(kokaine/async/effects/async :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> a;
+pub fun promise/await[133,9,133,21] : forall<a> (value : (promise :: V -> V)<a>) -> <(kokaine/async/effects/async :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> a;
 // Sleep without holding a Kokaine batch open. The generation handler invokes
 // this setup only after it has registered the task with the current owner.
 // Suspend the current async strand for `delay` using a browser timer. Effect:
@@ -125,10 +125,10 @@ pub fun promise/await[130,9,130,21] : forall<a> (value : (promise :: V -> V)<a>)
 // the code runs in a later turn, and only if the owning generation is still
 // live. Retirement or cancellation clears the timer. Delays longer than the
 // browser's 32-bit `setTimeout` limit are split into chunks.
-pub fun sleep[59,9,59,13] : (delay : std/time/duration/duration) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
+pub fun sleep[62,9,62,13] : (delay : std/time/duration/duration) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
 // Suspend until a later browser task (a zero-delay `sleep`). Effect:
 // `<async,exn>`.
-pub fun yield[78,9,78,13] : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
+pub fun yield[81,9,81,13] : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
 // monadic lift
 fun @mlift-timeout@10047[1,0,1,0] : forall<a,(e :: E)> (wild_ : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> (std/core/types/maybe :: V -> V)<a>;
 // monadic lift
@@ -137,43 +137,43 @@ fun @mlift-timeout@10048[1,0,1,0] : forall<a,(e :: E)> (@y-x10020 : a) -> <(koka
 // or `Nothing` once `delay` elapses, in which case `action` is canceled (its
 // `finally` clauses still run before `timeout` returns). Effect:
 // `<async,exn|e>`. An exception from `action` propagates.
-pub fun timeout[85,9,85,15] : forall<a,(e :: E)> (delay : std/time/duration/duration, action : () -> <(kokaine/async/effects/async :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a) -> <(kokaine/async/effects/async :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> (std/core/types/maybe :: V -> V)<a>;
+pub fun timeout[88,9,88,15] : forall<a,(e :: E)> (delay : std/time/duration/duration, action : () -> <(kokaine/async/effects/async :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a) -> <(kokaine/async/effects/async :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> (std/core/types/maybe :: V -> V)<a>;
 // Explicitly unsafe because no runtime check can prove the JavaScript promise
 // resolves to Koka value `a`.
 // Treat a JavaScript value as a `promise<a>`. Total, but unchecked: nothing
 // verifies that the promise resolves to a Koka value of type `a`.
-pub fun unsafe-promise[106,12,106,25] : forall<a> (value : std/core/types/any) -> (promise :: V -> V)<a>;
+pub fun unsafe-promise[109,12,109,25] : forall<a> (value : std/core/types/any) -> (promise :: V -> V)<a>;
 // Expose the underlying JavaScript promise object. Total.
-pub fun promise/unsafe-any[110,12,110,29] : forall<a> (value : (promise :: V -> V)<a>) -> std/core/types/any;
+pub fun promise/unsafe-any[113,12,113,29] : forall<a> (value : (promise :: V -> V)<a>) -> std/core/types/any;
 // Automatically generated. Retrieves the `value` constructor field of the `:request` type.
-fun request/value[153,19,153,23] : (^ request : request) -> std/core/types/any;
-pub fun request/@copy[153,3,153,17] : (@this : request, value : (std/core/types/@optional :: V -> V)<std/core/types/any>) -> request;
+fun request/value[156,19,156,23] : (^ request : request) -> std/core/types/any;
+pub fun request/@copy[156,3,156,17] : (@this : request, value : (std/core/types/@optional :: V -> V)<std/core/types/any>) -> request;
 // Automatically generated. Retrieves the `value` constructor field of the `:response` type.
-fun response/value[156,20,156,24] : (^ response : response) -> std/core/types/any;
-pub fun response/@copy[156,3,156,18] : (@this : response, value : (std/core/types/@optional :: V -> V)<std/core/types/any>) -> response;
+fun response/value[159,20,159,24] : (^ response : response) -> std/core/types/any;
+pub fun response/@copy[159,3,159,18] : (@this : response, value : (std/core/types/@optional :: V -> V)<std/core/types/any>) -> response;
 // Automatically generated. Retrieves the `value` constructor field of the `:fetch-subscription` type.
-fun fetch-subscription/value[159,22,159,26] : (^ @this : fetch-subscription) -> std/core/types/any;
-pub fun fetch-subscription/@copy[159,3,159,20] : (@this : fetch-subscription, value : (std/core/types/@optional :: V -> V)<std/core/types/any>) -> fetch-subscription;
+fun fetch-subscription/value[162,22,162,26] : (^ @this : fetch-subscription) -> std/core/types/any;
+pub fun fetch-subscription/@copy[162,3,162,20] : (@this : fetch-subscription, value : (std/core/types/@optional :: V -> V)<std/core/types/any>) -> fetch-subscription;
 // Build a Fetch request description: `url`, HTTP `method` (default `"GET"`),
 // and an optional string `body`. Total; nothing is sent until `fetch`. No
 // custom headers are set, so a string body uses the browser's default
 // `text/plain` content type.
-pub fun request[165,12,165,18] : (url : std/core/types/string, method : (std/core/types/@optional :: V -> V)<std/core/types/string>, body : (std/core/types/@optional :: V -> V)<(std/core/types/maybe :: V -> V)<std/core/types/string>>) -> request;
+pub fun request[168,12,168,18] : (url : std/core/types/string, method : (std/core/types/@optional :: V -> V)<std/core/types/string>, body : (std/core/types/@optional :: V -> V)<(std/core/types/maybe :: V -> V)<std/core/types/string>>) -> request;
 // Convenience constructors keep the common call sites direct and typed.
 // A `GET` request for `url`. Total.
-pub fun get[171,9,171,11] : (url : std/core/types/string) -> request;
+pub fun get[174,9,174,11] : (url : std/core/types/string) -> request;
 // A `POST` request for `url` with a string `body` (sent as `text/plain`).
 // Total.
-pub fun post[176,9,176,12] : (url : std/core/types/string, body : std/core/types/string) -> request;
-fun fetch-subscribe[179,8,179,22] : (value : request, fulfill : (response) -> <(std/core/ui :: X)> (), reject : (std/core/types/any) -> <(std/core/ui :: X)> ()) -> <(std/core/ui :: X)> std/core/types/any;
-fun fetch-result-state[184,8,184,25] : (value : std/core/types/any) -> fetch-subscription;
+pub fun post[179,9,179,12] : (url : std/core/types/string, body : std/core/types/string) -> request;
+fun fetch-subscribe[182,8,182,22] : (value : request, fulfill : (response) -> <(std/core/ui :: X)> (), reject : (std/core/types/any) -> <(std/core/ui :: X)> ()) -> <(std/core/ui :: X)> std/core/types/any;
+fun fetch-result-state[187,8,187,25] : (value : std/core/types/any) -> fetch-subscription;
 // Revoke Koka closures first; AbortController is invoked only after the task
 // has become inert, so a hostile/polyfilled abort cannot re-enter it.
-fun fetch-retire[189,8,189,19] : (value : fetch-subscription) -> <(std/core/ui :: X)> ();
-fun response-own[236,8,236,19] : (value : response, release : kokaine/async/effects/dispose-fn) -> <(std/core/ui :: X)> ();
+fun fetch-retire[192,8,192,19] : (value : fetch-subscription) -> <(std/core/ui :: X)> ();
+fun response-own[239,8,239,19] : (value : response, release : kokaine/async/effects/dispose-fn) -> <(std/core/ui :: X)> ();
 // Generation retirement owns this raw disposer. It must not call the lease's
 // release action because the owner registration is already being finalized.
-fun response-retire[241,8,241,22] : (value : response) -> <(std/core/ui :: X)> ();
+fun response-retire[244,8,244,22] : (value : response) -> <(std/core/ui :: X)> ();
 // monadic lift
 fun @mlift-fetch@10049[1,0,1,0] : (result@0 : response, wild_ : ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> response;
 // monadic lift
@@ -189,48 +189,48 @@ fun @mlift-fetch@10051[1,0,1,0] : (result@0 : response) -> <(kokaine/async/effec
 // or released with `discard`. Gotcha: call `discard` on a response you will
 // not read, so the connection is released immediately rather than at
 // retirement.
-pub fun fetch[201,9,201,13] : (value : request) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> response;
+pub fun fetch[204,9,204,13] : (value : request) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> response;
 // The HTTP status code. Effect: `ui`.
-pub fun response/status[224,12,224,26] : (value : response) -> <(std/core/ui :: X)> std/core/types/int;
+pub fun response/status[227,12,227,26] : (value : response) -> <(std/core/ui :: X)> std/core/types/int;
 // Whether the status is in the 200-299 range. Effect: `ui`.
-pub fun response/ok[228,12,228,22] : (value : response) -> <(std/core/ui :: X)> std/core/types/bool;
+pub fun response/ok[231,12,231,22] : (value : response) -> <(std/core/ui :: X)> std/core/types/bool;
 // The final response URL after redirects (empty when unavailable). Effect:
 // `ui`.
-pub fun response/url[233,12,233,23] : (value : response) -> <(std/core/ui :: X)> std/core/types/string;
+pub fun response/url[236,12,236,23] : (value : response) -> <(std/core/ui :: X)> std/core/types/string;
 // A response which will not be consumed explicitly releases its generation
 // lease before aborting. Clear the wrapper first so hostile host objects cannot
 // observe or re-enter a live ownership edge.
 // Release a response that will not be read: drop its generation lease, abort
 // the request, and cancel the body stream. Effect: `ui`. Safe to call more
 // than once.
-pub fun response/discard[250,12,250,27] : (value : response) -> <(std/core/ui :: X)> ();
+pub fun response/discard[253,12,253,27] : (value : response) -> <(std/core/ui :: X)> ();
 // Automatically generated. Retrieves the `value` constructor field of the `:response-body-subscription` type.
-fun response-body-subscription/value[254,30,254,34] : (^ @this : response-body-subscription) -> std/core/types/any;
-pub fun response-body-subscription/@copy[254,3,254,28] : (@this : response-body-subscription, value : (std/core/types/@optional :: V -> V)<std/core/types/any>) -> response-body-subscription;
+fun response-body-subscription/value[257,30,257,34] : (^ @this : response-body-subscription) -> std/core/types/any;
+pub fun response-body-subscription/@copy[257,3,257,28] : (@this : response-body-subscription, value : (std/core/types/@optional :: V -> V)<std/core/types/any>) -> response-body-subscription;
 // Response body consumption remains tied to the AbortController created for
 // Fetch. `fetch()` resolves as soon as headers arrive, so revoking only the
 // body Promise callbacks would otherwise leave a streaming network request
 // alive after its Kokaine generation retired.
-fun response-body-subscribe[260,8,260,30] : forall<a> (value : response, as-json : std/core/types/bool, fulfill : (a) -> <(std/core/ui :: X)> (), reject : (std/core/types/any) -> <(std/core/ui :: X)> ()) -> <(std/core/ui :: X)> std/core/types/any;
-fun response-body-result-state[265,8,265,33] : (value : std/core/types/any) -> response-body-subscription;
+fun response-body-subscribe[263,8,263,30] : forall<a> (value : response, as-json : std/core/types/bool, fulfill : (a) -> <(std/core/ui :: X)> (), reject : (std/core/types/any) -> <(std/core/ui :: X)> ()) -> <(std/core/ui :: X)> std/core/types/any;
+fun response-body-result-state[268,8,268,33] : (value : std/core/types/any) -> response-body-subscription;
 // Revoke language callbacks before aborting the request. A locked body is
 // canceled by AbortController; an as-yet-unlocked stream is canceled directly
 // as well so custom Fetch implementations get the same retirement contract.
-fun response-body-retire[271,8,271,27] : (value : response-body-subscription) -> <(std/core/ui :: X)> ();
-fun await-response-body[274,5,274,23] : forall<a> (value : response, as-json : std/core/types/bool) -> <(kokaine/async/effects/async :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> a;
+fun response-body-retire[274,8,274,27] : (value : response-body-subscription) -> <(std/core/ui :: X)> ();
+fun await-response-body[277,5,277,23] : forall<a> (value : response, as-json : std/core/types/bool) -> <(kokaine/async/effects/async :: E),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> a;
 // Read the whole body as a string. Effect: `<async,exn>`. Takes over the
 // response's ownership; cancellation aborts the request. A body can be read
 // only once.
-pub fun response/text[296,9,296,21] : (value : response) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> std/core/types/string;
+pub fun response/text[299,9,299,21] : (value : response) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> std/core/types/string;
 // JSON stays an `any` FFI value. A domain adapter should validate/decode it at
 // its boundary instead of asserting an unchecked generic Koka type.
 // Read and parse the body as JSON. Effect: `<async,exn>`. The result is an
 // untyped JavaScript value (`any`); validate or decode it at your boundary. A
 // body can be read only once.
-pub fun response/json[304,9,304,21] : (value : response) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> std/core/types/any;
+pub fun response/json[307,9,307,21] : (value : response) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-await :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-cancel :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ioc :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/async-ownership :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/async/effects/discontinue :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> std/core/types/any;
 // Return the response unchanged when `ok`; otherwise discard it and raise an
 // HTTP-status exception. Effect: `<ui,exn>`.
-pub fun response/require-ok[309,9,309,27] : (value : response) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> response;
+pub fun response/require-ok[312,9,312,27] : (value : response) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/ui :: X)> response;
  
 fun @kokaine-cache-phase[1,0,1,0] : () -> std/core/types/int;
  
