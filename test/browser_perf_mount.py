@@ -8,14 +8,17 @@ Loads dist/test_dom_dash_perf_dash_mount__main.mjs (built by
 - toggle-off / toggle-on: retire and rebuild that region;
 - flat-off / flat-on: the same for a region whose 300 rows are sibling roots;
 - update: one write that updates every live text and attribute;
+- first-click / click: synchronous delivery of the first and later clicks
+  to one listener;
 - allocation proxies: retained JS heap after mount, and the sampling heap
   profiler's estimate of bytes allocated (including collected garbage)
   during each phase.
 
 It also checks that the fixture still behaves (listeners deliver, the table
 retires and returns, live bindings update), so a broken build cannot report
-a fast but meaningless number.  Usage: `make bench-browser` (or run with
-`--samples N` / `--json`).
+a fast but meaningless number.  Usage: `make bench-browser`, or run with
+`--samples N`, `--json`, and `--dist DIR` (repeatable) to compare builds of
+the fixture with interleaved samples.
 """
 
 from __future__ import annotations
@@ -33,7 +36,7 @@ from playwright.sync_api import sync_playwright
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-MODULE = "/dist/test_dom_dash_perf_dash_mount__main.mjs"
+MODULE = "test_dom_dash_perf_dash_mount__main.mjs"
 
 
 class QuietHandler(SimpleHTTPRequestHandler):
@@ -55,7 +58,7 @@ def serve_project():
         thread.join()
 
 
-def load_fixture(page, origin: str) -> None:
+def load_fixture(page, origin: str, dist: str = "dist") -> None:
     page.goto(f"{origin}/test/")
     page.evaluate(
         """async (module) => {
@@ -64,7 +67,20 @@ def load_fixture(page, origin: str) -> None:
             document.body.replaceChildren(host);
             await import(module);
         }""",
-        MODULE,
+        f"/{dist}/{MODULE}",
+    )
+
+
+def click_ms(page, index: int) -> float:
+    """Time one synchronous click delivery to the index-th "+" button."""
+    return page.evaluate(
+        """(index) => {
+            const button = document.querySelectorAll('.perf-inc')[index];
+            const start = performance.now();
+            button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            return performance.now() - start;
+        }""",
+        index,
     )
 
 
@@ -133,97 +149,114 @@ def check_behaviour(page) -> None:
     assert page.locator("#perf-root").evaluate("node => node.childNodes.length") == 0
 
 
+PHASES = ("mount", "toggle-off", "toggle-on", "flat-off", "flat-on", "update",
+          "first-click", "click")
+
+
+def sample_page(browser, origin: str, dist: str, errors: list[str]) -> dict[str, float]:
+    page = browser.new_page()
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    load_fixture(page, origin, dist)
+    mount = timed(page, "mount")
+    toggles = [(timed(page, "toggle"), timed(page, "toggle")) for _ in range(3)]
+    flats = [(timed(page, "toggleFlat"), timed(page, "toggleFlat")) for _ in range(3)]
+    updates = [timed(page, "bump") for _ in range(5)]
+    first_click = click_ms(page, 10)
+    clicks = [click_ms(page, 10) for _ in range(5)]
+    page.close()
+    return {
+        "mount": mount,
+        "toggle-off": statistics.median(t[0] for t in toggles),
+        "toggle-on": statistics.median(t[1] for t in toggles),
+        "flat-off": statistics.median(t[0] for t in flats),
+        "flat-on": statistics.median(t[1] for t in flats),
+        "update": statistics.median(updates),
+        "first-click": first_click,
+        "click": statistics.median(clicks),
+    }
+
+
+def allocation_page(browser, origin: str, dist: str) -> dict[str, int]:
+    page = browser.new_page()
+    cdp = page.context.new_cdp_session(page)
+    cdp.send("HeapProfiler.enable")
+    load_fixture(page, origin, dist)
+    before = heap_used(cdp)
+    result = {"mount": allocated(cdp, page, "mount")}
+    result["retained-after-mount"] = heap_used(cdp) - before
+    result["toggle-off"] = allocated(cdp, page, "toggle")
+    result["toggle-on"] = allocated(cdp, page, "toggle")
+    result["flat-off"] = allocated(cdp, page, "toggleFlat")
+    result["flat-on"] = allocated(cdp, page, "toggleFlat")
+    result["update"] = allocated(cdp, page, "bump")
+    page.close()
+    return {name: round(value / 1024) for name, value in result.items()}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--samples", type=int, default=9)
+    parser.add_argument(
+        "--dist", action="append",
+        help="output directory holding the built fixture (default dist); "
+             "repeat to compare builds with interleaved samples",
+    )
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
+    dists = args.dist or ["dist"]
 
-    times: dict[str, list[float]] = {
-        "mount": [], "toggle-off": [], "toggle-on": [],
-        "flat-off": [], "flat-on": [], "update": [],
-    }
+    times = {dist: {name: [] for name in PHASES} for dist in dists}
+    allocations = {}
+    errors: list[str] = []
     with serve_project() as origin:
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=True)
-            errors: list[str] = []
-
-            page = browser.new_page()
-            page.on("pageerror", lambda error: errors.append(str(error)))
-            page.on(
-                "console",
-                lambda message: errors.append(message.text)
-                if message.type == "error" else None,
-            )
-            load_fixture(page, origin)
-            timed(page, "mount")
-            check_behaviour(page)
-            page.close()
-
-            # Warm-up page so the first timed sample is not a cold compile.
-            for sample in range(args.samples + 1):
+            for dist in dists:
                 page = browser.new_page()
                 page.on("pageerror", lambda error: errors.append(str(error)))
-                load_fixture(page, origin)
-                mount = timed(page, "mount")
-                toggles = []
-                for _ in range(3):
-                    off = timed(page, "toggle")
-                    on = timed(page, "toggle")
-                    toggles.append((off, on))
-                flats = []
-                for _ in range(3):
-                    off = timed(page, "toggleFlat")
-                    on = timed(page, "toggleFlat")
-                    flats.append((off, on))
-                updates = [timed(page, "bump") for _ in range(5)]
-                if sample > 0:
-                    times["mount"].append(mount)
-                    times["toggle-off"].append(statistics.median(t[0] for t in toggles))
-                    times["toggle-on"].append(statistics.median(t[1] for t in toggles))
-                    times["flat-off"].append(statistics.median(t[0] for t in flats))
-                    times["flat-on"].append(statistics.median(t[1] for t in flats))
-                    times["update"].append(statistics.median(updates))
+                page.on(
+                    "console",
+                    lambda message: errors.append(message.text)
+                    if message.type == "error" else None,
+                )
+                load_fixture(page, origin, dist)
+                timed(page, "mount")
+                check_behaviour(page)
                 page.close()
 
-            page = browser.new_page()
-            cdp = page.context.new_cdp_session(page)
-            cdp.send("HeapProfiler.enable")
-            load_fixture(page, origin)
-            before = heap_used(cdp)
-            alloc_mount = allocated(cdp, page, "mount")
-            retained = heap_used(cdp) - before
-            alloc_off = allocated(cdp, page, "toggle")
-            alloc_on = allocated(cdp, page, "toggle")
-            alloc_flat_off = allocated(cdp, page, "toggleFlat")
-            alloc_flat_on = allocated(cdp, page, "toggleFlat")
-            alloc_update = allocated(cdp, page, "bump")
-            page.close()
+            # The first round warms the browser and is discarded.
+            for sample in range(args.samples + 1):
+                for dist in dists:
+                    measured = sample_page(browser, origin, dist, errors)
+                    if sample > 0:
+                        for name in PHASES:
+                            times[dist][name].append(measured[name])
+            for dist in dists:
+                allocations[dist] = allocation_page(browser, origin, dist)
             browser.close()
-            assert not errors, f"benchmark page reported errors: {errors!r}"
+    assert not errors, f"benchmark page reported errors: {errors!r}"
 
     result = {
-        "ms": {name: round(statistics.median(values), 2) for name, values in times.items()},
-        "ms_min": {name: round(min(values), 2) for name, values in times.items()},
-        "retained_kb_after_mount": round(retained / 1024),
-        "allocated_kb": {
-            "mount": round(alloc_mount / 1024),
-            "toggle-off": round(alloc_off / 1024),
-            "toggle-on": round(alloc_on / 1024),
-            "flat-off": round(alloc_flat_off / 1024),
-            "flat-on": round(alloc_flat_on / 1024),
-            "update": round(alloc_update / 1024),
-        },
+        dist: {
+            "ms": {name: round(statistics.median(v), 2) for name, v in times[dist].items()},
+            "ms_min": {name: round(min(v), 2) for name, v in times[dist].items()},
+            "kib": allocations[dist],
+        }
+        for dist in dists
     }
     if args.json:
         print(json.dumps(result))
-    else:
-        print(f"perf-mount ({args.samples} samples, median / min ms)")
-        for name in times:
-            print(f"  {name:<11} {result['ms'][name]:>8.2f} / {result['ms_min'][name]:.2f}")
-        print(f"  retained heap after mount: {result['retained_kb_after_mount']} KiB")
-        for name, value in result["allocated_kb"].items():
-            print(f"  allocated during {name}: ~{value} KiB")
+        return 0
+    print(f"perf-mount: {args.samples} fresh pages per build, median ms (min)")
+    print("  " + f"{'':<22}" + "".join(f"{dist:>22}" for dist in dists))
+    for name in PHASES:
+        cells = "".join(
+            f"{result[d]['ms'][name]:>13.2f} ({result[d]['ms_min'][name]:>6.2f})" for d in dists
+        )
+        print(f"  {name + ' ms':<22}{cells}")
+    for name in allocations[dists[0]]:
+        label = "retained KiB after mount" if name == "retained-after-mount" else f"allocated KiB {name}"
+        print(f"  {label:<22}" + "".join(f"{allocations[d][name]:>22}" for d in dists))
     return 0
 
 
