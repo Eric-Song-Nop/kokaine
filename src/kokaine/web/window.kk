@@ -12,6 +12,9 @@ module kokaine/web/window
 import kokaine/async/effects
 import kokaine/async/structured
 
+extern import
+  js file "window-inline.js"
+
 
 pub type window-event
   Window-scroll
@@ -29,7 +32,7 @@ fun window-event/name(value : window-event) : string
 extern window-event-setup-raw(name : string,
                               complete : () -> ui (),
                               reject : any -> ui ()) : ui any
-  js inline "(function(){ var eventName=#1; var state={ complete:#2, reject:#3, listener:null }; var listener=function(){ var callback=state.complete; var fail=state.reject; state.complete=null; state.reject=null; state.listener=null; try { window.removeEventListener(eventName,listener); } catch(error) { if(fail) fail(error); return; } if(callback) callback(); }; state.listener=listener; try { window.addEventListener(eventName,listener,{ passive:eventName==='scroll' }); return { ok:true, state:state, name:eventName }; } catch(error) { state.complete=null; state.reject=null; state.listener=null; try { window.removeEventListener(eventName,listener); } catch(_) {} return { ok:false, error:error }; } })()"
+  js inline "kokaineWindowEventSetupRaw(#1,#2,#3)"
 
 extern host-result-ok(value : any) : bool
   js inline "!!(#1).ok"
@@ -41,22 +44,22 @@ extern host-result-state(value : any) : window-event-subscription
   js inline "(#1)"
 
 extern host-attempt-raw(action : () -> ui a) : ui any
-  js inline "(function(){ try { return { ok:true, value:(#1)() }; } catch(error) { return { ok:false, error:error }; } })()"
+  js inline "kokaineWindowHostAttemptRaw(#1)"
 
 extern host-result-value(value : any) : a
   js inline "(#1).value"
 
 extern host-error-message(value : any) : string
-  js inline "(function(error){ try { var message=error && error.message; return String(message == null ? error : message); } catch(formatError) { try { return String(formatError); } catch(_) { return 'unprintable host error'; } } })(#1)"
+  js inline "kokaineWindowHostErrorMessage(#1)"
 
 extern retire-window-event(value : window-event-subscription) : ui ()
-  js inline "(function(){ var wrapper=#1; if(!wrapper) return; var state=wrapper.state; if(!state) return; var listener=state.listener; state.complete=null; state.reject=null; state.listener=null; if(listener){ try { window.removeEventListener(wrapper.name,listener); } catch(_) {} } wrapper.state=null; })()"
+  js inline "kokaineWindowRetireWindowEvent(#1)"
 
 extern focus-selector-raw(selector : string) : ui any
-  js inline "(function(){ try { var target=document.querySelector(#1); if(!target) throw new Error('DOM selector did not match: '+#1); target.focus(); return { ok:true }; } catch(error) { return { ok:false, error:error }; } })()"
+  js inline "kokaineWindowFocusSelectorRaw(#1)"
 
 extern viewport-bounds-raw(selector : string) : ui any
-  js inline "(function(){ try { var target=document.querySelector(#1); if(!target) throw new Error('DOM selector did not match: '+#1); var rectangle=target.getBoundingClientRect(); return { ok:true, top:Math.round(rectangle.top), bottom:Math.round(rectangle.bottom) }; } catch(error) { return { ok:false, error:error }; } })()"
+  js inline "kokaineWindowViewportBoundsRaw(#1)"
 
 extern viewport-result-top(value : any) : int
   js inline "Number((#1).top)"
@@ -68,7 +71,7 @@ extern viewport-height-raw() : ui int
   js inline "Math.round(window.innerHeight)"
 
 extern location-fragment-raw() : ui string
-  js inline "(function(){ var raw=String(window.location.hash || ''); if(raw.charCodeAt(0)===35) raw=raw.slice(1); try { return decodeURIComponent(raw); } catch(error) { if(typeof URIError==='function' && error instanceof URIError) return raw; throw error; } })()"
+  js inline "kokaineWindowLocationFragmentRaw()"
 
 extern prefers-reduced-motion-raw() : ui bool
   js inline "!!(typeof window.matchMedia==='function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches)"
@@ -140,4 +143,4 @@ pub fun prefers-reduced-motion() : <ui,exn> bool
   host-attempt("reduced motion query",fn() prefers-reduced-motion-raw())
 
 pub extern log-window-error(message : string) : ui ()
-  js inline "(function(){ try { if(globalThis.console && typeof globalThis.console.error==='function') globalThis.console.error(#1); } catch(_) {} })()"
+  js inline "kokaineWindowLogWindowError(#1)"
