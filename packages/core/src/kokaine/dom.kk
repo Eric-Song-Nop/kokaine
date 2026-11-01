@@ -56,6 +56,14 @@ pub type toggle-state
   Toggle-open
   Toggle-closed
 
+// A listener's guarded event continuation is captured on its first delivery,
+// not at mount: most listeners never fire, and capture needs a nested dispatch
+// and async interpreter. Closing the gate is one-way in every state.
+type listener-gate
+  Gate-pending
+  Gate-captured(gate-continuation : event-continuation<async,event>)
+  Gate-closed
+
 // A keyed row has a lifetime which is deliberately independent from the
 // collection observer generation.  `current-item` and `current-index` are the
 // last committed values; their always-publishing sources are written only
@@ -766,8 +774,39 @@ fun snapshot(value : raw-event) : <ui,exn> event
     Event(raw-event-value(value),raw-event-checked(value),raw-event-key(value),
           raw-event-any(value))
 
+fun gate-is-live(gate : ref<global,listener-gate>) : bool
+  match transaction-load(gate)
+    Gate-pending -> True
+    Gate-captured(continuation) -> continuation.is-live
+    Gate-closed -> False
+
+fun close-gate(gate : ref<global,listener-gate>) : ()
+  val current = transaction-load(gate)
+  transaction-store(gate,Gate-closed)
+  match current
+    Gate-captured(continuation) -> continuation.close
+    _ -> ()
+
+fun resume-gate(gate : ref<global,listener-gate>, action : callback,
+                value : event)
+               : <async,signal-read,signal-write,pure,ui> ()
+  match transaction-load(gate)
+    Gate-closed -> ()
+    Gate-captured(continuation) ->
+      val _ = continuation.resume(value)
+      ()
+    Gate-pending ->
+      // `capture-event` reaches its unconditional browser-event suspension
+      // before running any user code, so this publishes the master
+      // continuation before the first (possibly re-entrant) delivery resumes
+      // it. Nested deliveries then resume the same multi-shot master.
+      val continuation = capture-event(action)
+      transaction-store(gate,Gate-captured(continuation))
+      val _ = continuation.resume(value)
+      ()
+
 fun invoke-event(root : root<<ui>>, portal : reentry<<ui>>,
-                 continuation : event-continuation<async,event>,
+                 gate : ref<global,listener-gate>, action : callback,
                  value : raw-event)
                 : ui ()
   // A browser event runs after `main` has returned, so its dynamic exception
@@ -777,11 +816,11 @@ fun invoke-event(root : root<<ui>>, portal : reentry<<ui>>,
     dom-report-error("uncaught Kokaine event exception: " ++ problem.show)
   // Closing the gate must make even a retained/undetachable JavaScript
   // trampoline inert: do not snapshot or touch a stale structural frame.
-  if continuation.is-live then
+  if gate.gate-is-live then
     val captured = snapshot(value)
     // A custom event target getter can synchronously dispose during snapshot.
     // Recheck before touching the structural portal; resume checks once more.
-    if continuation.is-live then
+    if gate.gate-is-live then
       // Re-entry restores Kokaine's structural/reactive handlers; the opaque
       // event capability then resumes the actual multi-shot user continuation.
       // Keeping resume synchronous preserves native nested `dispatchEvent` order.
@@ -789,9 +828,10 @@ fun invoke-event(root : root<<ui>>, portal : reentry<<ui>>,
         // The async delimiter is inside this re-entry batch. Reaching await
         // therefore returns here first, letting the batch close before any
         // later browser completion starts its own generation-bound turn.
+        // The continuation is resumed under these handlers whether it was
+        // captured just now or by an earlier delivery.
         run-async(root,fn()
-          val _ = continuation.resume(captured)
-          ()
+          resume-gate(gate,action,captured)
         )
       )
     else ()
@@ -799,7 +839,7 @@ fun invoke-event(root : root<<ui>>, portal : reentry<<ui>>,
 
 fun retire-event-listener(
       target : element, name : string,
-      continuation : event-continuation<async,event>,
+      gate : ref<global,listener-gate>,
       listener : ref<global,maybe<dom-listener>>)
     : <ui,exn> ()
   // Gate the continuation before detaching the host callback. Even if a
@@ -813,48 +853,33 @@ fun retire-event-listener(
           dom-retire-listener(value)
           dom-attempt{ dom-unlisten(target,name,value) }
     },
-    fn() continuation.close
+    fn() close-gate(gate)
   )
-
-fun capture-event-listener(root : root<<ui>>, action : callback)
-                          : <ui,exn> event-continuation<async,event>
-  val captured = transaction-cell(Nothing)
-  dispatch(root,fn()
-    run-async(root,fn()
-      // `capture-event` reaches its unconditional browser-event suspension
-      // before any user code or Web await, so the capability is published
-      // synchronously while the real async evidence remains installed.
-      transaction-store(captured,Just(capture-event(action)))
-    )
-  )
-  match transaction-load(captured)
-    Just(continuation) -> continuation
-    Nothing -> throw("event continuation capture did not complete synchronously")
 
 fun install-event-listener(root : root<<ui>>, target : element,
                            name : string, action : callback)
                           : <ui,exn> ()
-  // Capture the action before JavaScript retains its ABI trampoline. The
-  // short nested dispatch installs the full reactive handler set required by
-  // the parked continuation, but no user action executes during capture.
-  val continuation = capture-event-listener(root,action)
+  // The gate exists before JavaScript retains its ABI trampoline, so
+  // retirement can always close it. The continuation itself is captured on
+  // first delivery, under that delivery's re-entry and async handlers.
+  val gate = transaction-cell(Gate-pending)
   val portal = capture-reentry(root)
   val listener : ref<global,maybe<dom-listener>> = transaction-cell(Nothing)
   val committed = transaction-cell(False)
   finally(
     fn() {
       if transaction-load(committed) then () else
-        retire-event-listener(target,name,continuation,listener)
+        retire-event-listener(target,name,gate,listener)
     },
     fn()
       val installed = dom-attempt fn()
         dom-listen(target,name,fn(value)
-          invoke-event(root,portal,continuation,value)
+          invoke-event(root,portal,gate,action,value)
         )
       transaction-store(listener,Just(installed))
       on-cleanup(root,fn()
         reactive-ui-exn{
-          retire-event-listener(target,name,continuation,listener)
+          retire-event-listener(target,name,gate,listener)
         }
       )
       transaction-store(committed,True)
