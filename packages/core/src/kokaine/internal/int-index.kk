@@ -14,13 +14,13 @@ import std/core/vector
 
 val minimum-capacity : int = 16
 
-fun cell(value : a) : ref<global,a>
+noinline fun cell(value : a) : ref<global,a>
   unsafe-total { ref(value) }
 
-fun load(value : ref<global,a>) : a
+noinline fun load(value : ref<global,a>) : a
   unsafe-total { !value }
 
-fun store(target : ref<global,a>, value : a) : ()
+noinline fun store(target : ref<global,a>, value : a) : ()
   unsafe-total { target := value }
 
 

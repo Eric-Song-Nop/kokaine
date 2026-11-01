@@ -1,7 +1,8 @@
-# Supported compilers: Koka >=3.2.3 <3.2.8. Koka 3.2.8 renamed the
-# finalization primitives used by kokaine/async/structured. Run
-# `make print-managed-koka` for the checksummed 3.2.3 that the CLI installs.
+# Supported compilers: Koka >=3.2.3 <3.3.0; CI tests 3.2.3 and 3.2.9. Run
+# `make print-managed-koka [KOKA_VERSION=3.2.9]` for the checksummed compiler
+# the CLI installs.
 KOKA ?= koka
+KOKA_VERSION ?= 3.2.3
 PYTHON ?= python3
 UV ?= uv
 PLAYWRIGHT ?= playwright==1.61.0
@@ -32,14 +33,14 @@ test: test-native test-pocketjs-runtime
 check-koka:
 	@version="$$($(KOKA) --version 2>/dev/null | sed -n 's/^version: //p')"; \
 	case "$$version" in \
-		3.2.[3-7]) ;; \
-		*) echo "Kokaine needs Koka >=3.2.3 <3.2.8, but '$(KOKA)' reports '$${version:-nothing}'."; \
+		3.2.[3-9]) ;; \
+		*) echo "Kokaine needs Koka >=3.2.3 <3.3.0, but '$(KOKA)' reports '$${version:-nothing}'."; \
 		   echo "Use the managed compiler: make KOKA=\"\$$(make -s print-managed-koka)\" ..."; \
 		   exit 2 ;; \
 	esac
 
 print-managed-koka:
-	@$(NODE) --input-type=module -e "import { resolveCompiler } from './packages/cli/src/toolchain.js'; const { binary } = await resolveCompiler('3.2.3'); console.log(binary);"
+	@$(NODE) --input-type=module -e "import { resolveCompiler } from './packages/cli/src/toolchain.js'; const { binary } = await resolveCompiler('$(KOKA_VERSION)'); console.log(binary);"
 
 # `pnpm test` covers the CLI packages and the JavaScript sidecars that Koka
 # pastes into generated modules (`extern import { js file ... }`).
@@ -88,6 +89,8 @@ serve-playground: playground-install
 # and exits nonzero when any suite fails.
 test-native: check-koka
 	$(KOKA_TEST) test/all.kk
+	$(PYTHON) "$(PROJECT_ROOT)/support/run_koka_test.py" \
+		$(KOKA) $(KOKA_FLAGS) --target=jsnode -e test/structured-escape.kk
 	$(PYTHON) test/keyed_transaction_boundary.py
 	$(PYTHON) test/event_effect_boundary.py $(KOKA)
 	$(PYTHON) test/async_effect_boundary.py $(KOKA)

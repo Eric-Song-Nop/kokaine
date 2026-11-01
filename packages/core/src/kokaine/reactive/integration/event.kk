@@ -12,13 +12,13 @@ import kokaine/reactive/effects
 import std/core/unsafe
 
 
-fun event-cell(value : a) : ref<global,a>
+noinline fun event-cell(value : a) : ref<global,a>
   unsafe-total { ref(value) }
 
-fun event-load(value : ref<global,a>) : a
+noinline fun event-load(value : ref<global,a>) : a
   unsafe-total { !value }
 
-fun event-store(target : ref<global,a>, value : a) : ()
+noinline fun event-store(target : ref<global,a>, value : a) : ()
   unsafe-total { target := value }
 
 

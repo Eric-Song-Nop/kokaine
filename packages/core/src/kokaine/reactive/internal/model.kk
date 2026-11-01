@@ -16,13 +16,13 @@ import kokaine/reactive/internal/work-transaction
 // Persistent cells and root identity
 // --------------------------------------------------------------------------
 
-pub fun cell(value : a) : ref<global,a>
+pub noinline fun cell(value : a) : ref<global,a>
   unsafe-total { ref(value) }
 
-pub fun load(value : ref<global,a>) : a
+pub noinline fun load(value : ref<global,a>) : a
   unsafe-total { !value }
 
-pub fun store(target : ref<global,a>, value : a) : ()
+pub noinline fun store(target : ref<global,a>, value : a) : ()
   unsafe-total { target := value }
 
 // A derivation is dynamically read-only even when application code hides a

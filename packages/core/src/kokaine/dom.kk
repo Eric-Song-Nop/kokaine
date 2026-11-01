@@ -156,13 +156,13 @@ fun discard-keyed-participation(current : keyed-participation)
 
 // Transaction state must survive abortive control while mount bootstraps are
 // flushing. Keep this adapter-local and inaccessible to user code.
-fun transaction-cell(value : a) : ref<global,a>
+noinline fun transaction-cell(value : a) : ref<global,a>
   unsafe-total { ref(value) }
 
-fun transaction-load(value : ref<global,a>) : a
+noinline fun transaction-load(value : ref<global,a>) : a
   unsafe-total { !value }
 
-fun transaction-store(target : ref<global,a>, value : a) : ()
+noinline fun transaction-store(target : ref<global,a>, value : a) : ()
   unsafe-total { target := value }
 
 

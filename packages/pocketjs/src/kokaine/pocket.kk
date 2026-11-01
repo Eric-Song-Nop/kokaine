@@ -316,13 +316,13 @@ extern pocket-throw(message : string) : ui a
 // Exact-row adapters and host operations
 // --------------------------------------------------------------------------
 
-fun cell(value : a) : ref<global,a>
+noinline fun cell(value : a) : ref<global,a>
   unsafe-total { ref(value) }
 
-fun load(value : ref<global,a>) : a
+noinline fun load(value : ref<global,a>) : a
   unsafe-total { !value }
 
-fun store(target : ref<global,a>, value : a) : ()
+noinline fun store(target : ref<global,a>, value : a) : ()
   unsafe-total { target := value }
 
 // JavaScript calls a generated Koka export after its lexical effect handlers

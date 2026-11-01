@@ -53,7 +53,7 @@ abstract value type resource<s,a>
 // Private request metadata
 // --------------------------------------------------------------------------
 
-fun cell(value : a) : ref<global,a>
+noinline fun cell(value : a) : ref<global,a>
   unsafe-total { ref(value) }
 
 fun cell/read(value : ref<global,a>) : a
