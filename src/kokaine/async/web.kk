@@ -15,6 +15,9 @@ import kokaine/async/effects
 pub import kokaine/async/structured
 import std/time/duration
 
+extern import
+  js file "web-inline.js"
+
 
 // --------------------------------------------------------------------------
 // Browser scheduling
@@ -29,7 +32,7 @@ abstract type timer-subscription
 extern timer-setup-raw(milliseconds : int,
                        fulfill : () -> ui (),
                        reject : any -> ui ()) : ui any
-  js inline "(function(){ var maxDelay=2147483647; var requested=Math.max(0,Number(#1)); var state={ fulfill:#2, reject:#3, handle:null, remaining:0, started:0, slice:0, deadline:0 }; function clear(){ state.fulfill=null; state.reject=null; state.handle=null; } function complete(){ var callback=state.fulfill; clear(); if(callback) callback(); } function fail(error){ var callback=state.reject; clear(); if(callback) callback(error); } function schedule(delay){ state.handle=setTimeout(tick,delay); } function arm(){ state.slice=Math.min(maxDelay,Math.ceil(state.remaining)); state.started=performance.now(); state.deadline=state.started+state.slice; schedule(state.slice); } function tick(){ state.handle=null; if(!state.fulfill) return; try { var now=performance.now(); var until=state.deadline-now; if(until>0){ schedule(Math.min(maxDelay,Math.ceil(until))); return; } state.remaining=Math.max(0,state.remaining-Math.max(state.slice,now-state.started)); if(state.remaining<=0) complete(); else arm(); } catch(error) { fail(error); } } if(!Number.isSafeInteger(requested)){ clear(); return { ok:false, error:'duration exceeds the exact browser timer range' }; } state.remaining=requested; try { arm(); return { ok:true, state:state }; } catch(error) { clear(); return { ok:false, error:error }; } })()"
+  js inline "kokaineAsyncWebTimerSetupRaw(#1,#2,#3)"
 
 extern host-result-ok(value : any) : bool
   js inline "!!(#1).ok"
@@ -41,13 +44,13 @@ extern host-result-error(value : any) : any
 // whose `message` getter/string conversion throws. Formatting must never keep
 // the Koka completion callback from observing that rejection.
 extern host-error-message(value : any) : string
-  js inline "(function(error){ try { var message=error && error.message; return String(message == null ? error : message); } catch(formatError) { try { var fallback=formatError && formatError.message; return String(fallback == null ? formatError : fallback); } catch(_) { return 'unprintable host error'; } } })(#1)"
+  js inline "kokaineAsyncWebHostErrorMessage(#1)"
 
 extern host-result-state(value : any) : timer-subscription
   js inline "(#1).state"
 
 extern timer-retire(value : timer-subscription) : ui ()
-  js inline "(function(){ var state=#1; if(!state) return; var handle=state.handle; state.fulfill=null; state.reject=null; state.handle=null; if(handle!=null){ try { clearTimeout(handle); } catch(_) {} } })()"
+  js inline "kokaineAsyncWebTimerRetire(#1)"
 
 // Sleep without holding a Kokaine batch open. The generation handler invokes
 // this setup only after it has registered the task with the current owner.
@@ -99,7 +102,7 @@ pub extern promise/unsafe-any(value : promise<a>) : any
 extern promise-subscribe(value : promise<a>,
                          fulfill : a -> ui (),
                          reject : any -> ui ()) : ui any
-  js inline "(function(){ var state={ fulfill:#2, reject:#3 }; try { Promise.resolve(#1).then(function(value){ var callback=state.fulfill; state.fulfill=null; state.reject=null; if(callback) callback(value); },function(error){ var callback=state.reject; state.fulfill=null; state.reject=null; if(callback) callback(error); }); return { ok:true, state:state }; } catch(error) { state.fulfill=null; state.reject=null; return { ok:false, error:error }; } })()"
+  js inline "kokaineAsyncWebPromiseSubscribe(#1,#2,#3)"
 
 extern promise-result-state(value : any) : promise-subscription
   js inline "(#1).state"
@@ -107,7 +110,7 @@ extern promise-result-state(value : any) : promise-subscription
 // Drop both Koka callbacks before touching any host object. A non-cancelable
 // Promise may still settle, but its JavaScript closure then sees an inert cell.
 extern promise-retire(value : promise-subscription) : ui ()
-  js inline "(function(){ var state=#1; if(state){ state.fulfill=null; state.reject=null; } })()"
+  js inline "kokaineAsyncWebPromiseRetire(#1)"
 
 pub fun promise/await(value : promise<a>) : <async,exn> a
   setup/await("promise",fn(resume)
@@ -154,7 +157,7 @@ pub fun post(url : string, body : string) : request
 extern fetch-subscribe(value : request,
                        fulfill : response -> ui (),
                        reject : any -> ui ()) : ui any
-  js inline "(function(){ var controller=null; var state={ fulfill:#2, reject:#3, controller:null }; try { controller=new AbortController(); state.controller=controller; var request=#1; globalThis.fetch(request.url,Object.assign({},request.init,{ signal:controller.signal })).then(function(value){ var callback=state.fulfill; var activeController=state.controller; state.fulfill=null; state.reject=null; if(callback) callback({ response:value, controller:activeController, release:null }); },function(error){ var callback=state.reject; state.fulfill=null; state.reject=null; state.controller=null; if(callback) callback(error); }); return { ok:true, state:state }; } catch(error) { state.fulfill=null; state.reject=null; state.controller=null; return { ok:false, error:error }; } })()"
+  js inline "kokaineAsyncWebFetchSubscribe(#1,#2,#3)"
 
 extern fetch-result-state(value : any) : fetch-subscription
   js inline "(#1).state"
@@ -162,7 +165,7 @@ extern fetch-result-state(value : any) : fetch-subscription
 // Revoke Koka closures first; AbortController is invoked only after the task
 // has become inert, so a hostile/polyfilled abort cannot re-enter it.
 extern fetch-retire(value : fetch-subscription) : ui ()
-  js inline "(function(){ var state=#1; if(!state) return; var controller=state.controller; state.fulfill=null; state.reject=null; state.controller=null; if(controller){ try { controller.abort(); } catch(_) {} } })()"
+  js inline "kokaineAsyncWebFetchRetire(#1)"
 
 pub fun fetch(value : request) : <async,exn> response
   val result = setup/await("fetch",fn(resume)
@@ -201,13 +204,13 @@ extern response-own(value : response, release : dispose-fn) : ui ()
 // Generation retirement owns this raw disposer. It must not call the lease's
 // release action because the owner registration is already being finalized.
 extern response-retire(value : response) : ui ()
-  js inline "(function(){ var wrapper=#1; if(!wrapper) return; var response=wrapper.response; var controller=wrapper.controller; var body=response && response.body; wrapper.release=null; wrapper.controller=null; if(controller){ try { controller.abort(); } catch(_) {} } if(body && !body.locked){ try { var canceled=body.cancel(); if(canceled && canceled.catch) canceled.catch(function(){}); } catch(_) {} } })()"
+  js inline "kokaineAsyncWebResponseRetire(#1)"
 
 // A response which will not be consumed explicitly releases its generation
 // lease before aborting. Clear the wrapper first so hostile host objects cannot
 // observe or re-enter a live ownership edge.
 pub extern response/discard(value : response) : ui ()
-  js inline "(function(){ var wrapper=#1; if(!wrapper) return; var response=wrapper.response; var release=wrapper.release; var controller=wrapper.controller; var body=response && response.body; wrapper.release=null; wrapper.controller=null; if(release){ try { release(); } catch(_) {} } if(controller){ try { controller.abort(); } catch(_) {} } if(body && !body.locked){ try { var canceled=body.cancel(); if(canceled && canceled.catch) canceled.catch(function(){}); } catch(_) {} } })()"
+  js inline "kokaineAsyncWebResponseDiscard(#1)"
 
 abstract type response-body-subscription
   Response-body-subscription(value : any)
@@ -219,7 +222,7 @@ abstract type response-body-subscription
 extern response-body-subscribe(value : response, as-json : bool,
                                fulfill : a -> ui (),
                                reject : any -> ui ()) : ui any
-  js inline "(function(){ var wrapper=#1; var response=wrapper.response; var release=wrapper.release; var state={ fulfill:#3, reject:#4, controller:wrapper.controller, body:response.body }; wrapper.release=null; wrapper.controller=null; function clear(){ state.controller=null; state.body=null; } function stop(){ var controller=state.controller; var body=state.body; state.fulfill=null; state.reject=null; clear(); if(controller){ try { controller.abort(); } catch(_) {} } if(body && !body.locked){ try { var canceled=body.cancel(); if(canceled && canceled.catch) canceled.catch(function(){}); } catch(_) {} } } try { if(release) release(); var pending=(#2 ? response.json() : response.text()); Promise.resolve(pending).then(function(result){ var callback=state.fulfill; state.fulfill=null; state.reject=null; clear(); if(callback) callback(result); },function(error){ var callback=state.reject; state.fulfill=null; state.reject=null; clear(); if(callback) callback(error); }); return { ok:true, state:state }; } catch(error) { stop(); return { ok:false, error:error }; } })()"
+  js inline "kokaineAsyncWebResponseBodySubscribe(#1,#2,#3,#4)"
 
 extern response-body-result-state(value : any) : response-body-subscription
   js inline "(#1).state"
@@ -228,7 +231,7 @@ extern response-body-result-state(value : any) : response-body-subscription
 // canceled by AbortController; an as-yet-unlocked stream is canceled directly
 // as well so custom Fetch implementations get the same retirement contract.
 extern response-body-retire(value : response-body-subscription) : ui ()
-  js inline "(function(){ var state=#1; if(!state) return; var controller=state.controller; var body=state.body; state.fulfill=null; state.reject=null; state.controller=null; state.body=null; if(controller){ try { controller.abort(); } catch(_) {} } if(body && !body.locked){ try { var canceled=body.cancel(); if(canceled && canceled.catch) canceled.catch(function(){}); } catch(_) {} } })()"
+  js inline "kokaineAsyncWebResponseBodyRetire(#1)"
 
 fun await-response-body(value : response, as-json : bool)
                        : <async,exn> a
