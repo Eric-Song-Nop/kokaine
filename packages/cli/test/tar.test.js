@@ -86,7 +86,7 @@ test("rejects a symlink pointing outside the destination", { skip: SYMLINK_SKIP 
   assert.deepEqual(snapshot(), EMPTY());
 });
 
-test("rejects an entry nested under a symlink chain that escapes", { skip: SYMLINK_SKIP, todo: "tar.js only checks link targets lexically" }, async () => {
+test("rejects an entry nested under a symlink chain that escapes", { skip: SYMLINK_SKIP }, async () => {
   // Each link target is lexically inside the destination, but p/q/l really
   // resolves to <dest>/.. because p/q/b points at <dest>.
   await assertEscape(archive(
