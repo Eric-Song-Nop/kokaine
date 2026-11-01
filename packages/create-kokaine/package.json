@@ -2,7 +2,7 @@
   "name": "@kokaine/create",
   "version": "0.1.0",
   "description": "Create a Kokaine application backed by npm and Vite",
-  "license": "Apache-2.0",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Eric-Song-Nop/kokaine.git",
@@ -29,6 +29,6 @@
     "test": "node --test"
   },
   "engines": {
-    "node": "^20.19.0 || >=22.12.0"
+    "node": ">=22.12.0"
   }
 }

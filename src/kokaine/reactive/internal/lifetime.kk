@@ -12,7 +12,11 @@ import std/core/undiv
 // Trace inspection and source invalidation
 // --------------------------------------------------------------------------
 
-pub fun trace-state-of(current : trace<e>) : capture-state
+// `noinline`: Koka 3.2.8+ exports this body's inlined `unsafe-total` with a
+// fresh `_e1` effect variable that its own `.kki` parser rejects, so every
+// incremental build after the first fails. Keeping it out of the interface's
+// inline section is stable on 3.2.3 through 3.2.9.
+pub noinline fun trace-state-of(current : trace<e>) : capture-state
   match current
     Trace-end -> Capture-dead
     Trace-read(gate,_,_,_,_,_,_,_) -> load(gate.gate-state)

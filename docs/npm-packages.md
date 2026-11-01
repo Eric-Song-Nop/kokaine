@@ -70,7 +70,7 @@ Any npm package can expose Koka sources with a `koka` field:
   "koka": {
     "schemaVersion": 1,
     "sources": ["src"],
-    "compiler": ">=3.2.3 <3.3.0",
+    "compiler": ">=3.2.3 <3.2.8",
     "targets": ["jsweb"]
   }
 }

@@ -7,7 +7,8 @@ captured continuations, while continuation frames record reactive lifetime.
 The browser layer uses an effect-handled Koka DSL instead of JSX or a virtual
 DOM.
 
-The core package supports Koka 3.2.x (`>=3.2.3 <3.3.0`). Generated applications
+The core package supports Koka 3.2.3 (`>=3.2.3 <3.2.8`); Koka 3.2.8 renamed
+the standard-library finalization primitives that structured async relies on. Generated applications
 currently pin Koka 3.2.3, while the browser Playground ships Koka 3.2.4. The
 source-local continuation index, two-plane scheduler, lifetime model, and
 retained-host callback transport are renderer-neutral. The HTML vocabulary is
@@ -34,14 +35,14 @@ The first three reactive concepts are deliberately small:
 
 ### Run the Playground locally
 
-This path requires Node.js `^20.19.0` or `>=22.12.0`, but does not require
-native Koka:
+This path requires Node.js `>=22.12.0` and [pnpm](https://pnpm.io/), but does
+not require native Koka:
 
 ```sh
 git clone https://github.com/Eric-Song-Nop/kokaine.git
 cd kokaine
-npm install
-npm run dev --workspace @kokaine/playground
+pnpm install
+pnpm --filter @kokaine/playground dev
 ```
 
 Open the URL printed by Vite. Framework contributors can use the repository
@@ -168,8 +169,12 @@ attempts.
   is running marks that same capability for a later turn.
 - Resume capabilities are not modeled as affine or one-shot. A live trace can
   be invalidated and resumed again, and a failed replacement attempt keeps the
-  same K pending for retry. The bootstrap closure is deliberately one-shot; an
-  initial bootstrap failure retires its scope instead of replaying that closure.
+  same K pending for retry. A failed effect K is quarantined rather than left
+  at the queue front: the rest of the flush still drains, the first failure is
+  rethrown once the queue is empty, and the K runs again only when one of its
+  own inputs changes or at an explicit `update` boundary. The bootstrap closure
+  is deliberately one-shot; an initial bootstrap failure retires its scope
+  instead of replaying that closure.
 - The scheduler admits only the current continuation frontier: a pending trace
   is runnable when no ancestor is pending or running. Blocked or retired tickets
   may remain in a queue temporarily and are deferred or skipped by state.
@@ -231,7 +236,13 @@ attempts.
   boundary for results.
 - Text and attributes are escaped in SSR. Inline `on*`, `srcdoc`, and
   markup-writing DOM properties are rejected; raw markup requires the explicit
-  `unsafe-trusted-html` boundary. Native DOM exceptions become Koka `exn`.
+  `unsafe-trusted-html` boundary. URL attributes and properties (`href`, `src`,
+  `action`, `formaction`, `xlink:href`, `data`, `poster`, `cite`, `background`,
+  `ping`) accept only relative, `http(s)`, `mailto`, and `tel` URLs, plus
+  `data:image/*` for `src` and `poster`; anything else, such as `javascript:`,
+  needs `unsafe-trusted-url`. SVG and MathML elements are created in their
+  namespaces, as an HTML parser would create them from the SSR output. Native
+  DOM exceptions become Koka `exn`.
 - `kokaine/control` provides memo-driven `branch`/`when` and keyed `for`
   overloads for lists and vectors. Browser reconciliation retains row DOM,
   listeners, local state, and row-owned reactive work by business key; SSR
@@ -299,7 +310,7 @@ additionally use [`uv`](https://docs.astral.sh/uv/) to run Playwright without
 adding project dependencies.
 
 To open the single-file Koka + Kokaine playground, also install Node.js
-`^20.19.0` or `>=22.12.0` and run:
+`>=22.12.0` and pnpm, then run:
 
 ```sh
 make serve-playground

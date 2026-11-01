@@ -1,8 +1,11 @@
-HOMEBREW_KOKA := $(firstword $(wildcard /opt/homebrew/opt/koka/bin/koka /usr/local/opt/koka/bin/koka))
-KOKA ?= $(if $(HOMEBREW_KOKA),$(HOMEBREW_KOKA),koka)
+# Supported compilers: Koka >=3.2.3 <3.2.8. Koka 3.2.8 renamed the
+# finalization primitives used by kokaine/async/structured. Run
+# `make print-managed-koka` for the checksummed 3.2.3 that the CLI installs.
+KOKA ?= koka
 PYTHON ?= python3
 UV ?= uv
-NPM ?= npm
+PLAYWRIGHT ?= playwright==1.61.0
+PNPM ?= pnpm
 BUN ?= bun
 NODE ?= node
 WRANGLER ?= npx wrangler
@@ -19,34 +22,46 @@ KOKA_FLAGS := -j1 -i./src
 DIST_KOKA = $(PYTHON) "$(RUN_LOCKED)" dist/.koka-build.lock \
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist
 
-.PHONY: test test-native test-pocketjs-runtime test-pocketjs-bridge test-pocketjs-bundle test-pocketjs-wasm test-pocketjs-browser test-tooling test-all test-wasm test-report build-counter build-top-layer build-keyed build-report build-pocketjs-example compile-pocketjs-example build-window-fixture build-browser-fixtures browser-install test-browser serve serve-pocketjs-example serve-top-layer serve-keyed serve-report
+.PHONY: check-koka print-managed-koka test test-native test-pocketjs-runtime test-pocketjs-bridge test-pocketjs-bundle test-pocketjs-wasm test-pocketjs-browser test-tooling test-all test-wasm test-report build-counter build-top-layer build-keyed build-report build-pocketjs-example compile-pocketjs-example build-window-fixture build-browser-fixtures browser-install test-browser serve serve-pocketjs-example serve-top-layer serve-keyed serve-report
 .PHONY: playground-install playground-precompile playground-sync-assets playground-build playground-preview playground-release playground-deploy serve-playground
 
 test: test-native test-pocketjs-runtime
 
+check-koka:
+	@version="$$($(KOKA) --version 2>/dev/null | sed -n 's/^version: //p')"; \
+	case "$$version" in \
+		3.2.[3-7]) ;; \
+		*) echo "Kokaine needs Koka >=3.2.3 <3.2.8, but '$(KOKA)' reports '$${version:-nothing}'."; \
+		   echo "Use the managed compiler: make KOKA=\"\$$(make -s print-managed-koka)\" ..."; \
+		   exit 2 ;; \
+	esac
+
+print-managed-koka:
+	@$(NODE) --input-type=module -e "import { resolveCompiler } from './packages/cli/src/toolchain.js'; const { binary } = await resolveCompiler('3.2.3'); console.log(binary);"
+
 test-tooling:
-	npm test
+	$(PNPM) test
 
 playground-install:
-	$(NPM) install --workspace @kokaine/playground
+	$(PNPM) install --frozen-lockfile
 
 playground-precompile: playground-install
-	$(NPM) run precompile:kokaine --workspace @kokaine/playground
+	$(PNPM) --filter @kokaine/playground run precompile:kokaine
 
 playground-sync-assets: playground-install
-	$(NPM) run assets:koka --workspace @kokaine/playground
-	$(NPM) run assets:devtools --workspace @kokaine/playground
+	$(PNPM) --filter @kokaine/playground run assets:koka
+	$(PNPM) --filter @kokaine/playground run assets:devtools
 
 playground-build: playground-install
-	$(NPM) run build --workspace @kokaine/playground
+	$(PNPM) --filter @kokaine/playground run build
 
 playground-preview: playground-build
 	@echo "Static browser-only playground: http://127.0.0.1:4173/ (COOP/COEP enabled)"
-	$(NPM) run preview --workspace @kokaine/playground
+	$(PNPM) --filter @kokaine/playground run preview
 
 playground-release: playground-precompile
-	$(NPM) run test:wasm --workspace @kokaine/playground
-	$(NPM) run build --workspace @kokaine/playground
+	$(PNPM) --filter @kokaine/playground run test:wasm
+	$(PNPM) --filter @kokaine/playground run build
 
 playground-deploy: playground-release
 	$(WRANGLER) pages deploy "packages/playground/dist" \
@@ -55,9 +70,9 @@ playground-deploy: playground-release
 
 serve-playground: playground-install
 	@echo "Koka compiler and LSP run as browser WASM Workers; no native Koka, server, or container."
-	$(NPM) run dev --workspace @kokaine/playground
+	$(PNPM) --filter @kokaine/playground run dev
 
-test-native:
+test-native: check-koka
 	$(KOKA) $(KOKA_FLAGS) -e test/root-construction.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/resource-finalization.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/internal-registry.kk
@@ -86,6 +101,7 @@ test-native:
 	$(KOKA) $(KOKA_FLAGS) -e test/reactive.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/reactive-advanced.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/reactive-stress.kk
+	$(KOKA) $(KOKA_FLAGS) -e test/kernel-regressions.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/html.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/key-index.kk
 	$(KOKA) $(KOKA_FLAGS) -e test/control-flow.kk
@@ -98,7 +114,7 @@ test-native:
 	$(PYTHON) test/run_locked.py
 	$(PYTHON) test/make_parallel.py
 
-test-pocketjs-runtime:
+test-pocketjs-runtime: check-koka
 	$(KOKA) $(KOKA_FLAGS) -i./packages/pocketjs/src \
 		--target=jsnode -e test/pocketjs-runtime.kk
 	$(PYTHON) test/pocketjs_boundary.py
@@ -163,7 +179,7 @@ test-pocketjs-wasm: test-pocketjs-bundle
 		"$(POCKETJS_CHECKOUT)"
 
 test-pocketjs-browser: test-pocketjs-bundle
-	$(UV) run --with playwright python test/browser_pocketjs.py
+	$(UV) run --with "$(PLAYWRIGHT)" python test/browser_pocketjs.py
 
 build-window-fixture:
 	$(DIST_KOKA) \
@@ -172,6 +188,8 @@ build-window-fixture:
 build-browser-fixtures: build-counter build-top-layer build-keyed
 	$(DIST_KOKA) \
 		--buildname=dom-errors test/dom-errors.kk
+	$(DIST_KOKA) \
+		--buildname=dom-namespaces test/dom-namespaces.kk
 	$(DIST_KOKA) \
 		--buildname=dom-lifecycle test/dom-lifecycle.kk
 	$(DIST_KOKA) \
@@ -196,21 +214,21 @@ build-browser-fixtures: build-counter build-top-layer build-keyed
 		--buildname=async-runtime-scale test/async-runtime-scale.kk
 
 browser-install:
-	$(UV) run --with playwright python -m playwright install chromium
+	$(UV) run --with "$(PLAYWRIGHT)" python -m playwright install chromium
 
 test-browser: build-browser-fixtures
-	$(UV) run --with playwright python test/browser_counter.py
-	$(UV) run --with playwright python test/browser_top_layer.py
-	$(UV) run --with playwright python test/browser_keyed.py
-	$(UV) run --with playwright python test/browser_async.py
+	$(UV) run --with "$(PLAYWRIGHT)" python test/browser_counter.py
+	$(UV) run --with "$(PLAYWRIGHT)" python test/browser_top_layer.py
+	$(UV) run --with "$(PLAYWRIGHT)" python test/browser_keyed.py
+	$(UV) run --with "$(PLAYWRIGHT)" python test/browser_async.py
 
 test-wasm:
 	./support/wasmweb-proof/run.sh test
 
 test-report: build-report build-counter build-window-fixture
 	$(PYTHON) test/report_html.py
-	$(UV) run --with playwright python test/browser_window.py
-	$(UV) run --with playwright python test/browser_report.py
+	$(UV) run --with "$(PLAYWRIGHT)" python test/browser_window.py
+	$(UV) run --with "$(PLAYWRIGHT)" python test/browser_report.py
 
 test-all: test-tooling test test-pocketjs-bridge test-browser test-wasm test-report
 

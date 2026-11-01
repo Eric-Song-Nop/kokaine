@@ -17,7 +17,7 @@ starter, and press Command/Control+Enter. No installation or account is needed.
 
 ## Run it
 
-The frontend build requires Node.js `^20.19.0` or `>=22.12.0`. It does **not**
+The frontend build requires Node.js `>=22.12.0`. It does **not**
 require a native Koka installation.
 
 From the repository root:

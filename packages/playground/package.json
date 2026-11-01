@@ -7,11 +7,11 @@
     "assets:koka": "node scripts/sync-koka-assets.mjs",
     "assets:release": "node scripts/stage-runtime-release.mjs",
     "compile:workbench": "node scripts/compile-workbench.mjs",
-    "precompile:kokaine": "node scripts/smoke-wasm.mjs --update-kokaine-cache && npm run assets:koka",
+    "precompile:kokaine": "node scripts/smoke-wasm.mjs --update-kokaine-cache && pnpm run assets:koka",
     "assets:devtools": "node scripts/sync-devtools-assets.mjs",
-    "predev": "npm run assets:devtools && npm run assets:release && npm run compile:workbench",
+    "predev": "pnpm run assets:devtools && pnpm run assets:release && pnpm run compile:workbench",
     "dev": "vite --host 127.0.0.1",
-    "prebuild": "npm run assets:devtools && npm run assets:release && npm run compile:workbench",
+    "prebuild": "pnpm run assets:devtools && pnpm run assets:release && pnpm run compile:workbench",
     "build": "tsc --noEmit && vite build",
     "postbuild": "node scripts/prune-stable-runtime.mjs",
     "preview": "vite preview --host 127.0.0.1",
@@ -42,6 +42,6 @@
     "vitest": "^4.1.10"
   },
   "engines": {
-    "node": "^20.19.0 || >=22.12.0"
+    "node": ">=22.12.0"
   }
 }

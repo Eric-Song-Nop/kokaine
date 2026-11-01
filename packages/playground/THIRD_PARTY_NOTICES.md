@@ -1,7 +1,7 @@
 # Third-party notices
 
 This playground redistributes or adapts the following upstream work. Version
-pins for npm packages are recorded in the repository root `package-lock.json`;
+pins for npm packages are recorded in the repository root `pnpm-lock.yaml`;
 the Koka compiler pin and artifact hashes are recorded in
 `scripts/sync-koka-assets.mjs` and `public/koka/assets.json`.
 
