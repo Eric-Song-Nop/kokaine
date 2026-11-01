@@ -7,8 +7,6 @@ module kernel-regressions
 
 import kokaine/reactive
 import std/core/unsafe
-import std/time/duration
-import std/time/timer
 
 
 // --------------------------------------------------------------------------
@@ -30,6 +28,12 @@ fun check-ints(actual : list<int>, expected : list<int>, label : string)
   check(actual == expected,
         label ++ " (expected " ++ expected.show ++
         ", got " ++ actual.show ++ ")")
+
+// Monotonic milliseconds. std/time would pull in std/num/int64, whose C does
+// not build with GCC 15 on x86-64 CI runners.
+extern now-ms() : ndet int
+  c inline "({ kk_duration_t now = kk_timer_ticks(kk_context()); kk_integer_from_int64(now.seconds * 1000 + now.attoseconds / 1000000000000000LL, kk_context()); })"
+  js inline "Math.floor(performance.now())"
 
 fun hidden-cell(value : a) : ref<global,a>
   unsafe-total { ref(value) }
@@ -71,13 +75,14 @@ fun test-clean-diamond-read-is-linear()
     (source,diamond-chain(root,base,depth))
 
   val first = sample(root){ top.get }
-  val (spent,reads) = elapsed fn()
-    sample(root){ top.get } + sample(root){ top.get } +
-    sample(root){ top.get } + sample(root){ top.get }
+  val started = now-ms()
+  val reads = sample(root){ top.get } + sample(root){ top.get } +
+              sample(root){ top.get } + sample(root){ top.get }
+  val spent = now-ms() - started
   check-int(reads,4 * first,"clean diamond reads agree")
-  check(spent < 1.seconds,
+  check(spent < 1000,
         "four clean reads of a 22-deep diamond take under a second (took " ++
-        spent.show ++ ")")
+        spent.show ++ " ms)")
 
   update(root){ source.set(2) }
   val after = sample(root){ top.get }
