@@ -26,7 +26,7 @@ Options:
   -h, --help         Show this help
   -v, --version      Show the CLI version`;
 
-function parseArguments(argv) {
+export function parseArguments(argv) {
   const result = { command: null, root: process.cwd(), json: false };
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
