@@ -316,6 +316,19 @@ fun apply-input(
 // Public construction and observation
 // --------------------------------------------------------------------------
 
+// Create an async Resource with explicit source equality. `source` is a
+// synchronous tracked calculation (`signal-read`) returning `Just(snapshot)`
+// to load or `Nothing` for "no request"; `load` receives the snapshot and runs
+// under the closed Web async row `<async,ui,exn>`. Creating it has
+// `<signal-write,pure>` and needs a browser `root<<ui>>`.
+//
+// A changed snapshot (per `equals`) cancels any active load and starts a new
+// one; an equal snapshot keeps the active request. `Nothing` cancels and
+// clears the Resource to `Unresolved`. The Resource is owned by the current
+// owner and cancels its request when that owner retires.
+//
+// Gotcha: `load` has no `signal-read` capability, so it cannot create
+// dependencies; everything it needs must come through the snapshot.
 pub fun resource-by(
     root : root<<ui>>,
     source : () -> signal-read maybe<s>,
@@ -358,6 +371,15 @@ pub fun resource-by(
 
   Resource(state-source,control-source)
 
+// Create an async Resource using the implicit `(==)` on source snapshots. See
+// `resource-by` for the full contract. Row: `<signal-write,pure>`; requires a
+// `root<<ui>>`. Example:
+//
+//   val data = resource(root, fn() endpoint.get, fn(url)
+//     val response = fetch(get(url))
+//     response.require-ok
+//     response.text
+//   )
 pub fun resource(
     root : root<<ui>>,
     source : () -> signal-read maybe<s>,
@@ -366,11 +388,18 @@ pub fun resource(
     : <signal-write,pure> resource<s,a>
   resource-by(root,source,load,(==))
 
+// Read the atomic state: `Unresolved`, `Pending(previous)`, `Ready(value)`, or
+// `Failed(error, previous)`. Effect: `signal-read` (tracked in derivations,
+// effects, and live bindings). `previous` is the last successful value, kept
+// across refreshes and failures.
 pub fun resource/state(value : resource<s,a>)
                        : signal-read resource-state<a>
   match value
     Resource(state-source,_) -> state-source.get
 
+// The current value if `Ready`, otherwise the last successful value carried by
+// `Pending` or `Failed`; `Nothing` when unresolved. Effect: `signal-read`
+// (tracked, via `state`).
 pub fun resource/latest(value : resource<s,a>) : signal-read maybe<a>
   match value.state
     Unresolved -> Nothing
@@ -378,6 +407,10 @@ pub fun resource/latest(value : resource<s,a>) : signal-read maybe<a>
     Ready(current) -> Just(current)
     Failed(_,previous) -> previous
 
+// Start a fresh load for the current snapshot, keeping the last successful
+// value visible as `Pending(previous)`. Effect: `signal-write`. Any active
+// request is canceled first. Gotcha: when the source is currently `Nothing`,
+// refresh clears the Resource to `Unresolved` instead of loading.
 pub fun resource/refresh(value : resource<s,a>) : signal-write ()
   match value
     Resource(_,control-source) ->
@@ -385,6 +418,9 @@ pub fun resource/refresh(value : resource<s,a>) : signal-write ()
         Refresh-command(command.revision + 1)
       control-source.modify(next)
 
+// Cancel the active request, if any, and fall back to `Ready(previous)` or
+// `Unresolved`. Effect: `signal-write`. A later source change or `refresh`
+// starts loading again.
 pub fun resource/cancel(value : resource<s,a>) : signal-write ()
   match value
     Resource(_,control-source) ->
