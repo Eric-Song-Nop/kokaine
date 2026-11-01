@@ -92,6 +92,42 @@ with serve_project() as origin:
             "a raw DOMException escaped the Koka exn boundary"
         )
 
+        namespaces = desktop.evaluate(
+            """async () => {
+                await import('/dist/test_dom_dash_namespaces__main.mjs');
+                const ns = (id) => document.getElementById(id)?.namespaceURI;
+                return {
+                    result: globalThis.__kokaineNamespaces,
+                    svg: ns('ns-svg'),
+                    circle: ns('ns-circle'),
+                    foreignDiv: ns('ns-foreign-div'),
+                    math: ns('ns-math'),
+                    miSpan: ns('ns-mi-span'),
+                    circleRadius: document.getElementById('ns-circle')?.r?.baseVal?.value,
+                    trustedHref: document.getElementById('ns-trusted')?.getAttribute('href'),
+                    unsafeChildren: document.getElementById('ns-unsafe-root').childElementCount,
+                    afterPatch: document.getElementById('ns-after-patch')?.textContent,
+                };
+            }"""
+        )
+        svg_ns = "http://www.w3.org/2000/svg"
+        mathml_ns = "http://www.w3.org/1998/Math/MathML"
+        html_ns = "http://www.w3.org/1999/xhtml"
+        assert namespaces["result"]["graphic"] == "mounted", namespaces
+        assert namespaces["svg"] == svg_ns, namespaces
+        assert namespaces["circle"] == svg_ns, namespaces
+        assert namespaces["circleRadius"] == 4, "SVG circle is a real SVGCircleElement"
+        assert namespaces["foreignDiv"] == html_ns, "foreignObject returns to HTML"
+        assert namespaces["math"] == mathml_ns, namespaces
+        assert namespaces["miSpan"] == html_ns, "MathML text integration point returns to HTML"
+        assert namespaces["trustedHref"] == "javascript:void(0)", namespaces
+        assert namespaces["result"]["unsafe"].startswith("rejected: unsafe URL scheme"), namespaces
+        assert namespaces["unsafeChildren"] == 0, "a rejected mount leaves nothing behind"
+        assert namespaces["result"]["patched"] == "mounted", (
+            "a later attachShadow patch must not break mounting"
+        )
+        assert namespaces["afterPatch"] == "after patch", namespaces
+
         desktop.evaluate(
             """() => {
                 for (const id of [

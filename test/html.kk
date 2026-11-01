@@ -89,6 +89,39 @@ pub fun main()
   assert(srcdoc-error.is-error,"srcdoc requires an explicit trusted integration")
   assert(!is-valid-element-name("1div"),"element names start with a letter")
 
+  // URL-valued attributes reject executable and opaque schemes, including the
+  // whitespace and control-character spellings a browser still accepts.
+  val unsafe-urls = [
+    ("href","javascript:alert(1)"), ("href"," JavaScript:alert(1)"),
+    ("href","java\tscript:alert(1)"), ("HREF","vbscript:x"),
+    ("xlink:href","javascript:x"), ("action","javascript:x"),
+    ("formaction","javascript:x"), ("data","data:text/html,<b>"),
+    ("href","data:image/png;base64,AA"), ("src","data:text/html,<b>")
+  ]
+  unsafe-urls.foreach fn((name,value))
+    val rejected : error<string> = mask<exn>{
+      error/try fn() render(root,view{ element-empty("a",attrs=[attr(name,value)]) })
+    }
+    assert(rejected.is-error,"rejects " ++ name ++ "=" ++ value)
+  val unsafe-property : error<string> = mask<exn>{
+    error/try fn()
+      render(root,view{ element-empty("a",attrs=[prop("href",string-property("javascript:x"))]) })
+  }
+  assert(unsafe-property.is-error,"URL properties are checked too")
+  val safe-urls = [
+    ("href","/relative?a=1#b"), ("href","page.html"), ("href","#top"),
+    ("href","https://example.com/x:y"), ("href","mailto:a@b.c"),
+    ("href","tel:+1"), ("src","data:image/png;base64,AA"),
+    ("title","javascript: is fine in non-URL attributes")
+  ]
+  safe-urls.foreach fn((name,value))
+    val accepted = render(root,view{ element-empty("a",attrs=[attr(name,value)]) })
+    assert(accepted.contains("=\""),"accepts " ++ name ++ "=" ++ value)
+  assert-string(
+    render(root,view{ element-empty("a",attrs=[trusted/href(unsafe-trusted-url("javascript:void(0)"))]) }),
+    "<a href=\"javascript:void(0)\"></a>",
+    "unsafe-trusted-url is the explicit escape hatch")
+
   val top-layer = view
     fragment
       dialog(attrs=[id("settings<&\""),dialog-closed-by(Dialog-close-any),
