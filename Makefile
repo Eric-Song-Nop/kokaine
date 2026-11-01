@@ -25,7 +25,7 @@ DIST_KOKA = $(PYTHON) "$(RUN_LOCKED)" dist/.koka-build.lock \
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist
 
 .PHONY: check-koka print-managed-koka test test-native test-pocketjs-runtime test-pocketjs-bridge test-pocketjs-bundle test-pocketjs-wasm test-pocketjs-browser test-tooling test-all test-wasm test-report build-counter build-top-layer build-keyed build-report build-pocketjs-example compile-pocketjs-example build-window-fixture build-browser-fixtures browser-install test-browser serve serve-pocketjs-example serve-top-layer serve-keyed serve-report
-.PHONY: playground-install playground-precompile playground-sync-assets playground-build playground-preview playground-release playground-deploy serve-playground
+.PHONY: playground-install playground-assets playground-precompile playground-sync-assets playground-build playground-preview playground-release playground-deploy serve-playground
 
 test: test-native test-pocketjs-runtime
 
@@ -50,8 +50,13 @@ playground-install:
 playground-precompile: playground-install
 	$(PNPM) --filter @kokaine/playground run precompile:kokaine
 
+# Fetch (or restore from the local cache) and verify the untracked pinned assets.
+playground-assets: playground-install
+	$(PNPM) --filter @kokaine/playground run assets
+
+# Rebuild the runtime bundle and rewrite public/koka/assets.json (pin changes).
 playground-sync-assets: playground-install
-	$(PNPM) --filter @kokaine/playground run assets:koka
+	$(PNPM) --filter @kokaine/playground run assets:koka:update
 	$(PNPM) --filter @kokaine/playground run assets:devtools
 
 playground-build: playground-install
