@@ -1,7 +1,6 @@
 module all
 
 import std/core/unsafe
-import std/num/int32
 
 // One compile for the whole native suite. Each suite's `main` runs in
 // order; a failure is reported and the remaining suites still run. The
@@ -43,9 +42,10 @@ import test/control-flow
 import test/async-effects
 import test/structured-async
 
-extern exit-process(code : int32) : ndet ()
-  c inline "exit(#1)"
-  js inline "process.exit(#1)"
+// No std/num/int32: GCC 15 cannot compile that module's C on x86-64 runners.
+extern exit-failure() : ndet ()
+  c inline "exit(1)"
+  js inline "process.exit(1)"
 
 val failures : ref<global,int> = unsafe-total { ref(0) }
 
@@ -94,4 +94,4 @@ pub fun main()
   if failed == 0 then println("native suite: 34 suites passed")
   else
     println("native suite: " ++ failed.show ++ " suite(s) failed")
-    exit-process(1.int32)
+    exit-failure()
