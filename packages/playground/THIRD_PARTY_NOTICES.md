@@ -14,6 +14,10 @@ the Koka compiler pin and artifact hashes are recorded in
 
 The Koka WebAssembly binaries, standard-library sources, and precompiled
 JavaScript modules are copied from the pinned upstream browser playground.
+Except for `public/koka/koka-browser-repl.wasm` (built from fork commit
+`32fee7eda6397dee81f4752ff7cab4e4001d3eb2`), they are not stored in this
+repository: `scripts/sync-koka-assets.mjs` downloads and hash-verifies them at
+build time, and they are redistributed only in the deployed site.
 The Kokaine worker integration, asset packaging, and user interface are
 modified for this project.
 
@@ -35,9 +39,9 @@ from Solid Playground's `solid-repl` package.
 ## Chii and Chobitsu
 
 The self-hosted Chromium DevTools frontend and protocol implementation are
-copied from the pinned npm packages. Their original license files are also
-deployed as `public/devtools/CHII-LICENSE` and
-`public/devtools/CHOBITSU-LICENSE`.
+copied from the pinned npm packages into the untracked `public/devtools/` by
+`scripts/sync-devtools-assets.mjs` at build time. Their original license files
+are also deployed as `/devtools/CHII-LICENSE` and `/devtools/CHOBITSU-LICENSE`.
 
 - Chii source: <https://github.com/liriliri/chii>
 - Chobitsu source: <https://github.com/liriliri/chobitsu>
