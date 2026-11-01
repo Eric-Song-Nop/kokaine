@@ -14,7 +14,8 @@ export const SIDECARS = {
 const repoRoot = new URL('../../', import.meta.url);
 
 export function readRepoFile(relative) {
-  return readFileSync(new URL(relative, repoRoot), 'utf8');
+  // Normalise CRLF: Windows checkouts may convert line endings.
+  return readFileSync(new URL(relative, repoRoot), 'utf8').replace(/\r\n/g, '\n');
 }
 
 /** Top-level function names declared by a sidecar source. */
