@@ -1,6 +1,8 @@
 // A deliberately small DOM realm: just enough structure (node types, parent
 // and child links, `Element.prototype.attachShadow`, `defaultView`) for the
-// shadow-root tracker and owner registry. It is not a DOM implementation.
+// shadow-root tracker, owner registry and range cleanup. It is not a DOM
+// implementation. `node.onRemoved`, when set, runs synchronously after the
+// node is detached, standing in for a custom element's disconnectedCallback.
 
 export function createFakeRealm({ attachShadow = 'data' } = {}) {
   // Minimal MutationObserver: childList records for the observed node or its
@@ -63,8 +65,24 @@ export function createFakeRealm({ attachShadow = 'data' } = {}) {
       if (index < 0) throw new Error('not a child');
       this.childNodes.splice(index, 1);
       child.parentNode = null;
+      if (typeof child.onRemoved === 'function') child.onRemoved();
       notify(this, { type: 'childList', removedNodes: [child] });
       return child;
+    }
+
+    contains(other) {
+      for (let node = other; node; node = node.parentNode) if (node === this) return true;
+      return false;
+    }
+
+    getRootNode() {
+      let node = this;
+      while (node.parentNode) node = node.parentNode;
+      return node;
+    }
+
+    get firstChild() {
+      return this.childNodes[0] ?? null;
     }
 
     get nextSibling() {

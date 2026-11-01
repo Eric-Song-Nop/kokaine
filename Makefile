@@ -25,7 +25,7 @@ KOKA_TEST = $(PYTHON) "$(PROJECT_ROOT)/support/run_koka_test.py" $(KOKA) $(KOKA_
 DIST_KOKA = $(PYTHON) "$(RUN_LOCKED)" dist/.koka-build.lock \
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist
 
-.PHONY: check-koka print-managed-koka bench-keyed test test-native test-sidecar test-pocketjs-runtime test-pocketjs-bridge test-pocketjs-bundle test-pocketjs-wasm test-pocketjs-browser test-tooling test-all test-wasm test-report build-counter build-top-layer build-keyed build-report build-pocketjs-example compile-pocketjs-example build-window-fixture build-browser-fixtures browser-install test-browser serve serve-pocketjs-example serve-top-layer serve-keyed serve-report
+.PHONY: check-koka print-managed-koka bench-keyed test test-native test-sidecar test-pocketjs-runtime test-pocketjs-bridge test-pocketjs-bundle test-pocketjs-wasm test-pocketjs-browser test-tooling test-all test-wasm test-report build-counter build-top-layer build-keyed build-report build-pocketjs-example compile-pocketjs-example build-window-fixture build-browser-fixtures browser-install test-browser bench-browser serve serve-pocketjs-example serve-top-layer serve-keyed serve-report
 .PHONY: playground-install playground-assets playground-precompile playground-sync-assets playground-build playground-preview playground-release playground-deploy serve-playground
 
 test: test-native test-pocketjs-runtime
@@ -199,6 +199,8 @@ build-browser-fixtures: build-counter build-top-layer build-keyed
 		--buildname=async-owner-registration test/async-owner-registration.kk
 	$(DIST_KOKA) \
 		--buildname=async-runtime-scale test/async-runtime-scale.kk
+	$(DIST_KOKA) \
+		--buildname=dom-perf-mount test/dom-perf-mount.kk
 
 browser-install:
 	$(UV) run --with "$(PLAYWRIGHT)" python -m playwright install chromium
@@ -214,6 +216,10 @@ bench-keyed:
 	$(DIST_KOKA) \
 		--buildname=keyed-bench test/keyed-bench.kk
 	$(UV) run --with "$(PLAYWRIGHT)" python test/bench_keyed.py
+# Not part of test-all: timings are machine-dependent. Prints median mount,
+# region toggle and live-update times plus heap allocation estimates.
+bench-browser: build-browser-fixtures
+	$(UV) run --with "$(PLAYWRIGHT)" python test/browser_perf_mount.py
 
 test-wasm:
 	./support/wasmweb-proof/run.sh test
