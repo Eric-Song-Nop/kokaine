@@ -107,6 +107,9 @@ type async-family<e::E>
     family-supervisors : registry<runtime-supervisor<e>>,
     family-index       : int-index<runtime-supervisor-bucket<e>>,
     family-canceled    : ref<global,list<async-scope>>,
+    // Set once a task registers under an already-canceled scope (only a
+    // scheduled action can). Until then a canceled scope owns no live task.
+    family-late-tasks  : ref<global,bool>,
     family-root-scope  : async-scope,
     family-dispatcher  : host-turn-dispatcher,
     family-runner      : host-turn-runner<<exn,ui|e>,<exn,ui>>
@@ -633,6 +636,8 @@ fun register-task(
   // into the existing owner ledger before JavaScript can retain its callback.
   val portal = capture-reentry(root)
   val family = runtime.runtime-family
+  if runtime.is-canceled(scope) then store(family.family-late-tasks,True)
+  else ()
   val supervisor = runtime.supervisor(root,scope)
   val state = new-one-shot-task(Task-payload(portal,resume-action,label))
   val task = Generation-task(state,supervisor,cell(Nothing))
@@ -686,17 +691,26 @@ fun claim-scope-supervisors(
 noinline fun cancel-runtime-scope(runtime : generation-runtime<e>,
                                   scope : async-scope)
                                  : <signal-write,pure,ui|e> ()
-  runtime.record-canceled(scope)
-  store(scope-cancellation-scans,load(scope-cancellation-scans) + 1)
-  val family = runtime.runtime-family
-  // First claim every matching supervisor/task in the immutable registry
-  // snapshot. The family root explicitly includes routed foreign scopes; no
-  // other namespace root can match them. Only after the full subtree is
-  // terminal may cancellation run.
-  val actions = claim-scope-supervisors(
-    family.family-supervisors.snapshot,scope,
-    scope == family.family-root-scope)
-  run-task-cancellations(actions)
+  // When `scope` (or an ancestor) was canceled, that cancellation claimed
+  // every task under it, and awaits and no-awaits under a canceled scope are
+  // refused before registration. Unless a scheduled action has registered
+  // under a canceled scope since, a second scan cannot find anything to
+  // claim, so a race's repeated cancel-outstanding calls skip it.
+  val already-claimed =
+    runtime.is-canceled(scope) &&
+    !load(runtime.runtime-family.family-late-tasks)
+  if already-claimed then () else
+    runtime.record-canceled(scope)
+    store(scope-cancellation-scans,load(scope-cancellation-scans) + 1)
+    val family = runtime.runtime-family
+    // First claim every matching supervisor/task in the immutable registry
+    // snapshot. The family root explicitly includes routed foreign scopes; no
+    // other namespace root can match them. Only after the full subtree is
+    // terminal may cancellation run.
+    val actions = claim-scope-supervisors(
+      family.family-supervisors.snapshot,scope,
+      scope == family.family-root-scope)
+    run-task-cancellations(actions)
 
 noinline fun release-runtime-scope(runtime : generation-runtime<e>,
                                    scope : async-scope) : ()
@@ -913,5 +927,6 @@ pub fun run-generation-async-with-host(
     : <signal-read,signal-write,pure,ui|e> ()
   run-generation-async-with-family(
     root,Async-family(new-registry(),new-int-index(),
-                      cell([]),new-runtime-scope-root(),dispatcher,runner),action
+                      cell([]),cell(False),new-runtime-scope-root(),
+                      dispatcher,runner),action
   )

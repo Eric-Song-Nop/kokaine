@@ -151,10 +151,19 @@ fun test-scheduled-action-order-and-revocation()
         async-schedule(fn() note("revoked"))
         cancel-outstanding()
       )
+      // A scheduled action may still register under an already-canceled
+      // scope; canceling that scope again must claim it rather than skip
+      // the scan as an already-drained scope.
+      cancelation-scope(fn()
+        cancel-outstanding()
+        async-schedule(fn() note("late-revoked"))
+        cancel-outstanding()
+      )
     )
   )
-  check(hidden-load(turns).length == 3,
+  check(hidden-load(turns).length == 4,
         "every scheduled action and synchronous sibling posts one turn")
+  run-next(turns)
   run-next(turns)
   run-next(turns)
   run-next(turns)
