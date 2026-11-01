@@ -135,25 +135,41 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
+      # The Koka compiler/LSP WASM (~34 MiB) and the upstream stdlib sources
+      # behind koka-runtime.json.gz are not tracked in git. sync-koka-assets.mjs
+      # keeps them in a content-addressed cache under ~/.cache/kokaine/playground
+      # and verifies every file against the pins in public/koka/assets.json.
+      - name: Cache pinned Koka browser assets
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/kokaine/playground
+          key: koka-playground-assets-${{ hashFiles('packages/playground/public/koka/assets.json', 'packages/playground/scripts/sync-koka-assets.mjs') }}
+          restore-keys: koka-playground-assets-
+      - name: Fetch and verify pinned Koka browser assets
+        run: pnpm --filter @kokaine/playground run assets:koka
       - name: Regenerate the pinned Kokaine cache
         run: pnpm --filter @kokaine/playground run precompile:kokaine
+      # vendor/kokaine-precompiled-v3.2.4 is the only tracked copy of the
+      # Kokaine precompiled cache; public/koka/assets.json pins the runtime
+      # bundle derived from it. Everything else under public/ is gitignored.
       - name: Reject generated cache drift
         shell: bash
         run: |
-          status="$(git status --porcelain=v1 --untracked-files=all -- \
-            packages/playground/vendor/kokaine-precompiled-v3.2.4 \
-            packages/playground/public/koka)"
+          paths=(
+            packages/playground/vendor/kokaine-precompiled-v3.2.4
+            packages/playground/public/koka/assets.json
+          )
+          status="$(git status --porcelain=v1 --untracked-files=all -- "${paths[@]}")"
           if [[ -n "$status" ]]; then
             printf '%s\n' "$status"
-            git diff -- \
-              packages/playground/vendor/kokaine-precompiled-v3.2.4 \
-              packages/playground/public/koka
+            git diff -- "${paths[@]}"
             exit 1
           fi
       - run: pnpm --filter @kokaine/playground run test:wasm
       - run: pnpm --filter @kokaine/playground run test:architecture
-      # `build` runs prebuild (asset staging and workbench compile), then
-      # `tsc --noEmit` and `vite build`; the unit tests need the staged assets.
+      # `build` runs prebuild (asset fetch/verify, DevTools copy, release
+      # staging, and workbench compile), then `tsc --noEmit` and `vite build`.
+      # `test` has its own pretest hook that stages the release it needs.
       - run: pnpm --filter @kokaine/playground run build
       - run: pnpm --filter @kokaine/playground run test
 

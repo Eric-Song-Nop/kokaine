@@ -35,7 +35,9 @@ make serve-playground
 
 Vite binds to `127.0.0.1`, serves the required cross-origin isolation headers,
 and stages the pinned local DevTools and content-addressed runtime assets before
-startup. Open the URL it prints and press Command/Control+Enter to compile.
+startup. The first run downloads about 38 MiB of pinned Koka WASM and library
+sources into a local cache (see [Pinned assets](#pinned-assets)); later runs
+work offline. Open the URL it prints and press Command/Control+Enter to compile.
 
 ## Included today
 
@@ -104,13 +106,37 @@ package contents without restoring a server or native compiler path.
 
 ## Pinned assets
 
-The checked-in browser toolchain is intentionally reproducible:
+The browser toolchain is reproducible from pins, so only the pins and the
+inputs that cannot be downloaded are tracked in git:
 
-- `scripts/sync-koka-assets.mjs` downloads the official Koka compiler and LSP
-  browser build from the immutable commit recorded in that script, verifies
-  their SHA-256 hashes, verifies the checked-in browser REPL built from its
-  separately recorded upstream fork commit, rebuilds the compressed
-  standard-library VFS, and writes `public/koka/assets.json`.
+| Path | Tracked | Source |
+| --- | --- | --- |
+| `public/koka/assets.json` | yes | SHA-256 pins for every WASM program and the runtime bundle |
+| `public/koka/koka-browser-repl.wasm` | yes | built from the recorded browser-REPL fork commit; no upstream download exists |
+| `vendor/kokaine-precompiled-v3.2.4/` | yes | the single copy of the Kokaine precompiled cache (`.kki` + `.mjs` + `manifest.json`) |
+| `public/koka/koka-playground.wasm`, `koka-lsp.wasm` | no | downloaded from the pinned upstream Koka commit |
+| `public/koka/koka-runtime.json.gz` | no | rebuilt from the pinned upstream stdlib/precompiled sources plus `vendor/kokaine-precompiled-v3.2.4/` |
+| `public/devtools/` | no | copied from the `chii` and `chobitsu` devDependencies |
+| `public/koka/releases/`, `release.json` | no | staged per build under a content-derived release ID |
+
+`dev`, `build`, `test`, `typecheck`, `test:wasm`, and `precompile:kokaine` fetch
+and stage what they need through their `pre*` hooks, so a fresh clone needs no
+manual step. To populate the assets explicitly, run `make playground-assets`
+(`pnpm --filter @kokaine/playground run assets`).
+
+- `scripts/sync-koka-assets.mjs` (`assets:koka`) makes the untracked Koka files
+  match the SHA-256 pins in `public/koka/assets.json`, verifies the checked-in
+  browser REPL, and never rewrites the manifest. Downloads (about 38 MiB on a
+  cold cache) are kept in a content-addressed cache outside the repository:
+  `$KOKAINE_CACHE_DIR`, else `$XDG_CACHE_HOME/kokaine`, else
+  `%LOCALAPPDATA%\kokaine\cache` on Windows, else `~/.cache/kokaine`, under
+  `playground/` (`sha256/<hash>` for pinned blobs, `koka-src/<commit>/` for
+  upstream sources). Later runs are offline. With no network and no cache it
+  fails with an explicit message; set `KOKAINE_OFFLINE=1` to forbid network
+  access and use only the cache.
+- `assets:koka:update` (`--update`) rebuilds the runtime bundle from the pinned
+  upstream sources and the vendored Kokaine cache, then rewrites
+  `public/koka/assets.json`.
 - `scripts/sync-devtools-assets.mjs` copies Chii and Chobitsu from the exact npm
   versions pinned in `pnpm-lock.yaml`, including their license files, into
   `public/devtools/`.
@@ -123,22 +149,17 @@ make playground-precompile
 ```
 
 This uses the pinned browser compiler, verifies that it loads the generated
-interfaces, then downloads and revalidates the browser assets at the existing
-Koka pin before rebuilding `public/koka/assets.json`. It requires network
-access. Do not hand-edit files under `vendor/kokaine-precompiled-*` or
-`public/koka/precompiled/`.
-
-To resync the Koka compiler and DevTools asset sets without rebuilding the
-Kokaine cache, run:
-
-```sh
-make playground-sync-assets
-```
+interfaces, rewrites `vendor/kokaine-precompiled-v3.2.4/`, and then rebuilds
+the runtime bundle and `public/koka/assets.json` from it. Commit both. It needs
+network access only when the local asset cache is cold. Do not hand-edit files
+under `vendor/kokaine-precompiled-*`; the served `precompiled/` directory is
+derived from the runtime bundle by `scripts/stage-runtime-release.mjs` at build
+time.
 
 When deliberately changing a pin, update the commit, compiler version, and
-expected hashes together, then compile a representative Kokaine program and
-exercise the LSP before committing the generated assets. Do not hand-edit files
-under `public/devtools/`.
+expected hashes in `scripts/sync-koka-assets.mjs` together, run
+`make playground-sync-assets` to rewrite `public/koka/assets.json`, then compile
+a representative Kokaine program and exercise the LSP before committing.
 
 ## Cross-origin isolation
 
@@ -207,7 +228,12 @@ the Koka pin; every individual WASM asset must remain below that limit.
 For CI, build the browser assets ahead of deployment and run Wrangler Direct
 Upload with `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, and
 explicit `--project-name` and `--branch` values. Never build a native Koka
-toolchain inside Pages.
+toolchain inside Pages. The deploy machine needs network access to
+`raw.githubusercontent.com` or a warm asset cache (`KOKAINE_CACHE_DIR`), because
+the compiler/LSP WASM and runtime bundle are not in the git checkout; cache
+`~/.cache/kokaine/playground` keyed on `public/koka/assets.json` as the CI
+workflow does. Do not use Cloudflare Pages Git integration with a build command
+that cannot reach the network.
 
 ## Security boundary
 
