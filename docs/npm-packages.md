@@ -18,6 +18,27 @@ only package-management layer. npm, pnpm, and Yarn installations that expose a
 selects versions, modifies dependencies, or writes a lockfile. Yarn PnP is not
 part of the initial contract.
 
+## CLI and managed compiler
+
+The generated project pins Koka 3.2.3 in its `kokaine` manifest. The
+`@kokaine/cli` downloads the matching official compiler into a checksummed,
+platform-specific user cache, or validates an explicit `--koka`/`KOKA_BIN`
+override. `kokaine doctor --json` reports the resolved npm dependency paths,
+canonical Koka source roots, module index, compiler origin, graph fingerprint,
+and exact compiler command.
+
+The CLI exposes four project scripts:
+
+- `kokaine check` compiles the application without invoking Vite;
+- `kokaine build` compiles Koka into `.kokaine/` and creates a Vite production
+  bundle;
+- `kokaine dev` watches only the discovered Koka source roots, serializes
+  rebuilds, and performs a full reload after a successful compile;
+- `kokaine doctor` validates and explains the complete installed build graph.
+
+Editor configuration for generated applications is described in
+[Editor setup](editor-setup.md).
+
 ## Applications
 
 An application pins one exact Koka compiler and the `jsweb` target:
