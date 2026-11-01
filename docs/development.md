@@ -62,7 +62,7 @@ Cloudflare Worker, or Pages Function. Vite and `public/_headers` provide the
 COOP/COEP headers required by the WASM LSP's `SharedArrayBuffer` transport:
 
 ```sh
-make playground-precompile   # after changing src/kokaine/**
+make playground-precompile   # after changing packages/core/src/kokaine/**
 make playground-build
 make playground-preview
 make playground-deploy       # precompile, smoke-test, build, then production upload

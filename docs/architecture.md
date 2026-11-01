@@ -44,9 +44,9 @@ a Pocket-specific view algebra and Pocket's native bundle pipeline. See
 
 ## Module boundaries
 
-The public module, `src/kokaine/reactive.kk`, exposes opaque roots, signals,
+The public module, `packages/core/src/kokaine/reactive.kk`, exposes opaque roots, signals,
 and memos. Host-facing capabilities live in
-`src/kokaine/reactive/integration.kk`. Implementations are split by
+`packages/core/src/kokaine/reactive/integration.kk`. Implementations are split by
 responsibility:
 
 | Module | Responsibility |

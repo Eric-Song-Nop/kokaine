@@ -4,14 +4,14 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "src/kokaine/dom.kk"
+SOURCE = ROOT / "packages/core/src/kokaine/dom.kk"
 text = SOURCE.read_text()
-keyed_context = (ROOT / "src/kokaine/dom/internal/keyed-transaction.kk").read_text()
+keyed_context = (ROOT / "packages/core/src/kokaine/dom/internal/keyed-transaction.kk").read_text()
 core_scheduler = (
-    ROOT / "src/kokaine/reactive/internal/scheduler.kk"
+    ROOT / "packages/core/src/kokaine/reactive/internal/scheduler.kk"
 ).read_text()
 integration_provision = (
-    ROOT / "src/kokaine/reactive/integration/internal/provision.kk"
+    ROOT / "packages/core/src/kokaine/reactive/integration/internal/provision.kk"
 ).read_text()
 assert "kokaine/reactive/integration" not in core_scheduler, (
     "the core scheduler must not depend on integration modules"
@@ -94,7 +94,7 @@ for required in (
 
 reactive_sources = "\n".join(
     path.read_text()
-    for path in (ROOT / "src/kokaine/reactive").rglob("*.kk")
+    for path in (ROOT / "packages/core/src/kokaine/reactive").rglob("*.kk")
 )
 for forbidden in (
     "work-publication",
@@ -108,7 +108,7 @@ for forbidden in (
     )
 
 kokaine_sources = "\n".join(
-    path.read_text() for path in (ROOT / "src/kokaine").rglob("*.kk")
+    path.read_text() for path in (ROOT / "packages/core/src/kokaine").rglob("*.kk")
 )
 assert "structural-owner" not in kokaine_sources, (
     "the removed core structural-owner capability must not survive as an alias"
@@ -116,11 +116,11 @@ assert "structural-owner" not in kokaine_sources, (
 
 core_sources = "\n".join(
     [
-        (ROOT / "src/kokaine/reactive.kk").read_text(),
-        (ROOT / "src/kokaine/reactive/effects.kk").read_text(),
+        (ROOT / "packages/core/src/kokaine/reactive.kk").read_text(),
+        (ROOT / "packages/core/src/kokaine/reactive/effects.kk").read_text(),
         *[
             path.read_text()
-            for path in (ROOT / "src/kokaine/reactive/internal").rglob("*.kk")
+            for path in (ROOT / "packages/core/src/kokaine/reactive/internal").rglob("*.kk")
         ],
     ]
 )

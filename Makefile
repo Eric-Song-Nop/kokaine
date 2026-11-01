@@ -18,7 +18,7 @@ POCKETJS_COMMIT := 1f848dcdb2629e3c6373710cd0aa16d775ea2ad3
 
 PROJECT_ROOT := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 RUN_LOCKED := $(PROJECT_ROOT)/support/run_locked.py
-KOKA_FLAGS := -j1 -i./src
+KOKA_FLAGS := -j1 -i./packages/core/src
 # Koka test programs exit 0 on an uncaught exception; this wrapper does not.
 KOKA_TEST = $(PYTHON) "$(PROJECT_ROOT)/support/run_koka_test.py" $(KOKA) $(KOKA_FLAGS) -e
 DIST_KOKA = $(PYTHON) "$(RUN_LOCKED)" dist/.koka-build.lock \

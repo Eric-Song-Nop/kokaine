@@ -20,7 +20,7 @@ def main() -> int:
             [
                 *sys.argv[1:],
                 "-j1",
-                f"-i{root / 'src'}",
+                f"-i{root / 'packages' / 'core' / 'src'}",
                 "--target=jsweb",
                 f"--outputdir={output}",
                 f"--buildname={fixture.stem}",

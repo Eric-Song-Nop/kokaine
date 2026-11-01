@@ -25,7 +25,7 @@ def main() -> int:
                 [
                     *koka_command,
                     "-j1",
-                    f"-i{root / 'src'}",
+                    f"-i{root / 'packages' / 'core' / 'src'}",
                     "--target=jsweb",
                     f"--outputdir={output}",
                     f"--buildname={fixture.stem}",

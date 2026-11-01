@@ -340,8 +340,8 @@ pub fun render-limits()
         reference("https://koka-lang.github.io/koka/doc/book.html#sec-fbip",
                   "Koka · Functional but in-place")
         reference("../architecture.md","Kokaine · Architecture")
-        reference("../../src/kokaine/reactive.kk","Kokaine · Reactive source")
-        reference("../../src/kokaine/html.kk","Kokaine · HTML DSL source")
+        reference("../../packages/core/src/kokaine/reactive.kk","Kokaine · Reactive source")
+        reference("../../packages/core/src/kokaine/html.kk","Kokaine · HTML DSL source")
       p("框架对比以各项目官方文档描述的基础模型为准；所有队列动画、工作范围和次数都是 semantic simulation，用于解释状态转换，不是 runtime instrumentation 或 benchmark。")
 
 

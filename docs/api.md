@@ -1,8 +1,8 @@
 # API overview
 
 A tour of the public modules. The declarations themselves carry doc comments;
-see `src/kokaine/reactive.kk`, `src/kokaine/control.kk`,
-`src/kokaine/resource.kk`, and `src/kokaine/async/web.kk`.
+see `packages/core/src/kokaine/reactive.kk`, `packages/core/src/kokaine/control.kk`,
+`packages/core/src/kokaine/resource.kk`, and `packages/core/src/kokaine/async/web.kk`.
 
 ## API shape
 

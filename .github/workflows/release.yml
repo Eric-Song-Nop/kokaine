@@ -57,7 +57,7 @@ jobs:
               npm publish "$tarball" --access public --provenance
             fi
           }
-          publish .
+          # The workspace root is private; @kokaine/core lives in packages/core.
           for dir in packages/*; do
             if [ "$(node -p "Boolean(require('./$dir/package.json').private)")" = false ]; then
               publish "$dir"

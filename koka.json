@@ -2,7 +2,7 @@
   "target": "jsweb",
   "cwd": ".",
   "include_dirs": [
-    "src"
+    "packages/core/src"
   ],
   "compiler_args": [
     "-j1"
