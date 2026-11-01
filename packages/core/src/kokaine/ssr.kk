@@ -12,13 +12,13 @@ import kokaine/internal/key-index
 import std/core/unsafe
 
 
-fun render-cell(value : a) : ref<global,a>
+noinline fun render-cell(value : a) : ref<global,a>
   unsafe-total { ref(value) }
 
-fun render-load(value : ref<global,a>) : a
+noinline fun render-load(value : ref<global,a>) : a
   unsafe-total { !value }
 
-fun render-store(target : ref<global,a>, value : a) : ()
+noinline fun render-store(target : ref<global,a>, value : a) : ()
   unsafe-total { target := value }
 
 

@@ -27,13 +27,13 @@ abstract value type resume-queue<a>
 abstract value type delivery-guard
   Delivery-guard(disposer : ref<global,maybe<dispose-fn>>)
 
-fun cell(value : a) : ref<global,a>
+noinline fun cell(value : a) : ref<global,a>
   unsafe-total { ref(value) }
 
-fun load(value : ref<global,a>) : a
+noinline fun load(value : ref<global,a>) : a
   unsafe-total { !value }
 
-fun store(target : ref<global,a>, value : a) : ()
+noinline fun store(target : ref<global,a>, value : a) : ()
   unsafe-total { target := value }
 
 pub fun new-resume-queue() : resume-queue<a>

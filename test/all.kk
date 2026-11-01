@@ -49,9 +49,14 @@ extern exit-failure() : ndet ()
 
 val failures : ref<global,int> = unsafe-total { ref(0) }
 
+// Koka 3.2.9 attaches an implicit hdiv constraint to (!); reading through a
+// closed-row helper keeps it solvable inside unsafe-total.
+fun read-failures() : <read<global>> int
+  !failures
+
 fun suite(name : string, action : () -> <console,exn,ndet,div|e> ()) : <console,ndet,div|e> ()
   with catch fn(problem)
-    unsafe-total { failures := !failures + 1 }
+    unsafe-total { failures := read-failures() + 1 }
     println("FAILED " ++ name ++ ": " ++ problem.message)
   action()
 
@@ -90,7 +95,7 @@ pub fun main()
   suite("control-flow",fn() test/control-flow/main())
   suite("async-effects",fn() test/async-effects/main())
   suite("structured-async",fn() test/structured-async/main())
-  val failed = unsafe-total { !failures }
+  val failed = unsafe-total { read-failures() }
   if failed == 0 then println("native suite: 34 suites passed")
   else
     println("native suite: " ++ failed.show ++ " suite(s) failed")
