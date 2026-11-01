@@ -35,7 +35,8 @@
   ],
   "scripts": {
     "test:cli": "pnpm --filter @kokaine/cli --filter @kokaine/create test",
-    "test": "pnpm run test:cli"
+    "test:sidecar": "node --check src/kokaine/dom-inline.js && node --check src/kokaine/async/web-inline.js && node --check src/kokaine/web/window-inline.js && node --test \"test/sidecar/*.test.mjs\"",
+    "test": "pnpm run test:cli && pnpm run test:sidecar"
   },
   "engines": {
     "node": ">=22.12.0"

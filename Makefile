@@ -24,7 +24,7 @@ KOKA_TEST = $(PYTHON) "$(PROJECT_ROOT)/support/run_koka_test.py" $(KOKA) $(KOKA_
 DIST_KOKA = $(PYTHON) "$(RUN_LOCKED)" dist/.koka-build.lock \
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist
 
-.PHONY: check-koka print-managed-koka test test-native test-pocketjs-runtime test-pocketjs-bridge test-pocketjs-bundle test-pocketjs-wasm test-pocketjs-browser test-tooling test-all test-wasm test-report build-counter build-top-layer build-keyed build-report build-pocketjs-example compile-pocketjs-example build-window-fixture build-browser-fixtures browser-install test-browser serve serve-pocketjs-example serve-top-layer serve-keyed serve-report
+.PHONY: check-koka print-managed-koka test test-native test-sidecar test-pocketjs-runtime test-pocketjs-bridge test-pocketjs-bundle test-pocketjs-wasm test-pocketjs-browser test-tooling test-all test-wasm test-report build-counter build-top-layer build-keyed build-report build-pocketjs-example compile-pocketjs-example build-window-fixture build-browser-fixtures browser-install test-browser serve serve-pocketjs-example serve-top-layer serve-keyed serve-report
 .PHONY: playground-install playground-assets playground-precompile playground-sync-assets playground-build playground-preview playground-release playground-deploy serve-playground
 
 test: test-native test-pocketjs-runtime
@@ -41,8 +41,13 @@ check-koka:
 print-managed-koka:
 	@$(NODE) --input-type=module -e "import { resolveCompiler } from './packages/cli/src/toolchain.js'; const { binary } = await resolveCompiler('3.2.3'); console.log(binary);"
 
+# `pnpm test` covers the CLI packages and the JavaScript sidecars that Koka
+# pastes into generated modules (`extern import { js file ... }`).
 test-tooling:
 	$(PNPM) test
+
+test-sidecar:
+	$(PNPM) run test:sidecar
 
 playground-install:
 	$(PNPM) install --frozen-lockfile
