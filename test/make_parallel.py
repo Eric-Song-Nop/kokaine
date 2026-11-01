@@ -23,6 +23,7 @@ BROWSER_APP_SOURCES = [
 ]
 BROWSER_FIXTURE_SOURCES = [
     "test/dom-errors.kk",
+    "test/dom-namespaces.kk",
     "test/dom-lifecycle.kk",
     "test/dom-range-safety.kk",
     "test/dom-mount-rollback.kk",

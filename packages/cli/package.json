@@ -2,7 +2,7 @@
   "name": "@kokaine/cli",
   "version": "0.1.0",
   "description": "npm-native build, development, and diagnostics tooling for Kokaine",
-  "license": "Apache-2.0",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Eric-Song-Nop/kokaine.git",
@@ -39,6 +39,6 @@
     "vite": "^8.1.5"
   },
   "engines": {
-    "node": "^20.19.0 || >=22.12.0"
+    "node": ">=22.12.0"
   }
 }

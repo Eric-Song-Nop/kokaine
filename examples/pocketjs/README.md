@@ -14,7 +14,7 @@ cd pocketjs
 bun install --frozen-lockfile
 ```
 
-Install this repository's locked npm dependencies with `npm ci` before serving.
+Install this repository's locked npm dependencies with `pnpm install --frozen-lockfile` before serving.
 
 Build the Koka bundle and Pocket pak, then serve them with the locked
 browser/WASM host:

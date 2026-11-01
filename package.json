@@ -2,7 +2,7 @@
   "name": "@kokaine/core",
   "version": "0.1.1",
   "description": "A fine-grained UI runtime for Koka",
-  "license": "Apache-2.0",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Eric-Song-Nop/kokaine.git"
@@ -25,7 +25,7 @@
     "sources": [
       "src"
     ],
-    "compiler": ">=3.2.3 <3.3.0",
+    "compiler": ">=3.2.3 <3.2.8",
     "targets": [
       "jsweb"
     ]
@@ -34,11 +34,11 @@
     "packages/*"
   ],
   "scripts": {
-    "test:cli": "npm test --workspace @kokaine/cli && npm test --workspace @kokaine/create",
-    "test": "npm run test:cli"
+    "test:cli": "pnpm --filter @kokaine/cli --filter @kokaine/create test",
+    "test": "pnpm run test:cli"
   },
   "engines": {
-    "node": "^20.19.0 || >=22.12.0"
+    "node": ">=22.12.0"
   },
   "packageManager": "pnpm@11.20.0"
 }
