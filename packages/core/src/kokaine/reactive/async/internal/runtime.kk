@@ -690,17 +690,20 @@ fun register-owned-disposer(root : root<<ui|e>>, dispose : dispose-fn)
 // Scheduled host actions are ordinary generation-owned tasks. Keep their
 // structural phase evidence live through registration; erasing it would make
 // owner cleanup masks invalid at runtime on Koka's JavaScript backend.
+//
+// A scheduled action is ready as soon as it is scheduled, so setup completes
+// the task synchronously: the task becomes Ready and the dispatcher posts the
+// one turn which runs the action in a fresh re-entry batch. Cancellation and
+// retirement claim the Ready task exactly as they claimed the Pending one,
+// and a dispatcher rejection cancels it through the ordinary Ready path.
 fun register-scheduled-ioc(root : root<<ui|e>>,
                            runtime : generation-runtime<e>,
                            scope : async-scope,
                            host-action : () -> ui ())
                           : <signal-write,pure,ui|e> ()
   val scheduled-setup = fn(resume)
-    if runtime.runtime-family.family-dispatcher.dispatch(
-         fn() resume(Result(())))
-    then Ok(fn() ())
-    else Error(Exception("async host dispatcher rejected scheduled action",
-                         ExnError))
+    resume(Result(()))
+    Ok(fn() ())
   val scheduled-resume = fn(result)
     match result
       Result(_) -> host-action()
