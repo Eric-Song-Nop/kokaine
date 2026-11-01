@@ -19,6 +19,9 @@ import kokaine/dom/internal/keyed-transaction
 import std/core/unsafe
 import std/core/undiv
 
+extern import
+  js file "dom-inline.js"
+
 
 // --------------------------------------------------------------------------
 // Opaque browser values
@@ -183,7 +186,7 @@ extern any-reentry(value : any) : reentry<<ui>>
 // become Koka's `exn` effect. Keep raw exceptions inside this tiny result box
 // and rethrow them through Koka so handler/finally state is always restored.
 extern dom-attempt-raw(action : () -> ui a) : ui any
-  js inline "(function(){ try { return { ok:true, value:(#1)() }; } catch(error) { return { ok:false, message:String(error && error.message != null ? error.message : error) }; } })()"
+  js inline "kokaineDomAttemptRaw(#1)"
 
 extern dom-attempt-ok(result : any) : bool
   js inline "!!(#1).ok"
@@ -204,14 +207,14 @@ extern dom-attempt-message(result : any) : string
 // the rest of the DOM adapter, direct calls through deliberately retained or
 // foreign native primitives are outside the cooperative host contract.
 extern dom-install-shadow-tracker(parent : node) : ui ()
-  js inline "(function(parent){ var doc=parent && (parent.nodeType===9 ? parent : parent.ownerDocument); var view=doc && doc.defaultView; if(!view || !view.Element) throw new Error('cannot install Kokaine shadow-root tracking outside a DOM realm'); var key=Symbol.for('kokaine.dom.shadow-roots'); var tracker=globalThis[key]; if(!tracker){ tracker={ version:1, known:new WeakSet(), closed:new WeakSet(), realms:new WeakMap() }; tracker.remember=function(root){ var pending=root && root.childNodes ? Array.prototype.slice.call(root.childNodes) : []; while(pending.length){ var current=pending.pop(); if(current && current.nodeType===1){ tracker.known.add(current); if(current.localName==='template' && current.content){ var mode=current.getAttribute('shadowrootmode'); if(mode && mode.toLowerCase()==='closed' && current.parentNode && current.parentNode.nodeType===1) tracker.closed.add(current.parentNode); var templateChildren=Array.prototype.slice.call(current.content.childNodes); for(var j=0;j<templateChildren.length;j++) pending.push(templateChildren[j]); } } var children=current && current.childNodes ? Array.prototype.slice.call(current.childNodes) : []; for(var i=0;i<children.length;i++) pending.push(children[i]); } }; globalThis[key]=tracker; } if(tracker.version!==1 || !tracker.known || !tracker.closed || !tracker.realms || typeof tracker.remember!=='function') throw new Error('invalid Kokaine shadow-root tracker'); var prototype=view.Element.prototype; var state=tracker.realms.get(view); if(state){ var intact=state.wrapper ? prototype.attachShadow===state.wrapper : typeof prototype.attachShadow!=='function'; if(state.prototype!==prototype || !intact){ state.replaced=true; } return; } var descriptor=Object.getOwnPropertyDescriptor(prototype,'attachShadow'); if(!descriptor || typeof descriptor.value!=='function'){ if(typeof prototype.attachShadow==='function') throw new Error('cannot safely wrap this DOM realm attachShadow implementation'); tracker.realms.set(view,{ prototype:prototype, wrapper:null }); return; } var original=descriptor.value; var wrapper=function attachShadow(){ var root=original.apply(this,arguments); tracker.known.add(this); try { var mode=root && root.mode; if(mode!=='open') tracker.closed.add(this); } catch(error) { tracker.closed.add(this); throw error; } return root; }; Object.defineProperty(prototype,'attachShadow',{ configurable:descriptor.configurable, enumerable:descriptor.enumerable, writable:descriptor.writable, value:wrapper }); tracker.realms.set(view,{ prototype:prototype, wrapper:wrapper }); })(#1)"
+  js inline "kokaineDomInstallShadowTracker(#1)"
 
 // The namespace follows the HTML parser's rules so SVG and MathML created by
 // the DOM adapter match what SSR markup parses into: `svg` and `math` switch
 // namespace, children inherit it, and `foreignObject` or a MathML text
 // integration point returns to HTML.
 extern dom-create-element(parent : node, name : string) : ui element
-  js inline "(function(parent,name){ var doc=parent && (parent.nodeType===9 ? parent : parent.ownerDocument); if(!doc) throw new Error('cannot create a Kokaine element without an owner document'); var svg='http://www.w3.org/2000/svg', mathml='http://www.w3.org/1998/Math/MathML'; var ns=null; if(name==='svg') ns=svg; else if(name==='math') ns=mathml; else if(parent && parent.nodeType===1){ var pns=parent.namespaceURI, plocal=parent.localName; if(pns===svg && plocal!=='foreignObject') ns=svg; else if(pns===mathml && (name==='mglyph' || name==='malignmark' || !/^(mi|mo|mn|ms|mtext|annotation-xml)$/.test(plocal))) ns=mathml; } var value=ns ? doc.createElementNS(ns,name) : doc.createElement(name); var tracker=globalThis[Symbol.for('kokaine.dom.shadow-roots')]; if(tracker && tracker.known) tracker.known.add(value); return value; })(#1,#2)"
+  js inline "kokaineDomCreateElement(#1,#2)"
 
 extern dom-create-text(value : string) : ui node
   js inline "document.createTextNode(#1)"
@@ -229,13 +232,13 @@ extern element-node(value : element) : node
 extern dom-record-owner(value : node, root : root<<ui>>,
                         portal : reentry<<ui>>)
                        : ui dom-owner-registration
-  js inline "(function(){ var key=Symbol.for('kokaine.dom.owners'); var registry=globalThis[key]; if(!registry || !registry.owners || !registry.roots){ registry={ owners:new WeakMap(), roots:new WeakMap(), nextId:1 }; globalThis[key]=registry; } var ownerId=registry.roots.get(#2); if(ownerId==null){ ownerId=registry.nextId++; registry.roots.set(#2,ownerId); } var entry={ ownerId:ownerId, portal:#3, retired:false }; registry.owners.set(#1,entry); return [{ node:#1, ownerId:ownerId, entry:entry }]; })()"
+  js inline "kokaineDomRecordOwner(#1,#2,#3)"
 
 extern dom-retire-owners(value : dom-owner-registration) : ui ()
-  js inline "(function(){ var registry=globalThis[Symbol.for('kokaine.dom.owners')]; var handles=#1 || []; for(var i=0;i<handles.length;i++){ var handle=handles[i]; var entry=handle.entry; if(entry){ entry.portal=null; entry.retired=true; } if(registry && registry.owners && handle.node){ var current=registry.owners.get(handle.node); if(current===entry && current.ownerId===handle.ownerId){ registry.owners.set(handle.node,entry); } } handle.node=null; handle.entry=null; } })()"
+  js inline "kokaineDomRetireOwners(#1)"
 
 extern dom-find-owner(value : node, root : root<<ui>>) : ui any
-  js inline "(function(){ var registry=globalThis[Symbol.for('kokaine.dom.owners')]; if(!registry || !registry.owners || !registry.roots) return { state:0 }; var ownerId=registry.roots.get(#2); if(ownerId==null) return { state:0 }; var current=#1; while(current){ var entry=registry.owners.get(current); if(entry && entry.ownerId===ownerId){ if(entry.retired || !entry.portal) return { state:2 }; return { state:1, portal:entry.portal }; } current=current.parentNode || current.host || null; } return { state:0 }; })()"
+  js inline "kokaineDomFindOwner(#1,#2)"
 
 extern dom-owner-state(value : any) : int
   js inline "Number((#1).state)"
@@ -253,11 +256,11 @@ extern dom-insert-before(parent : node, child : node, before : node) : ui ()
 // If the final append/insert throws, neither endpoint has become observable in
 // the target DOM.
 extern dom-append-marker-pair(parent : node, first : node, last : node) : ui ()
-  js inline "(function(){ var rangeFirst=#2; var rangeLast=#3; var fragment=document.createDocumentFragment(); fragment.appendChild(rangeFirst); fragment.appendChild(rangeLast); try { (#1).appendChild(fragment); } catch(error) { try { if(rangeFirst.parentNode) Node.prototype.removeChild.call(rangeFirst.parentNode,rangeFirst); } catch(_) {} try { if(rangeLast.parentNode) Node.prototype.removeChild.call(rangeLast.parentNode,rangeLast); } catch(_) {} throw error; } })()"
+  js inline "kokaineDomAppendMarkerPair(#1,#2,#3)"
 
 extern dom-insert-marker-pair-before(parent : node, first : node, last : node,
                                      before : node) : ui ()
-  js inline "(function(){ var rangeFirst=#2; var rangeLast=#3; var fragment=document.createDocumentFragment(); fragment.appendChild(rangeFirst); fragment.appendChild(rangeLast); try { (#1).insertBefore(fragment,#4); } catch(error) { try { if(rangeFirst.parentNode) Node.prototype.removeChild.call(rangeFirst.parentNode,rangeFirst); } catch(_) {} try { if(rangeLast.parentNode) Node.prototype.removeChild.call(rangeLast.parentNode,rangeLast); } catch(_) {} throw error; } })()"
+  js inline "kokaineDomInsertMarkerPairBefore(#1,#2,#3,#4)"
 
 extern dom-same-node(left : node, right : node) : bool
   js inline "(#1 === #2)"
@@ -266,10 +269,10 @@ extern dom-same-node(left : node, right : node) : bool
 // can be mutated by application JavaScript, custom-element callbacks, or test
 // fault injection, so reconciliation never trusts retained marker handles.
 extern dom-range-first(parent : node, first : node, last : node) : ui node
-  js inline "(function(rangeParent,rangeFirst,rangeLast){ if(!rangeParent || !rangeFirst || !rangeLast || rangeFirst===rangeLast || rangeFirst.parentNode!==rangeParent || rangeLast.parentNode!==rangeParent){ throw new Error('invalid Kokaine DOM range: endpoints do not share the expected parent'); } var n=rangeFirst; while(n && n!==rangeLast) n=n.nextSibling; if(n!==rangeLast){ throw new Error('invalid Kokaine DOM range: closing marker is not reachable after opening marker'); } return rangeFirst.nextSibling; })(#1,#2,#3)"
+  js inline "kokaineDomRangeFirst(#1,#2,#3)"
 
 extern dom-range-next(parent : node, first : node, last : node) : ui node
-  js inline "(function(rangeParent,rangeFirst,rangeLast){ if(!rangeParent || !rangeFirst || !rangeLast || rangeFirst===rangeLast || rangeFirst.parentNode!==rangeParent || rangeLast.parentNode!==rangeParent){ throw new Error('invalid Kokaine DOM range: endpoints do not share the expected parent'); } var n=rangeFirst; while(n && n!==rangeLast) n=n.nextSibling; if(n!==rangeLast){ throw new Error('invalid Kokaine DOM range: closing marker is not reachable after opening marker'); } var next=rangeLast.nextSibling; if(!next){ throw new Error('invalid Kokaine keyed DOM range: row has no following boundary'); } return next; })(#1,#2,#3)"
+  js inline "kokaineDomRangeNext(#1,#2,#3)"
 
 // Move one inclusive row range with verified host operations.  Validation is
 // deliberately complete before extraction.  Custom-element-shaped nodes,
@@ -282,19 +285,19 @@ extern dom-range-next(parent : node, first : node, last : node) : ui node
 // listeners, form values, and owner registrations are retained.
 extern dom-validate-range-move-lifecycle(parent : node, first : node,
                                          last : node) : ui ()
-  js inline "(function(rangeParent,rangeFirst,rangeLast){ var doc=rangeParent && (rangeParent.nodeType===9 ? rangeParent : rangeParent.ownerDocument); var view=doc && doc.defaultView; var tracker=globalThis[Symbol.for('kokaine.dom.shadow-roots')]; var state=view && tracker && tracker.realms && tracker.realms.get(view); var prototype=view && view.Element && view.Element.prototype; var intact=state && state.prototype===prototype && (state.wrapper ? prototype.attachShadow===state.wrapper : typeof prototype.attachShadow!=='function'); if(!tracker || tracker.version!==1 || !tracker.known || !tracker.closed || !state || !intact) throw new Error('cannot safely move keyed row: shadow-root tracking is unavailable'); var documentPrototype=view.Document && view.Document.prototype; var createElement=documentPrototype && documentPrototype.createElement; var createElementNS=documentPrototype && documentPrototype.createElementNS; var outerHTMLDescriptor=prototype && Object.getOwnPropertyDescriptor(prototype,'outerHTML'); var serializeOuterHTML=outerHTMLDescriptor && outerHTMLDescriptor.get; if(typeof createElement!=='function' || typeof createElementNS!=='function' || typeof serializeOuterHTML!=='function') throw new Error('cannot safely move keyed row: native element inspection is unavailable'); function canHostShadow(element){ var name=element.localName || ''; return name.indexOf('-')>=0 || ['article','aside','blockquote','body','div','footer','h1','h2','h3','h4','h5','h6','header','main','nav','p','section','span'].indexOf(name)>=0; } function hasCustomPrototype(element){ var name=element.localName || ''; if(name.indexOf('-')>=0) return true; var namespace=element.namespaceURI; var baseline=namespace ? createElementNS.call(doc,namespace,name) : createElement.call(doc,name); return Object.getPrototypeOf(element)!==Object.getPrototypeOf(baseline); } function hasSerializedIsValue(element){ var serialized=serializeOuterHTML.call(element); var end=serialized.indexOf('>'); return end>=0 && serialized.slice(0,end).indexOf(' is=\"')>=0; } var pending=[]; var n=rangeFirst; while(n){ pending.push(n); if(n===rangeLast) break; n=n.nextSibling; } if(n!==rangeLast) throw new Error('invalid Kokaine DOM move: closing marker is not reachable after opening marker'); while(pending.length){ var current=pending.pop(); if(current && current.nodeType===1){ if(!(current instanceof view.Element)) throw new Error('cannot safely move keyed row: foreign-realm element lifecycle state is opaque'); var customized=current.getAttribute('is'); if(customized || hasCustomPrototype(current) || hasSerializedIsValue(current)) throw new Error('cannot safely move keyed row: custom-element move callbacks are synchronous and cannot be atomically published'); if(tracker.closed.has(current)) throw new Error('cannot safely move keyed row: closed shadow roots are opaque'); if(state.wrapper && !current.shadowRoot && canHostShadow(current) && !tracker.known.has(current)) throw new Error('cannot safely move keyed row: an external shadow host may contain an untracked closed root'); } var children=current && current.childNodes ? Array.prototype.slice.call(current.childNodes) : []; if(current && current.shadowRoot) children=children.concat(Array.prototype.slice.call(current.shadowRoot.childNodes)); for(var i=0;i<children.length;i++) pending.push(children[i]); } })(#1,#2,#3)"
+  js inline "kokaineDomValidateRangeMoveLifecycle(#1,#2,#3)"
 
 extern dom-validate-range-move-focus(parent : node, first : node,
                                      last : node) : ui ()
-  js inline "(function(rangeParent,rangeFirst,rangeLast){ var rangeDocument=rangeParent && (rangeParent.nodeType===9 ? rangeParent : rangeParent.ownerDocument); var rangeView=rangeDocument && rangeDocument.defaultView; if(!rangeDocument || !rangeView) throw new Error('cannot inspect keyed-row focus outside a DOM realm'); function movePrimitive(parent){ if(rangeView.Document && parent instanceof rangeView.Document && typeof rangeView.Document.prototype.moveBefore==='function') return rangeView.Document.prototype.moveBefore; if(rangeView.DocumentFragment && parent instanceof rangeView.DocumentFragment && typeof rangeView.DocumentFragment.prototype.moveBefore==='function') return rangeView.DocumentFragment.prototype.moveBefore; if(rangeView.Element && parent instanceof rangeView.Element && typeof rangeView.Element.prototype.moveBefore==='function') return rangeView.Element.prototype.moveBefore; return null; } var primitive=movePrimitive(rangeParent); if(primitive && rangeParent.moveBefore===primitive) return; var pending=[]; var all=[]; var n=rangeFirst; while(n){ pending.push(n); if(n===rangeLast) break; n=n.nextSibling; } if(n!==rangeLast) throw new Error('invalid Kokaine DOM move: closing marker is not reachable after opening marker'); while(pending.length){ var current=pending.pop(); all.push(current); var children=current && current.childNodes ? Array.prototype.slice.call(current.childNodes) : []; if(current && current.shadowRoot) children=children.concat(Array.prototype.slice.call(current.shadowRoot.childNodes)); for(var i=0;i<children.length;i++) pending.push(children[i]); } var active=rangeDocument.activeElement; while(active && active.shadowRoot && active.shadowRoot.activeElement) active=active.shadowRoot.activeElement; if(!active || all.indexOf(active)<0) return; if(active.localName==='iframe') throw new Error('cannot safely move keyed row: fallback DOM moves cannot inspect the focused subtree'); if(typeof active.selectionStart==='number' && typeof active.selectionEnd==='number') return; var selectionRoot=active.getRootNode ? active.getRootNode() : rangeDocument; if(selectionRoot && selectionRoot.host && typeof selectionRoot.getSelection!=='function') throw new Error('cannot safely move keyed row: this browser cannot inspect shadow-root selections'); var selection=selectionRoot && typeof selectionRoot.getSelection==='function' ? selectionRoot.getSelection() : rangeDocument.getSelection(); if(selection && selection.rangeCount>0 && typeof selection.setBaseAndExtent!=='function') throw new Error('cannot safely move keyed row: this browser cannot restore directional DOM selections'); })(#1,#2,#3)"
+  js inline "kokaineDomValidateRangeMoveFocus(#1,#2,#3)"
 
 extern dom-capture-range-focus(parent : node, first : node,
                                last : node) : ui any
-  js inline "(function(rangeParent,rangeFirst,rangeLast){ var rangeDocument=rangeParent && (rangeParent.nodeType===9 ? rangeParent : rangeParent.ownerDocument); if(!rangeDocument) throw new Error('cannot capture keyed-row focus without an owner document'); var nodes=[]; var n=rangeFirst; while(n){ nodes.push(n); if(n===rangeLast) break; n=n.nextSibling; } if(n!==rangeLast) throw new Error('invalid Kokaine DOM move: closing marker is not reachable after opening marker'); function deepActive(){ var active=rangeDocument.activeElement; while(active && active.shadowRoot && active.shadowRoot.activeElement) active=active.shadowRoot.activeElement; return active; } function composedParent(node){ if(!node) return null; if(node.parentNode) return node.parentNode; var tree=node.getRootNode ? node.getRootNode() : null; return tree && tree.host ? tree.host : null; } function belongs(node){ var current=node; while(current){ if(nodes.indexOf(current)>=0) return true; current=composedParent(current); } return false; } function sameControlSelection(active,selection){ return active.selectionStart===selection[0] && active.selectionEnd===selection[1] && active.selectionDirection===selection[2]; } function sameDomSelection(selection,snapshot){ return selection.anchorNode===snapshot[0] && selection.anchorOffset===snapshot[1] && selection.focusNode===snapshot[2] && selection.focusOffset===snapshot[3]; } var active=deepActive(); var ownsFocus=!!active && belongs(active); var controlSelection=null; var domSelection=null; if(ownsFocus && typeof active.selectionStart==='number' && typeof active.selectionEnd==='number'){ controlSelection=[active.selectionStart,active.selectionEnd,active.selectionDirection]; } else if(ownsFocus){ var selectionRoot=active.getRootNode ? active.getRootNode() : rangeDocument; var selection=selectionRoot && typeof selectionRoot.getSelection==='function' ? selectionRoot.getSelection() : rangeDocument.getSelection(); if(selection && selection.rangeCount>0 && belongs(selection.anchorNode) && belongs(selection.focusNode)){ domSelection=[selection.anchorNode,selection.anchorOffset,selection.focusNode,selection.focusOffset]; } } return { restore:function(){ if(!ownsFocus) return; if(!active.isConnected) throw new Error('cannot restore keyed-row focus: the focused node was detached'); if(deepActive()!==active){ if(typeof active.focus!=='function') throw new Error('cannot restore keyed-row focus: the focused node is not focusable'); try { active.focus({ preventScroll:true }); } catch(_) { active.focus(); } if(deepActive()!==active) throw new Error('cannot restore keyed-row focus: focus restoration did not take effect'); } if(controlSelection){ if(typeof active.setSelectionRange!=='function') throw new Error('cannot restore keyed-row selection: the focused control has no selection API'); if(!sameControlSelection(active,controlSelection)) active.setSelectionRange(controlSelection[0],controlSelection[1],controlSelection[2]); if(!sameControlSelection(active,controlSelection)) throw new Error('cannot restore keyed-row selection: control selection restoration did not take effect'); } else if(domSelection){ if(!domSelection[0].isConnected || !domSelection[2].isConnected) throw new Error('cannot restore keyed-row selection: a selection endpoint was detached'); var selectionRoot=active.getRootNode ? active.getRootNode() : rangeDocument; var selection=selectionRoot && typeof selectionRoot.getSelection==='function' ? selectionRoot.getSelection() : rangeDocument.getSelection(); if(!selection || typeof selection.setBaseAndExtent!=='function') throw new Error('cannot restore keyed-row selection: the directional selection API is unavailable'); if(!sameDomSelection(selection,domSelection)) selection.setBaseAndExtent(domSelection[0],domSelection[1],domSelection[2],domSelection[3]); if(!sameDomSelection(selection,domSelection)) throw new Error('cannot restore keyed-row selection: DOM selection restoration did not take effect'); } } }; })(#1,#2,#3)"
+  js inline "kokaineDomCaptureRangeFocus(#1,#2,#3)"
 
 extern dom-move-range-before(parent : node, first : node, last : node,
                              before : node, focus : any) : ui ()
-  js inline "(function(rangeParent,rangeFirst,rangeLast,target,focusState){ if(!rangeParent || !rangeFirst || !rangeLast || !target || rangeFirst===rangeLast || rangeFirst.parentNode!==rangeParent || rangeLast.parentNode!==rangeParent || target.parentNode!==rangeParent){ throw new Error('invalid Kokaine DOM move: range and target must share the expected parent'); } var rangeDocument=rangeParent.nodeType===9 ? rangeParent : rangeParent.ownerDocument; var rangeView=rangeDocument && rangeDocument.defaultView; if(!rangeDocument || !rangeView || !rangeView.Node) throw new Error('cannot move a keyed row outside a DOM realm'); var nodePrototype=rangeView.Node.prototype; function movePrimitive(parent){ if(rangeView.Document && parent instanceof rangeView.Document && typeof rangeView.Document.prototype.moveBefore==='function') return rangeView.Document.prototype.moveBefore; if(rangeView.DocumentFragment && parent instanceof rangeView.DocumentFragment && typeof rangeView.DocumentFragment.prototype.moveBefore==='function') return rangeView.DocumentFragment.prototype.moveBefore; if(rangeView.Element && parent instanceof rangeView.Element && typeof rangeView.Element.prototype.moveBefore==='function') return rangeView.Element.prototype.moveBefore; return null; } var nodes=[]; var n=rangeFirst; while(n){ nodes.push(n); if(n===rangeLast) break; n=n.nextSibling; } if(n!==rangeLast){ throw new Error('invalid Kokaine DOM move: closing marker is not reachable after opening marker'); } if(nodes.indexOf(target)>=0){ throw new Error('invalid Kokaine DOM move: target lies inside the moved range'); } if(rangeLast.nextSibling===target) return; var originalNext=rangeLast.nextSibling; var nativeMove=movePrimitive(rangeParent); var preserveMoves=!!nativeMove && rangeParent.moveBefore===nativeMove; function restoreFocus(){ if(focusState && typeof focusState.restore==='function') focusState.restore(); } function gather(values){ var fragment=rangeDocument.createDocumentFragment(); for(var i=0;i<values.length;i++) nodePrototype.appendChild.call(fragment,values[i]); return fragment; } function place(anchor){ if(preserveMoves){ for(var i=0;i<nodes.length;i++) nativeMove.call(rangeParent,nodes[i],anchor); } else { rangeParent.insertBefore(gather(nodes),anchor); } } function detachMoved(){ var passes=Math.max(2,nodes.length+2); while(passes-- > 0){ var attached=false; for(var i=0;i<nodes.length;i++){ var parent=nodes[i].parentNode; if(parent){ attached=true; nodePrototype.removeChild.call(parent,nodes[i]); } } if(!attached) return; } throw new Error('a retired keyed range was synchronously reinserted'); } function verify(anchor){ for(var i=0;i<nodes.length;i++){ if(nodes[i].parentNode!==rangeParent) throw new Error('a moved node escaped its keyed range'); if(i>0 && nodes[i-1].nextSibling!==nodes[i]) throw new Error('the keyed range became non-contiguous'); } if(nodes[nodes.length-1].nextSibling!==anchor) throw new Error('the keyed range was not placed at its requested boundary'); } function rollback(){ if(originalNext && originalNext.parentNode!==rangeParent){ detachMoved(); throw new Error('the original keyed range successor was detached'); } var anchor=originalNext || null; if(preserveMoves){ for(var i=0;i<nodes.length;i++) nativeMove.call(rangeParent,nodes[i],anchor); } else { nodePrototype.insertBefore.call(rangeParent,gather(nodes),anchor); } restoreFocus(); verify(anchor); } try { place(target); restoreFocus(); verify(target); } catch(error) { try { rollback(); } catch(rollbackError) { throw new Error(String(error && error.message != null ? error.message : error) + '; keyed DOM move rollback failed: ' + String(rollbackError && rollbackError.message != null ? rollbackError.message : rollbackError)); } throw error; } })(#1,#2,#3,#4,#5)"
+  js inline "kokaineDomMoveRangeBefore(#1,#2,#3,#4,#5)"
 
 extern dom-set-text(value : node, content : string) : ui ()
   js inline "((#1).data = #2)"
@@ -319,7 +322,7 @@ extern dom-set-int-property(value : element, name : string,
   js inline "((#1)[#2] = Number(#3))"
 
 extern dom-clean-range(first : node, last : node, inclusive : bool) : ui ()
-  js inline "(function(){ var rangeFirst=#1; var rangeLast=#2; var includeEndpoints=#3; var firstParent=rangeFirst && rangeFirst.parentNode; var lastParent=rangeLast && rangeLast.parentNode; if(!firstParent && !lastParent) return; if(!firstParent || firstParent!==lastParent || rangeFirst===rangeLast){ throw new Error('invalid Kokaine DOM range: endpoints do not share a parent'); } var roots=[]; var n=includeEndpoints ? rangeFirst : rangeFirst.nextSibling; while(n && n!==rangeLast){ roots.push(n); n=n.nextSibling; } if(n!==rangeLast){ throw new Error('invalid Kokaine DOM range: closing marker is not reachable after opening marker'); } if(includeEndpoints) roots.push(rangeLast); var descendants=[]; var pending=roots.slice(); while(pending.length){ var current=pending.pop(); var children=current && current.childNodes ? Array.prototype.slice.call(current.childNodes) : []; if(current && current.shadowRoot) children=children.concat(Array.prototype.slice.call(current.shadowRoot.childNodes)); for(var i=0;i<children.length;i++){ descendants.push(children[i]); pending.push(children[i]); } } function retained(node){ var current=node; while(current){ for(var i=0;i<roots.length;i++){ if(roots[i]===current || Node.prototype.contains.call(roots[i],current)) return true; } var tree=current.getRootNode ? current.getRootNode() : null; current=tree && tree.host ? tree.host : null; } return false; } var passes=Math.max(2,roots.length+descendants.length+2); while(passes-- > 0){ var attached=false; for(var i=0;i<roots.length;i++){ var parent=roots[i].parentNode; if(parent){ attached=true; Node.prototype.removeChild.call(parent,roots[i]); } } for(var j=0;j<descendants.length;j++){ var childParent=descendants[j].parentNode; if(childParent && !retained(descendants[j])){ attached=true; Node.prototype.removeChild.call(childParent,descendants[j]); } } if(!attached) return; } for(var i=0;i<roots.length;i++){ if(roots[i].parentNode){ throw new Error('invalid Kokaine DOM cleanup: a removed node was synchronously reinserted'); } } for(var j=0;j<descendants.length;j++){ if(descendants[j].parentNode && !retained(descendants[j])){ throw new Error('invalid Kokaine DOM cleanup: a removed descendant escaped its range'); } } })()"
+  js inline "kokaineDomCleanRange(#1,#2,#3)"
 
 fun dom-clear-between(first : node, last : node) : ui ()
   dom-clean-range(first,last,False)
@@ -329,47 +332,47 @@ fun dom-remove-range(first : node, last : node) : ui ()
 
 // Validate and snapshot an inclusive row range without changing the DOM.
 extern dom-stage-retirement(first : node, last : node) : ui dom-retirement
-  js inline "(function(){ var rangeFirst=#1; var rangeLast=#2; var parent=rangeFirst && rangeFirst.parentNode; if(!parent) throw new Error('invalid Kokaine keyed retirement range: opening marker is detached'); if(parent!==rangeLast.parentNode) throw new Error('invalid Kokaine keyed retirement range: endpoints have different parents'); if(rangeFirst===rangeLast) throw new Error('invalid Kokaine keyed retirement range: endpoints are identical'); var roots=[]; var node=rangeFirst; while(node){ roots.push(node); if(node===rangeLast) break; node=node.nextSibling; } if(node!==rangeLast) throw new Error('invalid Kokaine keyed retirement range: closing marker is unreachable'); var descendants=[]; var pending=roots.slice(); while(pending.length){ var current=pending.pop(); var children=current && current.childNodes ? Array.prototype.slice.call(current.childNodes) : []; if(current && current.shadowRoot) children=children.concat(Array.prototype.slice.call(current.shadowRoot.childNodes)); for(var i=0;i<children.length;i++){ descendants.push(children[i]); pending.push(children[i]); } } var doc=rangeFirst.ownerDocument; var view=doc && doc.defaultView; var proto=view && view.Node && view.Node.prototype; if(!proto || typeof proto.removeChild!=='function' || typeof proto.contains!=='function') throw new Error('cannot stage Kokaine keyed retirement without its DOM realm'); return { roots:roots, descendants:descendants, proto:proto }; })()"
+  js inline "kokaineDomStageRetirement(#1,#2)"
 
 // Detach a staged snapshot. If a host primitive throws before detaching its
 // target, stop immediately so the complete remaining row stays retryable. A
 // commit-then-throw is recognized by inspecting the target after the throw.
 extern dom-run-retirement(value : dom-retirement) : ui ()
-  js inline "(function(handle){ if(!handle || !handle.roots) return; var roots=handle.roots; var descendants=handle.descendants; var proto=handle.proto; var removeChild=proto && proto.removeChild; var contains=proto && proto.contains; if(typeof removeChild!=='function' || typeof contains!=='function') throw new Error('cannot run Kokaine keyed retirement without its DOM realm'); function retained(node){ var current=node; while(current){ for(var i=0;i<roots.length;i++){ if(roots[i]===current || contains.call(roots[i],current)) return true; } var tree=current.getRootNode ? current.getRootNode() : null; current=tree && tree.host ? tree.host : null; } return false; } function detach(node,escaped){ var parent=node && node.parentNode; if(!parent || (escaped && retained(node))) return; try { removeChild.call(parent,node); } catch(error) { if(node.parentNode && (!escaped || !retained(node))) throw error; } } var passes=Math.max(2,roots.length+descendants.length+2); while(passes-- > 0){ for(var i=0;i<roots.length;i++) detach(roots[i],false); for(var j=0;j<descendants.length;j++) detach(descendants[j],true); var pending=false; for(var r=0;r<roots.length;r++){ if(roots[r].parentNode){ pending=true; break; } } if(!pending){ for(var d=0;d<descendants.length;d++){ if(descendants[d].parentNode && !retained(descendants[d])){ pending=true; break; } } } if(!pending) return; } throw new Error('invalid Kokaine DOM cleanup: staged keyed nodes were synchronously reinserted'); })(#1)"
+  js inline "kokaineDomRunRetirement(#1)"
 
 extern dom-release-retirement(value : dom-retirement) : ui ()
-  js inline "(function(handle){ if(!handle) return; handle.roots=null; handle.descendants=null; handle.proto=null; })(#1)"
+  js inline "kokaineDomReleaseRetirement(#1)"
 
 extern dom-append-html(parent : node, content : string,
                        root : root<<ui>>, portal : reentry<<ui>>)
                       : ui dom-owner-registration
-  js inline "(function(parent){ var doc=parent && (parent.nodeType===9 ? parent : parent.ownerDocument); if(!doc) throw new Error('cannot create Kokaine trusted HTML without an owner document'); var template=doc.createElement('template'); template.innerHTML=#2; var tracker=globalThis[Symbol.for('kokaine.dom.shadow-roots')]; if(!tracker || typeof tracker.remember!=='function') throw new Error('cannot register Kokaine trusted HTML without shadow-root tracking'); tracker.remember(template.content); var key=Symbol.for('kokaine.dom.owners'); var registry=globalThis[key]; if(!registry || !registry.owners || !registry.roots){ registry={ owners:new WeakMap(), roots:new WeakMap(), nextId:1 }; globalThis[key]=registry; } var ownerId=registry.roots.get(#3); if(ownerId==null){ ownerId=registry.nextId++; registry.roots.set(#3,ownerId); } var handles=[]; Array.from(template.content.childNodes).forEach(function(child){ var entry={ ownerId:ownerId, portal:#4, retired:false }; registry.owners.set(child,entry); handles.push({ node:child, ownerId:ownerId, entry:entry }); }); try { parent.appendChild(template.content); return handles; } catch(error) { handles.forEach(function(handle){ var entry=handle.entry; if(entry){ entry.portal=null; entry.retired=true; } if(registry.owners.get(handle.node)===entry) registry.owners.set(handle.node,entry); handle.node=null; handle.entry=null; }); throw error; } })(#1)"
+  js inline "kokaineDomAppendHtml(#1,#2,#3,#4)"
 
 extern dom-insert-html-before(parent : node, before : node,
                               content : string, root : root<<ui>>,
                               portal : reentry<<ui>>)
                              : ui dom-owner-registration
-  js inline "(function(parent,before){ var doc=parent && (parent.nodeType===9 ? parent : parent.ownerDocument); if(!doc) throw new Error('cannot create Kokaine trusted HTML without an owner document'); var template=doc.createElement('template'); template.innerHTML=#3; var tracker=globalThis[Symbol.for('kokaine.dom.shadow-roots')]; if(!tracker || typeof tracker.remember!=='function') throw new Error('cannot register Kokaine trusted HTML without shadow-root tracking'); tracker.remember(template.content); var key=Symbol.for('kokaine.dom.owners'); var registry=globalThis[key]; if(!registry || !registry.owners || !registry.roots){ registry={ owners:new WeakMap(), roots:new WeakMap(), nextId:1 }; globalThis[key]=registry; } var ownerId=registry.roots.get(#4); if(ownerId==null){ ownerId=registry.nextId++; registry.roots.set(#4,ownerId); } var handles=[]; Array.from(template.content.childNodes).forEach(function(child){ var entry={ ownerId:ownerId, portal:#5, retired:false }; registry.owners.set(child,entry); handles.push({ node:child, ownerId:ownerId, entry:entry }); }); try { parent.insertBefore(template.content,before); return handles; } catch(error) { handles.forEach(function(handle){ var entry=handle.entry; if(entry){ entry.portal=null; entry.retired=true; } if(registry.owners.get(handle.node)===entry) registry.owners.set(handle.node,entry); handle.node=null; handle.entry=null; }); throw error; } })(#1,#2)"
+  js inline "kokaineDomInsertHtmlBefore(#1,#2,#3,#4,#5)"
 
 extern dom-listen(value : element, name : string,
                   action : raw-event -> ui ()) : ui dom-listener
-  js inline "(function(){ var state={ action:#3 }; var f=function(ev){ var current=state.action; return current ? current(ev) : undefined; }; f.__kokaineListenerState=state; try { (#1).addEventListener(#2,f); return f; } catch(error) { state.action=null; try { (#1).removeEventListener(#2,f); } catch(_) {} throw error; } })()"
+  js inline "kokaineDomListen(#1,#2,#3)"
 
 // Drop the Koka closure before asking an unreliable host to detach the ABI
 // trampoline. A callback retained after failed removal is then inert and no
 // longer keeps the root, structural portal, or event K reachable.
 extern dom-retire-listener(listener : dom-listener) : ui ()
-  js inline "(function(){ var state=(#1).__kokaineListenerState; if(state) state.action=null; })()"
+  js inline "kokaineDomRetireListener(#1)"
 
 extern dom-unlisten(value : element, name : string,
                     listener : dom-listener) : ui ()
   js inline "(#1).removeEventListener(#2,#3)"
 
 extern raw-event-value(value : raw-event) : ui string
-  js inline "(function(){ var t=(#1).currentTarget || (#1).target; return (t && t.value != null ? String(t.value) : ''); })()"
+  js inline "kokaineDomRawEventValue(#1)"
 
 extern raw-event-checked(value : raw-event) : ui bool
-  js inline "(function(){ var t=(#1).currentTarget || (#1).target; return !!(t && t.checked); })()"
+  js inline "kokaineDomRawEventChecked(#1)"
 
 extern raw-event-key(value : raw-event) : ui string
   js inline "String((#1).key == null ? '' : (#1).key)"
@@ -388,35 +391,35 @@ extern event-stop-propagation(value : any) : ui ()
 // Native Web IDL getters provide realm-neutral brand checks: unlike
 // `instanceof`, they accept genuine nodes created by another same-origin realm.
 extern dom-require-dialog-target(target : node, message : string) : ui ()
-  js inline "(function(target,message){ if(typeof HTMLDialogElement !== 'function') throw new Error('HTMLDialogElement is not supported by this browser'); var descriptor=Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype,'open'); if(!descriptor || typeof descriptor.get!=='function') throw new Error('HTMLDialogElement.open is not supported by this browser'); try { Reflect.apply(descriptor.get,target,[]); } catch(_) { throw new TypeError(message); } })(#1,#2)"
+  js inline "kokaineDomRequireDialogTarget(#1,#2)"
 
 extern dom-require-element-target(target : node, message : string) : ui ()
-  js inline "(function(target,message){ if(typeof Element !== 'function') throw new Error('Element is not supported by this browser'); var descriptor=Object.getOwnPropertyDescriptor(Element.prototype,'localName'); if(!descriptor || typeof descriptor.get!=='function') throw new Error('Element.localName is not supported by this browser'); try { Reflect.apply(descriptor.get,target,[]); } catch(_) { throw new TypeError(message); } })(#1,#2)"
+  js inline "kokaineDomRequireElementTarget(#1,#2)"
 
 // Read the platform reflection getter directly. An own `popover` class field on
 // a custom element must neither hide a real content attribute nor manufacture
 // popover state where the browser has none.
 extern dom-require-popover-target(target : node, message : string) : ui ()
-  js inline "(function(target,message){ if(typeof HTMLElement !== 'function') throw new Error('HTMLElement is not supported by this browser'); var descriptor=Object.getOwnPropertyDescriptor(HTMLElement.prototype,'popover'); if(!descriptor || typeof descriptor.get!=='function') throw new Error('HTMLElement.popover is not supported by this browser'); var mode; try { mode=Reflect.apply(descriptor.get,target,[]); } catch(_) { throw new TypeError(message); } if(mode!=='auto' && mode!=='manual' && mode!=='hint') throw new TypeError(message); })(#1,#2)"
+  js inline "kokaineDomRequirePopoverTarget(#1,#2)"
 
 extern dom-dialog-show(target : node) : ui ()
-  js inline "(function(target){ if(typeof target.show !== 'function') throw new Error('HTMLDialogElement.show() is not supported by this browser'); target.show(); })(#1)"
+  js inline "kokaineDomDialogShow(#1)"
 
 extern dom-dialog-show-modal(target : node) : ui ()
-  js inline "(function(target){ if(typeof target.showModal !== 'function') throw new Error('HTMLDialogElement.showModal() is not supported by this browser'); target.showModal(); })(#1)"
+  js inline "kokaineDomDialogShowModal(#1)"
 
 extern dom-dialog-close(target : node, result : string) : ui ()
-  js inline "(function(target,result){ if(typeof target.close !== 'function') throw new Error('HTMLDialogElement.close() is not supported by this browser'); target.close(result); })(#1,#2)"
+  js inline "kokaineDomDialogClose(#1,#2)"
 
 // `close()` cannot emulate the cancellable `cancel` event from requestClose.
 extern dom-dialog-request-close(target : node, result : string) : ui ()
-  js inline "(function(target,result){ if(typeof target.requestClose !== 'function') throw new Error('HTMLDialogElement.requestClose() is not supported by this browser'); target.requestClose(result); })(#1,#2)"
+  js inline "kokaineDomDialogRequestClose(#1,#2)"
 
 extern dom-dialog-is-open(target : node) : ui bool
   js inline "!!(#1).open"
 
 extern dom-dialog-is-modal(target : node) : ui bool
-  js inline "(function(target){ if(typeof Element !== 'function' || typeof Element.prototype.matches !== 'function') throw new Error('Element.matches() is not supported by this browser'); try { return Reflect.apply(Element.prototype.matches,target,[':modal']); } catch(error) { if(!error || error.name!=='SyntaxError') throw error; } if(typeof HTMLDialogElement !== 'function') throw new Error('HTMLDialogElement is not supported by this browser'); var openDescriptor=Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype,'open'); var showModal=HTMLDialogElement.prototype.showModal; if(!openDescriptor || typeof openDescriptor.get!=='function') throw new Error('HTMLDialogElement.open is not supported by this browser'); if(typeof showModal!=='function') throw new Error('HTMLDialogElement.showModal() is not supported by this browser'); if(!Reflect.apply(openDescriptor.get,target,[])) return false; try { Reflect.apply(showModal,target,[]); return true; } catch(error) { if(error && error.name==='InvalidStateError') return false; throw error; } })(#1)"
+  js inline "kokaineDomDialogIsModal(#1)"
 
 extern dom-dialog-return-value(target : node) : ui string
   js inline "String((#1).returnValue)"
@@ -424,15 +427,15 @@ extern dom-dialog-return-value(target : node) : ui string
 // A recognized reflected `popover` value distinguishes enabled elements from
 // arbitrary nodes. Do not infer state or simulate unsupported native methods.
 extern dom-popover-show(target : node) : ui ()
-  js inline "(function(target){ if(typeof target.showPopover !== 'function') throw new Error('Element.showPopover() is not supported by this browser'); target.showPopover(); })(#1)"
+  js inline "kokaineDomPopoverShow(#1)"
 
 extern dom-popover-hide(target : node) : ui ()
-  js inline "(function(target){ if(typeof target.hidePopover !== 'function') throw new Error('Element.hidePopover() is not supported by this browser'); target.hidePopover(); })(#1)"
+  js inline "kokaineDomPopoverHide(#1)"
 
 // Some older implementations return `undefined`; querying the selector after
 // the call gives Koka the authoritative post-toggle state in every case.
 extern dom-popover-toggle(target : node) : ui bool
-  js inline "(function(target){ if(typeof target.togglePopover !== 'function') throw new Error('Element.togglePopover() is not supported by this browser'); target.togglePopover(); if(typeof target.matches !== 'function') throw new Error('Element.matches() is not supported by this browser'); return target.matches(':popover-open'); })(#1)"
+  js inline "kokaineDomPopoverToggle(#1)"
 
 // The force overload arrived after the core Popover API. Compare state first so
 // older implementations which ignore that argument still provide a true setter.
@@ -441,16 +444,16 @@ extern dom-popover-toggle(target : node) : ui bool
 // `:modal` covers modal dialogs and the target's own fullscreen flag. Unlike
 // `:fullscreen`, it does not match a retargeted shadow host.
 extern dom-popover-set-open(target : node, open : bool) : ui ()
-  js inline "(function(target,open){ if(typeof target.togglePopover !== 'function') throw new Error('Element.togglePopover() is not supported by this browser'); if(typeof Node !== 'function') throw new Error('Node is not supported by this browser'); if(typeof Document !== 'function') throw new Error('Document is not supported by this browser'); if(typeof Element !== 'function' || typeof Element.prototype.matches !== 'function') throw new Error('Element.matches() is not supported by this browser'); var connectedDescriptor=Object.getOwnPropertyDescriptor(Node.prototype,'isConnected'); var documentDescriptor=Object.getOwnPropertyDescriptor(Node.prototype,'ownerDocument'); var viewDescriptor=Object.getOwnPropertyDescriptor(Document.prototype,'defaultView'); if(!connectedDescriptor || typeof connectedDescriptor.get!=='function') throw new Error('Node.isConnected is not supported by this browser'); if(!documentDescriptor || typeof documentDescriptor.get!=='function') throw new Error('Node.ownerDocument is not supported by this browser'); if(!viewDescriptor || typeof viewDescriptor.get!=='function') throw new Error('Document.defaultView is not supported by this browser'); var nativeMatches=Element.prototype.matches; var matches=function(selector){ return Reflect.apply(nativeMatches,target,[selector]); }; var current=matches(':popover-open'); var desired=!!open; if(current!==desired){ target.togglePopover(); return; } if(desired){ if(typeof target.showPopover !== 'function') throw new Error('Element.showPopover() is not supported by this browser'); target.showPopover(); return; } var doc=Reflect.apply(documentDescriptor.get,target,[]); var view=Reflect.apply(viewDescriptor.get,doc,[]); var connected=Reflect.apply(connectedDescriptor.get,target,[]); var inactive=!connected || !view; if(!inactive){ try { if(view.document!==doc) inactive=true; while(!inactive && view.parent!==view){ var parent=view.parent; var listed=false; for(var i=0;i<parent.length;i++){ if(parent[i]===view){ listed=true; break; } } if(!listed){ inactive=true; break; } view=parent; } } catch(_) { inactive=true; } } if(inactive || matches(':modal')) target.togglePopover(); })(#1,#2)"
+  js inline "kokaineDomPopoverSetOpen(#1,#2)"
 
 extern dom-popover-is-open(target : node) : ui bool
-  js inline "(function(target){ if(typeof target.matches !== 'function') throw new Error('Element.matches() is not supported by this browser'); return target.matches(':popover-open'); })(#1)"
+  js inline "kokaineDomPopoverIsOpen(#1)"
 
 extern dom-toggle-state(value : any) : ui int
-  js inline "(function(event){ if(!event || typeof event!=='object') throw new TypeError('toggle/state requires a DOM event'); if(event.type!=='toggle' && event.type!=='beforetoggle') throw new TypeError('toggle/state requires a toggle or beforetoggle event'); var target=event.currentTarget; if(typeof Element !== 'function') throw new Error('Element is not supported by this browser'); var descriptor=Object.getOwnPropertyDescriptor(Element.prototype,'localName'); if(!descriptor || typeof descriptor.get!=='function') throw new Error('Element.localName is not supported by this browser'); try { Reflect.apply(descriptor.get,target,[]); } catch(_) { throw new TypeError('toggle/state event must have an Element currentTarget'); } if(event.newState==='open') return 1; if(event.newState==='closed') return 0; throw new TypeError('toggle/state event must have an open or closed newState'); })(#1)"
+  js inline "kokaineDomToggleState(#1)"
 
 extern dom-dialog-event-return-value(value : any) : ui string
-  js inline "(function(event){ if(!event || typeof event!=='object' || event.type!=='close') throw new TypeError('dialog/event-return-value requires a close event'); var target=event.currentTarget; if(typeof HTMLDialogElement !== 'function') throw new Error('HTMLDialogElement is not supported by this browser'); var descriptor=Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype,'open'); if(!descriptor || typeof descriptor.get!=='function') throw new Error('HTMLDialogElement.open is not supported by this browser'); try { Reflect.apply(descriptor.get,target,[]); } catch(_) { throw new TypeError('dialog/event-return-value event must have an HTMLDialogElement currentTarget'); } return String(target.returnValue); })(#1)"
+  js inline "kokaineDomDialogEventReturnValue(#1)"
 
 extern dom-report-error(message : string) : ui ()
   js inline "console.error(#1)"
