@@ -83,7 +83,7 @@ loads the pinned `koka-browser-repl.wasm`. `@bjorn3/browser_wasi_shim` exposes
 only the browser-side in-memory filesystem and standard streams these programs
 need. The compressed `koka-runtime.json.gz` bundle supplies the Koka standard
 library and precompiled JavaScript modules, while Vite bundles the current
-`src/kokaine/**/*.kk` tree into the same virtual filesystem. The asset scripts
+`packages/core/src/kokaine/**/*.kk` tree into the same virtual filesystem. The asset scripts
 validate and stage the runtime bundle, all three WASM programs, and the complete
 precompiled module graph under a content-derived release ID.
 This keeps a core or compiler refactor from being mixed with browser-cached
@@ -141,7 +141,7 @@ manual step. To populate the assets explicitly, run `make playground-assets`
   versions pinned in `pnpm-lock.yaml`, including their license files, into
   `public/devtools/`.
 
-After changing `src/kokaine/**`, rebuild the Kokaine precompiled cache and its
+After changing `packages/core/src/kokaine/**`, rebuild the Kokaine precompiled cache and its
 runtime bundle from the repository root:
 
 ```sh

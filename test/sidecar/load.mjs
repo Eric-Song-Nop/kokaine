@@ -6,9 +6,9 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
 export const SIDECARS = {
-  dom: { kk: 'src/kokaine/dom.kk', js: 'src/kokaine/dom-inline.js', prefix: 'kokaineDom' },
-  asyncWeb: { kk: 'src/kokaine/async/web.kk', js: 'src/kokaine/async/web-inline.js', prefix: 'kokaineAsyncWeb' },
-  window: { kk: 'src/kokaine/web/window.kk', js: 'src/kokaine/web/window-inline.js', prefix: 'kokaineWindow' },
+  dom: { kk: 'packages/core/src/kokaine/dom.kk', js: 'packages/core/src/kokaine/dom-inline.js', prefix: 'kokaineDom' },
+  asyncWeb: { kk: 'packages/core/src/kokaine/async/web.kk', js: 'packages/core/src/kokaine/async/web-inline.js', prefix: 'kokaineAsyncWeb' },
+  window: { kk: 'packages/core/src/kokaine/web/window.kk', js: 'packages/core/src/kokaine/web/window-inline.js', prefix: 'kokaineWindow' },
 };
 
 const repoRoot = new URL('../../', import.meta.url);

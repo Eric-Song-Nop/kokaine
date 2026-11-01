@@ -49,7 +49,7 @@
     "@pocketjs/framework": ">=0.6.0 <0.7.0"
   },
   "devDependencies": {
-    "@kokaine/core": "file:../..",
+    "@kokaine/core": "workspace:*",
     "@pocketjs/framework": "0.6.0"
   },
   "koka": {

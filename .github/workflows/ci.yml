@@ -218,7 +218,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: node packages/create-kokaine/bin/create-kokaine.js integration-app
-      - run: npm pkg set 'dependencies.@kokaine/core=file:..' 'devDependencies.@kokaine/cli=file:../packages/cli' --prefix integration-app
+      - run: npm pkg set 'dependencies.@kokaine/core=file:../packages/core' 'devDependencies.@kokaine/cli=file:../packages/cli' --prefix integration-app
       - if: matrix.client == 'npm'
         working-directory: integration-app
         run: |

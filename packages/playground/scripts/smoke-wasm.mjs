@@ -148,7 +148,7 @@ function makeOpaqueKokaineInterface(content, name) {
 
 const runtimeGzip = await readFile(path.join(PACKAGE_ROOT, 'public/koka/koka-runtime.json.gz'));
 const runtime = JSON.parse(gunzipSync(runtimeGzip).toString('utf8'));
-const kokaineSources = await readSources(path.join(REPO_ROOT, 'src/kokaine'));
+const kokaineSources = await readSources(path.join(REPO_ROOT, 'packages/core/src/kokaine'));
 const runtimeFiles = updateKokaineCache
   ? runtime.files.filter(([filePath]) => (
       !KOKAINE_PRECOMPILED_PATH.test(filePath)

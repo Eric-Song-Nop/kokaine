@@ -1,0 +1,37 @@
+{
+  "name": "@kokaine/core",
+  "version": "0.1.1",
+  "description": "A fine-grained UI runtime for Koka",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Eric-Song-Nop/kokaine.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/Eric-Song-Nop/kokaine/tree/main/packages/core#readme",
+  "bugs": {
+    "url": "https://github.com/Eric-Song-Nop/kokaine/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "koka": {
+    "schemaVersion": 1,
+    "sources": [
+      "src"
+    ],
+    "compiler": ">=3.2.3 <3.2.8",
+    "targets": [
+      "jsweb"
+    ]
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

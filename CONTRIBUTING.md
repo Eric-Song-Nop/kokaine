@@ -7,7 +7,7 @@ pull request with a test that fails before the change and passes after it.
 
 | You are changing | You need |
 | --- | --- |
-| The runtime (`src/`), tests in `test/` | Koka **3.2.3**, Python 3, `make` |
+| The runtime (`packages/core/src/`), tests in `test/` | Koka **3.2.3**, Python 3, `make` |
 | DOM, HTML, SSR, or the report example | additionally [`uv`](https://docs.astral.sh/uv/) (runs Playwright) |
 | The CLI, create package, or Playground | Node.js `>=22.12.0` and pnpm |
 | The PocketJS adapter | additionally bun; Rust with `wasm32-unknown-unknown` for the exact lane |
@@ -37,7 +37,7 @@ through `make` (which uses `test/all.kk` and `support/run_koka_test.py`), not
 with a bare `koka -e`. A new native suite must be imported and called from
 `test/all.kk`.
 
-## When you change `src/`
+## When you change `packages/core/src/`
 
 The Playground ships a precompiled copy of Kokaine built by its own browser
 Koka. Regenerate it and commit the result, or CI's drift check fails:

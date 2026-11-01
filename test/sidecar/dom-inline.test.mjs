@@ -1,4 +1,4 @@
-// Unit tests for src/kokaine/dom-inline.js against a fake DOM realm.
+// Unit tests for packages/core/src/kokaine/dom-inline.js against a fake DOM realm.
 // Run: node --test "test/sidecar/*.test.mjs"
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
