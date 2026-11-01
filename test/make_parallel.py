@@ -31,6 +31,7 @@ BROWSER_FIXTURE_SOURCES = [
     "test/dom-event-continuation.kk",
     "test/dom-top-layer.kk",
     "test/dom-keyed.kk",
+    "test/keyed-bench.kk",
     "test/dom-async-runtime.kk",
     "test/async-resource.kk",
     "test/async-owner-registration.kk",
