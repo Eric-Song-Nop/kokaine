@@ -120,6 +120,17 @@ type generation-runtime<e::E>
 // remain owned exclusively by frames and lexical cancellation scopes.
 val outstanding-operations : ref<global,int> = cell(0)
 
+// Debug-only cost counters for the async scale tests. Like the outstanding
+// aggregate above, they never influence scheduling or ownership.
+val supervisor-allocations : ref<global,int> = cell(0)
+val scope-cancellation-scans : ref<global,int> = cell(0)
+
+pub fun generation-async-supervisor-allocations() : int
+  load(supervisor-allocations)
+
+pub fun generation-async-scope-scans() : int
+  load(scope-cancellation-scans)
+
 // Resource loaders need a lifetime which can outlive the create-effect
 // generation that observed their source. A lease group owns only raw host
 // disposers; the Resource keeps the active and latest groups in its own
@@ -346,6 +357,7 @@ fun new-runtime-supervisor(
     root : root<<ui|e>>, family : async-family<e>, scope : async-scope,
     current : frame<<ui|e>>, bucket : runtime-supervisor-bucket<e>)
     : <signal-write,pure,ui|e> runtime-supervisor<e>
+  store(supervisor-allocations,load(supervisor-allocations) + 1)
   val supervisor = Runtime-supervisor(
     scope,new-cancellation-supervisor(),cell(Task-canceled),
     cell(Nothing),cell(Nothing),cell(Nothing))
@@ -621,6 +633,7 @@ noinline fun cancel-runtime-scope(runtime : generation-runtime<e>,
                                   scope : async-scope)
                                  : <signal-write,pure,ui|e> ()
   runtime.record-canceled(scope)
+  store(scope-cancellation-scans,load(scope-cancellation-scans) + 1)
   val family = runtime.runtime-family
   // First claim every matching supervisor/task in the immutable registry
   // snapshot. The family root explicitly includes routed foreign scopes; no
