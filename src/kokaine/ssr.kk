@@ -50,8 +50,13 @@ fun checked-property-name(name : string) : exn string
   else throw("invalid or markup-writing DOM property: " ++ name)
 
 fun string-attribute(name : string, value : string) : exn string
+  if !is-safe-url-value(name,value) then throw(unsafe-url-message(name))
+  else " " ++ checked-attribute-name(name) ++ "=\"" ++
+       value.escape-attribute ++ "\""
+
+fun trusted-url-attribute(name : string, value : trusted-url) : exn string
   " " ++ checked-attribute-name(name) ++ "=\"" ++
-  value.escape-attribute ++ "\""
+  trusted-url-content(value).escape-attribute ++ "\""
 
 fun boolean-attribute(name : string, enabled : bool) : exn string
   if enabled then " " ++ checked-attribute-name(name) else ""
@@ -66,6 +71,7 @@ fun property-attribute(name : string, value : property-value) : exn string
 fun render-attribute(attribute : attribute<e>) : <signal-read,pure> string
   match attribute
     Attribute(name,value) -> string-attribute(name,value)
+    Trusted-url-attribute(name,value) -> trusted-url-attribute(name,value)
     Boolean-attribute(name,enabled) -> boolean-attribute(name,enabled)
     Property(name,value) -> property-attribute(name,value)
     Live-attribute(name,read) ->

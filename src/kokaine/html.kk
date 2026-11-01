@@ -66,6 +66,7 @@ pub type attribute<e::E>
   Live-attribute(name : string, read : () -> signal-read maybe<string>)
   Live-property(name : string, read : () -> signal-read property-value)
   Listener(name : string, action : callback)
+  Trusted-url-attribute(name : string, url : trusted-url)
 
 
 // --------------------------------------------------------------------------
@@ -74,6 +75,9 @@ pub type attribute<e::E>
 
 abstract value type trusted-html
   Trusted-html(content : string)
+
+abstract value type trusted-url
+  Trusted-url(content : string)
 
 pub type view<e::E>
   Empty
@@ -95,6 +99,79 @@ pub fun unsafe-trusted-html(content : string) : trusted-html
 pub fun trusted-content(value : trusted-html) : string
   match value
     Trusted-html(content) -> content
+
+// URL-valued attributes and properties reject executable and opaque schemes
+// such as `javascript:`, `vbscript:`, and non-image `data:` by default. Use
+// this only for a URL the application itself produced; the name keeps that
+// trust decision visible at the call site, like `unsafe-trusted-html`.
+pub fun unsafe-trusted-url(content : string) : trusted-url
+  Trusted-url(content)
+
+pub fun trusted-url-content(value : trusted-url) : string
+  match value
+    Trusted-url(content) -> content
+
+// Attribute and property names (case-insensitive) whose value a browser
+// navigates to, loads, or submits to.
+pub fun is-url-attribute(name : string) : bool
+  match name.to-lower
+    "href" -> True
+    "src" -> True
+    "action" -> True
+    "formaction" -> True
+    "xlink:href" -> True
+    "data" -> True
+    "poster" -> True
+    "cite" -> True
+    "background" -> True
+    "ping" -> True
+    _ -> False
+
+fun is-url-ignorable(char : char) : bool
+  char == '\t' || char == '\n' || char == '\r'
+
+fun is-url-leading(char : char) : bool
+  char.int <= 0x20
+
+fun url-scheme-loop(chars : list<char>, acc : list<char>) : maybe<string>
+  match chars
+    Nil -> Nothing
+    Cons(':',_) ->
+      match acc
+        Nil -> Nothing
+        _ -> Just(acc.reverse.string.to-lower)
+    Cons(c,rest) ->
+      if c == '/' || c == '?' || c == '#' then Nothing
+      else url-scheme-loop(rest,Cons(c,acc))
+
+// The scheme a browser would see: leading C0 controls and spaces are dropped
+// and tab/newline characters are ignored anywhere, as the URL parser does.
+pub fun url-scheme(value : string) : maybe<string>
+  val chars = value.list.drop-while(is-url-leading).filter(fn(c) !c.is-url-ignorable)
+  url-scheme-loop(chars,[])
+
+fun is-image-data-url(value : string) : bool
+  val chars = value.list.drop-while(is-url-leading).filter(fn(c) !c.is-url-ignorable)
+  chars.take(11).string.to-lower == "data:image/"
+
+pub fun is-safe-url-value(name : string, value : string) : bool
+  if !name.is-url-attribute then True
+  else
+    match value.url-scheme
+      Nothing -> True
+      Just("http") -> True
+      Just("https") -> True
+      Just("mailto") -> True
+      Just("tel") -> True
+      Just("data") ->
+        val lower = name.to-lower
+        (lower == "src" || lower == "poster") && value.is-image-data-url
+      _ -> False
+
+pub fun unsafe-url-message(name : string) : string
+  "unsafe URL scheme in " ++ name ++
+  "; allowed are relative, http(s), mailto, tel, and data:image for src " ++
+  "(use unsafe-trusted-url for an application-produced URL)"
 
 fun is-name-tail-character(char : char) : bool
   char.is-alpha-num || char == '-' || char == '_' || char == '.' || char == ':'
@@ -305,6 +382,10 @@ pub fun live/title(read : () -> signal-read string) : attribute<e>
   Live-attribute("title",fn() Just(read()))
 pub fun href(value : string) : attribute<e>
   attr("href",value)
+pub fun trusted/href(value : trusted-url) : attribute<e>
+  Trusted-url-attribute("href",value)
+pub fun trusted-url/attr(name : string, value : trusted-url) : attribute<e>
+  Trusted-url-attribute(name,value)
 pub fun live/href(read : () -> signal-read string) : attribute<e>
   Live-attribute("href",fn() Just(read()))
 pub fun kind(value : string) : attribute<e>

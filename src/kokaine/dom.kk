@@ -198,14 +198,20 @@ extern dom-attempt-message(result : any) : string
 // them for custom-element callbacks after the fact. Install one wrapper per DOM
 // realm before mount construction and remember both observed closed hosts and
 // elements whose provenance proves that they had no pre-existing closed root.
-// If another host shim replaces the wrapper, later moves fail closed. As with
+// If another host shim (Sentry replay, shadydom, scoped-registry polyfills)
+// later replaces the wrapper, mounting continues and only keyed moves fail
+// closed, because their validator re-checks the wrapper itself. As with
 // the rest of the DOM adapter, direct calls through deliberately retained or
 // foreign native primitives are outside the cooperative host contract.
 extern dom-install-shadow-tracker(parent : node) : ui ()
-  js inline "(function(parent){ var doc=parent && (parent.nodeType===9 ? parent : parent.ownerDocument); var view=doc && doc.defaultView; if(!view || !view.Element) throw new Error('cannot install Kokaine shadow-root tracking outside a DOM realm'); var key=Symbol.for('kokaine.dom.shadow-roots'); var tracker=globalThis[key]; if(!tracker){ tracker={ version:1, known:new WeakSet(), closed:new WeakSet(), realms:new WeakMap() }; tracker.remember=function(root){ var pending=root && root.childNodes ? Array.prototype.slice.call(root.childNodes) : []; while(pending.length){ var current=pending.pop(); if(current && current.nodeType===1){ tracker.known.add(current); if(current.localName==='template' && current.content){ var mode=current.getAttribute('shadowrootmode'); if(mode && mode.toLowerCase()==='closed' && current.parentNode && current.parentNode.nodeType===1) tracker.closed.add(current.parentNode); var templateChildren=Array.prototype.slice.call(current.content.childNodes); for(var j=0;j<templateChildren.length;j++) pending.push(templateChildren[j]); } } var children=current && current.childNodes ? Array.prototype.slice.call(current.childNodes) : []; for(var i=0;i<children.length;i++) pending.push(children[i]); } }; globalThis[key]=tracker; } if(tracker.version!==1 || !tracker.known || !tracker.closed || !tracker.realms || typeof tracker.remember!=='function') throw new Error('invalid Kokaine shadow-root tracker'); var prototype=view.Element.prototype; var state=tracker.realms.get(view); if(state){ var intact=state.wrapper ? prototype.attachShadow===state.wrapper : typeof prototype.attachShadow!=='function'; if(state.prototype!==prototype || !intact) throw new Error('Kokaine shadow-root tracking was replaced'); return; } var descriptor=Object.getOwnPropertyDescriptor(prototype,'attachShadow'); if(!descriptor || typeof descriptor.value!=='function'){ if(typeof prototype.attachShadow==='function') throw new Error('cannot safely wrap this DOM realm attachShadow implementation'); tracker.realms.set(view,{ prototype:prototype, wrapper:null }); return; } var original=descriptor.value; var wrapper=function attachShadow(){ var root=original.apply(this,arguments); tracker.known.add(this); try { var mode=root && root.mode; if(mode!=='open') tracker.closed.add(this); } catch(error) { tracker.closed.add(this); throw error; } return root; }; Object.defineProperty(prototype,'attachShadow',{ configurable:descriptor.configurable, enumerable:descriptor.enumerable, writable:descriptor.writable, value:wrapper }); tracker.realms.set(view,{ prototype:prototype, wrapper:wrapper }); })(#1)"
+  js inline "(function(parent){ var doc=parent && (parent.nodeType===9 ? parent : parent.ownerDocument); var view=doc && doc.defaultView; if(!view || !view.Element) throw new Error('cannot install Kokaine shadow-root tracking outside a DOM realm'); var key=Symbol.for('kokaine.dom.shadow-roots'); var tracker=globalThis[key]; if(!tracker){ tracker={ version:1, known:new WeakSet(), closed:new WeakSet(), realms:new WeakMap() }; tracker.remember=function(root){ var pending=root && root.childNodes ? Array.prototype.slice.call(root.childNodes) : []; while(pending.length){ var current=pending.pop(); if(current && current.nodeType===1){ tracker.known.add(current); if(current.localName==='template' && current.content){ var mode=current.getAttribute('shadowrootmode'); if(mode && mode.toLowerCase()==='closed' && current.parentNode && current.parentNode.nodeType===1) tracker.closed.add(current.parentNode); var templateChildren=Array.prototype.slice.call(current.content.childNodes); for(var j=0;j<templateChildren.length;j++) pending.push(templateChildren[j]); } } var children=current && current.childNodes ? Array.prototype.slice.call(current.childNodes) : []; for(var i=0;i<children.length;i++) pending.push(children[i]); } }; globalThis[key]=tracker; } if(tracker.version!==1 || !tracker.known || !tracker.closed || !tracker.realms || typeof tracker.remember!=='function') throw new Error('invalid Kokaine shadow-root tracker'); var prototype=view.Element.prototype; var state=tracker.realms.get(view); if(state){ var intact=state.wrapper ? prototype.attachShadow===state.wrapper : typeof prototype.attachShadow!=='function'; if(state.prototype!==prototype || !intact){ state.replaced=true; } return; } var descriptor=Object.getOwnPropertyDescriptor(prototype,'attachShadow'); if(!descriptor || typeof descriptor.value!=='function'){ if(typeof prototype.attachShadow==='function') throw new Error('cannot safely wrap this DOM realm attachShadow implementation'); tracker.realms.set(view,{ prototype:prototype, wrapper:null }); return; } var original=descriptor.value; var wrapper=function attachShadow(){ var root=original.apply(this,arguments); tracker.known.add(this); try { var mode=root && root.mode; if(mode!=='open') tracker.closed.add(this); } catch(error) { tracker.closed.add(this); throw error; } return root; }; Object.defineProperty(prototype,'attachShadow',{ configurable:descriptor.configurable, enumerable:descriptor.enumerable, writable:descriptor.writable, value:wrapper }); tracker.realms.set(view,{ prototype:prototype, wrapper:wrapper }); })(#1)"
 
+// The namespace follows the HTML parser's rules so SVG and MathML created by
+// the DOM adapter match what SSR markup parses into: `svg` and `math` switch
+// namespace, children inherit it, and `foreignObject` or a MathML text
+// integration point returns to HTML.
 extern dom-create-element(parent : node, name : string) : ui element
-  js inline "(function(parent,name){ var doc=parent && (parent.nodeType===9 ? parent : parent.ownerDocument); if(!doc) throw new Error('cannot create a Kokaine element without an owner document'); var value=doc.createElement(name); var tracker=globalThis[Symbol.for('kokaine.dom.shadow-roots')]; if(tracker && tracker.known) tracker.known.add(value); return value; })(#1,#2)"
+  js inline "(function(parent,name){ var doc=parent && (parent.nodeType===9 ? parent : parent.ownerDocument); if(!doc) throw new Error('cannot create a Kokaine element without an owner document'); var svg='http://www.w3.org/2000/svg', mathml='http://www.w3.org/1998/Math/MathML'; var ns=null; if(name==='svg') ns=svg; else if(name==='math') ns=mathml; else if(parent && parent.nodeType===1){ var pns=parent.namespaceURI, plocal=parent.localName; if(pns===svg && plocal!=='foreignObject') ns=svg; else if(pns===mathml && (name==='mglyph' || name==='malignmark' || !/^(mi|mo|mn|ms|mtext|annotation-xml)$/.test(plocal))) ns=mathml; } var value=ns ? doc.createElementNS(ns,name) : doc.createElement(name); var tracker=globalThis[Symbol.for('kokaine.dom.shadow-roots')]; if(tracker && tracker.known) tracker.known.add(value); return value; })(#1,#2)"
 
 extern dom-create-text(value : string) : ui node
   js inline "document.createTextNode(#1)"
@@ -697,7 +703,15 @@ fun set-attribute(value : element, name : string,
   then throw("invalid HTML attribute name: " ++ name)
   else match content
          Nothing -> dom-attempt{ dom-remove-attribute(value,name) }
-         Just(text) -> dom-attempt{ dom-set-attribute(value,name,text) }
+         Just(text) ->
+           if !is-safe-url-value(name,text) then throw(unsafe-url-message(name))
+           else dom-attempt{ dom-set-attribute(value,name,text) }
+
+fun set-trusted-url(value : element, name : string,
+                    url : trusted-url) : <ui,exn> ()
+  if !name.is-valid-attribute-name
+  then throw("invalid HTML attribute name: " ++ name)
+  else dom-attempt{ dom-set-attribute(value,name,trusted-url-content(url)) }
 
 fun set-property(value : element, name : string,
                  content : property-value) : <ui,exn> ()
@@ -705,7 +719,8 @@ fun set-property(value : element, name : string,
   then throw("invalid or markup-writing DOM property: " ++ name)
   else match content
          String-property(text) ->
-           dom-attempt{ dom-set-string-property(value,name,text) }
+           if !is-safe-url-value(name,text) then throw(unsafe-url-message(name))
+           else dom-attempt{ dom-set-string-property(value,name,text) }
          Bool-property(flag) ->
            dom-attempt{ dom-set-bool-property(value,name,flag) }
          Int-property(number) ->
@@ -820,6 +835,7 @@ fun mount-attribute(root : root<<ui>>, target : element,
                    : <signal-write,ui,pure> ()
   match attribute
     Attribute(name,value) -> set-attribute(target,name,Just(value))
+    Trusted-url-attribute(name,url) -> set-trusted-url(target,name,url)
     Boolean-attribute(name,enabled) ->
       set-attribute(target,name,if enabled then Just("") else Nothing)
     Property(name,value) -> set-property(target,name,value)
