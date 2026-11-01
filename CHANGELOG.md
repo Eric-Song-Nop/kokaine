@@ -21,7 +21,9 @@ Versions are per package. Entries list the package and version they shipped in.
 ### Changed
 - Package metadata declares MIT, matching the LICENSE file.
 - Node `>=22.12.0` is required.
-- The supported Koka range is `>=3.2.3 <3.2.8`.
+- The supported Koka range is `>=3.2.3 <3.3.0`; new applications pin 3.2.9.
+  `kokaine/async/structured` no longer depends on the standard-library
+  finalization primitives that Koka 3.2.8 renamed.
 
 ## @kokaine/core 0.1.1, @kokaine/cli 0.1.0, @kokaine/create 0.1.0
 

@@ -2,9 +2,14 @@
 
 ## Compiler and renderer targets
 
-The core package supports Koka 3.2.3 (`>=3.2.3 <3.2.8`); Koka 3.2.8 renamed
-the standard-library finalization primitives that structured async relies on. Generated applications
-currently pin Koka 3.2.3, while the browser Playground ships Koka 3.2.4. The
+The core package supports Koka `>=3.2.3 <3.3.0`, and CI tests both 3.2.3 and
+3.2.9. Generated applications pin Koka 3.2.9, while the browser Playground
+ships a Koka 3.2.4 browser build. The same sources compile on all of them:
+`kokaine/async/structured` propagates a child's final control through
+`finally` instead of naming the standard-library finalization primitives that
+Koka 3.2.8 renamed. On Koka 3.2.3's C backend that control path corrupts the
+heap inside Koka's own runtime (fixed upstream in 3.2.8), so its tests run on
+the JavaScript backend, which is the one Kokaine ships. The
 source-local continuation index, two-plane scheduler, lifetime model, and
 retained-host callback transport are renderer-neutral. The HTML vocabulary is
 shared by DOM and SSR, but is deliberately not the native-UI abstraction. The

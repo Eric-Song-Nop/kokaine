@@ -88,10 +88,8 @@ goes away. See the [API overview](docs/api.md).
 
 ## Requirements
 
-- **Koka** `>=3.2.3 <3.2.8`. Generated applications pin Koka 3.2.3, and the
-  CLI installs it for you. Koka 3.2.8 renamed standard-library primitives that
-  structured async depends on, so it is not supported yet. The Playground
-  runs Koka 3.2.4.
+- **Koka** `>=3.2.3 <3.3.0`. Generated applications pin Koka 3.2.9, and the
+  CLI installs it for you. The Playground runs a Koka 3.2.4 browser build.
 - **Node.js** `>=22.12.0` for the CLI, the Playground, and repository
   tooling.
 
@@ -102,7 +100,7 @@ backend for [PocketJS](https://pocketjs.dev/) is described in
 
 ## Repository development
 
-This repository uses [pnpm](https://pnpm.io/). Native tests need Koka 3.2.3,
+This repository uses [pnpm](https://pnpm.io/). Native tests need Koka 3.2.3–3.2.9,
 Python 3, and `make`. Browser tests also need [`uv`](https://docs.astral.sh/uv/).
 
 ```sh

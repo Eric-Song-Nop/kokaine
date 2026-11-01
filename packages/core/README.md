@@ -13,7 +13,7 @@ Start a new application with:
 npm create @kokaine my-app
 ```
 
-- Supported compilers: Koka `>=3.2.3 <3.2.8` (applications pin 3.2.3).
+- Supported compilers: Koka `>=3.2.3 <3.3.0` (new applications pin 3.2.9).
 - Target: `jsweb`.
 - Modules: `kokaine/reactive`, `kokaine/html`, `kokaine/dom`, `kokaine/ssr`,
   `kokaine/control`, `kokaine/resource`, `kokaine/async`, and friends.
