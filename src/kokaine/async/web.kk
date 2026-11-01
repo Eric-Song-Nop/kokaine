@@ -51,6 +51,11 @@ extern timer-retire(value : timer-subscription) : ui ()
 
 // Sleep without holding a Kokaine batch open. The generation handler invokes
 // this setup only after it has registered the task with the current owner.
+// Suspend the current async strand for `delay` using a browser timer. Effect:
+// `<async,exn>`. While suspended no Kokaine batch is held open; the rest of
+// the code runs in a later turn, and only if the owning generation is still
+// live. Retirement or cancellation clears the timer. Delays longer than the
+// browser's 32-bit `setTimeout` limit are split into chunks.
 pub fun sleep(delay : duration) : <async,exn> ()
   setup/await("sleep " ++ delay.show,fn(resume)
     val installed = timer-setup-raw(
@@ -68,9 +73,15 @@ pub fun sleep(delay : duration) : <async,exn> ()
       Ok(fn() timer-retire(subscription))
   )
 
+// Suspend until a later browser task (a zero-delay `sleep`). Effect:
+// `<async,exn>`.
 pub fun yield() : <async,exn> ()
   sleep(0.milli-seconds)
 
+// Run `action` with a deadline. Returns `Just(result)` if it finishes first,
+// or `Nothing` once `delay` elapses, in which case `action` is canceled (its
+// `finally` clauses still run before `timeout` returns). Effect:
+// `<async,exn|e>`. An exception from `action` propagates.
 pub fun timeout(delay : duration,
                 action : () -> <async,exn|e> a)
                : <async,exn|e> maybe<a>
@@ -90,9 +101,12 @@ abstract type promise-subscription
 
 // Explicitly unsafe because no runtime check can prove the JavaScript promise
 // resolves to Koka value `a`.
+// Treat a JavaScript value as a `promise<a>`. Total, but unchecked: nothing
+// verifies that the promise resolves to a Koka value of type `a`.
 pub extern unsafe-promise(value : any) : promise<a>
   js inline "#1"
 
+// Expose the underlying JavaScript promise object. Total.
 pub extern promise/unsafe-any(value : promise<a>) : any
   js inline "#1"
 
@@ -109,6 +123,10 @@ extern promise-result-state(value : any) : promise-subscription
 extern promise-retire(value : promise-subscription) : ui ()
   js inline "(function(){ var state=#1; if(state){ state.fulfill=null; state.reject=null; } })()"
 
+// Wait for a JavaScript promise in direct style. Effect: `<async,exn>`;
+// rejection becomes an `exn`. Gotcha: cancellation only drops the Koka
+// continuation; the underlying promise (and whatever started it) keeps
+// running.
 pub fun promise/await(value : promise<a>) : <async,exn> a
   setup/await("promise",fn(resume)
     val installed = promise-subscribe(
@@ -140,14 +158,21 @@ abstract type response
 abstract type fetch-subscription
   Fetch-subscription(value : any)
 
+// Build a Fetch request description: `url`, HTTP `method` (default `"GET"`),
+// and an optional string `body`. Total; nothing is sent until `fetch`. No
+// custom headers are set, so a string body uses the browser's default
+// `text/plain` content type.
 pub extern request(url : string, method : string = "GET",
                    body : maybe<string> = Nothing) : request
   js inline "({ url:#1, init:{ method:#2, body:(#3 == null ? undefined : (#3).value) } })"
 
 // Convenience constructors keep the common call sites direct and typed.
+// A `GET` request for `url`. Total.
 pub fun get(url : string) : request
   request(url)
 
+// A `POST` request for `url` with a string `body` (sent as `text/plain`).
+// Total.
 pub fun post(url : string, body : string) : request
   request(url,"POST",Just(body))
 
@@ -164,6 +189,15 @@ extern fetch-result-state(value : any) : fetch-subscription
 extern fetch-retire(value : fetch-subscription) : ui ()
   js inline "(function(){ var state=#1; if(!state) return; var controller=state.controller; state.fulfill=null; state.reject=null; state.controller=null; if(controller){ try { controller.abort(); } catch(_) {} } })()"
 
+// Send `value` with the browser Fetch API and wait for the response headers.
+// Effect: `<async,exn>`; network failure becomes an `exn`. HTTP error statuses
+// do not raise; use `require-ok` or check `ok`/`status`.
+//
+// The returned response stays owned by the current generation: retiring the
+// generation aborts the request until the body is consumed with `text`/`json`
+// or released with `discard`. Gotcha: call `discard` on a response you will
+// not read, so the connection is released immediately rather than at
+// retirement.
 pub fun fetch(value : request) : <async,exn> response
   val result = setup/await("fetch",fn(resume)
     val installed = fetch-subscribe(
@@ -186,12 +220,16 @@ pub fun fetch(value : request) : <async,exn> response
   async-host(fn() response-own(result,release))
   result
 
+// The HTTP status code. Effect: `ui`.
 pub extern response/status(value : response) : ui int
   js inline "Number((#1).response.status)"
 
+// Whether the status is in the 200-299 range. Effect: `ui`.
 pub extern response/ok(value : response) : ui bool
   js inline "!!(#1).response.ok"
 
+// The final response URL after redirects (empty when unavailable). Effect:
+// `ui`.
 pub extern response/url(value : response) : ui string
   js inline "String((#1).response.url == null ? '' : (#1).response.url)"
 
@@ -206,6 +244,9 @@ extern response-retire(value : response) : ui ()
 // A response which will not be consumed explicitly releases its generation
 // lease before aborting. Clear the wrapper first so hostile host objects cannot
 // observe or re-enter a live ownership edge.
+// Release a response that will not be read: drop its generation lease, abort
+// the request, and cancel the body stream. Effect: `ui`. Safe to call more
+// than once.
 pub extern response/discard(value : response) : ui ()
   js inline "(function(){ var wrapper=#1; if(!wrapper) return; var response=wrapper.response; var release=wrapper.release; var controller=wrapper.controller; var body=response && response.body; wrapper.release=null; wrapper.controller=null; if(release){ try { release(); } catch(_) {} } if(controller){ try { controller.abort(); } catch(_) {} } if(body && !body.locked){ try { var canceled=body.cancel(); if(canceled && canceled.catch) canceled.catch(function(){}); } catch(_) {} } })()"
 
@@ -249,14 +290,22 @@ fun await-response-body(value : response, as-json : bool)
       Ok(fn() response-body-retire(subscription))
   )
 
+// Read the whole body as a string. Effect: `<async,exn>`. Takes over the
+// response's ownership; cancellation aborts the request. A body can be read
+// only once.
 pub fun response/text(value : response) : <async,exn> string
   await-response-body(value,False)
 
 // JSON stays an `any` FFI value. A domain adapter should validate/decode it at
 // its boundary instead of asserting an unchecked generic Koka type.
+// Read and parse the body as JSON. Effect: `<async,exn>`. The result is an
+// untyped JavaScript value (`any`); validate or decode it at your boundary. A
+// body can be read only once.
 pub fun response/json(value : response) : <async,exn> any
   await-response-body(value,True)
 
+// Return the response unchanged when `ok`; otherwise discard it and raise an
+// HTTP-status exception. Effect: `<ui,exn>`.
 pub fun response/require-ok(value : response) : <ui,exn> response
   if value.ok then value
   else
