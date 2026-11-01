@@ -597,8 +597,12 @@ won is returned to setup code and invoked immediately.
 
 Tasks in one active lexical `async-scope` share a registry-backed cancellation
 supervisor and one lifetime cleanup registration. Normal completion claims
-Ready, unlinks its cancellation registration in O(1), and detaches the empty
-supervisor before re-entry. Cancellation or lifetime retirement instead:
+Ready and unlinks its cancellation registration in O(1). An emptied supervisor
+stays attached while the resumed suffix runs and is detached when it returns,
+unless the suffix awaited again in the same scope and frame. Such an await
+reuses it only while its owner cleanup is still the frame's newest finalizer
+and it is still the family's newest supervisor, i.e. exactly where a rebuilt
+supervisor would be registered; otherwise it is detached and rebuilt. Cancellation or lifetime retirement instead:
 
 1. seals and detaches the supervisor registry;
 2. claims every sibling task state;

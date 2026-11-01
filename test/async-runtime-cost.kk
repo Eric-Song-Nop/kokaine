@@ -81,6 +81,9 @@ fun new-root() : <exn,ui> root<<ui>>
   val (root,()) : (root<<ui>>,()) = create-root fn(_root) ()
   root
 
+fun open-scope(root : root<<ui>>) : <exn,ui> lifetime-scope<<ui>>
+  dispatch(root,fn() open-lifetime-scope(root))
+
 fun dispose-root(root : root<<ui>>) : <exn,ui> ()
   root.dispose()
 
@@ -247,14 +250,99 @@ fun test-coalescer-order() : <ui,div,exn> ()
   check(!hidden-load(log).any(fn(entry) entry == "rejected"),
         "a rejected turn never runs")
 
+fun note(log : ref<global,list<string>>, entry : string) : ui ()
+  hidden-store(log,hidden-load(log) ++ [entry])
+
+// A resumed suffix reuses its emptied supervisor only where a rebuild would
+// be indistinguishable. A cleanup registered between two awaits must still
+// retire after (LIFO) the strand parked by the second await.
+fun exercise-supervisor-reuse-retirement(with-cleanup : bool)
+    : <ui,div,exn> (list<string>,int)
+  val h = new-host()
+  val log : ref<global,list<string>> = hidden([])
+  val completion : ref<global,maybe<int -> ui ()>> = hidden(Nothing)
+  val root = new-root()
+  val supervisors = generation-async-supervisor-allocations()
+  fun step(label : string) : async int
+    setup/await-noexn(label,fn(complete)
+      hidden-store(completion,Just(complete))
+      fn() note(log,label ++ "-dispose")
+    )
+  start(root,h,fn()
+    finally(fn() note(log,"strand-finally"),fn()
+      val _ = step("first")
+      if with-cleanup then on-cleanup(root,fn() note(log,"cleanup")) else ()
+      val _ = step("second")
+      note(log,"unreachable")
+    )
+  )
+  match hidden-load(completion)
+    Nothing -> throw("async runtime cost: first await was not installed")
+    Just(complete) -> complete(1)
+  h.drain
+  dispose-root(root)
+  check(generation-async-outstanding() == 0,"retired strand releases")
+  (hidden-load(log),
+   generation-async-supervisor-allocations() - supervisors)
+
+fun test-supervisor-reuse-preserves-retirement-order() : <ui,div,exn> ()
+  val (plain,plain-supervisors) = exercise-supervisor-reuse-retirement(False)
+  check(plain == ["strand-finally","second-dispose"],
+        "retirement unwinds the parked strand, then disposes its host op")
+  check(plain-supervisors == 1,"an adjacent second await reuses the supervisor")
+  val (cleanup,cleanup-supervisors) = exercise-supervisor-reuse-retirement(True)
+  check(cleanup == ["strand-finally","second-dispose","cleanup"],
+        "a cleanup registered between awaits still retires after the strand")
+  check(cleanup-supervisors == 2,
+        "an intervening cleanup forces the order-preserving rebuild")
+
+fun install-noting(log : ref<global,list<string>>, label : string)
+                  : <async,ui> ()
+  val setup : await-setup<()> = fn(_complete) Ok(fn() ())
+  no-await(setup,async-scope,label,fn(result)
+    match result
+      Cancel -> note(log,label)
+      _ -> ()
+  )
+
+// Family cancellation visits supervisors newest first. A supervisor emptied
+// by a completion may not be reused once a newer family member exists.
+fun test-supervisor-reuse-preserves-family-order() : <ui,div,exn> ()
+  val h = new-host()
+  val log : ref<global,list<string>> = hidden([])
+  val completion : ref<global,maybe<int -> ui ()>> = hidden(Nothing)
+  val root = new-root()
+  val inner = open-scope(root)
+  start(root,h,fn()
+    val _ = setup/await-noexn("first",fn(complete)
+      hidden-store(completion,Just(complete))
+      fn() ()
+    )
+    with-lifetime-scope(root,inner,fn() install-noting(log,"inner"))
+    install-noting(log,"outer")
+    cancel-outstanding()
+  )
+  match hidden-load(completion)
+    Nothing -> throw("async runtime cost: first await was not installed")
+    Just(complete) -> complete(1)
+  h.drain
+  check(hidden-load(log) == ["outer","inner"],
+        "family cancellation order matches a rebuilt supervisor")
+  check(generation-async-outstanding() == 0,"family cancellation releases")
+  dispose-root(root)
+
 pub fun main()
   test-coalescer-order()
+  test-supervisor-reuse-preserves-retirement-order()
+  test-supervisor-reuse-preserves-family-order()
   val fan-in = scenario-fan-in(new-host())
   check(fan-in.posts == 1,"fan-in completions share one host callback")
   check(fan-in.batches == 50,"each fan-in completion keeps its own batch")
   val sequential = scenario-sequential(new-host())
   check(sequential.posts == 3 && sequential.batches == 3,
         "sequential awaits take one turn and batch each")
+  check(sequential.supervisors == 1,
+        "sequential awaits keep one resident supervisor")
   val raced = scenario-race(new-host())
   check(raced.posts == 2,"a race settles in two coalesced host callbacks")
   val scheduled = scenario-schedule(new-host())
