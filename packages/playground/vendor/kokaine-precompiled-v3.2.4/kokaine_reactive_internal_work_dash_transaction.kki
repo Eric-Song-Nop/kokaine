@@ -71,9 +71,9 @@ pub type work-group[107,1,112,3] <a> :: V -> V {
 //------------------------------
 //#kki: declarations
  
-fun cell[14,5,14,8] : forall<a> (value : a) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>;
-fun load[17,5,17,8] : forall<a> (value : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>) -> a;
-fun store[20,5,20,9] : forall<a> (target : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>, value : a) -> ();
+fun cell[14,14,14,17] : forall<a> (value : a) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>;
+fun load[17,14,17,17] : forall<a> (value : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>) -> a;
+fun store[20,14,20,18] : forall<a> (target : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>, value : a) -> ();
 // Automatically generated. Retrieves the `deque-front` constructor field of the `:deque` type.
 pub fun deque/deque-front[28,5,28,15] : forall<a> (^ deque : (deque :: V -> V)<a>) -> (std/core/types/list :: V -> V)<a>;
 // Automatically generated. Retrieves the `deque-back` constructor field of the `:deque` type.
