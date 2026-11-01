@@ -1,0 +1,65 @@
+name: Release
+
+# Push a tag such as `v2026.11.0` (any `v*` tag) after bumping the versions you
+# want to ship. Every non-private workspace package whose exact version is not
+# on npm yet is published with provenance; already-published versions are
+# skipped, so packages can keep independent versions.
+#
+# One-time setup on npmjs.com: for each package, add a Trusted Publisher for
+# GitHub Actions (repository Eric-Song-Nop/kokaine, workflow release.yml,
+# environment npm). No NPM_TOKEN secret is needed after that.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+      - run: npm install -g npm@11
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Refuse unsatisfiable internal version ranges
+        run: node support/check-release.mjs --plan
+      - run: pnpm test
+      - name: Install managed Koka
+        run: echo "KOKA_BIN=$(make -s print-managed-koka)" >> "$GITHUB_ENV"
+      - run: make test-native KOKA="$KOKA_BIN"
+      - name: Publish versions missing from npm
+        shell: bash
+        run: |
+          set -euo pipefail
+          publish() {
+            local dir=$1 name version
+            name=$(node -p "require('./$dir/package.json').name")
+            version=$(node -p "require('./$dir/package.json').version")
+            if npm view "$name@$version" version >/dev/null 2>&1; then
+              echo "skip $name@$version (already on npm)"
+            else
+              echo "publish $name@$version"
+              # pnpm pack rewrites workspace: ranges; npm publishes the exact
+              # tarball through npm's trusted-publishing (OIDC) flow.
+              local tarball
+              tarball=$(cd "$dir" && pnpm pack --pack-destination "$RUNNER_TEMP" | tail -n 1)
+              npm publish "$tarball" --access public --provenance
+            fi
+          }
+          publish .
+          for dir in packages/*; do
+            if [ "$(node -p "Boolean(require('./$dir/package.json').private)")" = false ]; then
+              publish "$dir"
+            fi
+          done
