@@ -25,7 +25,7 @@ KOKA_TEST = $(PYTHON) "$(PROJECT_ROOT)/support/run_koka_test.py" $(KOKA) $(KOKA_
 DIST_KOKA = $(PYTHON) "$(RUN_LOCKED)" dist/.koka-build.lock \
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist
 
-.PHONY: check-koka print-managed-koka test test-native test-sidecar test-pocketjs-runtime test-pocketjs-bridge test-pocketjs-bundle test-pocketjs-wasm test-pocketjs-browser test-tooling test-all test-wasm test-report build-counter build-top-layer build-keyed build-report build-pocketjs-example compile-pocketjs-example build-window-fixture build-browser-fixtures browser-install test-browser serve serve-pocketjs-example serve-top-layer serve-keyed serve-report
+.PHONY: check-koka print-managed-koka bench-keyed test test-native test-sidecar test-pocketjs-runtime test-pocketjs-bridge test-pocketjs-bundle test-pocketjs-wasm test-pocketjs-browser test-tooling test-all test-wasm test-report build-counter build-top-layer build-keyed build-report build-pocketjs-example compile-pocketjs-example build-window-fixture build-browser-fixtures browser-install test-browser serve serve-pocketjs-example serve-top-layer serve-keyed serve-report
 .PHONY: playground-install playground-assets playground-precompile playground-sync-assets playground-build playground-preview playground-release playground-deploy serve-playground
 
 test: test-native test-pocketjs-runtime
@@ -190,6 +190,8 @@ build-browser-fixtures: build-counter build-top-layer build-keyed
 	$(DIST_KOKA) \
 		--buildname=dom-keyed test/dom-keyed.kk
 	$(DIST_KOKA) \
+		--buildname=keyed-bench test/keyed-bench.kk
+	$(DIST_KOKA) \
 		--buildname=dom-async-runtime test/dom-async-runtime.kk
 	$(DIST_KOKA) \
 		--buildname=async-resource test/async-resource.kk
@@ -206,6 +208,12 @@ test-browser: build-browser-fixtures
 	$(UV) run --with "$(PLAYWRIGHT)" python test/browser_top_layer.py
 	$(UV) run --with "$(PLAYWRIGHT)" python test/browser_keyed.py
 	$(UV) run --with "$(PLAYWRIGHT)" python test/browser_async.py
+
+# Keyed reorder benchmark: row moves and timings for drag/reverse/shuffle/append.
+bench-keyed:
+	$(DIST_KOKA) \
+		--buildname=keyed-bench test/keyed-bench.kk
+	$(UV) run --with "$(PLAYWRIGHT)" python test/bench_keyed.py
 
 test-wasm:
 	./support/wasmweb-proof/run.sh test
