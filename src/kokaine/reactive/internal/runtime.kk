@@ -43,7 +43,7 @@ fun fresh-root() : root<e>
     Root-key(cell(True)),
     fresh-plane(derive-frame,derive-retirement),
     fresh-plane(effect-frame,effect-retirement),
-    lifetime,cell(0),cell(False),cell(False),cell(False)
+    lifetime,cell(0),cell(False),cell(False),cell(False),cell(True)
   )
   effect-retirement.install-root-disposal(fn() retire-root-now(root))
   root
@@ -114,6 +114,7 @@ pub fun create-root(action : (root<e>) -> <signal-write,pure|e> a)
         val result = interpret-write(root,fn() action(root))
         store(root.root-batch-depth,0)
         flush(root)
+        store(root.root-constructing,False)
         store(committed,True)
         (root,result)
     )

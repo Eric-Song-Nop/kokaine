@@ -259,7 +259,10 @@ pub type root<e::E>
     root-batch-depth  : ref<global,int>,
     root-flushing     : ref<global,bool>,
     root-disposing    : ref<global,bool>,
-    root-disposed     : ref<global,bool>
+    root-disposed     : ref<global,bool>,
+    // True until `create-root` publishes the root. Construction is atomic, so
+    // its initial flush stops at the first failure instead of draining on.
+    root-constructing : ref<global,bool>
   )
 
 pub type derive-producer
