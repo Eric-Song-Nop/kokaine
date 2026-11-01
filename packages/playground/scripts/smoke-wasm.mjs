@@ -63,7 +63,11 @@ async function readSources(directory, prefix = '/share/lib/kokaine') {
     const diskPath = path.join(directory, entry.name);
     const vfsPath = `${prefix}/${entry.name}`;
     if (entry.isDirectory()) files.push(...await readSources(diskPath, vfsPath));
-    else if (entry.name.endsWith('.kk')) files.push([vfsPath, await readFile(diskPath, 'utf8')]);
+    // `.js` files are sidecars that a module pulls in with
+    // `extern import { js file "..." }`; Koka reads them while parsing.
+    else if (entry.name.endsWith('.kk') || entry.name.endsWith('.js')) {
+      files.push([vfsPath, await readFile(diskPath, 'utf8')]);
+    }
   }
   return files;
 }
