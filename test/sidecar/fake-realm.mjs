@@ -3,6 +3,45 @@
 // shadow-root tracker and owner registry. It is not a DOM implementation.
 
 export function createFakeRealm({ attachShadow = 'data' } = {}) {
+  // Minimal MutationObserver: childList records for the observed node or its
+  // light-DOM descendants, plus `is` attribute records.
+  const observers = new Set();
+  function notify(target, record) {
+    for (const observer of observers) {
+      for (let node = target; node; node = node.parentNode) {
+        if (observer.targets.includes(node)) {
+          observer.records.push({ target, addedNodes: [], removedNodes: [], ...record });
+          break;
+        }
+      }
+    }
+  }
+
+  class MutationObserver {
+    constructor(callback) {
+      this.callback = callback;
+      this.targets = [];
+      this.records = [];
+    }
+
+    observe(target) {
+      this.targets.push(target);
+      observers.add(this);
+    }
+
+    takeRecords() {
+      const records = this.records;
+      this.records = [];
+      return records;
+    }
+
+    disconnect() {
+      observers.delete(this);
+      this.targets = [];
+      this.records = [];
+    }
+  }
+
   class Node {
     constructor(nodeType, ownerDocument) {
       this.nodeType = nodeType;
@@ -15,6 +54,7 @@ export function createFakeRealm({ attachShadow = 'data' } = {}) {
       if (child.parentNode) child.parentNode.removeChild(child);
       this.childNodes.push(child);
       child.parentNode = this;
+      notify(this, { type: 'childList', addedNodes: [child] });
       return child;
     }
 
@@ -23,6 +63,7 @@ export function createFakeRealm({ attachShadow = 'data' } = {}) {
       if (index < 0) throw new Error('not a child');
       this.childNodes.splice(index, 1);
       child.parentNode = null;
+      notify(this, { type: 'childList', removedNodes: [child] });
       return child;
     }
 
@@ -49,12 +90,16 @@ export function createFakeRealm({ attachShadow = 'data' } = {}) {
 
     setAttribute(name, value) {
       this.attributes.set(name, String(value));
+      if (name === 'is') notify(this, { type: 'attributes', attributeName: name });
     }
 
-    // Only the start tag matters to the keyed-move validator.
+    // Only the start tag matters to the keyed-move validator. Like the HTML
+    // serializer, an `is` value without an `is` attribute follows the name.
     get outerHTML() {
+      const isValue = this.isValue != null && !this.attributes.has('is') ? ` is="${this.isValue}"` : '';
       const attributes = [...this.attributes].map(([name, value]) => ` ${name}="${value}"`).join('');
-      return `<${this.localName}${attributes}></${this.localName}>`;
+      const children = this.childNodes.map((child) => (child.nodeType === 1 ? child.outerHTML : '')).join('');
+      return `<${this.localName}${isValue}${attributes}>${children}</${this.localName}>`;
     }
   }
 
@@ -93,17 +138,38 @@ export function createFakeRealm({ attachShadow = 'data' } = {}) {
       this.defaultView = null;
     }
 
-    createElement(name) {
-      return new Element(this, name);
+    createElement(name, options) {
+      const element = new Element(this, name);
+      if (options && options.is != null) element.isValue = String(options.is);
+      return element;
     }
 
     createElementNS(namespace, name) {
       return new Element(this, name, namespace);
     }
+
+    // A shallow import keeps the name, namespace, attributes and `is` value.
+    importNode(node, deep) {
+      if (deep) throw new Error('the fake realm only imports shallowly');
+      const copy = new Element(this, node.localName, node.namespaceURI);
+      for (const [name, value] of node.attributes) copy.attributes.set(name, value);
+      copy.isValue = node.isValue;
+      return copy;
+    }
+
+    get implementation() {
+      return new DOMImplementation();
+    }
+  }
+
+  class DOMImplementation {
+    createHTMLDocument() {
+      return new Document();
+    }
   }
 
   const document = new Document();
-  const view = { Node, Element, DocumentFragment, ShadowRoot, Document };
+  const view = { Node, Element, DocumentFragment, ShadowRoot, Document, DOMImplementation, MutationObserver };
   document.defaultView = view;
   const body = document.appendChild(document.createElement('body'));
   return { view, document, body, Element, nativeAttachShadow };
