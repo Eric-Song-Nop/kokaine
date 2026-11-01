@@ -207,9 +207,11 @@ pub fun main()
   val first-failure = failing-live-update(root,failure-value,1)
   check(string-includes(first-failure,"injected live failure"),
         "a live bridge failure escapes the triggering update")
-  check(host-live-writes() == before-first-failure &&
-        host-texts() == "First 0|Second 0",
-        "failure before publication leaves every binding uncommitted")
+  // The failing binding is quarantined; its independent sibling still
+  // publishes in the same flush instead of waiting behind it.
+  check(host-live-writes() == before-first-failure + 1 &&
+        host-texts() == "First 0|Second 1",
+        "a failing binding does not block an independent sibling")
   update(root){ failure-value.set(1) }
   check(host-live-writes() == before-first-failure + 2 &&
         host-texts() == "First 1|Second 1",

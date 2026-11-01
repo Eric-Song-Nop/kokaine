@@ -106,7 +106,12 @@ retains a full calculation action after bootstrap.
 
 The continuation capabilities are also not affine. A live read trace may be
 invalidated and resumed on many turns; after failure, the same capability
-remains pending for retry when replacing an existing generation. State and
+remains pending for retry when replacing an existing generation. On the effect
+plane a failed ticket leaves the run queue for a per-plane quarantine, so
+unrelated work behind it still drains in the same flush, and the first failure
+is rethrown once the queue is empty. The quarantined ticket is re-admitted
+when one of its own inputs is invalidated, or behind the runnable work at an
+explicit `update` boundary. State and
 generation gates prevent an invalid or concurrent resume. Only the initial
 bootstrap closure is consumed exactly once, and its initial failure retires the
 scope rather than replaying it.

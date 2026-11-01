@@ -57,101 +57,108 @@ local alias std/core/hnd/ev-index[138,1,138,28] = std/core/types/ssize_t = 1;
 //------------------------------
 //#kki: type declarations
  
-pub value{1,0,1} type capture-state[98,1,103,14] {
-  pub con Capture-draft[99,3,99,15]{0,0,0} : capture-state = 1;
-  pub con Capture-live[100,3,100,14]{0,0,0} : capture-state = 2;
-  pub con Capture-pending[101,3,101,17]{0,0,0} : capture-state = 3;
-  pub con Capture-running[102,3,102,17]{0,0,0} : capture-state = 4;
-  pub con Capture-dead[103,3,103,14]{0,0,0} : capture-state = 5;
+pub value{1,0,1} type capture-state[117,1,122,14] {
+  pub con Capture-draft[118,3,118,15]{0,0,0} : capture-state = 1;
+  pub con Capture-live[119,3,119,14]{0,0,0} : capture-state = 2;
+  pub con Capture-pending[120,3,120,17]{0,0,0} : capture-state = 3;
+  pub con Capture-running[121,3,121,17]{0,0,0} : capture-state = 4;
+  pub con Capture-dead[122,3,122,14]{0,0,0} : capture-state = 5;
 };
 // Every structural lifetime in one execution plane shares a retirement
 // coordinator. A root-disposal request made by a re-entrant cleanup is held
 // until the outermost already-detached finalizer snapshot has drained.
-pub type retirement-coordinator[159,1,164,3] <(e :: E)> :: E -> V {
-  pub con Retirement-coordinator[160,3,160,24](retirement-depth: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>, retirement-disposal-requested: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>, retirement-dispose-root: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<() -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ()>>){0,3,8} : forall<(e :: E)> (retirement-depth : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>, retirement-disposal-requested : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>, retirement-dispose-root : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<() -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ()>>) -> (retirement-coordinator :: E -> V)<(e :: E)> = 1;
+pub type retirement-coordinator[178,1,183,3] <(e :: E)> :: E -> V {
+  pub con Retirement-coordinator[179,3,179,24](retirement-depth: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>, retirement-disposal-requested: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>, retirement-dispose-root: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<() -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ()>>){0,3,8} : forall<(e :: E)> (retirement-depth : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>, retirement-disposal-requested : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>, retirement-dispose-root : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<() -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ()>>) -> (retirement-coordinator :: E -> V)<(e :: E)> = 1;
 };
 // Retirement is represented as data so the complete structural subtree can
 // be marked and detached before the first user finalizer runs. Step expansion
 // is pure structural work; only Finalizer carries the owner's effect row.
-pub recursive type retirement-work[148,1,154,3] <(e :: E)> :: E -> V {
-  pub con Retirement-step[149,3,149,17](retirement-expand: () -> <(std/core/types/div :: X)> (std/core/types/list :: V -> V)<(retirement-work :: E -> V)<(e :: E)>>){0,1,8} : forall<(e :: E)> (retirement-expand : () -> <(std/core/types/div :: X)> (std/core/types/list :: V -> V)<(retirement-work :: E -> V)<(e :: E)>>) -> (retirement-work :: E -> V)<(e :: E)> = 1;
-  pub con Retirement-finalizer[152,3,152,22](retirement-action: () -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ()){0,1,8} : forall<(e :: E)> (retirement-action : () -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ()) -> (retirement-work :: E -> V)<(e :: E)> = 2;
+pub recursive type retirement-work[167,1,173,3] <(e :: E)> :: E -> V {
+  pub con Retirement-step[168,3,168,17](retirement-expand: () -> <(std/core/types/div :: X)> (std/core/types/list :: V -> V)<(retirement-work :: E -> V)<(e :: E)>>){0,1,8} : forall<(e :: E)> (retirement-expand : () -> <(std/core/types/div :: X)> (std/core/types/list :: V -> V)<(retirement-work :: E -> V)<(e :: E)>>) -> (retirement-work :: E -> V)<(e :: E)> = 1;
+  pub con Retirement-finalizer[171,3,171,22](retirement-action: () -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ()){0,1,8} : forall<(e :: E)> (retirement-action : () -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ()) -> (retirement-work :: E -> V)<(e :: E)> = 2;
 };
-pub value{1,0,1} type scope-state[139,1,143,12] {
-  pub con Scope-starting[140,3,140,16]{0,0,0} : scope-state = 1;
-  pub con Scope-live[141,3,141,12]{0,0,0} : scope-state = 2;
-  pub con Scope-branch-dead[142,3,142,19]{0,0,0} : scope-state = 3;
-  pub con Scope-dead[143,3,143,12]{0,0,0} : scope-state = 4;
+pub value{1,0,1} type scope-state[158,1,162,12] {
+  pub con Scope-starting[159,3,159,16]{0,0,0} : scope-state = 1;
+  pub con Scope-live[160,3,160,12]{0,0,0} : scope-state = 2;
+  pub con Scope-branch-dead[161,3,161,19]{0,0,0} : scope-state = 3;
+  pub con Scope-dead[162,3,162,12]{0,0,0} : scope-state = 4;
 };
 // Causal continuation gates and resource lifetime are deliberately separate.
 // Children and user finalizers have distinct registries so every descendant
 // is closed before any cleanup runs, while both classes retain LIFO order.
-pub type lifetime-owner[169,1,175,3] <(e :: E)> :: E -> V {
-  pub con Lifetime-owner[170,3,170,16](lifetime-token: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),scope-state>, lifetime-children: (kokaine/internal/registry/registry :: V -> V)<(retirement-work :: E -> V)<(e :: E)>>, lifetime-finalizers: (kokaine/internal/registry/registry :: V -> V)<(retirement-work :: E -> V)<(e :: E)>>, lifetime-retirement: (retirement-coordinator :: E -> V)<(e :: E)>){0,4,8} : forall<(e :: E)> (lifetime-token : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),scope-state>, lifetime-children : (kokaine/internal/registry/registry :: V -> V)<(retirement-work :: E -> V)<(e :: E)>>, lifetime-finalizers : (kokaine/internal/registry/registry :: V -> V)<(retirement-work :: E -> V)<(e :: E)>>, lifetime-retirement : (retirement-coordinator :: E -> V)<(e :: E)>) -> (lifetime-owner :: E -> V)<(e :: E)> = 1;
+pub type lifetime-owner[188,1,194,3] <(e :: E)> :: E -> V {
+  pub con Lifetime-owner[189,3,189,16](lifetime-token: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),scope-state>, lifetime-children: (kokaine/internal/registry/registry :: V -> V)<(retirement-work :: E -> V)<(e :: E)>>, lifetime-finalizers: (kokaine/internal/registry/registry :: V -> V)<(retirement-work :: E -> V)<(e :: E)>>, lifetime-retirement: (retirement-coordinator :: E -> V)<(e :: E)>){0,4,8} : forall<(e :: E)> (lifetime-token : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),scope-state>, lifetime-children : (kokaine/internal/registry/registry :: V -> V)<(retirement-work :: E -> V)<(e :: E)>>, lifetime-finalizers : (kokaine/internal/registry/registry :: V -> V)<(retirement-work :: E -> V)<(e :: E)>>, lifetime-retirement : (retirement-coordinator :: E -> V)<(e :: E)>) -> (lifetime-owner :: E -> V)<(e :: E)> = 1;
 };
-pub value{0,1,8} type frame[192,1,195,3] <(e :: E)> :: E -> V {
-  pub con Frame[193,3,193,7](frame-lifetime: (lifetime-owner :: E -> V)<(e :: E)>){0,1,8} : forall<(e :: E)> (frame-lifetime : (lifetime-owner :: E -> V)<(e :: E)>) -> (frame :: E -> V)<(e :: E)> = 1;
+pub value{0,1,8} type frame[211,1,214,3] <(e :: E)> :: E -> V {
+  pub con Frame[212,3,212,7](frame-lifetime: (lifetime-owner :: E -> V)<(e :: E)>){0,1,8} : forall<(e :: E)> (frame-lifetime : (lifetime-owner :: E -> V)<(e :: E)>) -> (frame :: E -> V)<(e :: E)> = 1;
 };
-pub recursive type built-trace[131,1,137,3] <(e :: E)> :: E -> V {
-  pub con Built-trace[132,3,132,13](built-root: (trace :: E -> V)<(e :: E)>, built-publication-current: (std/core/types/maybe :: V -> V)<continuation-gate>, built-publication-frame: (frame :: E -> V)<(e :: E)>, built-publication-action: () -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ()){0,5,8} : forall<(e :: E)> (built-root : (trace :: E -> V)<(e :: E)>, built-publication-current : (std/core/types/maybe :: V -> V)<continuation-gate>, built-publication-frame : (frame :: E -> V)<(e :: E)>, built-publication-action : () -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ()) -> (built-trace :: E -> V)<(e :: E)> = 1;
+// A quarantined ticket, keyed by its gate's state cell. `requeue(front)`
+// puts the concrete ticket back on its plane's queue. The closure keeps the
+// plane type free of `work<e>`, which Koka 3.2.3's jsweb pipeline rejects
+// when inlined through the rank-2 `packed-capture`.
+pub value{0,2,8} type failed-ticket[247,1,251,3] {
+  pub con Failed-ticket[248,3,248,15](failed-state: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),capture-state>, failed-requeue: (front : std/core/types/bool) -> ()){0,2,8} : (failed-state : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),capture-state>, failed-requeue : (front : std/core/types/bool) -> ()) -> failed-ticket = 1;
 };
-pub recursive div type trace[118,1,129,3] <(e :: E)> :: E -> V {
-  pub con Trace-end[119,3,119,11]{0,0,0} : forall<(e :: E)> (trace :: E -> V)<(e :: E)> = 1;
-  pub con Trace-read[120,3,120,12](trace-gate: continuation-gate, trace-owner: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<derive-producer>>, trace-child: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(trace :: E -> V)<(e :: E)>>, trace-frame: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(frame :: E -> V)<(e :: E)>>, trace-resume: ((frame :: E -> V)<(e :: E)>) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> (built-trace :: E -> V)<(e :: E)>, trace-finalize: () -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> (), trace-unlink: () -> (), trace-stale: () -> std/core/types/bool){0,8,8} : forall<(e :: E)> (trace-gate : continuation-gate, trace-owner : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<derive-producer>>, trace-child : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(trace :: E -> V)<(e :: E)>>, trace-frame : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(frame :: E -> V)<(e :: E)>>, trace-resume : ((frame :: E -> V)<(e :: E)>) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> (built-trace :: E -> V)<(e :: E)>, trace-finalize : () -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> (), trace-unlink : () -> (), trace-stale : () -> std/core/types/bool) -> (trace :: E -> V)<(e :: E)> = 2;
+pub recursive type built-trace[150,1,156,3] <(e :: E)> :: E -> V {
+  pub con Built-trace[151,3,151,13](built-root: (trace :: E -> V)<(e :: E)>, built-publication-current: (std/core/types/maybe :: V -> V)<continuation-gate>, built-publication-frame: (frame :: E -> V)<(e :: E)>, built-publication-action: () -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ()){0,5,8} : forall<(e :: E)> (built-root : (trace :: E -> V)<(e :: E)>, built-publication-current : (std/core/types/maybe :: V -> V)<continuation-gate>, built-publication-frame : (frame :: E -> V)<(e :: E)>, built-publication-action : () -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ()) -> (built-trace :: E -> V)<(e :: E)> = 1;
 };
-pub recursive type continuation-scope[183,1,190,3] <(e :: E)> :: E -> V {
-  pub con Scope[184,3,184,7](scope-lifetime: (lifetime-owner :: E -> V)<(e :: E)>, scope-body: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(trace :: E -> V)<(e :: E)>>, scope-parent: (std/core/types/maybe :: V -> V)<continuation-gate>, scope-bootstrap-slot: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<() -> <(std/core/types/div :: X)|(e :: E)> ((std/core/exn/error :: V -> V)<()> == 1 (std/core/types/result :: (V, V) -> V)<(),std/core/exn/exception>)>>, scope-unlink: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<() -> std/core/types/bool>>){0,6,8} : forall<(e :: E)> (scope-lifetime : (lifetime-owner :: E -> V)<(e :: E)>, scope-body : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(trace :: E -> V)<(e :: E)>>, scope-parent : (std/core/types/maybe :: V -> V)<continuation-gate>, scope-bootstrap-slot : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<() -> <(std/core/types/div :: X)|(e :: E)> ((std/core/exn/error :: V -> V)<()> == 1 (std/core/types/result :: (V, V) -> V)<(),std/core/exn/exception>)>>, scope-unlink : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<() -> std/core/types/bool>>) -> (continuation-scope :: E -> V)<(e :: E)> = 1;
+pub recursive div type trace[137,1,148,3] <(e :: E)> :: E -> V {
+  pub con Trace-end[138,3,138,11]{0,0,0} : forall<(e :: E)> (trace :: E -> V)<(e :: E)> = 1;
+  pub con Trace-read[139,3,139,12](trace-gate: continuation-gate, trace-owner: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<derive-producer>>, trace-child: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(trace :: E -> V)<(e :: E)>>, trace-frame: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(frame :: E -> V)<(e :: E)>>, trace-resume: ((frame :: E -> V)<(e :: E)>) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> (built-trace :: E -> V)<(e :: E)>, trace-finalize: () -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> (), trace-unlink: () -> (), trace-stale: () -> std/core/types/bool){0,8,8} : forall<(e :: E)> (trace-gate : continuation-gate, trace-owner : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<derive-producer>>, trace-child : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(trace :: E -> V)<(e :: E)>>, trace-frame : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(frame :: E -> V)<(e :: E)>>, trace-resume : ((frame :: E -> V)<(e :: E)>) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> (built-trace :: E -> V)<(e :: E)>, trace-finalize : () -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> (), trace-unlink : () -> (), trace-stale : () -> std/core/types/bool) -> (trace :: E -> V)<(e :: E)> = 2;
 };
-pub recursive type derive-producer[233,1,238,3] {
-  pub con Derive-producer[234,3,234,17](producer-plane: (plane :: E -> V)<(std/core/types/total :: E)>, producer-scope: (continuation-scope :: E -> V)<(std/core/types/total :: E)>, producer-settling: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>){0,3,8} : (producer-plane : (plane :: E -> V)<(std/core/types/total :: E)>, producer-scope : (continuation-scope :: E -> V)<(std/core/types/total :: E)>, producer-settling : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>) -> derive-producer = 1;
+pub recursive type continuation-scope[202,1,209,3] <(e :: E)> :: E -> V {
+  pub con Scope[203,3,203,7](scope-lifetime: (lifetime-owner :: E -> V)<(e :: E)>, scope-body: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(trace :: E -> V)<(e :: E)>>, scope-parent: (std/core/types/maybe :: V -> V)<continuation-gate>, scope-bootstrap-slot: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<() -> <(std/core/types/div :: X)|(e :: E)> ((std/core/exn/error :: V -> V)<()> == 1 (std/core/types/result :: (V, V) -> V)<(),std/core/exn/exception>)>>, scope-unlink: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<() -> std/core/types/bool>>){0,6,8} : forall<(e :: E)> (scope-lifetime : (lifetime-owner :: E -> V)<(e :: E)>, scope-body : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(trace :: E -> V)<(e :: E)>>, scope-parent : (std/core/types/maybe :: V -> V)<continuation-gate>, scope-bootstrap-slot : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<() -> <(std/core/types/div :: X)|(e :: E)> ((std/core/exn/error :: V -> V)<()> == 1 (std/core/types/result :: (V, V) -> V)<(),std/core/exn/exception>)>>, scope-unlink : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<() -> std/core/types/bool>>) -> (continuation-scope :: E -> V)<(e :: E)> = 1;
+};
+pub recursive type derive-producer[265,1,272,3] {
+  pub con Derive-producer[266,3,266,17](producer-plane: (plane :: E -> V)<(std/core/types/total :: E)>, producer-scope: (continuation-scope :: E -> V)<(std/core/types/total :: E)>, producer-settling: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>, producer-clean: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>){0,4,8} : (producer-plane : (plane :: E -> V)<(std/core/types/total :: E)>, producer-scope : (continuation-scope :: E -> V)<(std/core/types/total :: E)>, producer-settling : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>, producer-clean : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>) -> derive-producer = 1;
 };
 // Non-effectful structural identity shared across execution planes.
-pub recursive type continuation-gate[111,1,116,3] {
-  pub con Continuation-gate[112,3,112,19](gate-state: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),capture-state>, gate-parent: (std/core/types/maybe :: V -> V)<continuation-gate>, gate-input-producer: (std/core/types/maybe :: V -> V)<derive-producer>){0,5,8} : (gate-state : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),capture-state>, gate-parent : (std/core/types/maybe :: V -> V)<continuation-gate>, gate-input-producer : (std/core/types/maybe :: V -> V)<derive-producer>) -> continuation-gate = 1;
+pub recursive type continuation-gate[130,1,135,3] {
+  pub con Continuation-gate[131,3,131,19](gate-state: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),capture-state>, gate-parent: (std/core/types/maybe :: V -> V)<continuation-gate>, gate-input-producer: (std/core/types/maybe :: V -> V)<derive-producer>){0,5,8} : (gate-state : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),capture-state>, gate-parent : (std/core/types/maybe :: V -> V)<continuation-gate>, gate-input-producer : (std/core/types/maybe :: V -> V)<derive-producer>) -> continuation-gate = 1;
 };
 // Derivations use `plane<total>` while effects use `plane<e>`.
-pub recursive type plane[211,1,219,3] <(e :: E)> :: E -> V {
-  pub con Plane[212,3,212,7](plane-queue: ((kokaine/reactive/internal/work-transaction/work-queue :: V -> V)<(work :: E -> V)<(e :: E)>> == 1 (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(kokaine/reactive/internal/work-transaction/deque :: V -> V)<(work :: E -> V)<(e :: E)>>>), plane-work-group: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<(kokaine/reactive/internal/work-transaction/work-group :: V -> V)<(work :: E -> V)<(e :: E)>>>>, plane-current: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<continuation-gate>>, plane-current-frame: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(frame :: E -> V)<(e :: E)>>, plane-draft: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/list :: V -> V)<(trace :: E -> V)<(e :: E)>>>>>, plane-retirement: (retirement-coordinator :: E -> V)<(e :: E)>){0,6,8} : forall<(e :: E)> (plane-queue : ((kokaine/reactive/internal/work-transaction/work-queue :: V -> V)<(work :: E -> V)<(e :: E)>> == 1 (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(kokaine/reactive/internal/work-transaction/deque :: V -> V)<(work :: E -> V)<(e :: E)>>>), plane-work-group : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<(kokaine/reactive/internal/work-transaction/work-group :: V -> V)<(work :: E -> V)<(e :: E)>>>>, plane-current : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<continuation-gate>>, plane-current-frame : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(frame :: E -> V)<(e :: E)>>, plane-draft : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/list :: V -> V)<(trace :: E -> V)<(e :: E)>>>>>, plane-retirement : (retirement-coordinator :: E -> V)<(e :: E)>) -> (plane :: E -> V)<(e :: E)> = 1;
+pub recursive type plane[230,1,241,3] <(e :: E)> :: E -> V {
+  pub con Plane[231,3,231,7](plane-queue: ((kokaine/reactive/internal/work-transaction/work-queue :: V -> V)<(work :: E -> V)<(e :: E)>> == 1 (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(kokaine/reactive/internal/work-transaction/deque :: V -> V)<(work :: E -> V)<(e :: E)>>>), plane-work-group: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<(kokaine/reactive/internal/work-transaction/work-group :: V -> V)<(work :: E -> V)<(e :: E)>>>>, plane-current: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<continuation-gate>>, plane-current-frame: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(frame :: E -> V)<(e :: E)>>, plane-draft: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/list :: V -> V)<(trace :: E -> V)<(e :: E)>>>>>, plane-retirement: (retirement-coordinator :: E -> V)<(e :: E)>, plane-failed: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/list :: V -> V)<failed-ticket>>){0,7,8} : forall<(e :: E)> (plane-queue : ((kokaine/reactive/internal/work-transaction/work-queue :: V -> V)<(work :: E -> V)<(e :: E)>> == 1 (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(kokaine/reactive/internal/work-transaction/deque :: V -> V)<(work :: E -> V)<(e :: E)>>>), plane-work-group : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<(kokaine/reactive/internal/work-transaction/work-group :: V -> V)<(work :: E -> V)<(e :: E)>>>>, plane-current : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<continuation-gate>>, plane-current-frame : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(frame :: E -> V)<(e :: E)>>, plane-draft : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/list :: V -> V)<(trace :: E -> V)<(e :: E)>>>>>, plane-retirement : (retirement-coordinator :: E -> V)<(e :: E)>, plane-failed : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/list :: V -> V)<failed-ticket>>) -> (plane :: E -> V)<(e :: E)> = 1;
 };
-pub recursive type work[203,1,208,3] <(e :: E)> :: E -> V {
-  pub con Resume-work[204,3,204,13](resume-trace: (trace :: E -> V)<(e :: E)>){0,1,8} : forall<(e :: E)> (resume-trace : (trace :: E -> V)<(e :: E)>) -> (work :: E -> V)<(e :: E)> = 1;
-  pub con Bootstrap-work[205,3,205,16](bootstrap-scope: (continuation-scope :: E -> V)<(e :: E)>, bootstrap-owner: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<derive-producer>>){0,2,8} : forall<(e :: E)> (bootstrap-scope : (continuation-scope :: E -> V)<(e :: E)>, bootstrap-owner : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<derive-producer>>) -> (work :: E -> V)<(e :: E)> = 2;
+pub recursive type work[222,1,227,3] <(e :: E)> :: E -> V {
+  pub con Resume-work[223,3,223,13](resume-trace: (trace :: E -> V)<(e :: E)>){0,1,8} : forall<(e :: E)> (resume-trace : (trace :: E -> V)<(e :: E)>) -> (work :: E -> V)<(e :: E)> = 1;
+  pub con Bootstrap-work[224,3,224,16](bootstrap-scope: (continuation-scope :: E -> V)<(e :: E)>, bootstrap-owner: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<derive-producer>>){0,2,8} : forall<(e :: E)> (bootstrap-scope : (continuation-scope :: E -> V)<(e :: E)>, bootstrap-owner : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<derive-producer>>) -> (work :: E -> V)<(e :: E)> = 2;
 };
-pub type cleanup-registration[177,1,181,3] <(e :: E)> :: E -> V {
-  pub con Cleanup-registration[178,3,178,22](cleanup-node: (kokaine/internal/registry/registry-registration :: V -> V)<(retirement-work :: E -> V)<(e :: E)>>, cleanup-resource: (kokaine/reactive/internal/resource/resource-k :: E -> V)<(e :: E)>){0,5,8} : forall<(e :: E)> (cleanup-node : (kokaine/internal/registry/registry-registration :: V -> V)<(retirement-work :: E -> V)<(e :: E)>>, cleanup-resource : (kokaine/reactive/internal/resource/resource-k :: E -> V)<(e :: E)>) -> (cleanup-registration :: E -> V)<(e :: E)> = 1;
+pub type cleanup-registration[196,1,200,3] <(e :: E)> :: E -> V {
+  pub con Cleanup-registration[197,3,197,22](cleanup-node: (kokaine/internal/registry/registry-registration :: V -> V)<(retirement-work :: E -> V)<(e :: E)>>, cleanup-resource: (kokaine/reactive/internal/resource/resource-k :: E -> V)<(e :: E)>){0,5,8} : forall<(e :: E)> (cleanup-node : (kokaine/internal/registry/registry-registration :: V -> V)<(retirement-work :: E -> V)<(e :: E)>>, cleanup-resource : (kokaine/reactive/internal/resource/resource-k :: E -> V)<(e :: E)>) -> (cleanup-registration :: E -> V)<(e :: E)> = 1;
 };
-pub alias disposer[91,1,91,40]<(e :: E)> :: E -> V = () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> () = 1;
+pub alias disposer[110,1,110,40]<(e :: E)> :: E -> V = () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> () = 1;
 // Rank-2 packaging erases only the ambient effect row. Unlike a callback,
 // this value contains the actual execution plane and continuation node and
 // permits one operation: hand that typed pair to a polymorphic consumer.
-pub value{0,1,8} type packed-capture[67,1,70,3] {
-  pub con Packed-capture[68,3,68,16](run-packed: forall<a> (forall<(e :: E)> ((plane :: E -> V)<(e :: E)>, (trace :: E -> V)<(e :: E)>) -> a) -> a){0,1,8} : (run-packed : forall<a> (forall<(e :: E)> ((plane :: E -> V)<(e :: E)>, (trace :: E -> V)<(e :: E)>) -> a) -> a) -> packed-capture = 1;
+pub value{0,1,8} type packed-capture[86,1,89,3] {
+  pub con Packed-capture[87,3,87,16](run-packed: forall<a> (forall<(e :: E)> ((plane :: E -> V)<(e :: E)>, (trace :: E -> V)<(e :: E)>) -> a) -> a){0,1,8} : (run-packed : forall<a> (forall<(e :: E)> ((plane :: E -> V)<(e :: E)>, (trace :: E -> V)<(e :: E)>) -> a) -> a) -> packed-capture = 1;
 };
-pub value{0,1,8} type root-key[53,1,54,39] {
-  pub con Root-key[54,3,54,10](identity: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>){0,1,8} : (identity : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>) -> root-key = 1;
+pub value{0,1,8} type root-key[72,1,73,39] {
+  pub con Root-key[73,3,73,10](identity: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>){0,1,8} : (identity : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>) -> root-key = 1;
 };
-pub type source[72,1,79,3] <a> :: V -> V {
-  pub con Source[73,3,73,8](source-root: root-key, source-cell: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>, source-equals: (a, a) -> std/core/types/bool, source-version: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>, source-captures: (kokaine/internal/registry/registry :: V -> V)<packed-capture>){0,5,8} : forall<a> (source-root : root-key, source-cell : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>, source-equals : (a, a) -> std/core/types/bool, source-version : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>, source-captures : (kokaine/internal/registry/registry :: V -> V)<packed-capture>) -> (source :: V -> V)<a> = 1;
+pub type source[91,1,98,3] <a> :: V -> V {
+  pub con Source[92,3,92,8](source-root: root-key, source-cell: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>, source-equals: (a, a) -> std/core/types/bool, source-version: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>, source-captures: (kokaine/internal/registry/registry :: V -> V)<packed-capture>){0,5,8} : forall<a> (source-root : root-key, source-cell : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>, source-equals : (a, a) -> std/core/types/bool, source-version : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>, source-captures : (kokaine/internal/registry/registry :: V -> V)<packed-capture>) -> (source :: V -> V)<a> = 1;
 };
-pub value{0,2,8} type memo[240,1,244,3] <a> :: V -> V {
-  pub con Memo[241,3,241,6](memo-source: (source :: V -> V)<a>, memo-producer: derive-producer){0,2,8} : forall<a> (memo-source : (source :: V -> V)<a>, memo-producer : derive-producer) -> (memo :: V -> V)<a> = 1;
+pub value{0,2,8} type memo[274,1,278,3] <a> :: V -> V {
+  pub con Memo[275,3,275,6](memo-source: (source :: V -> V)<a>, memo-producer: derive-producer){0,2,8} : forall<a> (memo-source : (source :: V -> V)<a>, memo-producer : derive-producer) -> (memo :: V -> V)<a> = 1;
 };
 // `Track-read` captures the exact suffix. `Sample-read` is the untracked
 // override.
-pub value{1,0,1} type read-mode[84,1,86,13] {
-  pub con Track-read[85,3,85,12]{0,0,0} : read-mode = 1;
-  pub con Sample-read[86,3,86,13]{0,0,0} : read-mode = 2;
+pub value{1,0,1} type read-mode[103,1,105,13] {
+  pub con Track-read[104,3,104,12]{0,0,0} : read-mode = 1;
+  pub con Sample-read[105,3,105,13]{0,0,0} : read-mode = 2;
 };
-pub type root[221,1,231,3] <(e :: E)> :: E -> V {
-  pub con Root[222,3,222,6](root-key: root-key, root-derive-plane: (plane :: E -> V)<(std/core/types/total :: E)>, root-effect-plane: (plane :: E -> V)<(e :: E)>, root-lifetime: (lifetime-owner :: E -> V)<(e :: E)>, root-batch-depth: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>, root-flushing: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>, root-disposing: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>, root-disposed: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>){0,8,8} : forall<(e :: E)> (root-key : root-key, root-derive-plane : (plane :: E -> V)<(std/core/types/total :: E)>, root-effect-plane : (plane :: E -> V)<(e :: E)>, root-lifetime : (lifetime-owner :: E -> V)<(e :: E)>, root-batch-depth : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>, root-flushing : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>, root-disposing : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>, root-disposed : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>) -> (root :: E -> V)<(e :: E)> = 1;
+pub type root[253,1,263,3] <(e :: E)> :: E -> V {
+  pub con Root[254,3,254,6](root-key: root-key, root-derive-plane: (plane :: E -> V)<(std/core/types/total :: E)>, root-effect-plane: (plane :: E -> V)<(e :: E)>, root-lifetime: (lifetime-owner :: E -> V)<(e :: E)>, root-batch-depth: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>, root-flushing: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>, root-disposing: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>, root-disposed: (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>){0,8,8} : forall<(e :: E)> (root-key : root-key, root-derive-plane : (plane :: E -> V)<(std/core/types/total :: E)>, root-effect-plane : (plane :: E -> V)<(e :: E)>, root-lifetime : (lifetime-owner :: E -> V)<(e :: E)>, root-batch-depth : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>, root-flushing : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>, root-disposing : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>, root-disposed : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>) -> (root :: E -> V)<(e :: E)> = 1;
 };
-pub type settle-result[105,1,108,45] {
-  pub con Settle-ok[106,3,106,11]{0,0,0} : settle-result = 1;
-  pub con Settle-deferred[107,3,107,17]{0,0,0} : settle-result = 2;
-  pub con Settle-failed[108,3,108,15](settle-exception: std/core/exn/exception){0,2,8} : (settle-exception : std/core/exn/exception) -> settle-result = 3;
+pub type settle-result[124,1,127,45] {
+  pub con Settle-ok[125,3,125,11]{0,0,0} : settle-result = 1;
+  pub con Settle-deferred[126,3,126,17]{0,0,0} : settle-result = 2;
+  pub con Settle-failed[127,3,127,15](settle-exception: std/core/exn/exception){0,2,8} : (settle-exception : std/core/exn/exception) -> settle-result = 3;
 };
-pub value{0,1,8} type signal[88,1,89,35] <a> :: V -> V {
-  pub con Signal[89,3,89,8](signal-source: (source :: V -> V)<a>){0,1,8} : forall<a> (signal-source : (source :: V -> V)<a>) -> (signal :: V -> V)<a> = 1;
+pub value{0,1,8} type signal[107,1,108,35] <a> :: V -> V {
+  pub con Signal[108,3,108,8](signal-source: (source :: V -> V)<a>){0,1,8} : forall<a> (signal-source : (source :: V -> V)<a>) -> (signal :: V -> V)<a> = 1;
 };
  
 //------------------------------
@@ -169,169 +176,190 @@ val pure-plane-depth[33,5,33,20] : (std/core/types/ref :: (H, V) -> V)<(std/core
 pub fun enter-pure-plane[35,9,35,24] : () -> std/core/types/int;
 pub fun restore-pure-plane[40,9,40,26] : (previous : std/core/types/int) -> ();
 pub fun check-not-pure-plane[43,9,43,28] : (operation : std/core/types/string) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
-pub fun lift-div[47,9,47,16] : forall<a,(e :: E)> (action : () -> (e :: E) a) -> <(std/core/types/div :: X)|(e :: E)> a;
+// Settle walks. One outermost `settle-producer-result` call is one walk; the
+// calls nested inside it (through shared upstreams or memo reads made while
+// recomputing) belong to the same walk. Within a walk upstream producers are
+// always settled before their readers, so a producer that settled `Ok` stays
+// clean for the rest of the walk and can be skipped. Without this a chain of
+// diamonds is re-validated once per path, 2^depth times per read.
+val settle-walk-depth[53,5,53,21] : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>;
+val settle-walk-serial[54,5,54,22] : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>;
 // monadic lift
-fun @mlift-lift-exn@10079[1,0,1,0] : forall<a,(e :: E)> (action : () -> (e :: E) a, @y-x10073 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a;
-pub fun lift-exn[50,9,50,16] : forall<a,(e :: E)> (action : () -> (e :: E) a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a;
+fun @mlift-enter-settle-walk@10111[1,0,1,0] : forall<(_e :: E),(_e1 :: E)> (depth : std/core/types/int, @c-x10103 : ()) -> std/core/types/int;
+pub fun enter-settle-walk[56,9,56,25] : () -> std/core/types/int;
+pub fun leave-settle-walk[63,9,63,25] : () -> ();
+pub fun lift-div[66,9,66,16] : forall<a,(e :: E)> (action : () -> (e :: E) a) -> <(std/core/types/div :: X)|(e :: E)> a;
+// monadic lift
+fun @mlift-lift-exn@10112[1,0,1,0] : forall<a,(e :: E)> (action : () -> (e :: E) a, @y-x10105 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a;
+pub fun lift-exn[69,9,69,16] : forall<a,(e :: E)> (action : () -> (e :: E) a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a;
 // Automatically generated. Retrieves the `identity` constructor field of the `:root-key` type.
-pub fun root-key/identity[54,12,54,19] : (^ @this : root-key) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>;
-pub fun root-key/@copy[54,3,54,10] : (@this : root-key, identity : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>>) -> root-key;
-pub fun same-root[56,9,56,17] : (left : root-key, right : root-key) -> std/core/types/bool;
+pub fun root-key/identity[73,12,73,19] : (^ @this : root-key) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>;
+pub fun root-key/@copy[73,3,73,10] : (@this : root-key, identity : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>>) -> root-key;
+pub fun same-root[75,9,75,17] : (left : root-key, right : root-key) -> std/core/types/bool;
 // Automatically generated. Retrieves the `run-packed` constructor field of the `:packed-capture` type.
-pub fun packed-capture/run-packed[69,5,69,14] : forall<a> (^ @this : packed-capture) -> ((forall<(e :: E)> ((plane :: E -> V)<(e :: E)>, (trace :: E -> V)<(e :: E)>) -> a) -> a);
-pub fun packed-capture/@copy[68,3,68,16] : (@this : packed-capture, run-packed : (std/core/types/@optional :: V -> V)<forall<a> (forall<(e :: E)> ((plane :: E -> V)<(e :: E)>, (trace :: E -> V)<(e :: E)>) -> a) -> a>) -> packed-capture;
+pub fun packed-capture/run-packed[88,5,88,14] : forall<a> (^ @this : packed-capture) -> ((forall<(e :: E)> ((plane :: E -> V)<(e :: E)>, (trace :: E -> V)<(e :: E)>) -> a) -> a);
+pub fun packed-capture/@copy[87,3,87,16] : (@this : packed-capture, run-packed : (std/core/types/@optional :: V -> V)<forall<a> (forall<(e :: E)> ((plane :: E -> V)<(e :: E)>, (trace :: E -> V)<(e :: E)>) -> a) -> a>) -> packed-capture;
 // Automatically generated. Retrieves the `source-root` constructor field of the `:source` type.
-pub fun source/source-root[74,5,74,15] : forall<a> (^ source : (source :: V -> V)<a>) -> root-key;
+pub fun source/source-root[93,5,93,15] : forall<a> (^ source : (source :: V -> V)<a>) -> root-key;
 // Automatically generated. Retrieves the `source-cell` constructor field of the `:source` type.
-pub fun source/source-cell[75,5,75,15] : forall<a> (^ source : (source :: V -> V)<a>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>;
+pub fun source/source-cell[94,5,94,15] : forall<a> (^ source : (source :: V -> V)<a>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>;
 // Automatically generated. Retrieves the `source-equals` constructor field of the `:source` type.
-pub fun source/source-equals[76,5,76,17] : forall<a> (^ source : (source :: V -> V)<a>) -> ((a, a) -> std/core/types/bool);
+pub fun source/source-equals[95,5,95,17] : forall<a> (^ source : (source :: V -> V)<a>) -> ((a, a) -> std/core/types/bool);
 // Automatically generated. Retrieves the `source-version` constructor field of the `:source` type.
-pub fun source/source-version[77,5,77,18] : forall<a> (^ source : (source :: V -> V)<a>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>;
+pub fun source/source-version[96,5,96,18] : forall<a> (^ source : (source :: V -> V)<a>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>;
 // Automatically generated. Retrieves the `source-captures` constructor field of the `:source` type.
-pub fun source/source-captures[78,5,78,19] : forall<a> (^ source : (source :: V -> V)<a>) -> (kokaine/internal/registry/registry :: V -> V)<packed-capture>;
-pub fun source/@copy[73,3,73,8] : forall<a> (@this : (source :: V -> V)<a>, source-root : (std/core/types/@optional :: V -> V)<root-key>, source-cell : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>>, source-equals : (std/core/types/@optional :: V -> V)<(a, a) -> std/core/types/bool>, source-version : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>>, source-captures : (std/core/types/@optional :: V -> V)<(kokaine/internal/registry/registry :: V -> V)<packed-capture>>) -> (source :: V -> V)<a>;
+pub fun source/source-captures[97,5,97,19] : forall<a> (^ source : (source :: V -> V)<a>) -> (kokaine/internal/registry/registry :: V -> V)<packed-capture>;
+pub fun source/@copy[92,3,92,8] : forall<a> (@this : (source :: V -> V)<a>, source-root : (std/core/types/@optional :: V -> V)<root-key>, source-cell : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>>, source-equals : (std/core/types/@optional :: V -> V)<(a, a) -> std/core/types/bool>, source-version : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>>, source-captures : (std/core/types/@optional :: V -> V)<(kokaine/internal/registry/registry :: V -> V)<packed-capture>>) -> (source :: V -> V)<a>;
 // Automatically generated. Tests for the `Track-read` constructor of the `:read-mode` type.
-pub fip fun is-track-read[85,3,85,12] : (^ read-mode : read-mode) -> std/core/types/bool;
+pub fip fun is-track-read[104,3,104,12] : (^ read-mode : read-mode) -> std/core/types/bool;
 // Automatically generated. Tests for the `Sample-read` constructor of the `:read-mode` type.
-pub fip fun is-sample-read[86,3,86,13] : (^ read-mode : read-mode) -> std/core/types/bool;
+pub fip fun is-sample-read[105,3,105,13] : (^ read-mode : read-mode) -> std/core/types/bool;
 // Automatically generated. Retrieves the `signal-source` constructor field of the `:signal` type.
-pub fun signal/signal-source[89,10,89,22] : forall<a> (^ signal : (signal :: V -> V)<a>) -> (source :: V -> V)<a>;
-pub fun signal/@copy[89,3,89,8] : forall<a> (@this : (signal :: V -> V)<a>, signal-source : (std/core/types/@optional :: V -> V)<(source :: V -> V)<a>>) -> (signal :: V -> V)<a>;
+pub fun signal/signal-source[108,10,108,22] : forall<a> (^ signal : (signal :: V -> V)<a>) -> (source :: V -> V)<a>;
+pub fun signal/@copy[108,3,108,8] : forall<a> (@this : (signal :: V -> V)<a>, signal-source : (std/core/types/@optional :: V -> V)<(source :: V -> V)<a>>) -> (signal :: V -> V)<a>;
 // Automatically generated. Tests for the `Capture-draft` constructor of the `:capture-state` type.
-pub fip fun is-capture-draft[99,3,99,15] : (^ capture-state : capture-state) -> std/core/types/bool;
+pub fip fun is-capture-draft[118,3,118,15] : (^ capture-state : capture-state) -> std/core/types/bool;
 // Automatically generated. Tests for the `Capture-live` constructor of the `:capture-state` type.
-pub fip fun is-capture-live[100,3,100,14] : (^ capture-state : capture-state) -> std/core/types/bool;
+pub fip fun is-capture-live[119,3,119,14] : (^ capture-state : capture-state) -> std/core/types/bool;
 // Automatically generated. Tests for the `Capture-pending` constructor of the `:capture-state` type.
-pub fip fun is-capture-pending[101,3,101,17] : (^ capture-state : capture-state) -> std/core/types/bool;
+pub fip fun is-capture-pending[120,3,120,17] : (^ capture-state : capture-state) -> std/core/types/bool;
 // Automatically generated. Tests for the `Capture-running` constructor of the `:capture-state` type.
-pub fip fun is-capture-running[102,3,102,17] : (^ capture-state : capture-state) -> std/core/types/bool;
+pub fip fun is-capture-running[121,3,121,17] : (^ capture-state : capture-state) -> std/core/types/bool;
 // Automatically generated. Tests for the `Capture-dead` constructor of the `:capture-state` type.
-pub fip fun is-capture-dead[103,3,103,14] : (^ capture-state : capture-state) -> std/core/types/bool;
+pub fip fun is-capture-dead[122,3,122,14] : (^ capture-state : capture-state) -> std/core/types/bool;
 // Automatically generated. Tests for the `Settle-ok` constructor of the `:settle-result` type.
-pub fip fun is-settle-ok[106,3,106,11] : (^ settle-result : settle-result) -> std/core/types/bool;
+pub fip fun is-settle-ok[125,3,125,11] : (^ settle-result : settle-result) -> std/core/types/bool;
 // Automatically generated. Tests for the `Settle-deferred` constructor of the `:settle-result` type.
-pub fip fun is-settle-deferred[107,3,107,17] : (^ settle-result : settle-result) -> std/core/types/bool;
+pub fip fun is-settle-deferred[126,3,126,17] : (^ settle-result : settle-result) -> std/core/types/bool;
 // Automatically generated. Tests for the `Settle-failed` constructor of the `:settle-result` type.
-pub fip fun is-settle-failed[108,3,108,15] : (^ settle-result : settle-result) -> std/core/types/bool;
+pub fip fun is-settle-failed[127,3,127,15] : (^ settle-result : settle-result) -> std/core/types/bool;
 // Automatically generated. Retrieves the `gate-state` constructor field of the `:continuation-gate` type.
-pub fun continuation-gate/gate-state[113,5,113,14] : (^ @this : continuation-gate) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),capture-state>;
+pub fun continuation-gate/gate-state[132,5,132,14] : (^ @this : continuation-gate) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),capture-state>;
 // Automatically generated. Retrieves the `gate-parent` constructor field of the `:continuation-gate` type.
-pub fun continuation-gate/gate-parent[114,5,114,15] : (^ @this : continuation-gate) -> (std/core/types/maybe :: V -> V)<continuation-gate>;
+pub fun continuation-gate/gate-parent[133,5,133,15] : (^ @this : continuation-gate) -> (std/core/types/maybe :: V -> V)<continuation-gate>;
 // Automatically generated. Retrieves the `gate-input-producer` constructor field of the `:continuation-gate` type.
-pub fun continuation-gate/gate-input-producer[115,5,115,23] : (^ @this : continuation-gate) -> (std/core/types/maybe :: V -> V)<derive-producer>;
-pub fun continuation-gate/@copy[112,3,112,19] : (@this : continuation-gate, gate-state : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),capture-state>>, gate-parent : (std/core/types/@optional :: V -> V)<(std/core/types/maybe :: V -> V)<continuation-gate>>, gate-input-producer : (std/core/types/@optional :: V -> V)<(std/core/types/maybe :: V -> V)<derive-producer>>) -> continuation-gate;
+pub fun continuation-gate/gate-input-producer[134,5,134,23] : (^ @this : continuation-gate) -> (std/core/types/maybe :: V -> V)<derive-producer>;
+pub fun continuation-gate/@copy[131,3,131,19] : (@this : continuation-gate, gate-state : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),capture-state>>, gate-parent : (std/core/types/@optional :: V -> V)<(std/core/types/maybe :: V -> V)<continuation-gate>>, gate-input-producer : (std/core/types/@optional :: V -> V)<(std/core/types/maybe :: V -> V)<derive-producer>>) -> continuation-gate;
 // Automatically generated. Tests for the `Trace-end` constructor of the `:trace` type.
-pub fip fun is-trace-end[119,3,119,11] : forall<(e :: E)> (^ trace : (trace :: E -> V)<(e :: E)>) -> std/core/types/bool;
+pub fip fun is-trace-end[138,3,138,11] : forall<(e :: E)> (^ trace : (trace :: E -> V)<(e :: E)>) -> std/core/types/bool;
 // Automatically generated. Tests for the `Trace-read` constructor of the `:trace` type.
-pub fip fun is-trace-read[120,3,120,12] : forall<(e :: E)> (^ trace : (trace :: E -> V)<(e :: E)>) -> std/core/types/bool;
+pub fip fun is-trace-read[139,3,139,12] : forall<(e :: E)> (^ trace : (trace :: E -> V)<(e :: E)>) -> std/core/types/bool;
 // Automatically generated. Retrieves the `built-root` constructor field of the `:built-trace` type.
-pub fun built-trace/built-root[133,5,133,14] : forall<(e :: E)> (^ @this : (built-trace :: E -> V)<(e :: E)>) -> (trace :: E -> V)<(e :: E)>;
+pub fun built-trace/built-root[152,5,152,14] : forall<(e :: E)> (^ @this : (built-trace :: E -> V)<(e :: E)>) -> (trace :: E -> V)<(e :: E)>;
 // Automatically generated. Retrieves the `built-publication-current` constructor field of the `:built-trace` type.
-pub fun built-trace/built-publication-current[134,5,134,29] : forall<(e :: E)> (^ @this : (built-trace :: E -> V)<(e :: E)>) -> (std/core/types/maybe :: V -> V)<continuation-gate>;
+pub fun built-trace/built-publication-current[153,5,153,29] : forall<(e :: E)> (^ @this : (built-trace :: E -> V)<(e :: E)>) -> (std/core/types/maybe :: V -> V)<continuation-gate>;
 // Automatically generated. Retrieves the `built-publication-frame` constructor field of the `:built-trace` type.
-pub fun built-trace/built-publication-frame[135,5,135,27] : forall<(e :: E)> (^ @this : (built-trace :: E -> V)<(e :: E)>) -> (frame :: E -> V)<(e :: E)>;
+pub fun built-trace/built-publication-frame[154,5,154,27] : forall<(e :: E)> (^ @this : (built-trace :: E -> V)<(e :: E)>) -> (frame :: E -> V)<(e :: E)>;
 // Automatically generated. Retrieves the `built-publication-action` constructor field of the `:built-trace` type.
-pub fun built-trace/built-publication-action[136,5,136,28] : forall<(e :: E)> (^ @this : (built-trace :: E -> V)<(e :: E)>) -> (() -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ());
+pub fun built-trace/built-publication-action[155,5,155,28] : forall<(e :: E)> (^ @this : (built-trace :: E -> V)<(e :: E)>) -> (() -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ());
 // monadic lift
-fun built-trace/@mlift-copy@10080[1,0,1,0] : forall<(e :: E)> (@this : (built-trace :: E -> V)<(e :: E)>, built-publication-current : (std/core/types/@optional :: V -> V)<(std/core/types/maybe :: V -> V)<continuation-gate>>, built-publication-frame : (std/core/types/@optional :: V -> V)<(frame :: E -> V)<(e :: E)>>, built-root : (std/core/types/@optional :: V -> V)<(trace :: E -> V)<(e :: E)>>, @c-x10077 : () -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ()) -> (built-trace :: E -> V)<(e :: E)>;
-pub fun built-trace/@copy[132,3,132,13] : forall<(e :: E)> (@this : (built-trace :: E -> V)<(e :: E)>, built-root : (std/core/types/@optional :: V -> V)<(trace :: E -> V)<(e :: E)>>, built-publication-current : (std/core/types/@optional :: V -> V)<(std/core/types/maybe :: V -> V)<continuation-gate>>, built-publication-frame : (std/core/types/@optional :: V -> V)<(frame :: E -> V)<(e :: E)>>, built-publication-action : (std/core/types/@optional :: V -> V)<() -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ()>) -> (built-trace :: E -> V)<(e :: E)>;
+fun built-trace/@mlift-copy@10113[1,0,1,0] : forall<(e :: E)> (@this : (built-trace :: E -> V)<(e :: E)>, built-publication-current : (std/core/types/@optional :: V -> V)<(std/core/types/maybe :: V -> V)<continuation-gate>>, built-publication-frame : (std/core/types/@optional :: V -> V)<(frame :: E -> V)<(e :: E)>>, built-root : (std/core/types/@optional :: V -> V)<(trace :: E -> V)<(e :: E)>>, @c-x10109 : () -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ()) -> (built-trace :: E -> V)<(e :: E)>;
+pub fun built-trace/@copy[151,3,151,13] : forall<(e :: E)> (@this : (built-trace :: E -> V)<(e :: E)>, built-root : (std/core/types/@optional :: V -> V)<(trace :: E -> V)<(e :: E)>>, built-publication-current : (std/core/types/@optional :: V -> V)<(std/core/types/maybe :: V -> V)<continuation-gate>>, built-publication-frame : (std/core/types/@optional :: V -> V)<(frame :: E -> V)<(e :: E)>>, built-publication-action : (std/core/types/@optional :: V -> V)<() -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ()>) -> (built-trace :: E -> V)<(e :: E)>;
 // Automatically generated. Tests for the `Scope-starting` constructor of the `:scope-state` type.
-pub fip fun is-scope-starting[140,3,140,16] : (^ scope-state : scope-state) -> std/core/types/bool;
+pub fip fun is-scope-starting[159,3,159,16] : (^ scope-state : scope-state) -> std/core/types/bool;
 // Automatically generated. Tests for the `Scope-live` constructor of the `:scope-state` type.
-pub fip fun is-scope-live[141,3,141,12] : (^ scope-state : scope-state) -> std/core/types/bool;
+pub fip fun is-scope-live[160,3,160,12] : (^ scope-state : scope-state) -> std/core/types/bool;
 // Automatically generated. Tests for the `Scope-branch-dead` constructor of the `:scope-state` type.
-pub fip fun is-scope-branch-dead[142,3,142,19] : (^ scope-state : scope-state) -> std/core/types/bool;
+pub fip fun is-scope-branch-dead[161,3,161,19] : (^ scope-state : scope-state) -> std/core/types/bool;
 // Automatically generated. Tests for the `Scope-dead` constructor of the `:scope-state` type.
-pub fip fun is-scope-dead[143,3,143,12] : (^ scope-state : scope-state) -> std/core/types/bool;
+pub fip fun is-scope-dead[162,3,162,12] : (^ scope-state : scope-state) -> std/core/types/bool;
 // Automatically generated. Tests for the `Retirement-step` constructor of the `:retirement-work` type.
-pub fip fun is-retirement-step[149,3,149,17] : forall<(e :: E)> (^ retirement-work : (retirement-work :: E -> V)<(e :: E)>) -> std/core/types/bool;
+pub fip fun is-retirement-step[168,3,168,17] : forall<(e :: E)> (^ retirement-work : (retirement-work :: E -> V)<(e :: E)>) -> std/core/types/bool;
 // Automatically generated. Tests for the `Retirement-finalizer` constructor of the `:retirement-work` type.
-pub fip fun is-retirement-finalizer[152,3,152,22] : forall<(e :: E)> (^ retirement-work : (retirement-work :: E -> V)<(e :: E)>) -> std/core/types/bool;
+pub fip fun is-retirement-finalizer[171,3,171,22] : forall<(e :: E)> (^ retirement-work : (retirement-work :: E -> V)<(e :: E)>) -> std/core/types/bool;
 // Automatically generated. Retrieves the `retirement-depth` constructor field of the `:retirement-coordinator` type.
-pub fun retirement-coordinator/retirement-depth[161,5,161,20] : forall<(e :: E)> (^ @this : (retirement-coordinator :: E -> V)<(e :: E)>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>;
+pub fun retirement-coordinator/retirement-depth[180,5,180,20] : forall<(e :: E)> (^ @this : (retirement-coordinator :: E -> V)<(e :: E)>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>;
 // Automatically generated. Retrieves the `retirement-disposal-requested` constructor field of the `:retirement-coordinator` type.
-pub fun retirement-coordinator/retirement-disposal-requested[162,5,162,33] : forall<(e :: E)> (^ @this : (retirement-coordinator :: E -> V)<(e :: E)>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>;
+pub fun retirement-coordinator/retirement-disposal-requested[181,5,181,33] : forall<(e :: E)> (^ @this : (retirement-coordinator :: E -> V)<(e :: E)>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>;
 // Automatically generated. Retrieves the `retirement-dispose-root` constructor field of the `:retirement-coordinator` type.
-pub fun retirement-coordinator/retirement-dispose-root[163,5,163,27] : forall<(e :: E)> (^ @this : (retirement-coordinator :: E -> V)<(e :: E)>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<() -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ()>>;
-pub fun retirement-coordinator/@copy[160,3,160,24] : forall<(e :: E)> (@this : (retirement-coordinator :: E -> V)<(e :: E)>, retirement-depth : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>>, retirement-disposal-requested : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>>, retirement-dispose-root : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<() -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ()>>>) -> (retirement-coordinator :: E -> V)<(e :: E)>;
+pub fun retirement-coordinator/retirement-dispose-root[182,5,182,27] : forall<(e :: E)> (^ @this : (retirement-coordinator :: E -> V)<(e :: E)>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<() -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ()>>;
+pub fun retirement-coordinator/@copy[179,3,179,24] : forall<(e :: E)> (@this : (retirement-coordinator :: E -> V)<(e :: E)>, retirement-depth : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>>, retirement-disposal-requested : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>>, retirement-dispose-root : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<() -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ()>>>) -> (retirement-coordinator :: E -> V)<(e :: E)>;
 // Automatically generated. Retrieves the `lifetime-token` constructor field of the `:lifetime-owner` type.
-pub fun lifetime-owner/lifetime-token[171,5,171,18] : forall<(e :: E)> (^ @this : (lifetime-owner :: E -> V)<(e :: E)>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),scope-state>;
+pub fun lifetime-owner/lifetime-token[190,5,190,18] : forall<(e :: E)> (^ @this : (lifetime-owner :: E -> V)<(e :: E)>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),scope-state>;
 // Automatically generated. Retrieves the `lifetime-children` constructor field of the `:lifetime-owner` type.
-pub fun lifetime-owner/lifetime-children[172,5,172,21] : forall<(e :: E)> (^ @this : (lifetime-owner :: E -> V)<(e :: E)>) -> (kokaine/internal/registry/registry :: V -> V)<(retirement-work :: E -> V)<(e :: E)>>;
+pub fun lifetime-owner/lifetime-children[191,5,191,21] : forall<(e :: E)> (^ @this : (lifetime-owner :: E -> V)<(e :: E)>) -> (kokaine/internal/registry/registry :: V -> V)<(retirement-work :: E -> V)<(e :: E)>>;
 // Automatically generated. Retrieves the `lifetime-finalizers` constructor field of the `:lifetime-owner` type.
-pub fun lifetime-owner/lifetime-finalizers[173,5,173,23] : forall<(e :: E)> (^ @this : (lifetime-owner :: E -> V)<(e :: E)>) -> (kokaine/internal/registry/registry :: V -> V)<(retirement-work :: E -> V)<(e :: E)>>;
+pub fun lifetime-owner/lifetime-finalizers[192,5,192,23] : forall<(e :: E)> (^ @this : (lifetime-owner :: E -> V)<(e :: E)>) -> (kokaine/internal/registry/registry :: V -> V)<(retirement-work :: E -> V)<(e :: E)>>;
 // Automatically generated. Retrieves the `lifetime-retirement` constructor field of the `:lifetime-owner` type.
-pub fun lifetime-owner/lifetime-retirement[174,5,174,23] : forall<(e :: E)> (^ @this : (lifetime-owner :: E -> V)<(e :: E)>) -> (retirement-coordinator :: E -> V)<(e :: E)>;
-pub fun lifetime-owner/@copy[170,3,170,16] : forall<(e :: E)> (@this : (lifetime-owner :: E -> V)<(e :: E)>, lifetime-token : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),scope-state>>, lifetime-children : (std/core/types/@optional :: V -> V)<(kokaine/internal/registry/registry :: V -> V)<(retirement-work :: E -> V)<(e :: E)>>>, lifetime-finalizers : (std/core/types/@optional :: V -> V)<(kokaine/internal/registry/registry :: V -> V)<(retirement-work :: E -> V)<(e :: E)>>>, lifetime-retirement : (std/core/types/@optional :: V -> V)<(retirement-coordinator :: E -> V)<(e :: E)>>) -> (lifetime-owner :: E -> V)<(e :: E)>;
+pub fun lifetime-owner/lifetime-retirement[193,5,193,23] : forall<(e :: E)> (^ @this : (lifetime-owner :: E -> V)<(e :: E)>) -> (retirement-coordinator :: E -> V)<(e :: E)>;
+pub fun lifetime-owner/@copy[189,3,189,16] : forall<(e :: E)> (@this : (lifetime-owner :: E -> V)<(e :: E)>, lifetime-token : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),scope-state>>, lifetime-children : (std/core/types/@optional :: V -> V)<(kokaine/internal/registry/registry :: V -> V)<(retirement-work :: E -> V)<(e :: E)>>>, lifetime-finalizers : (std/core/types/@optional :: V -> V)<(kokaine/internal/registry/registry :: V -> V)<(retirement-work :: E -> V)<(e :: E)>>>, lifetime-retirement : (std/core/types/@optional :: V -> V)<(retirement-coordinator :: E -> V)<(e :: E)>>) -> (lifetime-owner :: E -> V)<(e :: E)>;
 // Automatically generated. Retrieves the `cleanup-node` constructor field of the `:cleanup-registration` type.
-pub fun cleanup-registration/cleanup-node[179,5,179,16] : forall<(e :: E)> (^ @this : (cleanup-registration :: E -> V)<(e :: E)>) -> (kokaine/internal/registry/registry-registration :: V -> V)<(retirement-work :: E -> V)<(e :: E)>>;
+pub fun cleanup-registration/cleanup-node[198,5,198,16] : forall<(e :: E)> (^ @this : (cleanup-registration :: E -> V)<(e :: E)>) -> (kokaine/internal/registry/registry-registration :: V -> V)<(retirement-work :: E -> V)<(e :: E)>>;
 // Automatically generated. Retrieves the `cleanup-resource` constructor field of the `:cleanup-registration` type.
-pub fun cleanup-registration/cleanup-resource[180,5,180,20] : forall<(e :: E)> (^ @this : (cleanup-registration :: E -> V)<(e :: E)>) -> (kokaine/reactive/internal/resource/resource-k :: E -> V)<(e :: E)>;
-pub fun cleanup-registration/@copy[178,3,178,22] : forall<(e :: E)> (@this : (cleanup-registration :: E -> V)<(e :: E)>, cleanup-node : (std/core/types/@optional :: V -> V)<(kokaine/internal/registry/registry-registration :: V -> V)<(retirement-work :: E -> V)<(e :: E)>>>, cleanup-resource : (std/core/types/@optional :: V -> V)<(kokaine/reactive/internal/resource/resource-k :: E -> V)<(e :: E)>>) -> (cleanup-registration :: E -> V)<(e :: E)>;
+pub fun cleanup-registration/cleanup-resource[199,5,199,20] : forall<(e :: E)> (^ @this : (cleanup-registration :: E -> V)<(e :: E)>) -> (kokaine/reactive/internal/resource/resource-k :: E -> V)<(e :: E)>;
+pub fun cleanup-registration/@copy[197,3,197,22] : forall<(e :: E)> (@this : (cleanup-registration :: E -> V)<(e :: E)>, cleanup-node : (std/core/types/@optional :: V -> V)<(kokaine/internal/registry/registry-registration :: V -> V)<(retirement-work :: E -> V)<(e :: E)>>>, cleanup-resource : (std/core/types/@optional :: V -> V)<(kokaine/reactive/internal/resource/resource-k :: E -> V)<(e :: E)>>) -> (cleanup-registration :: E -> V)<(e :: E)>;
 // Automatically generated. Retrieves the `scope-lifetime` constructor field of the `:continuation-scope` type.
-pub fun continuation-scope/scope-lifetime[185,5,185,18] : forall<(e :: E)> (^ @this : (continuation-scope :: E -> V)<(e :: E)>) -> (lifetime-owner :: E -> V)<(e :: E)>;
+pub fun continuation-scope/scope-lifetime[204,5,204,18] : forall<(e :: E)> (^ @this : (continuation-scope :: E -> V)<(e :: E)>) -> (lifetime-owner :: E -> V)<(e :: E)>;
 // Automatically generated. Retrieves the `scope-body` constructor field of the `:continuation-scope` type.
-pub fun continuation-scope/scope-body[186,5,186,14] : forall<(e :: E)> (^ @this : (continuation-scope :: E -> V)<(e :: E)>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(trace :: E -> V)<(e :: E)>>;
+pub fun continuation-scope/scope-body[205,5,205,14] : forall<(e :: E)> (^ @this : (continuation-scope :: E -> V)<(e :: E)>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(trace :: E -> V)<(e :: E)>>;
 // Automatically generated. Retrieves the `scope-parent` constructor field of the `:continuation-scope` type.
-pub fun continuation-scope/scope-parent[187,5,187,16] : forall<(e :: E)> (^ @this : (continuation-scope :: E -> V)<(e :: E)>) -> (std/core/types/maybe :: V -> V)<continuation-gate>;
+pub fun continuation-scope/scope-parent[206,5,206,16] : forall<(e :: E)> (^ @this : (continuation-scope :: E -> V)<(e :: E)>) -> (std/core/types/maybe :: V -> V)<continuation-gate>;
 // Automatically generated. Retrieves the `scope-bootstrap-slot` constructor field of the `:continuation-scope` type.
-pub fun continuation-scope/scope-bootstrap-slot[188,5,188,24] : forall<(e :: E)> (^ @this : (continuation-scope :: E -> V)<(e :: E)>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<() -> <(std/core/types/div :: X)|(e :: E)> (std/core/exn/error :: V -> V)<()>>>;
+pub fun continuation-scope/scope-bootstrap-slot[207,5,207,24] : forall<(e :: E)> (^ @this : (continuation-scope :: E -> V)<(e :: E)>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<() -> <(std/core/types/div :: X)|(e :: E)> (std/core/exn/error :: V -> V)<()>>>;
 // Automatically generated. Retrieves the `scope-unlink` constructor field of the `:continuation-scope` type.
-pub fun continuation-scope/scope-unlink[189,5,189,16] : forall<(e :: E)> (^ @this : (continuation-scope :: E -> V)<(e :: E)>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<() -> std/core/types/bool>>;
-pub fun continuation-scope/@copy[184,3,184,7] : forall<(e :: E)> (@this : (continuation-scope :: E -> V)<(e :: E)>, scope-lifetime : (std/core/types/@optional :: V -> V)<(lifetime-owner :: E -> V)<(e :: E)>>, scope-body : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(trace :: E -> V)<(e :: E)>>>, scope-parent : (std/core/types/@optional :: V -> V)<(std/core/types/maybe :: V -> V)<continuation-gate>>, scope-bootstrap-slot : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<() -> <(std/core/types/div :: X)|(e :: E)> (std/core/exn/error :: V -> V)<()>>>>, scope-unlink : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<() -> std/core/types/bool>>>) -> (continuation-scope :: E -> V)<(e :: E)>;
+pub fun continuation-scope/scope-unlink[208,5,208,16] : forall<(e :: E)> (^ @this : (continuation-scope :: E -> V)<(e :: E)>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<() -> std/core/types/bool>>;
+pub fun continuation-scope/@copy[203,3,203,7] : forall<(e :: E)> (@this : (continuation-scope :: E -> V)<(e :: E)>, scope-lifetime : (std/core/types/@optional :: V -> V)<(lifetime-owner :: E -> V)<(e :: E)>>, scope-body : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(trace :: E -> V)<(e :: E)>>>, scope-parent : (std/core/types/@optional :: V -> V)<(std/core/types/maybe :: V -> V)<continuation-gate>>, scope-bootstrap-slot : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<() -> <(std/core/types/div :: X)|(e :: E)> (std/core/exn/error :: V -> V)<()>>>>, scope-unlink : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<() -> std/core/types/bool>>>) -> (continuation-scope :: E -> V)<(e :: E)>;
 // Automatically generated. Retrieves the `frame-lifetime` constructor field of the `:frame` type.
-pub fun frame/frame-lifetime[194,5,194,18] : forall<(e :: E)> (^ frame : (frame :: E -> V)<(e :: E)>) -> (lifetime-owner :: E -> V)<(e :: E)>;
-pub fun frame/@copy[193,3,193,7] : forall<(e :: E)> (@this : (frame :: E -> V)<(e :: E)>, frame-lifetime : (std/core/types/@optional :: V -> V)<(lifetime-owner :: E -> V)<(e :: E)>>) -> (frame :: E -> V)<(e :: E)>;
+pub fun frame/frame-lifetime[213,5,213,18] : forall<(e :: E)> (^ frame : (frame :: E -> V)<(e :: E)>) -> (lifetime-owner :: E -> V)<(e :: E)>;
+pub fun frame/@copy[212,3,212,7] : forall<(e :: E)> (@this : (frame :: E -> V)<(e :: E)>, frame-lifetime : (std/core/types/@optional :: V -> V)<(lifetime-owner :: E -> V)<(e :: E)>>) -> (frame :: E -> V)<(e :: E)>;
 // Frames are structural capabilities. Their lifetime token is allocated once
 // with the frame and therefore provides identity without adding a hot-path ID.
-pub fun same-frame[199,9,199,18] : forall<(e :: E)> (left : (frame :: E -> V)<(e :: E)>, right : (frame :: E -> V)<(e :: E)>) -> std/core/types/bool;
+pub fun same-frame[218,9,218,18] : forall<(e :: E)> (left : (frame :: E -> V)<(e :: E)>, right : (frame :: E -> V)<(e :: E)>) -> std/core/types/bool;
 // Automatically generated. Tests for the `Resume-work` constructor of the `:work` type.
-pub fip fun is-resume-work[204,3,204,13] : forall<(e :: E)> (^ work : (work :: E -> V)<(e :: E)>) -> std/core/types/bool;
+pub fip fun is-resume-work[223,3,223,13] : forall<(e :: E)> (^ work : (work :: E -> V)<(e :: E)>) -> std/core/types/bool;
 // Automatically generated. Tests for the `Bootstrap-work` constructor of the `:work` type.
-pub fip fun is-bootstrap-work[205,3,205,16] : forall<(e :: E)> (^ work : (work :: E -> V)<(e :: E)>) -> std/core/types/bool;
+pub fip fun is-bootstrap-work[224,3,224,16] : forall<(e :: E)> (^ work : (work :: E -> V)<(e :: E)>) -> std/core/types/bool;
 // Automatically generated. Retrieves the `plane-queue` constructor field of the `:plane` type.
-pub fun plane/plane-queue[213,5,213,15] : forall<(e :: E)> (^ plane : (plane :: E -> V)<(e :: E)>) -> (kokaine/reactive/internal/work-transaction/work-queue :: V -> V)<(work :: E -> V)<(e :: E)>>;
+pub fun plane/plane-queue[232,5,232,15] : forall<(e :: E)> (^ plane : (plane :: E -> V)<(e :: E)>) -> (kokaine/reactive/internal/work-transaction/work-queue :: V -> V)<(work :: E -> V)<(e :: E)>>;
 // Automatically generated. Retrieves the `plane-work-group` constructor field of the `:plane` type.
-pub fun plane/plane-work-group[214,5,214,20] : forall<(e :: E)> (^ plane : (plane :: E -> V)<(e :: E)>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<(kokaine/reactive/internal/work-transaction/work-group :: V -> V)<(work :: E -> V)<(e :: E)>>>>;
+pub fun plane/plane-work-group[233,5,233,20] : forall<(e :: E)> (^ plane : (plane :: E -> V)<(e :: E)>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<(kokaine/reactive/internal/work-transaction/work-group :: V -> V)<(work :: E -> V)<(e :: E)>>>>;
 // Automatically generated. Retrieves the `plane-current` constructor field of the `:plane` type.
-pub fun plane/plane-current[215,5,215,17] : forall<(e :: E)> (^ plane : (plane :: E -> V)<(e :: E)>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<continuation-gate>>;
+pub fun plane/plane-current[234,5,234,17] : forall<(e :: E)> (^ plane : (plane :: E -> V)<(e :: E)>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<continuation-gate>>;
 // Automatically generated. Retrieves the `plane-current-frame` constructor field of the `:plane` type.
-pub fun plane/plane-current-frame[216,5,216,23] : forall<(e :: E)> (^ plane : (plane :: E -> V)<(e :: E)>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(frame :: E -> V)<(e :: E)>>;
+pub fun plane/plane-current-frame[235,5,235,23] : forall<(e :: E)> (^ plane : (plane :: E -> V)<(e :: E)>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(frame :: E -> V)<(e :: E)>>;
 // Automatically generated. Retrieves the `plane-draft` constructor field of the `:plane` type.
-pub fun plane/plane-draft[217,5,217,15] : forall<(e :: E)> (^ plane : (plane :: E -> V)<(e :: E)>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/list :: V -> V)<(trace :: E -> V)<(e :: E)>>>>>;
+pub fun plane/plane-draft[236,5,236,15] : forall<(e :: E)> (^ plane : (plane :: E -> V)<(e :: E)>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/list :: V -> V)<(trace :: E -> V)<(e :: E)>>>>>;
 // Automatically generated. Retrieves the `plane-retirement` constructor field of the `:plane` type.
-pub fun plane/plane-retirement[218,5,218,20] : forall<(e :: E)> (^ plane : (plane :: E -> V)<(e :: E)>) -> (retirement-coordinator :: E -> V)<(e :: E)>;
-pub fun plane/@copy[212,3,212,7] : forall<(e :: E)> (@this : (plane :: E -> V)<(e :: E)>, plane-queue : (std/core/types/@optional :: V -> V)<(kokaine/reactive/internal/work-transaction/work-queue :: V -> V)<(work :: E -> V)<(e :: E)>>>, plane-work-group : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<(kokaine/reactive/internal/work-transaction/work-group :: V -> V)<(work :: E -> V)<(e :: E)>>>>>, plane-current : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<continuation-gate>>>, plane-current-frame : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(frame :: E -> V)<(e :: E)>>>, plane-draft : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/list :: V -> V)<(trace :: E -> V)<(e :: E)>>>>>>, plane-retirement : (std/core/types/@optional :: V -> V)<(retirement-coordinator :: E -> V)<(e :: E)>>) -> (plane :: E -> V)<(e :: E)>;
+pub fun plane/plane-retirement[237,5,237,20] : forall<(e :: E)> (^ plane : (plane :: E -> V)<(e :: E)>) -> (retirement-coordinator :: E -> V)<(e :: E)>;
+// Automatically generated. Retrieves the `plane-failed` constructor field of the `:plane` type.
+pub fun plane/plane-failed[240,5,240,16] : forall<(e :: E)> (^ plane : (plane :: E -> V)<(e :: E)>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/list :: V -> V)<failed-ticket>>;
+pub fun plane/@copy[231,3,231,7] : forall<(e :: E)> (@this : (plane :: E -> V)<(e :: E)>, plane-queue : (std/core/types/@optional :: V -> V)<(kokaine/reactive/internal/work-transaction/work-queue :: V -> V)<(work :: E -> V)<(e :: E)>>>, plane-work-group : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<(kokaine/reactive/internal/work-transaction/work-group :: V -> V)<(work :: E -> V)<(e :: E)>>>>>, plane-current : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<continuation-gate>>>, plane-current-frame : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(frame :: E -> V)<(e :: E)>>>, plane-draft : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/maybe :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/list :: V -> V)<(trace :: E -> V)<(e :: E)>>>>>>, plane-retirement : (std/core/types/@optional :: V -> V)<(retirement-coordinator :: E -> V)<(e :: E)>>, plane-failed : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/list :: V -> V)<failed-ticket>>>) -> (plane :: E -> V)<(e :: E)>;
+// Automatically generated. Retrieves the `failed-state` constructor field of the `:failed-ticket` type.
+pub fun failed-ticket/failed-state[249,5,249,16] : (^ @this : failed-ticket) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),capture-state>;
+// Automatically generated. Retrieves the `failed-requeue` constructor field of the `:failed-ticket` type.
+pub fun failed-ticket/failed-requeue[250,5,250,18] : (^ @this : failed-ticket) -> ((front : std/core/types/bool) -> ());
+pub fun failed-ticket/@copy[248,3,248,15] : (@this : failed-ticket, failed-state : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),capture-state>>, failed-requeue : (std/core/types/@optional :: V -> V)<(front : std/core/types/bool) -> ()>) -> failed-ticket;
 // Automatically generated. Retrieves the `root-key` constructor field of the `:root` type.
-pub fun root/root-key[223,5,223,12] : forall<(e :: E)> (^ root : (root :: E -> V)<(e :: E)>) -> root-key;
+pub fun root/root-key[255,5,255,12] : forall<(e :: E)> (^ root : (root :: E -> V)<(e :: E)>) -> root-key;
 // Automatically generated. Retrieves the `root-derive-plane` constructor field of the `:root` type.
-pub fun root/root-derive-plane[224,5,224,21] : forall<(e :: E)> (^ root : (root :: E -> V)<(e :: E)>) -> (plane :: E -> V)<(std/core/types/total :: E)>;
+pub fun root/root-derive-plane[256,5,256,21] : forall<(e :: E)> (^ root : (root :: E -> V)<(e :: E)>) -> (plane :: E -> V)<(std/core/types/total :: E)>;
 // Automatically generated. Retrieves the `root-effect-plane` constructor field of the `:root` type.
-pub fun root/root-effect-plane[225,5,225,21] : forall<(e :: E)> (^ root : (root :: E -> V)<(e :: E)>) -> (plane :: E -> V)<(e :: E)>;
+pub fun root/root-effect-plane[257,5,257,21] : forall<(e :: E)> (^ root : (root :: E -> V)<(e :: E)>) -> (plane :: E -> V)<(e :: E)>;
 // Automatically generated. Retrieves the `root-lifetime` constructor field of the `:root` type.
-pub fun root/root-lifetime[226,5,226,17] : forall<(e :: E)> (^ root : (root :: E -> V)<(e :: E)>) -> (lifetime-owner :: E -> V)<(e :: E)>;
+pub fun root/root-lifetime[258,5,258,17] : forall<(e :: E)> (^ root : (root :: E -> V)<(e :: E)>) -> (lifetime-owner :: E -> V)<(e :: E)>;
 // Automatically generated. Retrieves the `root-batch-depth` constructor field of the `:root` type.
-pub fun root/root-batch-depth[227,5,227,20] : forall<(e :: E)> (^ root : (root :: E -> V)<(e :: E)>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>;
+pub fun root/root-batch-depth[259,5,259,20] : forall<(e :: E)> (^ root : (root :: E -> V)<(e :: E)>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>;
 // Automatically generated. Retrieves the `root-flushing` constructor field of the `:root` type.
-pub fun root/root-flushing[228,5,228,17] : forall<(e :: E)> (^ root : (root :: E -> V)<(e :: E)>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>;
+pub fun root/root-flushing[260,5,260,17] : forall<(e :: E)> (^ root : (root :: E -> V)<(e :: E)>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>;
 // Automatically generated. Retrieves the `root-disposing` constructor field of the `:root` type.
-pub fun root/root-disposing[229,5,229,18] : forall<(e :: E)> (^ root : (root :: E -> V)<(e :: E)>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>;
+pub fun root/root-disposing[261,5,261,18] : forall<(e :: E)> (^ root : (root :: E -> V)<(e :: E)>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>;
 // Automatically generated. Retrieves the `root-disposed` constructor field of the `:root` type.
-pub fun root/root-disposed[230,5,230,17] : forall<(e :: E)> (^ root : (root :: E -> V)<(e :: E)>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>;
-pub fun root/@copy[222,3,222,6] : forall<(e :: E)> (@this : (root :: E -> V)<(e :: E)>, root-key : (std/core/types/@optional :: V -> V)<root-key>, root-derive-plane : (std/core/types/@optional :: V -> V)<(plane :: E -> V)<(std/core/types/total :: E)>>, root-effect-plane : (std/core/types/@optional :: V -> V)<(plane :: E -> V)<(e :: E)>>, root-lifetime : (std/core/types/@optional :: V -> V)<(lifetime-owner :: E -> V)<(e :: E)>>, root-batch-depth : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>>, root-flushing : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>>, root-disposing : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>>, root-disposed : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>>) -> (root :: E -> V)<(e :: E)>;
+pub fun root/root-disposed[262,5,262,17] : forall<(e :: E)> (^ root : (root :: E -> V)<(e :: E)>) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>;
+pub fun root/@copy[254,3,254,6] : forall<(e :: E)> (@this : (root :: E -> V)<(e :: E)>, root-key : (std/core/types/@optional :: V -> V)<root-key>, root-derive-plane : (std/core/types/@optional :: V -> V)<(plane :: E -> V)<(std/core/types/total :: E)>>, root-effect-plane : (std/core/types/@optional :: V -> V)<(plane :: E -> V)<(e :: E)>>, root-lifetime : (std/core/types/@optional :: V -> V)<(lifetime-owner :: E -> V)<(e :: E)>>, root-batch-depth : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>>, root-flushing : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>>, root-disposing : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>>, root-disposed : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>>) -> (root :: E -> V)<(e :: E)>;
 // Automatically generated. Retrieves the `producer-plane` constructor field of the `:derive-producer` type.
-pub fun derive-producer/producer-plane[235,5,235,18] : (^ @this : derive-producer) -> (plane :: E -> V)<(std/core/types/total :: E)>;
+pub fun derive-producer/producer-plane[267,5,267,18] : (^ @this : derive-producer) -> (plane :: E -> V)<(std/core/types/total :: E)>;
 // Automatically generated. Retrieves the `producer-scope` constructor field of the `:derive-producer` type.
-pub fun derive-producer/producer-scope[236,5,236,18] : (^ @this : derive-producer) -> (continuation-scope :: E -> V)<(std/core/types/total :: E)>;
+pub fun derive-producer/producer-scope[268,5,268,18] : (^ @this : derive-producer) -> (continuation-scope :: E -> V)<(std/core/types/total :: E)>;
 // Automatically generated. Retrieves the `producer-settling` constructor field of the `:derive-producer` type.
-pub fun derive-producer/producer-settling[237,5,237,21] : (^ @this : derive-producer) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>;
-pub fun derive-producer/@copy[234,3,234,17] : (@this : derive-producer, producer-plane : (std/core/types/@optional :: V -> V)<(plane :: E -> V)<(std/core/types/total :: E)>>, producer-scope : (std/core/types/@optional :: V -> V)<(continuation-scope :: E -> V)<(std/core/types/total :: E)>>, producer-settling : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>>) -> derive-producer;
+pub fun derive-producer/producer-settling[269,5,269,21] : (^ @this : derive-producer) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>;
+// Automatically generated. Retrieves the `producer-clean` constructor field of the `:derive-producer` type.
+pub fun derive-producer/producer-clean[271,5,271,18] : (^ @this : derive-producer) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>;
+pub fun derive-producer/@copy[266,3,266,17] : (@this : derive-producer, producer-plane : (std/core/types/@optional :: V -> V)<(plane :: E -> V)<(std/core/types/total :: E)>>, producer-scope : (std/core/types/@optional :: V -> V)<(continuation-scope :: E -> V)<(std/core/types/total :: E)>>, producer-settling : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>>, producer-clean : (std/core/types/@optional :: V -> V)<(std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>>) -> derive-producer;
 // Automatically generated. Retrieves the `memo-source` constructor field of the `:memo` type.
-pub fun memo/memo-source[242,5,242,15] : forall<a> (^ memo : (memo :: V -> V)<a>) -> (source :: V -> V)<a>;
+pub fun memo/memo-source[276,5,276,15] : forall<a> (^ memo : (memo :: V -> V)<a>) -> (source :: V -> V)<a>;
 // Automatically generated. Retrieves the `memo-producer` constructor field of the `:memo` type.
-pub fun memo/memo-producer[243,5,243,17] : forall<a> (^ memo : (memo :: V -> V)<a>) -> derive-producer;
-pub fun memo/@copy[241,3,241,6] : forall<a> (@this : (memo :: V -> V)<a>, memo-source : (std/core/types/@optional :: V -> V)<(source :: V -> V)<a>>, memo-producer : (std/core/types/@optional :: V -> V)<derive-producer>) -> (memo :: V -> V)<a>;
+pub fun memo/memo-producer[277,5,277,17] : forall<a> (^ memo : (memo :: V -> V)<a>) -> derive-producer;
+pub fun memo/@copy[275,3,275,6] : forall<a> (@this : (memo :: V -> V)<a>, memo-source : (std/core/types/@optional :: V -> V)<(source :: V -> V)<a>>, memo-producer : (std/core/types/@optional :: V -> V)<derive-producer>) -> (memo :: V -> V)<a>;
  
 fun @kokaine-cache-phase[1,0,1,0] : () -> std/core/types/int;
  

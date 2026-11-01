@@ -2,10 +2,12 @@
   Copyright (c) 2026 Kokaine contributors. SPDX-License-Identifier: MIT
 
   Compatibility adapters for the Koka standard library surface used by the
-  runtime. Koka 3.2.3 exposes the one-argument exception adapter as
-  `error/try`; later versions expose it as `try`. The two-argument exception
-  handler is stable across both versions, so keep that spelling behind one
-  Kokaine-owned boundary.
+  runtime. The standard library's `try` overloads changed shape between
+  releases: Koka 3.2.3 takes `try(action, handler)` while 3.2.8+ takes
+  `try(handler, action)` and turns `error<a>` into an alias of
+  `result<a,exception>`. Handling the `exn` effect's `throw-exn` operation
+  directly is stable across both, so keep that behind one Kokaine-owned
+  boundary.
 --------------------------------------------------------------------------*/
 module interface kokaine/internal/compat
  
@@ -57,8 +59,8 @@ local alias std/core/exn/error[65,1,65,40]<a> :: V -> V = (std/core/types/result
 //#kki: declarations
  
 // monadic lift
-fun @mlift-capture-error@10004[1,0,1,0] : forall<a,(e :: E)> (@y-x10002 : a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> (std/core/types/result :: (V, V) -> V)<a,std/core/exn/exception>;
-pub fun capture-error[12,9,12,21] : forall<a,(e :: E)> (action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a) -> (e :: E) (std/core/exn/error :: V -> V)<a>;
+fun @mlift-capture-error@10002[1,0,1,0] : forall<a,(e :: E)> (@y-x10000 : a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> (std/core/types/result :: (V, V) -> V)<a,std/core/exn/exception>;
+pub fun capture-error[14,9,14,21] : forall<a,(e :: E)> (action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a) -> (e :: E) (std/core/exn/error :: V -> V)<a>;
  
 fun @kokaine-cache-phase[1,0,1,0] : () -> std/core/types/int;
  
