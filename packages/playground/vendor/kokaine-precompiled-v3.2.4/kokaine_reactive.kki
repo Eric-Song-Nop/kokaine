@@ -88,44 +88,155 @@ fun unwrap-root[25,5,25,15] : forall<(e :: E)> (value : (root :: E -> V)<(e :: E
 pub fun internal/root-handle[31,9,31,28] : forall<(e :: E)> (value : (root :: E -> V)<(e :: E)>) -> (kokaine/reactive/internal/model/root :: E -> V)<(e :: E)>;
 fun unwrap-signal[35,5,35,17] : forall<a> (value : (signal :: V -> V)<a>) -> (kokaine/reactive/internal/model/signal :: V -> V)<a>;
 fun unwrap-memo[40,5,40,15] : forall<a> (value : (memo :: V -> V)<a>) -> (kokaine/reactive/internal/model/memo :: V -> V)<a>;
-pub fun dispatch[44,9,44,16] : forall<a,(e :: E)> (root : (root :: E -> V)<(e :: E)>, action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)|(e :: E)> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a;
+// Run `action` against `root` with both signal capabilities handled: reads are
+// sampled (no dependency is recorded) and writes commit immediately. The
+// effect row is the caller's `e` plus `exn`; `signal-read` and `signal-write`
+// are discharged here.
+//
+// Gotcha: nothing read inside `dispatch` is tracked. Use `derive`,
+// `create-effect`, or a live HTML binding when a value should react to
+// changes.
+pub fun dispatch[52,9,52,16] : forall<a,(e :: E)> (root : (root :: E -> V)<(e :: E)>, action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)|(e :: E)> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a;
 // monadic lift
 fun @mlift-create-root@10114[1,0,1,0] : forall<a,(e :: E)> (@y-x10057 : ((kokaine/reactive/internal/model/root :: E -> V)<(e :: E)>, a)) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ((root :: E -> V)<(e :: E)>, a);
-pub fun create-root[53,9,53,19] : forall<a,(e :: E)> (action : ((root :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)|(e :: E)> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ((root :: E -> V)<(e :: E)>, a);
-pub fun root/dispose[59,9,59,20] : forall<(e :: E)> (root : (root :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
-pub fun root/is-disposed[63,18,63,33] : forall<(e :: E)> (root : (root :: E -> V)<(e :: E)>) -> std/core/types/bool;
-pub fun update[66,9,66,14] : forall<a,(e :: E)> (root : (root :: E -> V)<(e :: E)>, action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)|(e :: E)> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a;
+// Create a reactive root and run `action` to build its initial signals,
+// derivations, and effects. Returns the root together with the action's
+// result. The action may write signals (`signal-write`) and perform the
+// caller's effects `e`; the call itself can raise `exn`.
+//
+// Construction is atomic: all initial work stays queued until `action` returns
+// and the first flush drains. If the action or any initial calculation fails,
+// the unpublished root and everything it registered are retired before the
+// exception propagates. Calling `create-root` from inside a derivation is
+// rejected.
+pub fun create-root[71,9,71,19] : forall<a,(e :: E)> (action : ((root :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)|(e :: E)> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ((root :: E -> V)<(e :: E)>, a);
+// Retire the root: finalize every owned effect, derivation, cleanup, and
+// parked resource continuation. Idempotent. Raises `exn` (plus the caller's
+// `e`, from cleanup actions).
+//
+// Gotcha: disposing from inside a running computation, flush, or batch of the
+// same root throws; dispose from an outer turn instead.
+pub fun root/dispose[83,9,83,20] : forall<(e :: E)> (root : (root :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+// Whether `root.dispose` has completed for this root. Total: no effects.
+pub fun root/is-disposed[88,18,88,33] : forall<(e :: E)> (root : (root :: E -> V)<(e :: E)>) -> std/core/types/bool;
+// Run a write-only `action` as one turn on `root`, then flush. The action has
+// `signal-write` plus the caller's `e`; the call adds `exn`.
+//
+// Besides ordinary writes, `update` is the explicit recovery boundary: effects
+// quarantined after an earlier failure are re-admitted and retried even when
+// the action writes nothing new.
+pub fun update[97,9,97,14] : forall<a,(e :: E)> (root : (root :: E -> V)<(e :: E)>, action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)|(e :: E)> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a;
 // monadic lift
 fun @mlift-sample@10115[1,0,1,0] : forall<a,(e :: E)> (action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/pure :: E)|(e :: E)> a, @y-x10061 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>|(e :: E)> a;
-pub fun sample[74,9,74,14] : forall<a,(e :: E)> (root : (root :: E -> V)<(e :: E)>, action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/pure :: E)|(e :: E)> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a;
+// Run a read-only `action` on `root` and return its result. Reads are sampled
+// (not tracked) and produce settled derived values; writes are not available.
+// Effect row: the caller's `e` plus `exn`.
+pub fun sample[108,9,108,14] : forall<a,(e :: E)> (root : (root :: E -> V)<(e :: E)>, action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/pure :: E)|(e :: E)> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a;
 // monadic lift
 fun @mlift-signal-by@10116[1,0,1,0] : forall<a> (@y-x10064 : (kokaine/reactive/internal/model/signal :: V -> V)<a>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (signal :: V -> V)<a>;
-pub fun signal-by[78,9,78,17] : forall<a,(e :: E)> (root : (root :: E -> V)<(e :: E)>, initial : a, equals : (a, a) -> std/core/types/bool) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (signal :: V -> V)<a>;
+// Create a writable signal owned by `root` with an explicit equality function.
+// A write whose value `equals` the current one is dropped before anything is
+// invalidated. Raises `exn` when called inside a derivation (pure plane) or on
+// a retired root.
+pub fun signal-by[116,9,116,17] : forall<a,(e :: E)> (root : (root :: E -> V)<(e :: E)>, initial : a, equals : (a, a) -> std/core/types/bool) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (signal :: V -> V)<a>;
 // monadic lift
 fun @mlift-signal@10117[1,0,1,0] : forall<a> (@y-x10065 : (kokaine/reactive/internal/model/signal :: V -> V)<a>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (signal :: V -> V)<a>;
-pub fun signal[82,9,82,14] : forall<a,(e :: E)> (root : (root :: E -> V)<(e :: E)>, initial : a, ?(==) : (a, a) -> std/core/types/bool) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (signal :: V -> V)<a>;
+// Create a writable signal owned by `root`, using the implicit `(==)` for the
+// value type to suppress equal writes. Raises `exn` when called inside a
+// derivation or on a retired root.
+//
+// Read with `.get` (tracked inside derivations, effects, and live bindings),
+// write with `.set` or `.modify`. Unlike Solid, a signal is one value, not a
+// getter/setter pair.
+pub fun signal[127,9,127,14] : forall<a,(e :: E)> (root : (root :: E -> V)<(e :: E)>, initial : a, ?(==) : (a, a) -> std/core/types/bool) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (signal :: V -> V)<a>;
 // monadic lift
 fun @mlift-signal-always@10118[1,0,1,0] : forall<a> (@y-x10066 : (kokaine/reactive/internal/model/signal :: V -> V)<a>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (signal :: V -> V)<a>;
-pub fun signal-always[86,9,86,21] : forall<a,(e :: E)> (root : (root :: E -> V)<(e :: E)>, initial : a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (signal :: V -> V)<a>;
-pub fun signal/get[89,9,89,18] : forall<a> (value : (signal :: V -> V)<a>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> a;
-pub fun signal/set[92,9,92,18] : forall<a> (value : (signal :: V -> V)<a>, next : a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>> ();
-pub fun signal/modify[95,9,95,21] : forall<a> (value : (signal :: V -> V)<a>, update : (a) -> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>> ();
-pub fun batch[98,9,98,13] : forall<a,(e :: E),(e1 :: E)> (root : (root :: E -> V)<(e :: E)>, action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)|(e1 :: E)> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)|(e1 :: E)> a;
-pub fun untrack[102,9,102,15] : forall<a,(e :: E)> (action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/pure :: E)|(e :: E)> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/pure :: E)|(e :: E)> a;
+// Create a signal whose every write is treated as a change, so writing the
+// same value again still notifies dependents. Raises `exn` like `signal`.
+pub fun signal-always[133,9,133,21] : forall<a,(e :: E)> (root : (root :: E -> V)<(e :: E)>, initial : a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (signal :: V -> V)<a>;
+// Read the current value. Effect: `signal-read`. Inside a derivation,
+// `create-effect` track function, or live HTML binding this read is tracked:
+// the rest of that computation after this exact read is captured and resumed
+// when the signal changes. Elsewhere (for example under `dispatch` or
+// `untrack`) it is a plain sample.
+pub fun signal/get[141,9,141,18] : forall<a> (value : (signal :: V -> V)<a>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> a;
+// Replace the value. Effect: `signal-write`. An equal value (per the signal's
+// equality) is ignored; otherwise dependents are invalidated and, outside a
+// `batch`, flushed before `set` returns.
+//
+// Gotcha: writes are rejected at runtime inside a derivation calculator; write
+// from a `create-effect` apply function, an event handler, or `update`.
+pub fun signal/set[150,9,150,18] : forall<a> (value : (signal :: V -> V)<a>, next : a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>> ();
+// Replace the value with `update(current)`. Effect: `signal-write`. Same
+// equality and flushing rules as `set`; `update` itself must be total.
+pub fun signal/modify[155,9,155,21] : forall<a> (value : (signal :: V -> V)<a>, update : (a) -> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>> ();
+// Run `action` with settling deferred until it returns, then flush once. The
+// action's row (`signal-write`, `pure`, and its own `e1`) passes through.
+// Inside the batch, newly written values are immediately readable; only
+// downstream effects and derivations wait. Batches nest, and the outermost one
+// flushes. Host event delivery is already one batched turn.
+pub fun batch[163,9,163,13] : forall<a,(e :: E),(e1 :: E)> (root : (root :: E -> V)<(e :: E)>, action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)|(e1 :: E)> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)|(e1 :: E)> a;
+// Run `action` with tracked reads turned into samples: reads inside it do not
+// become dependencies of the surrounding derivation, effect, or binding.
+// Derived values read here are still settled first. The `signal-read`, `pure`,
+// and `e` row passes through unchanged.
+pub fun untrack[171,9,171,15] : forall<a,(e :: E)> (action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/pure :: E)|(e :: E)> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/pure :: E)|(e :: E)> a;
 // monadic lift
 fun @mlift-derive-by@10119[1,0,1,0] : forall<a> (@y-x10072 : (kokaine/reactive/internal/model/memo :: V -> V)<a>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)> (memo :: V -> V)<a>;
-pub fun derive-by[106,9,106,17] : forall<a,(e :: E)> (root : (root :: E -> V)<(e :: E)>, initial : a, calculate : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/pure :: E)> a, equals : (a, a) -> std/core/types/bool) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)> (memo :: V -> V)<a>;
+// Create a read-only derived value (`memo<a>`) with an explicit publication
+// equality. `calculate` may only read signals (`signal-read`, `pure`); it
+// cannot write. Creating the memo needs `signal-write` because it schedules
+// the first calculation. Read the result with `.get`.
+//
+// `initial` is the memo's value before its first calculation runs. The first
+// calculation is scheduled, not run inline, so it happens on the next flush
+// (for example when `create-root` finishes construction); a tracked or sampled
+// `.get` settles the memo first and observes the calculated value. A new value
+// equal to the previous one does not invalidate dependents.
+pub fun derive-by[185,9,185,17] : forall<a,(e :: E)> (root : (root :: E -> V)<(e :: E)>, initial : a, calculate : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/pure :: E)> a, equals : (a, a) -> std/core/types/bool) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)> (memo :: V -> V)<a>;
 // monadic lift
 fun @mlift-derive@10120[1,0,1,0] : forall<a> (@y-x10073 : (kokaine/reactive/internal/model/memo :: V -> V)<a>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)> (memo :: V -> V)<a>;
-pub fun derive[112,9,112,14] : forall<a,(e :: E)> (root : (root :: E -> V)<(e :: E)>, initial : a, calculate : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/pure :: E)> a, ?(==) : (a, a) -> std/core/types/bool) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)> (memo :: V -> V)<a>;
+// Create a read-only derived value from the current values of the signals and
+// memos that `calculate` reads, using the implicit `(==)` to cut propagation
+// when the result is unchanged. `calculate` has row `<signal-read,pure>`;
+// creating the memo has `<signal-write,pure>`.
+//
+// Gotcha: unlike Solid's `createMemo(fn)`, `derive(root, initial, calc)` takes
+// an explicit `initial` value (the value before the first calculation), and
+// the result is read through `.get`, not by calling it. Derivations are
+// stateless: to accumulate across updates, keep the state in a `signal` and
+// update it from a `create-effect`.
+pub fun derive[201,9,201,14] : forall<a,(e :: E)> (root : (root :: E -> V)<(e :: E)>, initial : a, calculate : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/pure :: E)> a, ?(==) : (a, a) -> std/core/types/bool) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)> (memo :: V -> V)<a>;
 // monadic lift
 fun @mlift-derive-always@10121[1,0,1,0] : forall<a> (@y-x10074 : (kokaine/reactive/internal/model/memo :: V -> V)<a>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)> (memo :: V -> V)<a>;
-pub fun derive-always[117,9,117,21] : forall<a,(e :: E)> (root : (root :: E -> V)<(e :: E)>, initial : a, calculate : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/pure :: E)> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)> (memo :: V -> V)<a>;
-pub fun memo/get[122,9,122,16] : forall<a> (value : (memo :: V -> V)<a>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> a;
-pub fun create-effect[125,9,125,21] : forall<a,(e :: E)> (root : (root :: E -> V)<(e :: E)>, track : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/pure :: E)> a, apply : (value : a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)|(e :: E)> ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)> (disposer :: E -> V)<(e :: E)>;
+// Like `derive`, but every recalculation publishes and notifies dependents,
+// even when the new value equals the old one.
+pub fun derive-always[208,9,208,21] : forall<a,(e :: E)> (root : (root :: E -> V)<(e :: E)>, initial : a, calculate : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/pure :: E)> a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)> (memo :: V -> V)<a>;
+// Read a derived value. Effect: `signal-read`. The memo is settled first, so
+// the value always reflects the current inputs. Inside a derivation, effect
+// track function, or live binding the read is tracked, exactly like
+// `signal/get`.
+pub fun memo/get[217,9,217,16] : forall<a> (value : (memo :: V -> V)<a>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>> a;
+// Create an effect owned by the current owner (the root or the enclosing
+// effect/binding generation). `track` reads its inputs (`<signal-read,pure>`)
+// and is the only part whose reads become dependencies; `apply` receives the
+// tracked value and may write signals and perform the root's effects `e`
+// (`<signal-write,pure|e>`). Creating the effect has `<signal-write,pure>`.
+// Returns a disposer that finalizes the effect and everything it owns.
+//
+// Gotcha: reads inside `apply` are not tracked. Effects and derivations
+// created inside `apply` are owned by that run and retired when the effect
+// re-runs or is disposed. A failing `apply` is quarantined (the rest of the
+// flush still runs and the first failure is rethrown afterwards); it runs
+// again only when its inputs change or at an explicit `update`.
+pub fun create-effect[232,9,232,21] : forall<a,(e :: E)> (root : (root :: E -> V)<(e :: E)>, track : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-read :: (E, V) -> V)>,(std/core/pure :: E)> a, apply : (value : a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)|(e :: E)> ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)> (disposer :: E -> V)<(e :: E)>;
 // monadic lift
 fun @mlift-on-cleanup@10122[1,0,1,0] : forall<(e :: E)> (@pat : (kokaine/reactive/internal/model/cleanup-registration :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
-pub fun on-cleanup[131,9,131,18] : forall<(e :: E)> (root : (root :: E -> V)<(e :: E)>, cleanup : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)|(e :: E)> ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
+// Register `cleanup` with the current owner: it runs once, when that owner (an
+// effect run, a dynamic region generation, or the root) is retired. `cleanup`
+// may write signals and perform `e`; registration can raise `exn` (for example
+// inside a derivation, where registration is rejected).
+pub fun on-cleanup[242,9,242,18] : forall<(e :: E)> (root : (root :: E -> V)<(e :: E)>, cleanup : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(kokaine/reactive/effects/signal-write :: (E, V) -> V)>,(std/core/pure :: E)|(e :: E)> ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
  
 fun @kokaine-cache-phase[1,0,1,0] : () -> std/core/types/int;
  

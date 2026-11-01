@@ -36,6 +36,16 @@ import * as $kokaine_reactive_internal_runtime from './kokaine_reactive_internal
  
 // declarations
  
+ 
+// Emit a dynamic region that is rebuilt with `children(v)` each time the memo
+// `value` publishes a new value `v`. The region's previous generation (its
+// DOM, listeners, effects, and cleanups) is retired on every rebuild. Effect:
+// `html<e>`; `children` may emit HTML and read signals.
+//
+// Gotcha: any tracked read performed directly in `children` (not inside a live
+// binding such as `text { ... }`) also rebuilds the whole region. Keep
+// fine-grained values in live bindings, and rely on the memo's equality to
+// avoid needless rebuilds.
 export function branch(value, children) /* forall<a,e> (value : kokaine/reactive/memo<a>, children : (a) -> <kokaine/html/html<e>,kokaine/reactive/effects/signal-read> ()) -> (kokaine/html/html<e>) () */  {
   return $kokaine_html.dynamic(function() {
      
@@ -71,6 +81,11 @@ export function _mlift_when_10052(children, fallback, visible_10002) /* forall<e
   }
 }
  
+ 
+// Boolean form of `branch`: render `children` while `condition` is `True` and
+// `fallback` (default: nothing) while it is `False`. Effect: `html<e>`. The
+// condition must be a memo, for example `derive(root, False, fn() ...)`, not a
+// plain boolean or signal.
 export function when(condition, children, fallback) /* forall<e> (condition : kokaine/reactive/memo<bool>, children : () -> <kokaine/html/html<e>,kokaine/reactive/effects/signal-read> (), fallback : ? (() -> <kokaine/html/html<e>,kokaine/reactive/effects/signal-read> ())) -> (kokaine/html/html<e>) () */  {
   return $kokaine_html.dynamic(function() {
      
@@ -104,6 +119,18 @@ export function when(condition, children, fallback) /* forall<e> (condition : ko
   });
 }
  
+ 
+// Keyed list rendering. `each` reads the current list (tracked), `key` maps an
+// item to a stable business key, and `children` builds one row from read-only
+// `item()` and `index()` accessors. Effect: `html<e>`. Optional implicit `cmp`
+// orders keys and `(==)` suppresses publishing unchanged items.
+//
+// A row whose key survives keeps its DOM nodes, listeners, local form state,
+// and owned reactive work; only its accessors publish new values. Removed keys
+// retire their rows. Gotcha: keys must be unique within one snapshot; a
+// duplicate throws and leaves the last committed rows unchanged (SSR rejects
+// it as well). Read row data through `item()` and `index()` inside live
+// bindings so a moved or updated row does not rebuild.
 export function list_fs_for(each, key, children, _implicit_fs_cmp, _implicit_fs__lp__eq__eq__rp_) /* forall<a,e,b> (each : () -> kokaine/reactive/effects/signal-read list<a>, key : (a) -> b, children : (item : kokaine/html/accessor<a>, index : kokaine/html/accessor<int>) -> <kokaine/html/html<e>,kokaine/reactive/effects/signal-read> (), ?cmp : (b, b) -> order, ?(==) : (a, a) -> bool) -> (kokaine/html/html<e>) () */  {
   return $kokaine_html.keyed($std_core_hnd._open_none0(function() {
     return $kokaine_html.Keyed_plan($kokaine_html.Keyed_spec(each, function(items /* list<378> */ , action /* (378) -> 220 () */ ) {
@@ -112,6 +139,10 @@ export function list_fs_for(each, key, children, _implicit_fs_cmp, _implicit_fs_
   }));
 }
  
+ 
+// Keyed vector rendering. Same contract as `list/for`, walking the vector in
+// order: `each` (tracked), `key`, and a `children(item, index)` row builder
+// with read-only accessors. Effect: `html<e>`. Keys must be unique.
 export function vector_fs_for(each, key, children, _implicit_fs_cmp, _implicit_fs__lp__eq__eq__rp_) /* forall<a,e,b> (each : () -> kokaine/reactive/effects/signal-read vector<a>, key : (a) -> b, children : (item : kokaine/html/accessor<a>, index : kokaine/html/accessor<int>) -> <kokaine/html/html<e>,kokaine/reactive/effects/signal-read> (), ?cmp : (b, b) -> order, ?(==) : (a, a) -> bool) -> (kokaine/html/html<e>) () */  {
   return $kokaine_html.keyed($std_core_hnd._open_none0(function() {
     return $kokaine_html.Keyed_plan($kokaine_html.Keyed_spec(each, function(items /* vector<607> */ , action /* (607) -> 449 () */ ) {

@@ -917,6 +917,20 @@ export function _mlift_resource_by_10374(equals, load, root, source, state_sourc
   }
 }
  
+ 
+// Create an async Resource with explicit source equality. `source` is a
+// synchronous tracked calculation (`signal-read`) returning `Just(snapshot)`
+// to load or `Nothing` for "no request"; `load` receives the snapshot and runs
+// under the closed Web async row `<async,ui,exn>`. Creating it has
+// `<signal-write,pure>` and needs a browser `root<<ui>>`.
+//
+// A changed snapshot (per `equals`) cancels any active load and starts a new
+// one; an equal snapshot keeps the active request. `Nothing` cancels and
+// clears the Resource to `Unresolved`. The Resource is owned by the current
+// owner and cancels its request when that owner retires.
+//
+// Gotcha: `load` has no `signal-read` capability, so it cannot create
+// dependencies; everything it needs must come through the snapshot.
 export function resource_by(root, source, load, equals) /* forall<a,b> (root : kokaine/reactive/root<ui>, source : () -> kokaine/reactive/effects/signal-read maybe<b>, load : (b) -> <kokaine/async/effects/async,ui,exn> a, equals : (b, b) -> bool) -> <kokaine/reactive/effects/signal-write,pure> resource<b,a> */  {
    
   var x_10444 = $std_core_hnd._open_at2(0, function(root_0 /* kokaine/reactive/root<ui> */ , initial /* resource-state<2466> */ ) {
@@ -925,7 +939,7 @@ export function resource_by(root, source, load, equals) /* forall<a,b> (root : k
           return value;
         }, root_0);
        
-      var x_0_10447 = $kokaine_reactive_internal_runtime.signal_by(root_1_10019, initial, function(___wildcard_x87__29 /* resource-state<2466> */ , ___wildcard_x87__31 /* resource-state<2466> */ ) {
+      var x_0_10447 = $kokaine_reactive_internal_runtime.signal_by(root_1_10019, initial, function(___wildcard_x134__29 /* resource-state<2466> */ , ___wildcard_x134__31 /* resource-state<2466> */ ) {
           return false;
         });
       if ($std_core_hnd._yielding()) {
@@ -1066,10 +1080,25 @@ export function resource_by(root, source, load, equals) /* forall<a,b> (root : k
   }
 }
  
+ 
+// Create an async Resource using the implicit `(==)` on source snapshots. See
+// `resource-by` for the full contract. Row: `<signal-write,pure>`; requires a
+// `root<<ui>>`. Example:
+//
+//   val data = resource(root, fn() endpoint.get, fn(url)
+//     val response = fetch(get(url))
+//     response.require-ok
+//     response.text
+//   )
 export function resource(root, source, load, _implicit_fs__lp__eq__eq__rp_) /* forall<a,b> (root : kokaine/reactive/root<ui>, source : () -> kokaine/reactive/effects/signal-read maybe<b>, load : (b) -> <kokaine/async/effects/async,ui,exn> a, ?(==) : (b, b) -> bool) -> <kokaine/reactive/effects/signal-write,pure> resource<b,a> */  {
   return resource_by(root, source, load, _implicit_fs__lp__eq__eq__rp_);
 }
  
+ 
+// Read the atomic state: `Unresolved`, `Pending(previous)`, `Ready(value)`, or
+// `Failed(error, previous)`. Effect: `signal-read` (tracked in derivations,
+// effects, and live bindings). `previous` is the last successful value, kept
+// across refreshes and failures.
 export function resource_fs_state(value) /* forall<a,b> (value : resource<b,a>) -> kokaine/reactive/effects/signal-read resource-state<a> */  {
    
   var value_0_10022 = $std_core_hnd._open_none1(function(value_1 /* kokaine/reactive/signal<resource-state<2625>> */ ) {
@@ -1095,6 +1124,10 @@ export function resource_fs__mlift_latest_10375(_y_x10146) /* forall<a> (resourc
   }
 }
  
+ 
+// The current value if `Ready`, otherwise the last successful value carried by
+// `Pending` or `Failed`; `Nothing` when unresolved. Effect: `signal-read`
+// (tracked, via `state`).
 export function resource_fs_latest(value) /* forall<a,b> (value : resource<b,a>) -> kokaine/reactive/effects/signal-read maybe<a> */  {
    
   var value_0_10022 = $std_core_hnd._open_none1(function(value_1_0 /* kokaine/reactive/signal<resource-state<2687>> */ ) {
@@ -1134,6 +1167,11 @@ export function resource_fs_latest(value) /* forall<a,b> (value : resource<b,a>)
   }
 }
  
+ 
+// Start a fresh load for the current snapshot, keeping the last successful
+// value visible as `Pending(previous)`. Effect: `signal-write`. Any active
+// request is canceled first. Gotcha: when the source is currently `Nothing`,
+// refresh clears the Resource to `Unresolved` instead of loading.
 export function resource_fs_refresh(value) /* forall<a,b> (value : resource<b,a>) -> kokaine/reactive/effects/signal-write () */  {
    
   var value_0_10025 = $std_core_hnd._open_none1(function(value_1 /* kokaine/reactive/signal<resource-command> */ ) {
@@ -1145,6 +1183,10 @@ export function resource_fs_refresh(value) /* forall<a,b> (value : resource<b,a>
     });
 }
  
+ 
+// Cancel the active request, if any, and fall back to `Ready(previous)` or
+// `Unresolved`. Effect: `signal-write`. A later source change or `refresh`
+// starts loading again.
 export function resource_fs_cancel(value) /* forall<a,b> (value : resource<b,a>) -> kokaine/reactive/effects/signal-write () */  {
    
   var value_0_10025 = $std_core_hnd._open_none1(function(value_1 /* kokaine/reactive/signal<resource-command> */ ) {

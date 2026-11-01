@@ -159,6 +159,11 @@ export function promise_retire(value) /* (value : promise-subscription) -> ui ()
   return (function(){ var state=value; if(state){ state.fulfill=null; state.reject=null; } })();
 }
  
+ 
+// Wait for a JavaScript promise in direct style. Effect: `<async,exn>`;
+// rejection becomes an `exn`. Gotcha: cancellation only drops the Koka
+// continuation; the underlying promise (and whatever started it) keeps
+// running.
 export function promise_fs_await(value) /* forall<a> (value : promise<a>) -> <kokaine/async/effects/async,exn> a */  {
   return $kokaine_async_effects.setup_fs_await("promise", function(resume /* (error<514>) -> ui () */ ) {
        
@@ -185,6 +190,11 @@ export function promise_fs_await(value) /* forall<a> (value : promise<a>) -> <ko
  
 // Sleep without holding a Kokaine batch open. The generation handler invokes
 // this setup only after it has registered the task with the current owner.
+// Suspend the current async strand for `delay` using a browser timer. Effect:
+// `<async,exn>`. While suspended no Kokaine batch is held open; the rest of
+// the code runs in a later turn, and only if the owning generation is still
+// live. Retirement or cancellation clears the timer. Delays longer than the
+// browser's 32-bit `setTimeout` limit are split into chunks.
 export function sleep(delay) /* (delay : std/time/duration/duration) -> <kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue,exn> () */  {
   return $kokaine_async_effects.setup_fs_await($std_core_types._lp__plus__plus__rp_("sleep ", $std_core_hnd._open_none2($std_time_duration.show, delay)), function(resume /* (error<()>) -> ui () */ ) {
        
@@ -212,6 +222,9 @@ export function sleep(delay) /* (delay : std/time/duration/duration) -> <kokaine
     });
 }
  
+ 
+// Suspend until a later browser task (a zero-delay `sleep`). Effect:
+// `<async,exn>`.
 export function $yield() /* () -> <kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue,exn> () */  {
   return sleep($std_core_hnd._open_none1(function(n /* int */ ) {
       return $std_num_ddouble._lp__fs__rp_($std_time_timestamp.int_fs_timespan(n), $std_time_timestamp.int_fs_timespan(1000));
@@ -230,6 +243,11 @@ export function _mlift_timeout_10048(_y_x10020) /* forall<a,e> (a) -> <kokaine/a
   return $std_core_types.Just(_y_x10020);
 }
  
+ 
+// Run `action` with a deadline. Returns `Just(result)` if it finishes first,
+// or `Nothing` once `delay` elapses, in which case `action` is canceled (its
+// `finally` clauses still run before `timeout` returns). Effect:
+// `<async,exn|e>`. An exception from `action` propagates.
 export function timeout(delay, action) /* forall<a,e> (delay : std/time/duration/duration, action : () -> <kokaine/async/effects/async,exn|e> a) -> <kokaine/async/effects/async,exn|e> maybe<a> */  {
   return $kokaine_async_structured.race(function() {
        
@@ -259,10 +277,14 @@ export function timeout(delay, action) /* forall<a,e> (delay : std/time/duration
  
 // Explicitly unsafe because no runtime check can prove the JavaScript promise
 // resolves to Koka value `a`.
+// Treat a JavaScript value as a `promise<a>`. Total, but unchecked: nothing
+// verifies that the promise resolves to a Koka value of type `a`.
 export function unsafe_promise(value) /* forall<a> (value : any) -> promise<a> */  {
   return value;
 }
  
+ 
+// Expose the underlying JavaScript promise object. Total.
 export function promise_fs_unsafe_any(value) /* forall<a> (value : promise<a>) -> any */  {
   return value;
 }
@@ -315,6 +337,11 @@ export function fetch_subscription_fs__copy(_this, value) /* (fetch-subscription
   return _x5;
 }
  
+ 
+// Build a Fetch request description: `url`, HTTP `method` (default `"GET"`),
+// and an optional string `body`. Total; nothing is sent until `fetch`. No
+// custom headers are set, so a string body uses the browser's default
+// `text/plain` content type.
 export function request(url, method, body) /* (url : string, method : ? string, body : ? (maybe<string>)) -> request */  {
   var _x6 = (method !== undefined) ? method : "GET";
   var _x7 = (body !== undefined) ? body : $std_core_types.Nothing;
@@ -323,10 +350,14 @@ export function request(url, method, body) /* (url : string, method : ? string, 
  
  
 // Convenience constructors keep the common call sites direct and typed.
+// A `GET` request for `url`. Total.
 export function get(url) /* (url : string) -> request */  {
   return request(url);
 }
  
+ 
+// A `POST` request for `url` with a string `body` (sent as `text/plain`).
+// Total.
 export function post(url, body) /* (url : string, body : string) -> request */  {
   return request(url, "POST", $std_core_types.Just(body));
 }
@@ -397,6 +428,16 @@ export function _mlift_fetch_10051(result_0) /* (result@0 : response) -> <kokain
   }
 }
  
+ 
+// Send `value` with the browser Fetch API and wait for the response headers.
+// Effect: `<async,exn>`; network failure becomes an `exn`. HTTP error statuses
+// do not raise; use `require-ok` or check `ok`/`status`.
+//
+// The returned response stays owned by the current generation: retiring the
+// generation aborts the request until the body is consumed with `text`/`json`
+// or released with `discard`. Gotcha: call `discard` on a response you will
+// not read, so the connection is released immediately rather than at
+// retirement.
 export function fetch(value) /* (value : request) -> <kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue,exn> response */  {
    
   var x_10064 = $kokaine_async_effects.setup_fs_await("fetch", function(resume /* (error<response>) -> ui () */ ) {
@@ -449,14 +490,21 @@ export function fetch(value) /* (value : request) -> <kokaine/async/effects/asyn
   }
 }
  
+ 
+// The HTTP status code. Effect: `ui`.
 export function response_fs_status(value) /* (value : response) -> ui int */  {
   return Number((value).response.status);
 }
  
+ 
+// Whether the status is in the 200-299 range. Effect: `ui`.
 export function response_fs_ok(value) /* (value : response) -> ui bool */  {
   return !!(value).response.ok;
 }
  
+ 
+// The final response URL after redirects (empty when unavailable). Effect:
+// `ui`.
 export function response_fs_url(value) /* (value : response) -> ui string */  {
   return String((value).response.url == null ? '' : (value).response.url);
 }
@@ -465,6 +513,9 @@ export function response_fs_url(value) /* (value : response) -> ui string */  {
 // A response which will not be consumed explicitly releases its generation
 // lease before aborting. Clear the wrapper first so hostile host objects cannot
 // observe or re-enter a live ownership edge.
+// Release a response that will not be read: drop its generation lease, abort
+// the request, and cancel the body stream. Effect: `ui`. Safe to call more
+// than once.
 export function response_fs_discard(value) /* (value : response) -> ui () */  {
   return (function(){ var wrapper=value; if(!wrapper) return; var response=wrapper.response; var release=wrapper.release; var controller=wrapper.controller; var body=response && response.body; wrapper.release=null; wrapper.controller=null; if(release){ try { release(); } catch(_) {} } if(controller){ try { controller.abort(); } catch(_) {} } if(body && !body.locked){ try { var canceled=body.cancel(); if(canceled && canceled.catch) canceled.catch(function(){}); } catch(_) {} } })();
 }
@@ -529,6 +580,10 @@ export function await_response_body(value, as_json) /* forall<a> (value : respon
     });
 }
  
+ 
+// Read the whole body as a string. Effect: `<async,exn>`. Takes over the
+// response's ownership; cancellation aborts the request. A body can be read
+// only once.
 export function response_fs_text(value) /* (value : response) -> <kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue,exn> string */  {
   return await_response_body(value, false);
 }
@@ -536,10 +591,16 @@ export function response_fs_text(value) /* (value : response) -> <kokaine/async/
  
 // JSON stays an `any` FFI value. A domain adapter should validate/decode it at
 // its boundary instead of asserting an unchecked generic Koka type.
+// Read and parse the body as JSON. Effect: `<async,exn>`. The result is an
+// untyped JavaScript value (`any`); validate or decode it at your boundary. A
+// body can be read only once.
 export function response_fs_json(value) /* (value : response) -> <kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue,exn> any */  {
   return await_response_body(value, true);
 }
  
+ 
+// Return the response unchanged when `ok`; otherwise discard it and raise an
+// HTTP-status exception. Effect: `<ui,exn>`.
 export function response_fs_require_ok(value) /* (value : response) -> <exn,ui> response */  {
   var _x9 = $std_core_hnd._open_none1(response_fs_ok, value);
   if (_x9) {
