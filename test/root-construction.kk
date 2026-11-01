@@ -83,7 +83,7 @@ fun check-disposed(slot : ref<global,maybe<root<e>>>, message : string)
     Nothing -> throw("missing side-channel root: " ++ message)
     Just(root) -> check(root.is-disposed,message)
 
-fun main()
+pub fun main()
   val action-failure : error<()> = mask<exn>{
     error/try(fn() fail-action())
   }

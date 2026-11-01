@@ -19,6 +19,8 @@ POCKETJS_COMMIT := 1f848dcdb2629e3c6373710cd0aa16d775ea2ad3
 PROJECT_ROOT := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 RUN_LOCKED := $(PROJECT_ROOT)/support/run_locked.py
 KOKA_FLAGS := -j1 -i./src
+# Koka test programs exit 0 on an uncaught exception; this wrapper does not.
+KOKA_TEST = $(PYTHON) "$(PROJECT_ROOT)/support/run_koka_test.py" $(KOKA) $(KOKA_FLAGS) -e
 DIST_KOKA = $(PYTHON) "$(RUN_LOCKED)" dist/.koka-build.lock \
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist
 
@@ -72,41 +74,10 @@ serve-playground: playground-install
 	@echo "Koka compiler and LSP run as browser WASM Workers; no native Koka, server, or container."
 	$(PNPM) --filter @kokaine/playground run dev
 
+# test/all.kk imports every native suite so the shared runtime compiles once,
+# and exits nonzero when any suite fails.
 test-native: check-koka
-	$(KOKA) $(KOKA_FLAGS) -e test/root-construction.kk
-	$(KOKA) $(KOKA_FLAGS) -e test/resource-finalization.kk
-	$(KOKA) $(KOKA_FLAGS) -e test/internal-registry.kk
-	$(KOKA) $(KOKA_FLAGS) -e test/internal-int-index.kk
-	$(KOKA) $(KOKA_FLAGS) -e test/source-capture-registry.kk
-	$(KOKA) $(KOKA_FLAGS) -e test/lifetime-foundation.kk
-	$(KOKA) $(KOKA_FLAGS) -e test/work-transaction.kk
-	$(KOKA) $(KOKA_FLAGS) -e test/integration-boundaries.kk
-	$(KOKA) $(KOKA_FLAGS) -e test/publication-effect.kk
-	$(KOKA) $(KOKA_FLAGS) -e test/integration-event.kk
-	$(KOKA) $(KOKA_FLAGS) -e test/async-host-turn.kk
-	$(KOKA) $(KOKA_FLAGS) -e test/async-host-dispatcher.kk
-	$(KOKA) $(KOKA_FLAGS) -e test/one-shot-task.kk
-	$(KOKA) $(KOKA_FLAGS) -e test/cancellation-supervisor.kk
-	$(KOKA) $(KOKA_FLAGS) -e test/trace-semantics.kk
-	$(KOKA) $(KOKA_FLAGS) -e test/structural-scopes.kk
-	$(KOKA) $(KOKA_FLAGS) -e test/targeted-settle.kk
-	$(KOKA) $(KOKA_FLAGS) -e test/targeted-settle-canary.kk
-	$(KOKA) $(KOKA_FLAGS) -e test/execution-planes.kk
-	$(KOKA) $(KOKA_FLAGS) -e test/derived-structural.kk
-	$(KOKA) $(KOKA_FLAGS) -e test/smoke.kk
-	$(KOKA) $(KOKA_FLAGS) -e test/continuation.kk
-	$(KOKA) $(KOKA_FLAGS) -e test/final-control-rollback.kk
-	$(KOKA) $(KOKA_FLAGS) -e test/resume-transaction-regression.kk
-	$(KOKA) $(KOKA_FLAGS) -e test/continuation-reentry.kk
-	$(KOKA) $(KOKA_FLAGS) -e test/reactive.kk
-	$(KOKA) $(KOKA_FLAGS) -e test/reactive-advanced.kk
-	$(KOKA) $(KOKA_FLAGS) -e test/reactive-stress.kk
-	$(KOKA) $(KOKA_FLAGS) -e test/kernel-regressions.kk
-	$(KOKA) $(KOKA_FLAGS) -e test/html.kk
-	$(KOKA) $(KOKA_FLAGS) -e test/key-index.kk
-	$(KOKA) $(KOKA_FLAGS) -e test/control-flow.kk
-	$(KOKA) $(KOKA_FLAGS) -e test/async-effects.kk
-	$(KOKA) $(KOKA_FLAGS) -e test/structured-async.kk
+	$(KOKA_TEST) test/all.kk
 	$(PYTHON) test/keyed_transaction_boundary.py
 	$(PYTHON) test/event_effect_boundary.py $(KOKA)
 	$(PYTHON) test/async_effect_boundary.py $(KOKA)
@@ -115,7 +86,8 @@ test-native: check-koka
 	$(PYTHON) test/make_parallel.py
 
 test-pocketjs-runtime: check-koka
-	$(KOKA) $(KOKA_FLAGS) -i./packages/pocketjs/src \
+	$(PYTHON) "$(PROJECT_ROOT)/support/run_koka_test.py" \
+		$(KOKA) $(KOKA_FLAGS) -i./packages/pocketjs/src \
 		--target=jsnode -e test/pocketjs-runtime.kk
 	$(PYTHON) test/pocketjs_boundary.py
 
