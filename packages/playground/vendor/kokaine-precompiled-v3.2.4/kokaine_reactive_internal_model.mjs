@@ -123,8 +123,8 @@ export function Memo(memo_source, memo_producer) /* forall<a> (memo-source : sou
 export const Track_read = 1; // read-mode
 export const Sample_read = 2; // read-mode
 // type root
-export function Root(root_key, root_derive_plane, root_effect_plane, root_lifetime, root_batch_depth, root_flushing, root_disposing, root_disposed) /* forall<e> (root-key : root-key, root-derive-plane : plane<total>, root-effect-plane : plane<e>, root-lifetime : lifetime-owner<e>, root-batch-depth : ref<global,int>, root-flushing : ref<global,bool>, root-disposing : ref<global,bool>, root-disposed : ref<global,bool>) -> root<e> */  {
-  return { root_key: root_key, root_derive_plane: root_derive_plane, root_effect_plane: root_effect_plane, root_lifetime: root_lifetime, root_batch_depth: root_batch_depth, root_flushing: root_flushing, root_disposing: root_disposing, root_disposed: root_disposed };
+export function Root(root_key, root_derive_plane, root_effect_plane, root_lifetime, root_batch_depth, root_flushing, root_disposing, root_disposed, root_constructing) /* forall<e> (root-key : root-key, root-derive-plane : plane<total>, root-effect-plane : plane<e>, root-lifetime : lifetime-owner<e>, root-batch-depth : ref<global,int>, root-flushing : ref<global,bool>, root-disposing : ref<global,bool>, root-disposed : ref<global,bool>, root-constructing : ref<global,bool>) -> root<e> */  {
+  return { root_key: root_key, root_derive_plane: root_derive_plane, root_effect_plane: root_effect_plane, root_lifetime: root_lifetime, root_batch_depth: root_batch_depth, root_flushing: root_flushing, root_disposing: root_disposing, root_disposed: root_disposed, root_constructing: root_constructing };
 }
 // type settle-result
 export const Settle_ok = { _tag: 1 }; // settle-result
@@ -199,7 +199,7 @@ var settle_walk_serial = { value: 0 };
  
  
 // monadic lift
-export function _mlift_enter_settle_walk_10111(depth, _c_x10103) /* forall<_e,_e1> (depth : int, ()) -> int */  {
+export function _mlift_enter_settle_walk_10112(depth, _c_x10104) /* forall<_e,_e1> (depth : int, ()) -> int */  {
    
   var value_2_10027 = $std_core_types._int_add(depth,1);
    
@@ -216,14 +216,14 @@ export function enter_settle_walk() /* () -> int */  {
     var x_10021 = settle_walk_serial.value;
      
     var value_0_10020 = $std_core_types._int_add(x_10021,1);
-    var x_10114 = ((settle_walk_serial).value = value_0_10020);
+    var x_10115 = ((settle_walk_serial).value = value_0_10020);
   }
   else {
-    var x_10114 = $std_core_types.Unit;
+    var x_10115 = $std_core_types.Unit;
   }
   if ($std_core_hnd._yielding()) {
-    return $std_core_hnd.yield_extend(function(_c_x10103 /* () */ ) {
-      return _mlift_enter_settle_walk_10111(depth, _c_x10103);
+    return $std_core_hnd.yield_extend(function(_c_x10104 /* () */ ) {
+      return _mlift_enter_settle_walk_10112(depth, _c_x10104);
     });
   }
   else {
@@ -249,20 +249,20 @@ export function lift_div(action) /* forall<a,e> (action : () -> e a) -> <div|e> 
  
  
 // monadic lift
-export function _mlift_lift_exn_10112(action, _y_x10105) /* forall<a,e> (action : () -> e a, hnd/ev-index) -> <exn|e> a */  {
-  return $std_core_hnd._mask_at(_y_x10105, false, action);
+export function _mlift_lift_exn_10113(action, _y_x10106) /* forall<a,e> (action : () -> e a, hnd/ev-index) -> <exn|e> a */  {
+  return $std_core_hnd._mask_at(_y_x10106, false, action);
 }
  
 export function lift_exn(action) /* forall<a,e> (action : () -> e a) -> <exn|e> a */  {
    
-  var x_10118 = $std_core_hnd._evv_index($std_core_exn.exn_fs__tag);
+  var x_10119 = $std_core_hnd._evv_index($std_core_exn.exn_fs__tag);
   if ($std_core_hnd._yielding()) {
-    return $std_core_hnd.yield_extend(function(_y_x10105 /* hnd/ev-index */ ) {
-      return $std_core_hnd._mask_at(_y_x10105, false, action);
+    return $std_core_hnd.yield_extend(function(_y_x10106 /* hnd/ev-index */ ) {
+      return $std_core_hnd._mask_at(_y_x10106, false, action);
     });
   }
   else {
-    return $std_core_hnd._mask_at(x_10118, false, action);
+    return $std_core_hnd._mask_at(x_10119, false, action);
   }
 }
  
@@ -523,7 +523,7 @@ export function built_trace_fs_built_publication_action(_this) /* forall<e> (bui
  
  
 // monadic lift
-export function built_trace_fs__mlift_copy_10113(_this, built_publication_current, built_publication_frame, built_root, _c_x10109) /* forall<e> (built-trace<e>, built-publication-current : ? (maybe<continuation-gate>), built-publication-frame : ? (frame<e>), built-root : ? (trace<e>), () -> <div,exn|e> ()) -> built-trace<e> */  {
+export function built_trace_fs__mlift_copy_10114(_this, built_publication_current, built_publication_frame, built_root, _c_x10110) /* forall<e> (built-trace<e>, built-publication-current : ? (maybe<continuation-gate>), built-publication-frame : ? (frame<e>), built-root : ? (trace<e>), () -> <div,exn|e> ()) -> built-trace<e> */  {
   if (built_root !== undefined) {
     var _x15 = built_root;
   }
@@ -542,12 +542,12 @@ export function built_trace_fs__mlift_copy_10113(_this, built_publication_curren
   else {
     var _x17 = _this.built_publication_frame;
   }
-  return Built_trace(_x15, _x16, _x17, _c_x10109);
+  return Built_trace(_x15, _x16, _x17, _c_x10110);
 }
  
 export function built_trace_fs__copy(_this, built_root, built_publication_current, built_publication_frame, built_publication_action) /* forall<e> (built-trace<e>, built-root : ? (trace<e>), built-publication-current : ? (maybe<continuation-gate>), built-publication-frame : ? (frame<e>), built-publication-action : ? (() -> <div,exn|e> ())) -> built-trace<e> */  {
   if ($std_core_hnd._yielding()) {
-    return $std_core_hnd.yield_extend(function(_c_x10109 /* () -> <div,exn|1469> () */ ) {
+    return $std_core_hnd.yield_extend(function(_c_x10110 /* () -> <div,exn|1471> () */ ) {
       if (built_root !== undefined) {
         var _x18 = built_root;
       }
@@ -566,7 +566,7 @@ export function built_trace_fs__copy(_this, built_root, built_publication_curren
       else {
         var _x20 = _this.built_publication_frame;
       }
-      return Built_trace(_x18, _x19, _x20, _c_x10109);
+      return Built_trace(_x18, _x19, _x20, _c_x10110);
     });
   }
   else {
@@ -1019,7 +1019,13 @@ export function root_fs_root_disposed(root) /* forall<e> (root : root<e>) -> ref
   return root.root_disposed;
 }
  
-export function root_fs__copy(_this, root_key, root_derive_plane, root_effect_plane, root_lifetime, root_batch_depth, root_flushing, root_disposing, root_disposed) /* forall<e> (root<e>, root-key : ? root-key, root-derive-plane : ? (plane<total>), root-effect-plane : ? (plane<e>), root-lifetime : ? (lifetime-owner<e>), root-batch-depth : ? (ref<global,int>), root-flushing : ? (ref<global,bool>), root-disposing : ? (ref<global,bool>), root-disposed : ? (ref<global,bool>)) -> root<e> */  {
+ 
+// Automatically generated. Retrieves the `root-constructing` constructor field of the `:root` type.
+export function root_fs_root_constructing(root) /* forall<e> (root : root<e>) -> ref<global,bool> */  {
+  return root.root_constructing;
+}
+ 
+export function root_fs__copy(_this, root_key, root_derive_plane, root_effect_plane, root_lifetime, root_batch_depth, root_flushing, root_disposing, root_disposed, root_constructing) /* forall<e> (root<e>, root-key : ? root-key, root-derive-plane : ? (plane<total>), root-effect-plane : ? (plane<e>), root-lifetime : ? (lifetime-owner<e>), root-batch-depth : ? (ref<global,int>), root-flushing : ? (ref<global,bool>), root-disposing : ? (ref<global,bool>), root-disposed : ? (ref<global,bool>), root-constructing : ? (ref<global,bool>)) -> root<e> */  {
   if (root_key !== undefined) {
     var _x51 = root_key;
   }
@@ -1068,7 +1074,13 @@ export function root_fs__copy(_this, root_key, root_derive_plane, root_effect_pl
   else {
     var _x58 = _this.root_disposed;
   }
-  return Root(_x51, _x52, _x53, _x54, _x55, _x56, _x57, _x58);
+  if (root_constructing !== undefined) {
+    var _x59 = root_constructing;
+  }
+  else {
+    var _x59 = _this.root_constructing;
+  }
+  return Root(_x51, _x52, _x53, _x54, _x55, _x56, _x57, _x58, _x59);
 }
  
  
@@ -1097,30 +1109,30 @@ export function derive_producer_fs_producer_clean(_this) /* (derive-producer) ->
  
 export function derive_producer_fs__copy(_this, producer_plane, producer_scope, producer_settling, producer_clean) /* (derive-producer, producer-plane : ? (plane<total>), producer-scope : ? (continuation-scope<total>), producer-settling : ? (ref<global,bool>), producer-clean : ? (ref<global,int>)) -> derive-producer */  {
   if (producer_plane !== undefined) {
-    var _x59 = producer_plane;
+    var _x60 = producer_plane;
   }
   else {
-    var _x59 = _this.producer_plane;
+    var _x60 = _this.producer_plane;
   }
   if (producer_scope !== undefined) {
-    var _x60 = producer_scope;
+    var _x61 = producer_scope;
   }
   else {
-    var _x60 = _this.producer_scope;
+    var _x61 = _this.producer_scope;
   }
   if (producer_settling !== undefined) {
-    var _x61 = producer_settling;
+    var _x62 = producer_settling;
   }
   else {
-    var _x61 = _this.producer_settling;
+    var _x62 = _this.producer_settling;
   }
   if (producer_clean !== undefined) {
-    var _x62 = producer_clean;
+    var _x63 = producer_clean;
   }
   else {
-    var _x62 = _this.producer_clean;
+    var _x63 = _this.producer_clean;
   }
-  return Derive_producer(_x59, _x60, _x61, _x62);
+  return Derive_producer(_x60, _x61, _x62, _x63);
 }
  
  
@@ -1137,16 +1149,16 @@ export function memo_fs_memo_producer(memo) /* forall<a> (memo : memo<a>) -> der
  
 export function memo_fs__copy(_this, memo_source, memo_producer) /* forall<a> (memo<a>, memo-source : ? (source<a>), memo-producer : ? derive-producer) -> memo<a> */  {
   if (memo_source !== undefined) {
-    var _x63 = memo_source;
+    var _x64 = memo_source;
   }
   else {
-    var _x63 = _this.memo_source;
+    var _x64 = _this.memo_source;
   }
   if (memo_producer !== undefined) {
-    var _x64 = memo_producer;
+    var _x65 = memo_producer;
   }
   else {
-    var _x64 = _this.memo_producer;
+    var _x65 = _this.memo_producer;
   }
-  return Memo(_x63, _x64);
+  return Memo(_x64, _x65);
 }

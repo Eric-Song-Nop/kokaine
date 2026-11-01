@@ -635,7 +635,9 @@ pub fun drain-loop(root : root<e>, first-failure : maybe<exception>)
     Ok(False) ->
       match run-next-effect(root.root-effect-plane)
         // The failed ticket is quarantined; keep draining unrelated work and
-        // report the first failure once the queue is empty.
+        // report the first failure once the queue is empty. Root construction
+        // is all-or-nothing, so there the first failure ends the drain.
+        Error(failure) | load(root.root-constructing) -> Error(failure)
         Error(failure) ->
           val first = match first-failure
             Nothing -> Just(failure)
