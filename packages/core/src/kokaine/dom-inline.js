@@ -21,6 +21,46 @@ function kokaineDomAttemptRaw(action) {
   }
 }
 
+/** Backs `extern dom-try-set-text`. Returns null or the failure message. */
+function kokaineDomTrySetText(node, content) {
+  try {
+    node.data = content;
+    return null;
+  } catch (error) {
+    return String(error && error.message != null ? error.message : error);
+  }
+}
+
+/** Backs `extern dom-try-set-attribute`. Returns null or the failure message. */
+function kokaineDomTrySetAttribute(element, name, content) {
+  try {
+    element.setAttribute(name, content);
+    return null;
+  } catch (error) {
+    return String(error && error.message != null ? error.message : error);
+  }
+}
+
+/** Backs `extern dom-try-remove-attribute`. Returns null or the failure message. */
+function kokaineDomTryRemoveAttribute(element, name) {
+  try {
+    element.removeAttribute(name);
+    return null;
+  } catch (error) {
+    return String(error && error.message != null ? error.message : error);
+  }
+}
+
+/** Backs `extern dom-try-set-property`. Returns null or the failure message. */
+function kokaineDomTrySetProperty(element, name, content) {
+  try {
+    element[name] = content;
+    return null;
+  } catch (error) {
+    return String(error && error.message != null ? error.message : error);
+  }
+}
+
 /** Backs `extern dom-install-shadow-tracker`. */
 function kokaineDomInstallShadowTracker(parent) {
   var doc = parent && (parent.nodeType === 9 ? parent : parent.ownerDocument);

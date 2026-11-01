@@ -299,27 +299,34 @@ extern dom-move-range-before(parent : node, first : node, last : node,
                              before : node, focus : any) : ui ()
   js inline "kokaineDomMoveRangeBefore(#1,#2,#3,#4,#5)"
 
-extern dom-set-text(value : node, content : string) : ui ()
-  js inline "((#1).data = #2)"
+// Single-operation writes used on every live update. Each catches its own
+// host exception and returns null or the message `dom-attempt` would report,
+// avoiding the per-call closure and result box of `dom-attempt-raw`.
+extern dom-try-set-text(value : node, content : string) : ui any
+  js inline "kokaineDomTrySetText(#1,#2)"
 
-extern dom-set-attribute(value : element, name : string,
-                         content : string) : ui ()
-  js inline "(#1).setAttribute(#2,#3)"
+extern dom-try-set-attribute(value : element, name : string,
+                             content : string) : ui any
+  js inline "kokaineDomTrySetAttribute(#1,#2,#3)"
 
-extern dom-remove-attribute(value : element, name : string) : ui ()
-  js inline "(#1).removeAttribute(#2)"
+extern dom-try-remove-attribute(value : element, name : string) : ui any
+  js inline "kokaineDomTryRemoveAttribute(#1,#2)"
 
-extern dom-set-string-property(value : element, name : string,
-                               content : string) : ui ()
-  js inline "((#1)[#2] = #3)"
+extern dom-try-set-property(value : element, name : string,
+                            content : any) : ui any
+  js inline "kokaineDomTrySetProperty(#1,#2,#3)"
 
-extern dom-set-bool-property(value : element, name : string,
-                             content : bool) : ui ()
-  js inline "((#1)[#2] = #3)"
+extern string-any(value : string) : any
+  js inline "#1"
 
-extern dom-set-int-property(value : element, name : string,
-                            content : string) : ui ()
-  js inline "((#1)[#2] = Number(#3))"
+extern bool-any(value : bool) : any
+  js inline "#1"
+
+extern int-string-any(value : string) : any
+  js inline "Number(#1)"
+
+extern any-string(value : any) : string
+  js inline "String(#1)"
 
 extern dom-clean-range(first : node, last : node, inclusive : bool) : ui ()
   js inline "kokaineDomCleanRange(#1,#2,#3)"
@@ -700,34 +707,59 @@ fun insert-html(root : root<<ui>>, parent : node, before : maybe<node>,
       }
   register-owner-cleanup(root,registered)
 
-fun set-attribute(value : element, name : string,
-                  content : maybe<string>) : <ui,exn> ()
-  if !name.is-valid-attribute-name
+fun dom-check(failure : any) : exn ()
+  if failure.any-is-null then ()
+  else throw("browser DOM exception: " ++ failure.any-string)
+
+fun set-text(target : node, content : string) : <ui,exn> ()
+  dom-check(dom-try-set-text(target,content))
+
+// A name is fixed for the lifetime of a binding, so live bindings classify it
+// once (`valid`, and whether it is a URL attribute) and pass the result to
+// every update. The value is still URL-checked on every update.
+fun set-classified-attribute(value : element, name : string, valid : bool,
+                             url : bool, content : maybe<string>)
+                            : <ui,exn> ()
+  if !valid
   then throw("invalid HTML attribute name: " ++ name)
   else match content
-         Nothing -> dom-attempt{ dom-remove-attribute(value,name) }
+         Nothing -> dom-check(dom-try-remove-attribute(value,name))
          Just(text) ->
-           if !is-safe-url-value(name,text) then throw(unsafe-url-message(name))
-           else dom-attempt{ dom-set-attribute(value,name,text) }
+           if url && !is-safe-url-value(name,text)
+           then throw(unsafe-url-message(name))
+           else dom-check(dom-try-set-attribute(value,name,text))
+
+fun set-attribute(value : element, name : string,
+                  content : maybe<string>) : <ui,exn> ()
+  set-classified-attribute(value,name,name.is-valid-attribute-name,
+                           name.is-url-attribute,content)
 
 fun set-trusted-url(value : element, name : string,
                     url : trusted-url) : <ui,exn> ()
   if !name.is-valid-attribute-name
   then throw("invalid HTML attribute name: " ++ name)
-  else dom-attempt{ dom-set-attribute(value,name,trusted-url-content(url)) }
+  else dom-check(dom-try-set-attribute(value,name,trusted-url-content(url)))
 
-fun set-property(value : element, name : string,
-                 content : property-value) : <ui,exn> ()
-  if !name.is-valid-property-name
+fun set-classified-property(value : element, name : string, valid : bool,
+                            url : bool, content : property-value)
+                           : <ui,exn> ()
+  if !valid
   then throw("invalid or markup-writing DOM property: " ++ name)
   else match content
          String-property(text) ->
-           if !is-safe-url-value(name,text) then throw(unsafe-url-message(name))
-           else dom-attempt{ dom-set-string-property(value,name,text) }
+           if url && !is-safe-url-value(name,text)
+           then throw(unsafe-url-message(name))
+           else dom-check(dom-try-set-property(value,name,string-any(text)))
          Bool-property(flag) ->
-           dom-attempt{ dom-set-bool-property(value,name,flag) }
+           dom-check(dom-try-set-property(value,name,bool-any(flag)))
          Int-property(number) ->
-           dom-attempt{ dom-set-int-property(value,name,number.show) }
+           dom-check(dom-try-set-property(
+             value,name,int-string-any(number.show)))
+
+fun set-property(value : element, name : string,
+                 content : property-value) : <ui,exn> ()
+  set-classified-property(value,name,name.is-valid-property-name,
+                          name.is-url-attribute,content)
 
 fun snapshot(value : raw-event) : <ui,exn> event
   dom-attempt fn()
@@ -843,13 +875,22 @@ fun mount-attribute(root : root<<ui>>, target : element,
       set-attribute(target,name,if enabled then Just("") else Nothing)
     Property(name,value) -> set-property(target,name,value)
     Live-attribute(name,read) ->
+      // An invalid name still fails on the first run, as before.
+      val valid = name.is-valid-attribute-name
+      val url = name.is-url-attribute
       val dispose = create-effect(root,fn() tracked(read),fn(value)
-        reactive-ui-exn{ set-attribute(target,name,value) }
+        reactive-ui-exn{
+          set-classified-attribute(target,name,valid,url,value)
+        }
       )
       ()
     Live-property(name,read) ->
+      val valid = name.is-valid-property-name
+      val url = name.is-url-attribute
       val dispose = create-effect(root,fn() tracked(read),fn(value)
-        reactive-ui-exn{ set-property(target,name,value) }
+        reactive-ui-exn{
+          set-classified-property(target,name,valid,url,value)
+        }
       )
       ()
     Listener(name,action) ->
@@ -1428,7 +1469,7 @@ fun mount-view(renderer : keyed-context, root : root<<ui>>, parent : node,
       val target = dom-attempt{ dom-create-text("") }
       insert(parent,before,target)
       val dispose = create-effect(root,fn() tracked(read),fn(value)
-        reactive-ui-exn{ dom-attempt{ dom-set-text(target,value) } }
+        reactive-ui-exn{ set-text(target,value) }
       )
       ()
     Element(name,attributes,children) ->
