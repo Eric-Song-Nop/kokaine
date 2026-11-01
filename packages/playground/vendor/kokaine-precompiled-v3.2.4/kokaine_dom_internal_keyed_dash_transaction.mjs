@@ -88,31 +88,31 @@ export function keyed_publication_fs_publication_rollback(_this) /* (keyed-publi
  
  
 // monadic lift
-export function keyed_publication_fs__mlift_copy_10116(_c_x10040, _this, publication_publish, _c_x10042) /* (() -> <ui,exn> (), keyed-publication, publication-publish : ? (() -> ()), () -> <ui,exn> ()) -> keyed-publication */  {
+export function keyed_publication_fs__mlift_copy_10111(_c_x10017, _this, publication_publish, _c_x10019) /* (() -> <ui,exn> (), keyed-publication, publication-publish : ? (() -> ()), () -> <ui,exn> ()) -> keyed-publication */  {
   if (publication_publish !== undefined) {
     var _x0 = publication_publish;
   }
   else {
     var _x0 = _this.publication_publish;
   }
-  return Keyed_publication(_c_x10040, _x0, _c_x10042);
+  return Keyed_publication(_c_x10017, _x0, _c_x10019);
 }
  
  
 // monadic lift
-export function keyed_publication_fs__mlift_copy_10117(_this, publication_publish, publication_rollback, _c_x10040) /* (keyed-publication, publication-publish : ? (() -> ()), publication-rollback : ? (() -> <ui,exn> ()), () -> <ui,exn> ()) -> keyed-publication */  {
+export function keyed_publication_fs__mlift_copy_10112(_this, publication_publish, publication_rollback, _c_x10017) /* (keyed-publication, publication-publish : ? (() -> ()), publication-rollback : ? (() -> <ui,exn> ()), () -> <ui,exn> ()) -> keyed-publication */  {
    
-  function next_10123(_c_x10042) /* (() -> <ui,exn> ()) -> keyed-publication */  {
+  function next_10118(_c_x10019) /* (() -> <ui,exn> ()) -> keyed-publication */  {
     if (publication_publish !== undefined) {
       var _x1 = publication_publish;
     }
     else {
       var _x1 = _this.publication_publish;
     }
-    return Keyed_publication(_c_x10040, _x1, _c_x10042);
+    return Keyed_publication(_c_x10017, _x1, _c_x10019);
   }
   if ($std_core_hnd._yielding()) {
-    return $std_core_hnd.yield_extend(next_10123);
+    return $std_core_hnd.yield_extend(next_10118);
   }
   else {
     if (publication_rollback !== undefined) {
@@ -121,19 +121,19 @@ export function keyed_publication_fs__mlift_copy_10117(_this, publication_publis
     else {
       var _x1 = _this.publication_rollback;
     }
-    return next_10123(_x1);
+    return next_10118(_x1);
   }
 }
  
 export function keyed_publication_fs__copy(_this, publication_prepare, publication_publish, publication_rollback) /* (keyed-publication, publication-prepare : ? (() -> <ui,exn> ()), publication-publish : ? (() -> ()), publication-rollback : ? (() -> <ui,exn> ())) -> keyed-publication */  {
   if ($std_core_hnd._yielding()) {
-    return $std_core_hnd.yield_extend(function(_c_x10040 /* () -> <ui,exn> () */ ) {
-      return keyed_publication_fs__mlift_copy_10117(_this, publication_publish, publication_rollback, _c_x10040);
+    return $std_core_hnd.yield_extend(function(_c_x10017 /* () -> <ui,exn> () */ ) {
+      return keyed_publication_fs__mlift_copy_10112(_this, publication_publish, publication_rollback, _c_x10017);
     });
   }
   else {
     if ($std_core_hnd._yielding()) {
-      return $std_core_hnd.yield_extend(function(_c_x10042 /* () -> <ui,exn> () */ ) {
+      return $std_core_hnd.yield_extend(function(_c_x10019 /* () -> <ui,exn> () */ ) {
         if (publication_prepare !== undefined) {
           var _x2 = publication_prepare;
         }
@@ -146,7 +146,7 @@ export function keyed_publication_fs__copy(_this, publication_prepare, publicati
         else {
           var _x3 = _this.publication_publish;
         }
-        return Keyed_publication(_x2, _x3, _c_x10042);
+        return Keyed_publication(_x2, _x3, _c_x10019);
       });
     }
     else {
@@ -270,11 +270,11 @@ export function keyed_context_fs__copy(_this, context_active) /* (keyed-context,
 }
  
 export function new_keyed_context() /* () -> keyed-context */  {
-  return { value: ($std_core_types.Nil) };
+  return cell($std_core_types.Nil);
 }
  
 export function new_keyed_transaction() /* () -> keyed-transaction */  {
-  return Keyed_transaction({ value: Keyed_open }, { value: ($std_core_types.Nil) });
+  return Keyed_transaction(cell(Keyed_open), cell($std_core_types.Nil));
 }
  
 export function find_keyed_transaction(values, expected) /* (values : list<keyed-entry>, expected : kokaine/reactive/integration/provision<ui>) -> exn keyed-transaction */  { tailcall: while(1)
@@ -284,14 +284,14 @@ export function find_keyed_transaction(values, expected) /* (values : list<keyed
   }
   else {
      
-    var _x_x1_10109 = $std_core_hnd._open_none1(function(_this /* keyed-entry */ ) {
+    var _x_x1_10078 = $std_core_hnd._open_none1(function(_this /* keyed-entry */ ) {
         return _this.entry_provision;
       }, values.head);
     var _x12 = $std_core_hnd._open_none2(function(left /* kokaine/reactive/integration/provision<ui> */ , right /* kokaine/reactive/integration/provision<ui> */ ) {
         var _x13 = left;
         var _x14 = right;
         return $kokaine_reactive_integration_internal_provision.provision_fs_same(_x13, _x14);
-      }, _x_x1_10109, expected);
+      }, _x_x1_10078, expected);
     if (_x12) {
       return $std_core_hnd._open_none1(function(_this_0 /* keyed-entry */ ) {
           return _this_0.entry_transaction;
@@ -308,25 +308,25 @@ export function find_keyed_transaction(values, expected) /* (values : list<keyed
 }}
  
 export function current_keyed_transaction(renderer, expected) /* (renderer : keyed-context, expected : kokaine/reactive/integration/provision<ui>) -> exn keyed-transaction */  {
-  return find_keyed_transaction(renderer.value, expected);
+  return find_keyed_transaction($std_core_hnd._open_none1(load, renderer), expected);
 }
  
 export function with_keyed_transaction(renderer, current, transaction, action) /* forall<a,e> (renderer : keyed-context, current : kokaine/reactive/integration/provision<ui>, transaction : keyed-transaction, action : () -> <div,exn|e> a) -> <div,exn|e> a */  {
    
-  var previous = renderer.value;
+  var previous = $std_core_hnd._open_none1(load, renderer);
    
-  ((renderer).value = ($std_core_types.Cons(Keyed_entry(current, transaction), previous)));
+  $std_core_hnd._open_none2(store, renderer, $std_core_types.Cons(Keyed_entry(current, transaction), previous));
   return $std_core_hnd.finally_prompt(function() {
-      return ((renderer).value = previous);
+      return $std_core_hnd._open_none2(store, renderer, previous);
     }, action());
 }
  
 export function stage_keyed_publication(transaction, prepare, publish, rollback) /* (transaction : keyed-transaction, prepare : () -> <exn,ui> (), publish : () -> (), rollback : () -> <exn,ui> ()) -> exn () */  {
-  var _x15 = (transaction.transaction_state).value;
+  var _x15 = $std_core_hnd._open_none1(load, transaction.transaction_state);
   if (_x15 === 1) {
      
-    var value_0_10086 = $std_core_types.Cons(Keyed_publication(prepare, publish, rollback), (transaction.transaction_publications).value);
-    return (((transaction.transaction_publications)).value = value_0_10086);
+    var _x_x2_10090 = $std_core_types.Cons(Keyed_publication(prepare, publish, rollback), $std_core_hnd._open_none1(load, transaction.transaction_publications));
+    return $std_core_hnd._open_none2(store, transaction.transaction_publications, _x_x2_10090);
   }
   else {
     return $std_core_exn.$throw("cannot enlist publication in a closed keyed transaction");
@@ -335,7 +335,7 @@ export function stage_keyed_publication(transaction, prepare, publish, rollback)
  
  
 // monadic lift
-export function _mlift_prepare_publications_10118(rest, _y_x10056) /* (rest : list<keyed-publication>, ()) -> <exn,ui> () */  {
+export function _mlift_prepare_publications_10113(rest, _y_x10033) /* (rest : list<keyed-publication>, ()) -> <exn,ui> () */  {
   var _x16 = rest;
   return prepare_publications(_x16);
 }
@@ -351,10 +351,10 @@ export function prepare_publications(values) /* (values : list<keyed-publication
         return _this.publication_prepare;
       }, values.head);
      
-    var x_10140 = prepare();
+    var x_10135 = prepare();
     if ($std_core_hnd._yielding()) {
-      return $std_core_hnd.yield_extend(function(_y_x10056_0 /* () */ ) {
-        return _mlift_prepare_publications_10118(values.tail, _y_x10056_0);
+      return $std_core_hnd.yield_extend(function(_y_x10033_0 /* () */ ) {
+        return _mlift_prepare_publications_10113(values.tail, _y_x10033_0);
       });
     }
     else {
@@ -401,47 +401,47 @@ export function rollback_publications(values) /* (values : list<keyed-publicatio
  
  
 // monadic lift
-export function _mlift_prepare_keyed_transaction_10119(state, wild__) /* forall<_e> (state : ref<global,keyed-transaction-state>, wild_ : ()) -> <exn,ui> () */  {
-  return ((state).value = Keyed_prepared);
+export function _mlift_prepare_keyed_transaction_10114(state, wild__) /* (state : ref<global,keyed-transaction-state>, wild_ : ()) -> <exn,ui> () */  {
+  return $std_core_hnd._open_none2(store, state, Keyed_prepared);
 }
  
  
 // monadic lift
-export function _mlift_prepare_keyed_transaction_10120(state, values) /* forall<_e> (state : ref<global,keyed-transaction-state>, values : list<keyed-publication>) -> <exn,ui> () */  {
+export function _mlift_prepare_keyed_transaction_10115(state, values) /* (state : ref<global,keyed-transaction-state>, values : list<keyed-publication>) -> <exn,ui> () */  {
    
-  var x_10145 = prepare_publications(values);
+  var x_10140 = prepare_publications(values);
   if ($std_core_hnd._yielding()) {
     return $std_core_hnd.yield_extend(function(wild__ /* () */ ) {
-      return ((state).value = Keyed_prepared);
+      return $std_core_hnd._open_none2(store, state, Keyed_prepared);
     });
   }
   else {
-    return ((state).value = Keyed_prepared);
+    return $std_core_hnd._open_none2(store, state, Keyed_prepared);
   }
 }
  
 export function prepare_keyed_transaction(transaction) /* (transaction : keyed-transaction) -> <exn,ui> () */  {
-  var _x20 = (transaction.transaction_state).value;
+  var _x20 = $std_core_hnd._open_none1(load, transaction.transaction_state);
   if (_x20 === 1) {
      
-    var xs_10091 = (transaction.transaction_publications).value;
+    var xs_10065 = $std_core_hnd._open_none1(load, transaction.transaction_publications);
      
-    var x_10149 = $std_core_list.reverse_acc($std_core_types.Nil, xs_10091);
+    var x_10144 = $std_core_list.reverse_acc($std_core_types.Nil, xs_10065);
     if ($std_core_hnd._yielding()) {
       return $std_core_hnd.yield_extend(function(values /* list<keyed-publication> */ ) {
-        return _mlift_prepare_keyed_transaction_10120(transaction.transaction_state, values);
+        return _mlift_prepare_keyed_transaction_10115(transaction.transaction_state, values);
       });
     }
     else {
        
-      var x_0_10152 = prepare_publications(x_10149);
+      var x_0_10147 = prepare_publications(x_10144);
       if ($std_core_hnd._yielding()) {
         return $std_core_hnd.yield_extend(function(wild__ /* () */ ) {
-          return (((transaction.transaction_state)).value = Keyed_prepared);
+          return $std_core_hnd._open_none2(store, transaction.transaction_state, Keyed_prepared);
         });
       }
       else {
-        return (((transaction.transaction_state)).value = Keyed_prepared);
+        return $std_core_hnd._open_none2(store, transaction.transaction_state, Keyed_prepared);
       }
     }
   }
@@ -452,32 +452,36 @@ export function prepare_keyed_transaction(transaction) /* (transaction : keyed-t
  
  
 // monadic lift
-export function _mlift_publish_keyed_transaction_10121(publications, state, values) /* forall<_e> (publications : ref<global,list<keyed-publication>>, state : ref<global,keyed-transaction-state>, values : list<keyed-publication>) -> exn () */  {
+export function _mlift_publish_keyed_transaction_10116(publications, state, values) /* (publications : ref<global,list<keyed-publication>>, state : ref<global,keyed-transaction-state>, values : list<keyed-publication>) -> exn () */  {
    
-  ((publications).value = ($std_core_types.Nil));
+  $std_core_hnd._open_none2(store, publications, $std_core_types.Nil);
    
-  ((state).value = Keyed_committed);
+  $std_core_hnd._open_none2(store, state, Keyed_committed);
   return $std_core_hnd._open_none1(publish_publications, values);
 }
  
 export function publish_keyed_transaction(transaction) /* (transaction : keyed-transaction) -> exn () */  {
-  var _x21 = (transaction.transaction_state).value;
+  var _x21 = $std_core_hnd._open_none1(load, transaction.transaction_state);
   if (_x21 === 2) {
      
-    var xs_10096 = (transaction.transaction_publications).value;
+    var xs_10069 = $std_core_hnd._open_none1(load, transaction.transaction_publications);
      
-    var x_10157 = $std_core_list.reverse_acc($std_core_types.Nil, xs_10096);
+    var x_10152 = $std_core_list.reverse_acc($std_core_types.Nil, xs_10069);
     if ($std_core_hnd._yielding()) {
       return $std_core_hnd.yield_extend(function(values /* list<keyed-publication> */ ) {
-        return _mlift_publish_keyed_transaction_10121(transaction.transaction_publications, transaction.transaction_state, values);
+         
+        $std_core_hnd._open_none2(store, transaction.transaction_publications, $std_core_types.Nil);
+         
+        $std_core_hnd._open_none2(store, transaction.transaction_state, Keyed_committed);
+        return $std_core_hnd._open_none1(publish_publications, values);
       });
     }
     else {
        
-      (((transaction.transaction_publications)).value = ($std_core_types.Nil));
+      $std_core_hnd._open_none2(store, transaction.transaction_publications, $std_core_types.Nil);
        
-      (((transaction.transaction_state)).value = Keyed_committed);
-      return $std_core_hnd._open_none1(publish_publications, x_10157);
+      $std_core_hnd._open_none2(store, transaction.transaction_state, Keyed_committed);
+      return $std_core_hnd._open_none1(publish_publications, x_10152);
     }
   }
   else {
@@ -486,7 +490,7 @@ export function publish_keyed_transaction(transaction) /* (transaction : keyed-t
 }
  
 export function abort_keyed_transaction(transaction) /* (transaction : keyed-transaction) -> <exn,ui> () */  {
-  var _x22 = (transaction.transaction_state).value;
+  var _x22 = $std_core_hnd._open_none1(load, transaction.transaction_state);
   if (_x22 === 3) {
     return $std_core_types.Unit;
   }
@@ -495,11 +499,11 @@ export function abort_keyed_transaction(transaction) /* (transaction : keyed-tra
   }
   else {
      
-    var values = (transaction.transaction_publications).value;
+    var values = $std_core_hnd._open_none1(load, transaction.transaction_publications);
      
-    (((transaction.transaction_publications)).value = ($std_core_types.Nil));
+    $std_core_hnd._open_none2(store, transaction.transaction_publications, $std_core_types.Nil);
      
-    (((transaction.transaction_state)).value = Keyed_aborted);
+    $std_core_hnd._open_none2(store, transaction.transaction_state, Keyed_aborted);
     return rollback_publications(values);
   }
 }
