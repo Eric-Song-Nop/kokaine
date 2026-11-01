@@ -582,6 +582,19 @@ function kokaineDomMoveRangeBefore(rangeParent, rangeFirst, rangeLast, target, f
 }
 
 /** Backs `extern dom-clean-range`. */
+// Detaching a connected custom element runs its disconnectedCallback
+// synchronously, and that user code may move a range descendant elsewhere (into
+// the document or a detached tree) or reinsert a removed node. Cleanup therefore
+// snapshots every descendant (open shadow trees included) before detaching the
+// range roots, then detaches any snapshot node that is still attached but no
+// longer inside a range root, repeating until the DOM is stable.
+//
+// "Inside" means the node's ancestor chain (parentNode, then a shadow root's
+// host) reaches a range root. The snapshot records each descendant's parent:
+// a node still under that parent shares the parent's answer, so the common
+// sweep is O(1) per node and only moved nodes walk their ancestors. The memo
+// is trusted only until the sweep itself mutates the DOM (a removal can run
+// user callbacks); every later check in that sweep walks.
 function kokaineDomCleanRange(first, last, inclusive) {
   var rangeFirst = first;
   var rangeLast = last;
@@ -604,29 +617,61 @@ function kokaineDomCleanRange(first, last, inclusive) {
   }
   if (includeEndpoints)
     roots.push(rangeLast);
+  // descendants[j] was snapshotted under parents[j]: the node (or its shadow
+  // root) at descendants[parentIndex[j]], or for index -1 a range root (or its
+  // shadow root).
   var descendants = [];
+  var parents = [];
+  var parentIndex = [];
   var pending = roots.slice();
+  var pendingIndex = [];
+  for (var r = 0; r < roots.length; r++)
+    pendingIndex.push(-1);
   while (pending.length) {
     var current = pending.pop();
-    var children = current && current.childNodes ? Array.prototype.slice.call(current.childNodes) : [];
-    if (current && current.shadowRoot)
-      children = children.concat(Array.prototype.slice.call(current.shadowRoot.childNodes));
-    for (var i = 0; i < children.length; i++) {
-      descendants.push(children[i]);
-      pending.push(children[i]);
+    var currentIndex = pendingIndex.pop();
+    var tree = current;
+    while (tree) {
+      for (var child = tree.firstChild; child; child = child.nextSibling) {
+        pending.push(child);
+        pendingIndex.push(descendants.length);
+        descendants.push(child);
+        parents.push(tree);
+        parentIndex.push(currentIndex);
+      }
+      tree = tree === current ? current.shadowRoot : null;
     }
   }
+  var rootSet = new Set(roots);
   function retained(node) {
     var current = node;
     while (current) {
-      for (var i = 0; i < roots.length; i++) {
-        if (roots[i] === current || Node.prototype.contains.call(roots[i], current))
+      var top = current;
+      for (var ancestor = current; ancestor; ancestor = ancestor.parentNode) {
+        if (rootSet.has(ancestor))
           return true;
+        top = ancestor;
       }
-      var tree = current.getRootNode ? current.getRootNode() : null;
-      current = tree && tree.host ? tree.host : null;
+      current = top.nodeType === 11 && top.host ? top.host : null;
     }
     return false;
+  }
+  var inside = [];
+  var dirty = false;
+  // Returns the parent to detach descendants[j] from, or null when it is
+  // detached or still inside the range.
+  function escapedParent(j) {
+    var node = descendants[j];
+    var parent = node.parentNode;
+    var result;
+    if (!parent)
+      result = false;
+    else if (!dirty && parent === parents[j])
+      result = parentIndex[j] < 0 || inside[parentIndex[j]];
+    else
+      result = retained(node);
+    inside[j] = result;
+    return result ? null : parent;
   }
   var passes = Math.max(2, roots.length + descendants.length + 2);
   while (passes-- > 0) {
@@ -638,10 +683,12 @@ function kokaineDomCleanRange(first, last, inclusive) {
         Node.prototype.removeChild.call(parent, roots[i]);
       }
     }
+    dirty = false;
     for (var j = 0; j < descendants.length; j++) {
-      var childParent = descendants[j].parentNode;
-      if (childParent && !retained(descendants[j])) {
+      var childParent = escapedParent(j);
+      if (childParent) {
         attached = true;
+        dirty = true;
         Node.prototype.removeChild.call(childParent, descendants[j]);
       }
     }
@@ -661,6 +708,8 @@ function kokaineDomCleanRange(first, last, inclusive) {
 }
 
 /** Backs `extern dom-stage-retirement`. */
+// Same snapshot shape as kokaineDomCleanRange (descendants with their recorded
+// parents), so kokaineDomRunRetirement can use the same parent memo.
 function kokaineDomStageRetirement(first, last) {
   var rangeFirst = first;
   var rangeLast = last;
@@ -682,15 +731,25 @@ function kokaineDomStageRetirement(first, last) {
   if (node !== rangeLast)
     throw new Error('invalid Kokaine keyed retirement range: closing marker is unreachable');
   var descendants = [];
+  var parents = [];
+  var parentIndex = [];
   var pending = roots.slice();
+  var pendingIndex = [];
+  for (var r = 0; r < roots.length; r++)
+    pendingIndex.push(-1);
   while (pending.length) {
     var current = pending.pop();
-    var children = current && current.childNodes ? Array.prototype.slice.call(current.childNodes) : [];
-    if (current && current.shadowRoot)
-      children = children.concat(Array.prototype.slice.call(current.shadowRoot.childNodes));
-    for (var i = 0; i < children.length; i++) {
-      descendants.push(children[i]);
-      pending.push(children[i]);
+    var currentIndex = pendingIndex.pop();
+    var tree = current;
+    while (tree) {
+      for (var child = tree.firstChild; child; child = child.nextSibling) {
+        pending.push(child);
+        pendingIndex.push(descendants.length);
+        descendants.push(child);
+        parents.push(tree);
+        parentIndex.push(currentIndex);
+      }
+      tree = tree === current ? current.shadowRoot : null;
     }
   }
   var doc = rangeFirst.ownerDocument;
@@ -698,49 +757,85 @@ function kokaineDomStageRetirement(first, last) {
   var proto = view && view.Node && view.Node.prototype;
   if (!proto || typeof proto.removeChild !== 'function' || typeof proto.contains !== 'function')
     throw new Error('cannot stage Kokaine keyed retirement without its DOM realm');
-  return { roots: roots, descendants: descendants, proto: proto };
+  return { roots: roots, descendants: descendants, parents: parents, parentIndex: parentIndex, proto: proto };
 }
 
 /** Backs `extern dom-run-retirement`. */
+// See kokaineDomCleanRange for the escape sweep and its parent memo. Between
+// staging and running, application code may already have moved snapshot
+// nodes; the memo only answers for a node still under its recorded parent.
 function kokaineDomRunRetirement(handle) {
   if (!handle || !handle.roots)
     return;
   var roots = handle.roots;
   var descendants = handle.descendants;
+  var parents = handle.parents;
+  var parentIndex = handle.parentIndex;
   var proto = handle.proto;
   var removeChild = proto && proto.removeChild;
   var contains = proto && proto.contains;
   if (typeof removeChild !== 'function' || typeof contains !== 'function')
     throw new Error('cannot run Kokaine keyed retirement without its DOM realm');
+  var rootSet = new Set(roots);
   function retained(node) {
     var current = node;
     while (current) {
-      for (var i = 0; i < roots.length; i++) {
-        if (roots[i] === current || contains.call(roots[i], current))
+      var top = current;
+      for (var ancestor = current; ancestor; ancestor = ancestor.parentNode) {
+        if (rootSet.has(ancestor))
           return true;
+        top = ancestor;
       }
-      var tree = current.getRootNode ? current.getRootNode() : null;
-      current = tree && tree.host ? tree.host : null;
+      current = top.nodeType === 11 && top.host ? top.host : null;
     }
     return false;
   }
-  function detach(node, escaped) {
+  var inside = [];
+  var dirty = false;
+  function isInside(j) {
+    var node = descendants[j];
+    var parent = node.parentNode;
+    var result;
+    if (!parent)
+      result = false;
+    else if (!dirty && parent === parents[j])
+      result = parentIndex[j] < 0 || inside[parentIndex[j]];
+    else
+      result = retained(node);
+    inside[j] = result;
+    return result;
+  }
+  function detachRoot(node) {
     var parent = node && node.parentNode;
-    if (!parent || (escaped && retained(node)))
+    if (!parent)
       return;
     try {
       removeChild.call(parent, node);
     } catch (error) {
-      if (node.parentNode && (!escaped || !retained(node)))
+      if (node.parentNode)
+        throw error;
+    }
+  }
+  function detachDescendant(j) {
+    var node = descendants[j];
+    var parent = node.parentNode;
+    if (isInside(j) || !parent)
+      return;
+    dirty = true;
+    try {
+      removeChild.call(parent, node);
+    } catch (error) {
+      if (node.parentNode && !retained(node))
         throw error;
     }
   }
   var passes = Math.max(2, roots.length + descendants.length + 2);
   while (passes-- > 0) {
     for (var i = 0; i < roots.length; i++)
-      detach(roots[i], false);
+      detachRoot(roots[i]);
+    dirty = false;
     for (var j = 0; j < descendants.length; j++)
-      detach(descendants[j], true);
+      detachDescendant(j);
     var pending = false;
     for (var r = 0; r < roots.length; r++) {
       if (roots[r].parentNode) {
@@ -749,8 +844,9 @@ function kokaineDomRunRetirement(handle) {
       }
     }
     if (!pending) {
+      dirty = false;
       for (var d = 0; d < descendants.length; d++) {
-        if (descendants[d].parentNode && !retained(descendants[d])) {
+        if (!isInside(d) && descendants[d].parentNode) {
           pending = true;
           break;
         }
@@ -768,6 +864,8 @@ function kokaineDomReleaseRetirement(handle) {
     return;
   handle.roots = null;
   handle.descendants = null;
+  handle.parents = null;
+  handle.parentIndex = null;
   handle.proto = null;
 }
 

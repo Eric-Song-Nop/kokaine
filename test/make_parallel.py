@@ -35,6 +35,7 @@ BROWSER_FIXTURE_SOURCES = [
     "test/async-resource.kk",
     "test/async-owner-registration.kk",
     "test/async-runtime-scale.kk",
+    "test/dom-perf-mount.kk",
 ]
 BROWSER_BUILD_SOURCES = [*BROWSER_APP_SOURCES, *BROWSER_FIXTURE_SOURCES]
 REPORT_SOURCE = "examples/report.kk"
