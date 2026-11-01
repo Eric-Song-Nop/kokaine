@@ -7,6 +7,7 @@ const distKokaRoot = path.join(packageRoot, 'dist', 'koka');
 const stableRuntimePaths = [
   'koka-playground.wasm',
   'koka-lsp.wasm',
+  'koka-browser-repl.wasm',
   'koka-runtime.json.gz',
   'precompiled',
 ];
