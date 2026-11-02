@@ -32,7 +32,7 @@
     "@fontsource-variable/jetbrains-mono": "5.2.8",
     "lz-string": "1.5.0",
     "monaco-editor": "0.55.1",
-    "monaco-languageclient": "10.7.0",
+    "monaco-languageclient": "11.0.3",
     "vscode": "npm:@codingame/monaco-vscode-extension-api@25.1.2",
     "vscode-jsonrpc": "8.2.1",
     "vscode-languageclient": "9.0.1"
