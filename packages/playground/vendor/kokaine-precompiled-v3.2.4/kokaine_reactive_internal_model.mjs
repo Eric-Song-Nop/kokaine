@@ -158,24 +158,22 @@ export function store(target, value) /* forall<a> (target : ref<global,a>, value
 // register work in root B either. The runtime is synchronous; nesting is still
 // represented explicitly so targeted producer settlement is safe.
 export var pure_plane_depth;
-var pure_plane_depth = { value: 0 };
+var pure_plane_depth = cell(0);
  
 export function enter_pure_plane() /* () -> int */  {
    
-  var previous = pure_plane_depth.value;
+  var previous = load(pure_plane_depth);
    
-  var value_0_10008 = $std_core_types._int_add(previous,1);
-   
-  ((pure_plane_depth).value = value_0_10008);
+  store(pure_plane_depth, $std_core_types._int_add(previous,1));
   return previous;
 }
  
 export function restore_pure_plane(previous) /* (previous : int) -> () */  {
-  return ((pure_plane_depth).value = previous);
+  return store(pure_plane_depth, previous);
 }
  
 export function check_not_pure_plane(operation) /* (operation : string) -> exn () */  {
-  var _x0 = $std_core_types._int_le((pure_plane_depth.value),0);
+  var _x0 = $std_core_types._int_le(($std_core_hnd._open_none1(load, pure_plane_depth)),0);
   if (_x0) {
     return $std_core_types.Unit;
   }
@@ -192,55 +190,32 @@ export function check_not_pure_plane(operation) /* (operation : string) -> exn (
 // clean for the rest of the walk and can be skipped. Without this a chain of
 // diamonds is re-validated once per path, 2^depth times per read.
 export var settle_walk_depth;
-var settle_walk_depth = { value: 0 };
+var settle_walk_depth = cell(0);
  
 export var settle_walk_serial;
-var settle_walk_serial = { value: 0 };
- 
- 
-// monadic lift
-export function _mlift_enter_settle_walk_10112(depth, _c_x10104) /* forall<_e,_e1> (depth : int, ()) -> int */  {
-   
-  var value_2_10027 = $std_core_types._int_add(depth,1);
-   
-  ((settle_walk_depth).value = value_2_10027);
-  return settle_walk_serial.value;
-}
+var settle_walk_serial = cell(0);
  
 export function enter_settle_walk() /* () -> int */  {
    
-  var depth = settle_walk_depth.value;
+  var depth = load(settle_walk_depth);
    
   if ($std_core_types._int_eq(depth,0)) {
      
-    var x_10021 = settle_walk_serial.value;
-     
-    var value_0_10020 = $std_core_types._int_add(x_10021,1);
-    var x_10115 = ((settle_walk_serial).value = value_0_10020);
+    var x_10005 = load(settle_walk_serial);
+    store(settle_walk_serial, $std_core_types._int_add(x_10005,1));
   }
   else {
-    var x_10115 = $std_core_types.Unit;
+    $std_core_types.Unit;
   }
-  if ($std_core_hnd._yielding()) {
-    return $std_core_hnd.yield_extend(function(_c_x10104 /* () */ ) {
-      return _mlift_enter_settle_walk_10112(depth, _c_x10104);
-    });
-  }
-  else {
-     
-    var value_2_10027 = $std_core_types._int_add(depth,1);
-     
-    ((settle_walk_depth).value = value_2_10027);
-    return settle_walk_serial.value;
-  }
+   
+  store(settle_walk_depth, $std_core_types._int_add(depth,1));
+  return load(settle_walk_serial);
 }
  
 export function leave_settle_walk() /* () -> () */  {
    
-  var x_10035 = settle_walk_depth.value;
-   
-  var value_10034 = $std_core_types._int_sub(x_10035,1);
-  return ((settle_walk_depth).value = value_10034);
+  var x_10009 = load(settle_walk_depth);
+  return store(settle_walk_depth, $std_core_types._int_sub(x_10009,1));
 }
  
 export function lift_div(action) /* forall<a,e> (action : () -> e a) -> <div|e> a */  {
@@ -249,20 +224,20 @@ export function lift_div(action) /* forall<a,e> (action : () -> e a) -> <div|e> 
  
  
 // monadic lift
-export function _mlift_lift_exn_10113(action, _y_x10106) /* forall<a,e> (action : () -> e a, hnd/ev-index) -> <exn|e> a */  {
-  return $std_core_hnd._mask_at(_y_x10106, false, action);
+export function _mlift_lift_exn_10081(action, _y_x10074) /* forall<a,e> (action : () -> e a, hnd/ev-index) -> <exn|e> a */  {
+  return $std_core_hnd._mask_at(_y_x10074, false, action);
 }
  
 export function lift_exn(action) /* forall<a,e> (action : () -> e a) -> <exn|e> a */  {
    
-  var x_10119 = $std_core_hnd._evv_index($std_core_exn.exn_fs__tag);
+  var x_10084 = $std_core_hnd._evv_index($std_core_exn.exn_fs__tag);
   if ($std_core_hnd._yielding()) {
-    return $std_core_hnd.yield_extend(function(_y_x10106 /* hnd/ev-index */ ) {
-      return $std_core_hnd._mask_at(_y_x10106, false, action);
+    return $std_core_hnd.yield_extend(function(_y_x10074 /* hnd/ev-index */ ) {
+      return $std_core_hnd._mask_at(_y_x10074, false, action);
     });
   }
   else {
-    return $std_core_hnd._mask_at(x_10119, false, action);
+    return $std_core_hnd._mask_at(x_10084, false, action);
   }
 }
  
@@ -523,7 +498,7 @@ export function built_trace_fs_built_publication_action(_this) /* forall<e> (bui
  
  
 // monadic lift
-export function built_trace_fs__mlift_copy_10114(_this, built_publication_current, built_publication_frame, built_root, _c_x10110) /* forall<e> (built-trace<e>, built-publication-current : ? (maybe<continuation-gate>), built-publication-frame : ? (frame<e>), built-root : ? (trace<e>), () -> <div,exn|e> ()) -> built-trace<e> */  {
+export function built_trace_fs__mlift_copy_10082(_this, built_publication_current, built_publication_frame, built_root, _c_x10078) /* forall<e> (built-trace<e>, built-publication-current : ? (maybe<continuation-gate>), built-publication-frame : ? (frame<e>), built-root : ? (trace<e>), () -> <div,exn|e> ()) -> built-trace<e> */  {
   if (built_root !== undefined) {
     var _x15 = built_root;
   }
@@ -542,12 +517,12 @@ export function built_trace_fs__mlift_copy_10114(_this, built_publication_curren
   else {
     var _x17 = _this.built_publication_frame;
   }
-  return Built_trace(_x15, _x16, _x17, _c_x10110);
+  return Built_trace(_x15, _x16, _x17, _c_x10078);
 }
  
 export function built_trace_fs__copy(_this, built_root, built_publication_current, built_publication_frame, built_publication_action) /* forall<e> (built-trace<e>, built-root : ? (trace<e>), built-publication-current : ? (maybe<continuation-gate>), built-publication-frame : ? (frame<e>), built-publication-action : ? (() -> <div,exn|e> ())) -> built-trace<e> */  {
   if ($std_core_hnd._yielding()) {
-    return $std_core_hnd.yield_extend(function(_c_x10110 /* () -> <div,exn|1471> () */ ) {
+    return $std_core_hnd.yield_extend(function(_c_x10078 /* () -> <div,exn|1471> () */ ) {
       if (built_root !== undefined) {
         var _x18 = built_root;
       }
@@ -566,7 +541,7 @@ export function built_trace_fs__copy(_this, built_root, built_publication_curren
       else {
         var _x20 = _this.built_publication_frame;
       }
-      return Built_trace(_x18, _x19, _x20, _c_x10110);
+      return Built_trace(_x18, _x19, _x20, _c_x10078);
     });
   }
   else {

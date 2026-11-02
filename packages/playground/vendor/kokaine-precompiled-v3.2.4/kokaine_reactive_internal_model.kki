@@ -164,9 +164,9 @@ pub value{0,1,8} type signal[107,1,108,35] <a> :: V -> V {
 //------------------------------
 //#kki: declarations
  
-pub fun cell[19,9,19,12] : forall<a> (value : a) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>;
-pub fun load[22,9,22,12] : forall<a> (value : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>) -> a;
-pub fun store[25,9,25,13] : forall<a> (target : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>, value : a) -> ();
+pub fun cell[19,18,19,21] : forall<a> (value : a) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>;
+pub fun load[22,18,22,21] : forall<a> (value : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>) -> a;
+pub fun store[25,18,25,22] : forall<a> (target : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>, value : a) -> ();
 // A derivation is dynamically read-only even when application code hides a
 // reactive operation behind a locally handled public wrapper. This marker is
 // runtime-wide on purpose: a calculator running for root A must not mutate or
@@ -184,13 +184,11 @@ pub fun check-not-pure-plane[43,9,43,28] : (operation : std/core/types/string) -
 // diamonds is re-validated once per path, 2^depth times per read.
 val settle-walk-depth[53,5,53,21] : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>;
 val settle-walk-serial[54,5,54,22] : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/int>;
-// monadic lift
-fun @mlift-enter-settle-walk@10112[1,0,1,0] : forall<(_e :: E),(_e1 :: E)> (depth : std/core/types/int, @c-x10104 : ()) -> std/core/types/int;
 pub fun enter-settle-walk[56,9,56,25] : () -> std/core/types/int;
 pub fun leave-settle-walk[63,9,63,25] : () -> ();
 pub fun lift-div[66,9,66,16] : forall<a,(e :: E)> (action : () -> (e :: E) a) -> <(std/core/types/div :: X)|(e :: E)> a;
 // monadic lift
-fun @mlift-lift-exn@10113[1,0,1,0] : forall<a,(e :: E)> (action : () -> (e :: E) a, @y-x10106 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a;
+fun @mlift-lift-exn@10081[1,0,1,0] : forall<a,(e :: E)> (action : () -> (e :: E) a, @y-x10074 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a;
 pub fun lift-exn[69,9,69,16] : forall<a,(e :: E)> (action : () -> (e :: E) a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a;
 // Automatically generated. Retrieves the `identity` constructor field of the `:root-key` type.
 pub fun root-key/identity[73,12,73,19] : (^ @this : root-key) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>;
@@ -253,7 +251,7 @@ pub fun built-trace/built-publication-frame[154,5,154,27] : forall<(e :: E)> (^ 
 // Automatically generated. Retrieves the `built-publication-action` constructor field of the `:built-trace` type.
 pub fun built-trace/built-publication-action[155,5,155,28] : forall<(e :: E)> (^ @this : (built-trace :: E -> V)<(e :: E)>) -> (() -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ());
 // monadic lift
-fun built-trace/@mlift-copy@10114[1,0,1,0] : forall<(e :: E)> (@this : (built-trace :: E -> V)<(e :: E)>, built-publication-current : (std/core/types/@optional :: V -> V)<(std/core/types/maybe :: V -> V)<continuation-gate>>, built-publication-frame : (std/core/types/@optional :: V -> V)<(frame :: E -> V)<(e :: E)>>, built-root : (std/core/types/@optional :: V -> V)<(trace :: E -> V)<(e :: E)>>, @c-x10110 : () -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ()) -> (built-trace :: E -> V)<(e :: E)>;
+fun built-trace/@mlift-copy@10082[1,0,1,0] : forall<(e :: E)> (@this : (built-trace :: E -> V)<(e :: E)>, built-publication-current : (std/core/types/@optional :: V -> V)<(std/core/types/maybe :: V -> V)<continuation-gate>>, built-publication-frame : (std/core/types/@optional :: V -> V)<(frame :: E -> V)<(e :: E)>>, built-root : (std/core/types/@optional :: V -> V)<(trace :: E -> V)<(e :: E)>>, @c-x10078 : () -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ()) -> (built-trace :: E -> V)<(e :: E)>;
 pub fun built-trace/@copy[151,3,151,13] : forall<(e :: E)> (@this : (built-trace :: E -> V)<(e :: E)>, built-root : (std/core/types/@optional :: V -> V)<(trace :: E -> V)<(e :: E)>>, built-publication-current : (std/core/types/@optional :: V -> V)<(std/core/types/maybe :: V -> V)<continuation-gate>>, built-publication-frame : (std/core/types/@optional :: V -> V)<(frame :: E -> V)<(e :: E)>>, built-publication-action : (std/core/types/@optional :: V -> V)<() -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ()>) -> (built-trace :: E -> V)<(e :: E)>;
 // Automatically generated. Tests for the `Scope-starting` constructor of the `:scope-state` type.
 pub fip fun is-scope-starting[159,3,159,16] : (^ scope-state : scope-state) -> std/core/types/bool;

@@ -108,8 +108,8 @@ export function await_host_event_fs__select(hnd) /* forall<e,a> (hnd : host-even
 // Call the `ctl await-host-event` operation of the effect `:host-event`
 export function await_host_event() /* () -> host-event any */  {
    
-  var ev_10042 = $std_core_hnd._evv_at(0);
-  return ev_10042.hnd._ctl_await_host_event(ev_10042.marker, ev_10042);
+  var ev_10036 = $std_core_hnd._evv_at(0);
+  return ev_10036.hnd._ctl_await_host_event(ev_10036.marker, ev_10036);
 }
  
  
@@ -154,7 +154,7 @@ export function event_continuation_fs__copy(_this, continuation_state) /* forall
  
  
 // monadic lift
-export function event_continuation_fs__mlift_resume_10036(_pat_2) /* forall<a,e> (event-result<e,a>) -> <kokaine/reactive/effects/signal-read,kokaine/reactive/effects/signal-write,ui,pure|e> bool */  {
+export function event_continuation_fs__mlift_resume_10030(_pat_2) /* forall<a,e> (event-result<e,a>) -> <kokaine/reactive/effects/signal-read,kokaine/reactive/effects/signal-write,ui,pure|e> bool */  {
   return true;
 }
  
@@ -162,13 +162,13 @@ export function event_continuation_fs__mlift_resume_10036(_pat_2) /* forall<a,e>
 // Returns False after retirement. The opaque gate is checked before touching
 // the raw multi-shot capability, including during nested synchronous delivery.
 export function event_continuation_fs_resume(value, input) /* forall<a,e> (value : event-continuation<e,a>, input : a) -> <kokaine/reactive/effects/signal-read,kokaine/reactive/effects/signal-write,ui,pure|e> bool */  {
-  var _x1 = value.value;
+  var _x1 = $std_core_hnd._open_none1(event_load, value);
   if (_x1 === null) {
     return false;
   }
   else {
      
-    var x_10044 = _x1.resume($std_core_hnd._open_none1(host_event_box, input));
+    var x_10038 = _x1.resume($std_core_hnd._open_none1(host_event_box, input));
     if ($std_core_hnd._yielding()) {
       return $std_core_hnd.yield_extend(function(_pat_2_0 /* event-result<735,734> */ ) {
         return true;
@@ -182,15 +182,15 @@ export function event_continuation_fs_resume(value, input) /* forall<a,e> (value
  
  
 // monadic lift
-export function _mlift_reify_event_10037(wild__) /* forall<a,e> (wild_ : ()) -> <host-event,div,exn,kokaine/reactive/effects/signal-read,kokaine/reactive/effects/signal-write,ui|e> event-result<e,a> */  {
+export function _mlift_reify_event_10031(wild__) /* forall<a,e> (wild_ : ()) -> <host-event,div,exn,kokaine/reactive/effects/signal-read,kokaine/reactive/effects/signal-write,ui|e> event-result<e,a> */  {
   return Event_finished;
 }
  
  
 // monadic lift
-export function _mlift_reify_event_10038(action, value_0, _y_x10020) /* forall<a,e> (action : host-callback<e,a>, value@0 : any, hnd/ev-index) -> <host-event,div,exn,kokaine/reactive/effects/signal-read,kokaine/reactive/effects/signal-write,ui|e> event-result<e,a> */  {
+export function _mlift_reify_event_10032(action, value_0, _y_x10012) /* forall<a,e> (action : host-callback<e,a>, value@0 : any, hnd/ev-index) -> <host-event,div,exn,kokaine/reactive/effects/signal-read,kokaine/reactive/effects/signal-write,ui|e> event-result<e,a> */  {
    
-  var x_10048 = $std_core_hnd._mask_at(_y_x10020, false, function() {
+  var x_10042 = $std_core_hnd._mask_at(_y_x10012, false, function() {
       return action($std_core_hnd._open_none1(host_event_unbox, value_0));
     });
   if ($std_core_hnd._yielding()) {
@@ -205,16 +205,16 @@ export function _mlift_reify_event_10038(action, value_0, _y_x10020) /* forall<a
  
  
 // monadic lift
-export function _mlift_reify_event_10039(action, value_0) /* forall<a,e> (action : host-callback<e,a>, value@0 : any) -> <host-event,div,exn,kokaine/reactive/effects/signal-read,kokaine/reactive/effects/signal-write,ui|e> event-result<e,a> */  {
+export function _mlift_reify_event_10033(action, value_0) /* forall<a,e> (action : host-callback<e,a>, value@0 : any) -> <host-event,div,exn,kokaine/reactive/effects/signal-read,kokaine/reactive/effects/signal-write,ui|e> event-result<e,a> */  {
    
-  var x_10051 = $std_core_hnd._evv_index(host_event_fs__tag);
+  var x_10045 = $std_core_hnd._evv_index(host_event_fs__tag);
   if ($std_core_hnd._yielding()) {
-    return $std_core_hnd.yield_extend(function(_y_x10020 /* hnd/ev-index */ ) {
-      return _mlift_reify_event_10038(action, value_0, _y_x10020);
+    return $std_core_hnd.yield_extend(function(_y_x10012 /* hnd/ev-index */ ) {
+      return _mlift_reify_event_10032(action, value_0, _y_x10012);
     });
   }
   else {
-    return _mlift_reify_event_10038(action, value_0, x_10051);
+    return _mlift_reify_event_10032(action, value_0, x_10045);
   }
 }
  
@@ -229,47 +229,47 @@ export function reify_event(action) /* forall<a,e> (action : host-callback<e,a>)
       return _res;
     }, function() {
        
-      var x_0_10056 = $std_core_hnd._open_at0($std_core_hnd._evv_index(host_event_fs__tag), function() {
+      var x_0_10050 = $std_core_hnd._open_at0($std_core_hnd._evv_index(host_event_fs__tag), function() {
            
-          var ev_10058 = $std_core_hnd._evv_at(0);
-          return ev_10058.hnd._ctl_await_host_event(ev_10058.marker, ev_10058);
+          var ev_10052 = $std_core_hnd._evv_at(0);
+          return ev_10052.hnd._ctl_await_host_event(ev_10052.marker, ev_10052);
         });
       if ($std_core_hnd._yielding()) {
         return $std_core_hnd.yield_extend(function(value_0 /* any */ ) {
-          return _mlift_reify_event_10039(action, value_0);
+          return _mlift_reify_event_10033(action, value_0);
         });
       }
       else {
-        return _mlift_reify_event_10039(action, x_0_10056);
+        return _mlift_reify_event_10033(action, x_0_10050);
       }
     });
 }
  
  
 // monadic lift
-export function _mlift_capture_event_10040(_y_x10024) /* forall<_e,a,e1> (event-result<e1,a>) -> <kokaine/reactive/effects/signal-read,kokaine/reactive/effects/signal-write,ui,pure|e1> event-continuation<e1,a> */  {
-  if (_y_x10024 !== null) {
-    return { value: (Event_live(_y_x10024.master_resume)) };
+export function _mlift_capture_event_10034(_y_x10016) /* forall<a,e> (event-result<e,a>) -> <kokaine/reactive/effects/signal-read,kokaine/reactive/effects/signal-write,ui,pure|e> event-continuation<e,a> */  {
+  if (_y_x10016 !== null) {
+    return $std_core_hnd._open_none1(event_cell, Event_live(_y_x10016.master_resume));
   }
   else {
-    return { value: Event_retired };
+    return $std_core_hnd._open_none1(event_cell, Event_retired);
   }
 }
  
 export function capture_event(action) /* forall<a,e> (action : host-callback<e,a>) -> <kokaine/reactive/effects/signal-read,kokaine/reactive/effects/signal-write,ui,pure|e> event-continuation<e,a> */  {
    
-  var x_10060 = reify_event(action);
+  var x_10054 = reify_event(action);
   if ($std_core_hnd._yielding()) {
-    return $std_core_hnd.yield_extend(function(_y_x10024 /* event-result<965,964> */ ) {
-      return _mlift_capture_event_10040(_y_x10024);
+    return $std_core_hnd.yield_extend(function(_y_x10016 /* event-result<965,964> */ ) {
+      return _mlift_capture_event_10034(_y_x10016);
     });
   }
   else {
-    if (x_10060 !== null) {
-      return { value: (Event_live(x_10060.master_resume)) };
+    if (x_10054 !== null) {
+      return $std_core_hnd._open_none1(event_cell, Event_live(x_10054.master_resume));
     }
     else {
-      return { value: Event_retired };
+      return $std_core_hnd._open_none1(event_cell, Event_retired);
     }
   }
 }
@@ -279,10 +279,10 @@ export function capture_event(action) /* forall<a,e> (action : host-callback<e,a
 // not begun `action` and contains no acquired resource/finalizer, so abandoning
 // it is the correct cancellation semantics; garbage collection reclaims K.
 export function event_continuation_fs_close(value) /* forall<a,e> (value : event-continuation<e,a>) -> () */  {
-  return ((value).value = Event_retired);
+  return event_store(value, Event_retired);
 }
  
 export function event_continuation_fs_is_live(value) /* forall<a,e> (value : event-continuation<e,a>) -> bool */  {
-  var _x2 = value.value;
+  var _x2 = event_load(value);
   return (_x2 !== null);
 }

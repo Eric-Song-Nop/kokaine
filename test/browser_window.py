@@ -115,6 +115,178 @@ def load_fixture(browser, origin: str, *, throw_add: bool = False):
     return page, page_errors, console_errors
 
 
+def load_monitor(browser, origin: str, *, throw_add: bool = False):
+    page = browser.new_page()
+    page_errors: list[str] = []
+    console_errors: list[str] = []
+    page.on("pageerror", lambda error: page_errors.append(str(error)))
+    page.on(
+        "console",
+        lambda message: console_errors.append(message.text)
+        if message.type == "error"
+        else None,
+    )
+    page.goto(origin)
+    page.wait_for_load_state("networkidle")
+    page.evaluate(TRACK_WINDOW_EVENTS)
+    if throw_add:
+        page.evaluate(
+            """() => {
+                const trackedAdd = window.addEventListener;
+                window.addEventListener = (name, listener, options) => {
+                    if (name === 'hashchange') {
+                        throw new Error('forced window listener setup failure');
+                    }
+                    return trackedAdd(name, listener, options);
+                };
+            }"""
+        )
+    page.evaluate(
+        "async () => { await import('/dist/test_window_dash_monitor__main.mjs'); }"
+    )
+    return page, page_errors, console_errors
+
+
+def monitor_records(page):
+    return page.evaluate(
+        """() => __kokaineWindowTracker.records.map(record => ({
+            name: record.name,
+            active: record.active,
+            attempts: record.removalAttempts
+        }))"""
+    )
+
+
+def exercise_monitor(browser, origin: str) -> None:
+    both_active = [
+        {"name": "scroll", "active": True, "attempts": 0},
+        {"name": "hashchange", "active": True, "attempts": 0},
+    ]
+    both_removed = [
+        {"name": "scroll", "active": False, "attempts": 1},
+        {"name": "hashchange", "active": False, "attempts": 1},
+    ]
+    events = "__kokaineWindowMonitor.events"
+
+    # Events fired while the action is suspended are delivered afterwards, in
+    # first-arrival order with repeats coalesced. Listeners are never churned.
+    page, page_errors, console_errors = load_monitor(browser, origin)
+    assert monitor_records(page) == both_active
+    page.evaluate("__kokaineWindowMonitor.hold = true")
+    page.evaluate("window.dispatchEvent(new Event('scroll'))")
+    page.wait_for_function("__kokaineWindowMonitor.gate !== null")
+    page.evaluate(
+        """() => {
+            window.dispatchEvent(new Event('scroll'));
+            window.dispatchEvent(new Event('hashchange'));
+            window.dispatchEvent(new Event('scroll'));
+        }"""
+    )
+    page.wait_for_timeout(20)
+    assert page.evaluate(events) == ["scroll"], "action is still suspended"
+    page.evaluate(
+        """() => {
+            __kokaineWindowMonitor.hold = false;
+            const gate = __kokaineWindowMonitor.gate;
+            __kokaineWindowMonitor.gate = null;
+            gate();
+        }"""
+    )
+    page.wait_for_function(f"{events}.length === 3")
+    assert page.evaluate(events) == ["scroll", "scroll", "hashchange"]
+
+    # Two kinds fired in one synchronous burst, and an event fired from the
+    # very next microtask after a delivery, both survive the re-arm gap.
+    page.evaluate(
+        """() => {
+            window.dispatchEvent(new Event('hashchange'));
+            window.dispatchEvent(new Event('scroll'));
+        }"""
+    )
+    page.wait_for_function(f"{events}.length === 5")
+    assert page.evaluate(f"{events}.slice(3)") == ["hashchange", "scroll"]
+    page.evaluate(
+        """() => {
+            window.dispatchEvent(new Event('scroll'));
+            queueMicrotask(() => window.dispatchEvent(new Event('hashchange')));
+        }"""
+    )
+    page.wait_for_function(f"{events}.length === 7")
+    assert page.evaluate(f"{events}.slice(5)") == ["scroll", "hashchange"]
+    assert monitor_records(page) == both_active, "listeners stay installed"
+
+    # Retirement closes the listeners and leaves nothing to deliver.
+    page.evaluate("__kokaineWindowMonitor.disposeRoot()")
+    assert monitor_records(page) == both_removed
+    page.evaluate("window.dispatchEvent(new Event('scroll'))")
+    page.wait_for_timeout(20)
+    assert page.evaluate(f"{events}.length") == 7
+    assert not page_errors, page_errors
+    assert not console_errors, console_errors
+    page.close()
+
+    # A failing action ends the monitor through `finally`, not by retirement.
+    page, page_errors, console_errors = load_monitor(browser, origin)
+    page.evaluate(
+        """() => {
+            __kokaineWindowMonitor.throwNext = true;
+            window.dispatchEvent(new Event('scroll'));
+        }"""
+    )
+    page.wait_for_function(
+        "__kokaineWindowMonitor.phase !== 'running'"
+    )
+    assert page.evaluate("__kokaineWindowMonitor.phase") == (
+        "monitor-error:forced action failure"
+    )
+    assert monitor_records(page) == both_removed, monitor_records(page)
+    assert not page_errors, page_errors
+    assert not console_errors, console_errors
+    page.close()
+
+    # A throwing removal during retirement leaves an inert closure, which
+    # retries its own removal if the host ever fires it.
+    page, page_errors, console_errors = load_monitor(browser, origin)
+    page.evaluate(
+        """() => {
+            __kokaineWindowTracker.throwOnRemove = true;
+            __kokaineWindowMonitor.disposeRoot();
+        }"""
+    )
+    # The lease and the monitor's `finally` may each attempt the removal.
+    throwing = monitor_records(page)
+    assert all(r["active"] and r["attempts"] >= 1 for r in throwing), throwing
+    page.evaluate(
+        """() => {
+            __kokaineWindowTracker.throwOnRemove = false;
+            window.dispatchEvent(new Event('scroll'));
+        }"""
+    )
+    page.wait_for_timeout(20)
+    assert page.evaluate(f"{events}.length") == 0
+    assert all(not record["active"] for record in monitor_records(page))
+    assert not page_errors, page_errors
+    assert not console_errors, console_errors
+    page.close()
+
+    # Setup failure on the second listener rolls back the first and arrives as
+    # a modeled Koka exception.
+    page, page_errors, console_errors = load_monitor(
+        browser, origin, throw_add=True
+    )
+    page.wait_for_function("__kokaineWindowMonitor.phase !== 'running'")
+    assert page.evaluate("__kokaineWindowMonitor.phase") == (
+        "monitor-error:browser window event setup failed: "
+        "forced window listener setup failure"
+    )
+    assert monitor_records(page) == [
+        {"name": "scroll", "active": False, "attempts": 1},
+    ], monitor_records(page)
+    assert not page_errors, page_errors
+    assert not console_errors, console_errors
+    page.close()
+
+
 def main() -> None:
     with serve_project() as origin:
         with sync_playwright() as playwright:
@@ -363,11 +535,13 @@ def main() -> None:
             assert not console_errors, console_errors
             page.close()
 
+            exercise_monitor(browser, origin)
+
             browser.close()
 
     print(
-        "browser window: one-shot races, retirement, host errors, and "
-        "inert stale callbacks passed"
+        "browser window: one-shot races, monitor mailbox, retirement, host "
+        "errors, and inert stale callbacks passed"
     )
 
 

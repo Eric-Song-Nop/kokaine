@@ -21,6 +21,46 @@ function kokaineDomAttemptRaw(action) {
   }
 }
 
+/** Backs `extern dom-try-set-text`. Returns null or the failure message. */
+function kokaineDomTrySetText(node, content) {
+  try {
+    node.data = content;
+    return null;
+  } catch (error) {
+    return String(error && error.message != null ? error.message : error);
+  }
+}
+
+/** Backs `extern dom-try-set-attribute`. Returns null or the failure message. */
+function kokaineDomTrySetAttribute(element, name, content) {
+  try {
+    element.setAttribute(name, content);
+    return null;
+  } catch (error) {
+    return String(error && error.message != null ? error.message : error);
+  }
+}
+
+/** Backs `extern dom-try-remove-attribute`. Returns null or the failure message. */
+function kokaineDomTryRemoveAttribute(element, name) {
+  try {
+    element.removeAttribute(name);
+    return null;
+  } catch (error) {
+    return String(error && error.message != null ? error.message : error);
+  }
+}
+
+/** Backs `extern dom-try-set-property`. Returns null or the failure message. */
+function kokaineDomTrySetProperty(element, name, content) {
+  try {
+    element[name] = content;
+    return null;
+  } catch (error) {
+    return String(error && error.message != null ? error.message : error);
+  }
+}
+
 /** Backs `extern dom-install-shadow-tracker`. */
 function kokaineDomInstallShadowTracker(parent) {
   var doc = parent && (parent.nodeType === 9 ? parent : parent.ownerDocument);
@@ -68,11 +108,15 @@ function kokaineDomInstallShadowTracker(parent) {
   if (!descriptor || typeof descriptor.value !== 'function') {
     if (typeof prototype.attachShadow === 'function')
       throw new Error('cannot safely wrap this DOM realm attachShadow implementation');
-    tracker.realms.set(view, { prototype: prototype, wrapper: null });
+    tracker.realms.set(view, { prototype: prototype, wrapper: null, epoch: 0 });
     return;
   }
   var original = descriptor.value;
+  // `epoch` counts attachShadow calls so a keyed move session can tell that no
+  // shadow root appeared since it validated a row.
+  var realmState = { prototype: prototype, wrapper: null, epoch: 0 };
   var wrapper = function attachShadow() {
+    realmState.epoch++;
     var root = original.apply(this, arguments);
     tracker.known.add(this);
     try {
@@ -86,7 +130,8 @@ function kokaineDomInstallShadowTracker(parent) {
     return root;
   };
   Object.defineProperty(prototype, 'attachShadow', { configurable: descriptor.configurable, enumerable: descriptor.enumerable, writable: descriptor.writable, value: wrapper });
-  tracker.realms.set(view, { prototype: prototype, wrapper: wrapper });
+  realmState.wrapper = wrapper;
+  tracker.realms.set(view, realmState);
 }
 
 /** Backs `extern dom-create-element`. */
@@ -255,8 +300,12 @@ function kokaineDomRangeNext(rangeParent, rangeFirst, rangeLast) {
   return next;
 }
 
-/** Backs `extern dom-validate-range-move-lifecycle`. */
-function kokaineDomValidateRangeMoveLifecycle(rangeParent, rangeFirst, rangeLast) {
+/**
+ * Backs `extern dom-validate-range-move-lifecycle`. With a move `session`
+ * (see kokaineDomKeyedOpenMoveSession), open shadow roots met on the way are
+ * observed by that session and the row is recorded as planned/pre-validated.
+ */
+function kokaineDomValidateRangeMoveLifecycle(rangeParent, rangeFirst, rangeLast, session) {
   var doc = rangeParent && (rangeParent.nodeType === 9 ? rangeParent : rangeParent.ownerDocument);
   var view = doc && doc.defaultView;
   var tracker = globalThis[Symbol.for('kokaine.dom.shadow-roots')];
@@ -265,13 +314,38 @@ function kokaineDomValidateRangeMoveLifecycle(rangeParent, rangeFirst, rangeLast
   var intact = state && state.prototype === prototype && (state.wrapper ? prototype.attachShadow === state.wrapper : typeof prototype.attachShadow !== 'function');
   if (!tracker || tracker.version !== 1 || !tracker.known || !tracker.closed || !state || !intact)
     throw new Error('cannot safely move keyed row: shadow-root tracking is unavailable');
-  var documentPrototype = view.Document && view.Document.prototype;
-  var createElement = documentPrototype && documentPrototype.createElement;
-  var createElementNS = documentPrototype && documentPrototype.createElementNS;
-  var outerHTMLDescriptor = prototype && Object.getOwnPropertyDescriptor(prototype, 'outerHTML');
-  var serializeOuterHTML = outerHTMLDescriptor && outerHTMLDescriptor.get;
-  if (typeof createElement !== 'function' || typeof createElementNS !== 'function' || typeof serializeOuterHTML !== 'function')
-    throw new Error('cannot safely move keyed row: native element inspection is unavailable');
+  // Native inspection primitives, the inert serialisation document, and the
+  // memo tables live on the realm's tracker state. Both memos are sound:
+  // createElement(name) without options can never yield a custom element, so
+  // a realm's baseline prototype for (namespace, localName) is fixed; and an
+  // element's `is` value is immutable for its lifetime.
+  var inspection = state.inspection;
+  if (!inspection || inspection.document !== doc) {
+    var documentPrototype = view.Document && view.Document.prototype;
+    var createElement = documentPrototype && documentPrototype.createElement;
+    var createElementNS = documentPrototype && documentPrototype.createElementNS;
+    var importNode = documentPrototype && documentPrototype.importNode;
+    var implementationDescriptor = documentPrototype && Object.getOwnPropertyDescriptor(documentPrototype, 'implementation');
+    var implementation = implementationDescriptor && typeof implementationDescriptor.get === 'function' ? implementationDescriptor.get.call(doc) : null;
+    var createHTMLDocument = view.DOMImplementation && view.DOMImplementation.prototype && view.DOMImplementation.prototype.createHTMLDocument;
+    var outerHTMLDescriptor = prototype && Object.getOwnPropertyDescriptor(prototype, 'outerHTML');
+    var serializeOuterHTML = outerHTMLDescriptor && outerHTMLDescriptor.get;
+    if (typeof createElement !== 'function' || typeof createElementNS !== 'function' || typeof importNode !== 'function' || !implementation || typeof createHTMLDocument !== 'function' || typeof serializeOuterHTML !== 'function')
+      throw new Error('cannot safely move keyed row: native element inspection is unavailable');
+    inspection = {
+      document: doc,
+      createElement: createElement,
+      createElementNS: createElementNS,
+      importNode: importNode,
+      serialize: serializeOuterHTML,
+      // A document without a browsing context has no custom-element
+      // registry, so importing into it never runs a constructor.
+      inert: createHTMLDocument.call(implementation, ''),
+      baselines: new Map(),
+      plain: new WeakSet()
+    };
+    state.inspection = inspection;
+  }
   function canHostShadow(element) {
     var name = element.localName || '';
     return name.indexOf('-') >= 0 || ['article', 'aside', 'blockquote', 'body', 'div', 'footer', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'header', 'main', 'nav', 'p', 'section', 'span'].indexOf(name) >= 0;
@@ -281,14 +355,29 @@ function kokaineDomValidateRangeMoveLifecycle(rangeParent, rangeFirst, rangeLast
     if (name.indexOf('-') >= 0)
       return true;
     var namespace = element.namespaceURI;
-    var baseline = namespace ? createElementNS.call(doc, namespace, name) : createElement.call(doc, name);
-    return Object.getPrototypeOf(element) !== Object.getPrototypeOf(baseline);
+    var key = (namespace || '') + ' ' + name;
+    var baseline = inspection.baselines.get(key);
+    if (baseline === undefined) {
+      baseline = Object.getPrototypeOf(namespace ? inspection.createElementNS.call(doc, namespace, name) : inspection.createElement.call(doc, name));
+      inspection.baselines.set(key, baseline);
+    }
+    return Object.getPrototypeOf(element) !== baseline;
   }
+  // A customized built-in created with createElement(name, { is }) carries
+  // its `is` value without an attribute; only serialisation exposes it.
+  // Serialise a shallow copy imported into the inert document, so the cost is
+  // one start tag rather than the whole subtree once per ancestor.
   function hasSerializedIsValue(element) {
-    var serialized = serializeOuterHTML.call(element);
+    if (inspection.plain.has(element))
+      return false;
+    var serialized = inspection.serialize.call(inspection.importNode.call(inspection.inert, element, false));
     var end = serialized.indexOf('>');
-    return end >= 0 && serialized.slice(0, end).indexOf(' is="') >= 0;
+    var customized = end >= 0 && serialized.slice(0, end).indexOf(' is="') >= 0;
+    if (!customized)
+      inspection.plain.add(element);
+    return customized;
   }
+  var watch = session && typeof session.watch === 'function' ? session.watch : null;
   var pending = [];
   var n = rangeFirst;
   while (n) {
@@ -313,14 +402,24 @@ function kokaineDomValidateRangeMoveLifecycle(rangeParent, rangeFirst, rangeLast
         throw new Error('cannot safely move keyed row: an external shadow host may contain an untracked closed root');
     }
     var children = current && current.childNodes ? Array.prototype.slice.call(current.childNodes) : [];
-    if (current && current.shadowRoot)
+    if (current && current.shadowRoot) {
+      if (watch)
+        watch(current.shadowRoot);
       children = children.concat(Array.prototype.slice.call(current.shadowRoot.childNodes));
+    }
     for (var i = 0; i < children.length; i++)
       pending.push(children[i]);
   }
+  if (session && session.planned)
+    session.planned.add(rangeFirst);
 }
 
-/** Backs `extern dom-validate-range-move-focus`. */
+/**
+ * Backs `extern dom-validate-range-move-focus`. Without an atomic native move,
+ * reject a focused subtree whose focus or selection cannot be restored. The
+ * focused node belongs to the range iff its composed ancestor chain reaches a
+ * top-level range node, so only that chain is walked, not the whole subtree.
+ */
 function kokaineDomValidateRangeMoveFocus(rangeParent, rangeFirst, rangeLast) {
   var rangeDocument = rangeParent && (rangeParent.nodeType === 9 ? rangeParent : rangeParent.ownerDocument);
   var rangeView = rangeDocument && rangeDocument.defaultView;
@@ -338,30 +437,29 @@ function kokaineDomValidateRangeMoveFocus(rangeParent, rangeFirst, rangeLast) {
   var primitive = movePrimitive(rangeParent);
   if (primitive && rangeParent.moveBefore === primitive)
     return;
-  var pending = [];
-  var all = [];
+  var nodes = [];
   var n = rangeFirst;
   while (n) {
-    pending.push(n);
+    nodes.push(n);
     if (n === rangeLast)
       break;
     n = n.nextSibling;
   }
   if (n !== rangeLast)
     throw new Error('invalid Kokaine DOM move: closing marker is not reachable after opening marker');
-  while (pending.length) {
-    var current = pending.pop();
-    all.push(current);
-    var children = current && current.childNodes ? Array.prototype.slice.call(current.childNodes) : [];
-    if (current && current.shadowRoot)
-      children = children.concat(Array.prototype.slice.call(current.shadowRoot.childNodes));
-    for (var i = 0; i < children.length; i++)
-      pending.push(children[i]);
-  }
   var active = rangeDocument.activeElement;
   while (active && active.shadowRoot && active.shadowRoot.activeElement)
     active = active.shadowRoot.activeElement;
-  if (!active || all.indexOf(active) < 0)
+  var top = active;
+  while (top && top.parentNode !== rangeParent) {
+    if (top.parentNode) {
+      top = top.parentNode;
+    } else {
+      var tree = top.getRootNode ? top.getRootNode() : null;
+      top = tree && tree.host ? tree.host : null;
+    }
+  }
+  if (!top || nodes.indexOf(top) < 0)
     return;
   if (active.localName === 'iframe')
     throw new Error('cannot safely move keyed row: fallback DOM moves cannot inspect the focused subtree');
@@ -373,6 +471,194 @@ function kokaineDomValidateRangeMoveFocus(rangeParent, rangeFirst, rangeLast) {
   var selection = selectionRoot && typeof selectionRoot.getSelection === 'function' ? selectionRoot.getSelection() : rangeDocument.getSelection();
   if (selection && selection.rangeCount > 0 && typeof selection.setBaseAndExtent !== 'function')
     throw new Error('cannot safely move keyed row: this browser cannot restore directional DOM selections');
+}
+
+/**
+ * Backs `extern dom-keyed-open-move-session`. One session spans a keyed
+ * reconciliation's move phase. Rows validated with it are "planned" and may
+ * later move without re-inspection only while the session can prove that
+ * nothing could have changed their lifecycle shape since: its observer saw no
+ * mutation in the region (or in any open shadow root met during validation)
+ * other than the keyed moves themselves, no attachShadow call happened in the
+ * realm, and the attachShadow wrapper is still installed. Anything else, or a
+ * realm without MutationObserver or an epoch-counting tracker, makes the
+ * session dirty, and every later move re-validates its row as before.
+ */
+function kokaineDomKeyedOpenMoveSession(rangeParent) {
+  var session = { closed: false, dirty: true, planned: new WeakSet(), observer: null, audit: null, watch: null };
+  var doc = rangeParent && (rangeParent.nodeType === 9 ? rangeParent : rangeParent.ownerDocument);
+  var view = doc && doc.defaultView;
+  var tracker = globalThis[Symbol.for('kokaine.dom.shadow-roots')];
+  var state = view && tracker && tracker.realms && tracker.realms.get(view);
+  var prototype = view && view.Element && view.Element.prototype;
+  if (!state || !prototype || typeof state.epoch !== 'number' || typeof view.MutationObserver !== 'function')
+    return session;
+  var options = { childList: true, subtree: true, attributes: true, attributeFilter: ['is'] };
+  var observer;
+  try {
+    observer = new view.MutationObserver(function () {});
+    observer.observe(rangeParent, options);
+  } catch (_) {
+    return session;
+  }
+  var epoch = state.epoch;
+  function untouched() {
+    return state.prototype === prototype && view.Element.prototype === prototype && state.epoch === epoch && (state.wrapper ? prototype.attachShadow === state.wrapper : typeof prototype.attachShadow !== 'function');
+  }
+  function contained(list, moved) {
+    for (var i = 0; i < list.length; i++) {
+      if (!moved.has(list[i]))
+        return false;
+    }
+    return true;
+  }
+  session.observer = observer;
+  session.dirty = false;
+  // Consume pending records. `moved` lists the nodes of the keyed move that
+  // produced them; childList records of the range parent touching only those
+  // nodes are expected. Returns whether the session is still clean.
+  session.audit = function (moved) {
+    if (session.closed || session.dirty)
+      return false;
+    try {
+      var records = observer.takeRecords();
+      var clean = untouched();
+      var allowed = moved ? new Set(moved) : null;
+      for (var i = 0; clean && i < records.length; i++) {
+        var record = records[i];
+        clean = !!allowed && record.type === 'childList' && record.target === rangeParent && contained(record.addedNodes, allowed) && contained(record.removedNodes, allowed);
+      }
+      if (!clean)
+        session.dirty = true;
+    } catch (_) {
+      session.dirty = true;
+    }
+    return !session.dirty;
+  };
+  session.watch = function (root) {
+    if (session.closed || session.dirty)
+      return;
+    try {
+      observer.observe(root, options);
+    } catch (_) {
+      session.dirty = true;
+    }
+  };
+  return session;
+}
+
+/** Backs `extern dom-keyed-close-move-session`. Planned rows stay queryable. */
+function kokaineDomKeyedCloseMoveSession(session) {
+  if (!session || session.closed)
+    return;
+  session.closed = true;
+  if (session.observer) {
+    try {
+      session.observer.disconnect();
+    } catch (_) {
+    }
+  }
+}
+
+/** Backs `extern dom-keyed-session-trusts`: may this row skip re-validation? */
+function kokaineDomKeyedSessionTrusts(session, rangeFirst) {
+  if (!session || typeof session.audit !== 'function' || !session.planned.has(rangeFirst))
+    return false;
+  return session.audit(null);
+}
+
+/** Backs `extern dom-keyed-session-planned`. */
+function kokaineDomKeyedSessionPlanned(session, rangeFirst) {
+  return !!session && !!session.planned && session.planned.has(rangeFirst);
+}
+
+/**
+ * Backs `extern dom-keyed-current-order`. `firsts`/`lasts` hold the boundary
+ * markers of the rows expected in the region. Returns, in current DOM order,
+ * each row's index in those arrays, or null unless the region consists of
+ * exactly those rows, each once, with nothing between them.
+ */
+function kokaineDomKeyedCurrentOrder(rangeParent, rangeFirst, rangeLast, firsts, lasts) {
+  if (!rangeParent || !rangeFirst || !rangeLast || rangeFirst.parentNode !== rangeParent || rangeLast.parentNode !== rangeParent)
+    return null;
+  var index = new Map();
+  for (var i = 0; i < firsts.length; i++)
+    index.set(firsts[i], i);
+  var order = [];
+  var n = rangeFirst.nextSibling;
+  while (n && n !== rangeLast) {
+    var position = index.get(n);
+    if (position === undefined)
+      return null;
+    index.delete(n);
+    var end = lasts[position];
+    while (n && n !== end) {
+      if (n === rangeLast)
+        return null;
+      n = n.nextSibling;
+    }
+    if (!n)
+      return null;
+    order.push(position);
+    n = n.nextSibling;
+  }
+  if (n !== rangeLast || order.length !== firsts.length)
+    return null;
+  return order;
+}
+
+/**
+ * Backs `extern dom-keyed-stable-rows`. `order` is a permutation of
+ * 0..n-1: the target position of each row, listed in current DOM order.
+ * Returns flags indexed by target position, true for the rows of one longest
+ * increasing subsequence. Those rows keep their relative order and stay
+ * put; every other row is moved (Vue/ivi-style placement). O(n log n).
+ */
+function kokaineDomKeyedStableRows(order) {
+  var count = order.length;
+  var keep = [];
+  var previous = [];
+  var tails = [];
+  for (var i = 0; i < count; i++)
+    keep.push(false);
+  for (var j = 0; j < count; j++) {
+    var value = order[j];
+    var low = 0;
+    var high = tails.length;
+    while (low < high) {
+      var middle = (low + high) >>> 1;
+      if (order[tails[middle]] < value)
+        low = middle + 1;
+      else
+        high = middle;
+    }
+    previous.push(low > 0 ? tails[low - 1] : -1);
+    tails[low] = j;
+  }
+  var k = tails.length ? tails[tails.length - 1] : -1;
+  while (k >= 0) {
+    keep[order[k]] = true;
+    k = previous[k];
+  }
+  return keep;
+}
+
+/**
+ * Backs `extern dom-keyed-firsts-in-order`. Do the opening markers `firsts`
+ * all occur, in this order, between the region markers (other nodes, such as
+ * draft rows awaiting disposal, may sit in between)?
+ */
+function kokaineDomKeyedFirstsInOrder(rangeParent, rangeFirst, rangeLast, firsts) {
+  if (!rangeParent || !rangeFirst || !rangeLast || rangeFirst.parentNode !== rangeParent || rangeLast.parentNode !== rangeParent)
+    return false;
+  var i = 0;
+  var n = rangeFirst.nextSibling;
+  while (n && n !== rangeLast) {
+    if (i < firsts.length && n === firsts[i])
+      i++;
+    n = n.nextSibling;
+  }
+  return n === rangeLast && i === firsts.length;
 }
 
 /** Backs `extern dom-capture-range-focus`. */
@@ -470,8 +756,12 @@ function kokaineDomCaptureRangeFocus(rangeParent, rangeFirst, rangeLast) {
     } };
 }
 
-/** Backs `extern dom-move-range-before`. */
-function kokaineDomMoveRangeBefore(rangeParent, rangeFirst, rangeLast, target, focusState) {
+/**
+ * Backs `extern dom-move-range-before`. A keyed move `session` (or null)
+ * audits the mutation records this move produced, so focus-restoration
+ * handlers that mutate the region make later pre-validated moves re-validate.
+ */
+function kokaineDomMoveRangeBefore(rangeParent, rangeFirst, rangeLast, target, focusState, session) {
   if (!rangeParent || !rangeFirst || !rangeLast || !target || rangeFirst === rangeLast || rangeFirst.parentNode !== rangeParent || rangeLast.parentNode !== rangeParent || target.parentNode !== rangeParent) {
     throw new Error('invalid Kokaine DOM move: range and target must share the expected parent');
   }
@@ -568,20 +858,38 @@ function kokaineDomMoveRangeBefore(rangeParent, rangeFirst, rangeLast, target, f
     verify(anchor);
   }
   try {
-    place(target);
-    restoreFocus();
-    verify(target);
-  } catch (error) {
     try {
-      rollback();
-    } catch (rollbackError) {
-      throw new Error(String(error && error.message != null ? error.message : error) + '; keyed DOM move rollback failed: ' + String(rollbackError && rollbackError.message != null ? rollbackError.message : rollbackError));
+      place(target);
+      restoreFocus();
+      verify(target);
+    } catch (error) {
+      try {
+        rollback();
+      } catch (rollbackError) {
+        throw new Error(String(error && error.message != null ? error.message : error) + '; keyed DOM move rollback failed: ' + String(rollbackError && rollbackError.message != null ? rollbackError.message : rollbackError));
+      }
+      throw error;
     }
-    throw error;
+  } finally {
+    if (session && typeof session.audit === 'function')
+      session.audit(nodes);
   }
 }
 
 /** Backs `extern dom-clean-range`. */
+// Detaching a connected custom element runs its disconnectedCallback
+// synchronously, and that user code may move a range descendant elsewhere (into
+// the document or a detached tree) or reinsert a removed node. Cleanup therefore
+// snapshots every descendant (open shadow trees included) before detaching the
+// range roots, then detaches any snapshot node that is still attached but no
+// longer inside a range root, repeating until the DOM is stable.
+//
+// "Inside" means the node's ancestor chain (parentNode, then a shadow root's
+// host) reaches a range root. The snapshot records each descendant's parent:
+// a node still under that parent shares the parent's answer, so the common
+// sweep is O(1) per node and only moved nodes walk their ancestors. The memo
+// is trusted only until the sweep itself mutates the DOM (a removal can run
+// user callbacks); every later check in that sweep walks.
 function kokaineDomCleanRange(first, last, inclusive) {
   var rangeFirst = first;
   var rangeLast = last;
@@ -604,29 +912,61 @@ function kokaineDomCleanRange(first, last, inclusive) {
   }
   if (includeEndpoints)
     roots.push(rangeLast);
+  // descendants[j] was snapshotted under parents[j]: the node (or its shadow
+  // root) at descendants[parentIndex[j]], or for index -1 a range root (or its
+  // shadow root).
   var descendants = [];
+  var parents = [];
+  var parentIndex = [];
   var pending = roots.slice();
+  var pendingIndex = [];
+  for (var r = 0; r < roots.length; r++)
+    pendingIndex.push(-1);
   while (pending.length) {
     var current = pending.pop();
-    var children = current && current.childNodes ? Array.prototype.slice.call(current.childNodes) : [];
-    if (current && current.shadowRoot)
-      children = children.concat(Array.prototype.slice.call(current.shadowRoot.childNodes));
-    for (var i = 0; i < children.length; i++) {
-      descendants.push(children[i]);
-      pending.push(children[i]);
+    var currentIndex = pendingIndex.pop();
+    var tree = current;
+    while (tree) {
+      for (var child = tree.firstChild; child; child = child.nextSibling) {
+        pending.push(child);
+        pendingIndex.push(descendants.length);
+        descendants.push(child);
+        parents.push(tree);
+        parentIndex.push(currentIndex);
+      }
+      tree = tree === current ? current.shadowRoot : null;
     }
   }
+  var rootSet = new Set(roots);
   function retained(node) {
     var current = node;
     while (current) {
-      for (var i = 0; i < roots.length; i++) {
-        if (roots[i] === current || Node.prototype.contains.call(roots[i], current))
+      var top = current;
+      for (var ancestor = current; ancestor; ancestor = ancestor.parentNode) {
+        if (rootSet.has(ancestor))
           return true;
+        top = ancestor;
       }
-      var tree = current.getRootNode ? current.getRootNode() : null;
-      current = tree && tree.host ? tree.host : null;
+      current = top.nodeType === 11 && top.host ? top.host : null;
     }
     return false;
+  }
+  var inside = [];
+  var dirty = false;
+  // Returns the parent to detach descendants[j] from, or null when it is
+  // detached or still inside the range.
+  function escapedParent(j) {
+    var node = descendants[j];
+    var parent = node.parentNode;
+    var result;
+    if (!parent)
+      result = false;
+    else if (!dirty && parent === parents[j])
+      result = parentIndex[j] < 0 || inside[parentIndex[j]];
+    else
+      result = retained(node);
+    inside[j] = result;
+    return result ? null : parent;
   }
   var passes = Math.max(2, roots.length + descendants.length + 2);
   while (passes-- > 0) {
@@ -638,10 +978,12 @@ function kokaineDomCleanRange(first, last, inclusive) {
         Node.prototype.removeChild.call(parent, roots[i]);
       }
     }
+    dirty = false;
     for (var j = 0; j < descendants.length; j++) {
-      var childParent = descendants[j].parentNode;
-      if (childParent && !retained(descendants[j])) {
+      var childParent = escapedParent(j);
+      if (childParent) {
         attached = true;
+        dirty = true;
         Node.prototype.removeChild.call(childParent, descendants[j]);
       }
     }
@@ -661,6 +1003,8 @@ function kokaineDomCleanRange(first, last, inclusive) {
 }
 
 /** Backs `extern dom-stage-retirement`. */
+// Same snapshot shape as kokaineDomCleanRange (descendants with their recorded
+// parents), so kokaineDomRunRetirement can use the same parent memo.
 function kokaineDomStageRetirement(first, last) {
   var rangeFirst = first;
   var rangeLast = last;
@@ -682,15 +1026,25 @@ function kokaineDomStageRetirement(first, last) {
   if (node !== rangeLast)
     throw new Error('invalid Kokaine keyed retirement range: closing marker is unreachable');
   var descendants = [];
+  var parents = [];
+  var parentIndex = [];
   var pending = roots.slice();
+  var pendingIndex = [];
+  for (var r = 0; r < roots.length; r++)
+    pendingIndex.push(-1);
   while (pending.length) {
     var current = pending.pop();
-    var children = current && current.childNodes ? Array.prototype.slice.call(current.childNodes) : [];
-    if (current && current.shadowRoot)
-      children = children.concat(Array.prototype.slice.call(current.shadowRoot.childNodes));
-    for (var i = 0; i < children.length; i++) {
-      descendants.push(children[i]);
-      pending.push(children[i]);
+    var currentIndex = pendingIndex.pop();
+    var tree = current;
+    while (tree) {
+      for (var child = tree.firstChild; child; child = child.nextSibling) {
+        pending.push(child);
+        pendingIndex.push(descendants.length);
+        descendants.push(child);
+        parents.push(tree);
+        parentIndex.push(currentIndex);
+      }
+      tree = tree === current ? current.shadowRoot : null;
     }
   }
   var doc = rangeFirst.ownerDocument;
@@ -698,49 +1052,85 @@ function kokaineDomStageRetirement(first, last) {
   var proto = view && view.Node && view.Node.prototype;
   if (!proto || typeof proto.removeChild !== 'function' || typeof proto.contains !== 'function')
     throw new Error('cannot stage Kokaine keyed retirement without its DOM realm');
-  return { roots: roots, descendants: descendants, proto: proto };
+  return { roots: roots, descendants: descendants, parents: parents, parentIndex: parentIndex, proto: proto };
 }
 
 /** Backs `extern dom-run-retirement`. */
+// See kokaineDomCleanRange for the escape sweep and its parent memo. Between
+// staging and running, application code may already have moved snapshot
+// nodes; the memo only answers for a node still under its recorded parent.
 function kokaineDomRunRetirement(handle) {
   if (!handle || !handle.roots)
     return;
   var roots = handle.roots;
   var descendants = handle.descendants;
+  var parents = handle.parents;
+  var parentIndex = handle.parentIndex;
   var proto = handle.proto;
   var removeChild = proto && proto.removeChild;
   var contains = proto && proto.contains;
   if (typeof removeChild !== 'function' || typeof contains !== 'function')
     throw new Error('cannot run Kokaine keyed retirement without its DOM realm');
+  var rootSet = new Set(roots);
   function retained(node) {
     var current = node;
     while (current) {
-      for (var i = 0; i < roots.length; i++) {
-        if (roots[i] === current || contains.call(roots[i], current))
+      var top = current;
+      for (var ancestor = current; ancestor; ancestor = ancestor.parentNode) {
+        if (rootSet.has(ancestor))
           return true;
+        top = ancestor;
       }
-      var tree = current.getRootNode ? current.getRootNode() : null;
-      current = tree && tree.host ? tree.host : null;
+      current = top.nodeType === 11 && top.host ? top.host : null;
     }
     return false;
   }
-  function detach(node, escaped) {
+  var inside = [];
+  var dirty = false;
+  function isInside(j) {
+    var node = descendants[j];
+    var parent = node.parentNode;
+    var result;
+    if (!parent)
+      result = false;
+    else if (!dirty && parent === parents[j])
+      result = parentIndex[j] < 0 || inside[parentIndex[j]];
+    else
+      result = retained(node);
+    inside[j] = result;
+    return result;
+  }
+  function detachRoot(node) {
     var parent = node && node.parentNode;
-    if (!parent || (escaped && retained(node)))
+    if (!parent)
       return;
     try {
       removeChild.call(parent, node);
     } catch (error) {
-      if (node.parentNode && (!escaped || !retained(node)))
+      if (node.parentNode)
+        throw error;
+    }
+  }
+  function detachDescendant(j) {
+    var node = descendants[j];
+    var parent = node.parentNode;
+    if (isInside(j) || !parent)
+      return;
+    dirty = true;
+    try {
+      removeChild.call(parent, node);
+    } catch (error) {
+      if (node.parentNode && !retained(node))
         throw error;
     }
   }
   var passes = Math.max(2, roots.length + descendants.length + 2);
   while (passes-- > 0) {
     for (var i = 0; i < roots.length; i++)
-      detach(roots[i], false);
+      detachRoot(roots[i]);
+    dirty = false;
     for (var j = 0; j < descendants.length; j++)
-      detach(descendants[j], true);
+      detachDescendant(j);
     var pending = false;
     for (var r = 0; r < roots.length; r++) {
       if (roots[r].parentNode) {
@@ -749,8 +1139,9 @@ function kokaineDomRunRetirement(handle) {
       }
     }
     if (!pending) {
+      dirty = false;
       for (var d = 0; d < descendants.length; d++) {
-        if (descendants[d].parentNode && !retained(descendants[d])) {
+        if (!isInside(d) && descendants[d].parentNode) {
           pending = true;
           break;
         }
@@ -768,6 +1159,8 @@ function kokaineDomReleaseRetirement(handle) {
     return;
   handle.roots = null;
   handle.descendants = null;
+  handle.parents = null;
+  handle.parentIndex = null;
   handle.proto = null;
 }
 

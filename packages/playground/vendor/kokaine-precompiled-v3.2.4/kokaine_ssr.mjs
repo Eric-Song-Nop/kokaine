@@ -99,16 +99,16 @@ export function checked_property_name(name) /* (name : string) -> exn string */ 
  
  
 // monadic lift
-export function _mlift_string_attribute_10159(value, _y_x10027) /* (value : string, string) -> exn string */  {
-  return $std_core_types._lp__plus__plus__rp_(" ", $std_core_types._lp__plus__plus__rp_(_y_x10027, $std_core_types._lp__plus__plus__rp_("=\"", $std_core_types._lp__plus__plus__rp_($std_core_hnd._open_none1(escape_attribute, value), "\""))));
+export function _mlift_string_attribute_10160(value, _y_x10018) /* (value : string, string) -> exn string */  {
+  return $std_core_types._lp__plus__plus__rp_(" ", $std_core_types._lp__plus__plus__rp_(_y_x10018, $std_core_types._lp__plus__plus__rp_("=\"", $std_core_types._lp__plus__plus__rp_($std_core_hnd._open_none1(escape_attribute, value), "\""))));
 }
  
 export function string_attribute(name, value) /* (name : string, value : string) -> exn string */  {
    
-  var _x_x1_10128 = $std_core_hnd._open_none2($kokaine_html.is_safe_url_value, name, value);
+  var _x_x1_10116 = $std_core_hnd._open_none2($kokaine_html.is_safe_url_value, name, value);
   var _x4 = $std_core_hnd._open_none1(function(b /* bool */ ) {
       return (b) ? false : true;
-    }, _x_x1_10128);
+    }, _x_x1_10116);
   if (_x4) {
     return $std_core_exn.$throw($std_core_types._lp__plus__plus__rp_("unsafe URL scheme in ", $std_core_types._lp__plus__plus__rp_(name, $std_core_types._lp__plus__plus__rp_("; allowed are relative, http(s), mailto, tel, and data:image for src ", "(use unsafe-trusted-url for an application-produced URL)"))));
   }
@@ -116,59 +116,59 @@ export function string_attribute(name, value) /* (name : string, value : string)
      
     var _x5 = $std_core_hnd._open_none1($kokaine_html.is_valid_attribute_name, name);
     if (_x5) {
-      var x_10181 = name;
+      var x_10182 = name;
     }
     else {
-      var x_10181 = $std_core_exn.$throw($std_core_types._lp__plus__plus__rp_("invalid HTML attribute name: ", name));
+      var x_10182 = $std_core_exn.$throw($std_core_types._lp__plus__plus__rp_("invalid HTML attribute name: ", name));
     }
     if ($std_core_hnd._yielding()) {
-      return $std_core_hnd.yield_extend(function(_y_x10027 /* string */ ) {
-        return _mlift_string_attribute_10159(value, _y_x10027);
+      return $std_core_hnd.yield_extend(function(_y_x10018 /* string */ ) {
+        return _mlift_string_attribute_10160(value, _y_x10018);
       });
     }
     else {
-      return $std_core_types._lp__plus__plus__rp_(" ", $std_core_types._lp__plus__plus__rp_(x_10181, $std_core_types._lp__plus__plus__rp_("=\"", $std_core_types._lp__plus__plus__rp_($std_core_hnd._open_none1(escape_attribute, value), "\""))));
+      return $std_core_types._lp__plus__plus__rp_(" ", $std_core_types._lp__plus__plus__rp_(x_10182, $std_core_types._lp__plus__plus__rp_("=\"", $std_core_types._lp__plus__plus__rp_($std_core_hnd._open_none1(escape_attribute, value), "\""))));
     }
   }
 }
  
  
 // monadic lift
-export function _mlift_trusted_url_attribute_10160(value, _y_x10029) /* (value : kokaine/html/trusted-url, string) -> exn string */  {
+export function _mlift_trusted_url_attribute_10161(value, _y_x10020) /* (value : kokaine/html/trusted-url, string) -> exn string */  {
    
-  var value_0_10084 = $std_core_hnd._open_none1(function(value_0_0 /* kokaine/html/trusted-url */ ) {
+  var value_0_10075 = $std_core_hnd._open_none1(function(value_0_0 /* kokaine/html/trusted-url */ ) {
       return value_0_0;
     }, value);
-  return $std_core_types._lp__plus__plus__rp_(" ", $std_core_types._lp__plus__plus__rp_(_y_x10029, $std_core_types._lp__plus__plus__rp_("=\"", $std_core_types._lp__plus__plus__rp_((((((((((value_0_10084).replace(new RegExp((("&")).replace(/[\\\$\^*+\-{}?().]/g,'\\$&'),'g'),("&amp;")))).replace(new RegExp((("<")).replace(/[\\\$\^*+\-{}?().]/g,'\\$&'),'g'),("&lt;")))).replace(new RegExp(((">")).replace(/[\\\$\^*+\-{}?().]/g,'\\$&'),'g'),("&gt;")))).replace(new RegExp((("\"")).replace(/[\\\$\^*+\-{}?().]/g,'\\$&'),'g'),("&quot;")))).replace(new RegExp((("\'")).replace(/[\\\$\^*+\-{}?().]/g,'\\$&'),'g'),("&#39;")), "\""))));
+  return $std_core_types._lp__plus__plus__rp_(" ", $std_core_types._lp__plus__plus__rp_(_y_x10020, $std_core_types._lp__plus__plus__rp_("=\"", $std_core_types._lp__plus__plus__rp_((((((((((value_0_10075).replace(new RegExp((("&")).replace(/[\\\$\^*+\-{}?().]/g,'\\$&'),'g'),("&amp;")))).replace(new RegExp((("<")).replace(/[\\\$\^*+\-{}?().]/g,'\\$&'),'g'),("&lt;")))).replace(new RegExp(((">")).replace(/[\\\$\^*+\-{}?().]/g,'\\$&'),'g'),("&gt;")))).replace(new RegExp((("\"")).replace(/[\\\$\^*+\-{}?().]/g,'\\$&'),'g'),("&quot;")))).replace(new RegExp((("\'")).replace(/[\\\$\^*+\-{}?().]/g,'\\$&'),'g'),("&#39;")), "\""))));
 }
  
 export function trusted_url_attribute(name, value) /* (name : string, value : kokaine/html/trusted-url) -> exn string */  {
    
   var _x5 = $std_core_hnd._open_none1($kokaine_html.is_valid_attribute_name, name);
   if (_x5) {
-    var x_10185 = name;
+    var x_10186 = name;
   }
   else {
-    var x_10185 = $std_core_exn.$throw($std_core_types._lp__plus__plus__rp_("invalid HTML attribute name: ", name));
+    var x_10186 = $std_core_exn.$throw($std_core_types._lp__plus__plus__rp_("invalid HTML attribute name: ", name));
   }
   if ($std_core_hnd._yielding()) {
-    return $std_core_hnd.yield_extend(function(_y_x10029 /* string */ ) {
-      return _mlift_trusted_url_attribute_10160(value, _y_x10029);
+    return $std_core_hnd.yield_extend(function(_y_x10020 /* string */ ) {
+      return _mlift_trusted_url_attribute_10161(value, _y_x10020);
     });
   }
   else {
      
-    var value_0_10084 = $std_core_hnd._open_none1(function(value_0_0 /* kokaine/html/trusted-url */ ) {
+    var value_0_10075 = $std_core_hnd._open_none1(function(value_0_0 /* kokaine/html/trusted-url */ ) {
         return value_0_0;
       }, value);
-    return $std_core_types._lp__plus__plus__rp_(" ", $std_core_types._lp__plus__plus__rp_(x_10185, $std_core_types._lp__plus__plus__rp_("=\"", $std_core_types._lp__plus__plus__rp_((((((((((value_0_10084).replace(new RegExp((("&")).replace(/[\\\$\^*+\-{}?().]/g,'\\$&'),'g'),("&amp;")))).replace(new RegExp((("<")).replace(/[\\\$\^*+\-{}?().]/g,'\\$&'),'g'),("&lt;")))).replace(new RegExp(((">")).replace(/[\\\$\^*+\-{}?().]/g,'\\$&'),'g'),("&gt;")))).replace(new RegExp((("\"")).replace(/[\\\$\^*+\-{}?().]/g,'\\$&'),'g'),("&quot;")))).replace(new RegExp((("\'")).replace(/[\\\$\^*+\-{}?().]/g,'\\$&'),'g'),("&#39;")), "\""))));
+    return $std_core_types._lp__plus__plus__rp_(" ", $std_core_types._lp__plus__plus__rp_(x_10186, $std_core_types._lp__plus__plus__rp_("=\"", $std_core_types._lp__plus__plus__rp_((((((((((value_0_10075).replace(new RegExp((("&")).replace(/[\\\$\^*+\-{}?().]/g,'\\$&'),'g'),("&amp;")))).replace(new RegExp((("<")).replace(/[\\\$\^*+\-{}?().]/g,'\\$&'),'g'),("&lt;")))).replace(new RegExp(((">")).replace(/[\\\$\^*+\-{}?().]/g,'\\$&'),'g'),("&gt;")))).replace(new RegExp((("\"")).replace(/[\\\$\^*+\-{}?().]/g,'\\$&'),'g'),("&quot;")))).replace(new RegExp((("\'")).replace(/[\\\$\^*+\-{}?().]/g,'\\$&'),'g'),("&#39;")), "\""))));
   }
 }
  
  
 // monadic lift
-export function _mlift_boolean_attribute_10161(_y_x10030) /* (string) -> exn string */  {
-  return $std_core_types._lp__plus__plus__rp_(" ", _y_x10030);
+export function _mlift_boolean_attribute_10162(_y_x10021) /* (string) -> exn string */  {
+  return $std_core_types._lp__plus__plus__rp_(" ", _y_x10021);
 }
  
 export function boolean_attribute(name, enabled) /* (name : string, enabled : bool) -> exn string */  {
@@ -176,16 +176,16 @@ export function boolean_attribute(name, enabled) /* (name : string, enabled : bo
      
     var _x5 = $std_core_hnd._open_none1($kokaine_html.is_valid_attribute_name, name);
     if (_x5) {
-      var x_10189 = name;
+      var x_10190 = name;
     }
     else {
-      var x_10189 = $std_core_exn.$throw($std_core_types._lp__plus__plus__rp_("invalid HTML attribute name: ", name));
+      var x_10190 = $std_core_exn.$throw($std_core_types._lp__plus__plus__rp_("invalid HTML attribute name: ", name));
     }
     if ($std_core_hnd._yielding()) {
-      return $std_core_hnd.yield_extend(_mlift_boolean_attribute_10161);
+      return $std_core_hnd.yield_extend(_mlift_boolean_attribute_10162);
     }
     else {
-      return $std_core_types._lp__plus__plus__rp_(" ", x_10189);
+      return $std_core_types._lp__plus__plus__rp_(" ", x_10190);
     }
   }
   else {
@@ -195,13 +195,13 @@ export function boolean_attribute(name, enabled) /* (name : string, enabled : bo
  
  
 // monadic lift
-export function _mlift_property_attribute_10162(_y_x10034) /* (string) -> exn string */  {
-  return $std_core_types._lp__plus__plus__rp_(" ", _y_x10034);
+export function _mlift_property_attribute_10163(_y_x10025) /* (string) -> exn string */  {
+  return $std_core_types._lp__plus__plus__rp_(" ", _y_x10025);
 }
  
  
 // monadic lift
-export function _mlift_property_attribute_10163(value, safe_name) /* (value : kokaine/html/property-value, safe-name : string) -> exn string */  {
+export function _mlift_property_attribute_10164(value, safe_name) /* (value : kokaine/html/property-value, safe-name : string) -> exn string */  {
   if (value._tag === 1) {
     return string_attribute(safe_name, value.value);
   }
@@ -210,16 +210,16 @@ export function _mlift_property_attribute_10163(value, safe_name) /* (value : ko
        
       var _x5 = $std_core_hnd._open_none1($kokaine_html.is_valid_attribute_name, safe_name);
       if (_x5) {
-        var x_10193 = safe_name;
+        var x_10194 = safe_name;
       }
       else {
-        var x_10193 = $std_core_exn.$throw($std_core_types._lp__plus__plus__rp_("invalid HTML attribute name: ", safe_name));
+        var x_10194 = $std_core_exn.$throw($std_core_types._lp__plus__plus__rp_("invalid HTML attribute name: ", safe_name));
       }
       if ($std_core_hnd._yielding()) {
-        return $std_core_hnd.yield_extend(_mlift_property_attribute_10162);
+        return $std_core_hnd.yield_extend(_mlift_property_attribute_10163);
       }
       else {
-        return $std_core_types._lp__plus__plus__rp_(" ", x_10193);
+        return $std_core_types._lp__plus__plus__rp_(" ", x_10194);
       }
     }
     else {
@@ -235,35 +235,35 @@ export function property_attribute(name, value) /* (name : string, value : kokai
    
   var _x5 = $std_core_hnd._open_none1($kokaine_html.is_valid_property_name, name);
   if (_x5) {
-    var x_10196 = name;
+    var x_10197 = name;
   }
   else {
-    var x_10196 = $std_core_exn.$throw($std_core_types._lp__plus__plus__rp_("invalid or markup-writing DOM property: ", name));
+    var x_10197 = $std_core_exn.$throw($std_core_types._lp__plus__plus__rp_("invalid or markup-writing DOM property: ", name));
   }
   if ($std_core_hnd._yielding()) {
     return $std_core_hnd.yield_extend(function(safe_name /* string */ ) {
-      return _mlift_property_attribute_10163(value, safe_name);
+      return _mlift_property_attribute_10164(value, safe_name);
     });
   }
   else {
     if (value._tag === 1) {
-      return string_attribute(x_10196, value.value);
+      return string_attribute(x_10197, value.value);
     }
     else if (value._tag === 2) {
       if (value.value) {
          
-        var _x5 = $std_core_hnd._open_none1($kokaine_html.is_valid_attribute_name, x_10196);
+        var _x5 = $std_core_hnd._open_none1($kokaine_html.is_valid_attribute_name, x_10197);
         if (_x5) {
-          var x_0_10200 = x_10196;
+          var x_0_10201 = x_10197;
         }
         else {
-          var x_0_10200 = $std_core_exn.$throw($std_core_types._lp__plus__plus__rp_("invalid HTML attribute name: ", x_10196));
+          var x_0_10201 = $std_core_exn.$throw($std_core_types._lp__plus__plus__rp_("invalid HTML attribute name: ", x_10197));
         }
         if ($std_core_hnd._yielding()) {
-          return $std_core_hnd.yield_extend(_mlift_property_attribute_10162);
+          return $std_core_hnd.yield_extend(_mlift_property_attribute_10163);
         }
         else {
-          return $std_core_types._lp__plus__plus__rp_(" ", x_0_10200);
+          return $std_core_types._lp__plus__plus__rp_(" ", x_0_10201);
         }
       }
       else {
@@ -271,37 +271,37 @@ export function property_attribute(name, value) /* (name : string, value : kokai
       }
     }
     else {
-      return string_attribute(x_10196, $std_core_int.show(value.value));
+      return string_attribute(x_10197, $std_core_int.show(value.value));
     }
   }
 }
  
  
 // monadic lift
-export function _mlift_render_attribute_10164(_y_x10040) /* (string) -> exn string */  {
-  return $std_core_types._lp__plus__plus__rp_(" ", _y_x10040);
+export function _mlift_render_attribute_10165(_y_x10031) /* (string) -> exn string */  {
+  return $std_core_types._lp__plus__plus__rp_(" ", _y_x10031);
 }
  
  
 // monadic lift
-export function _mlift_render_attribute_10165(name_3, _y_x10044) /* (name@3 : string, maybe<string>) -> <kokaine/reactive/effects/signal-read,exn,div> string */  {
-  if (_y_x10044 === null) {
+export function _mlift_render_attribute_10166(name_3, _y_x10035) /* (name@3 : string, maybe<string>) -> <kokaine/reactive/effects/signal-read,exn,div> string */  {
+  if (_y_x10035 === null) {
     return "";
   }
   else {
-    return $std_core_hnd._open_at2(0, string_attribute, name_3, _y_x10044.value);
+    return $std_core_hnd._open_at2(0, string_attribute, name_3, _y_x10035.value);
   }
 }
  
  
 // monadic lift
-export function _mlift_render_attribute_10166(name_4, _y_x10047) /* (name@4 : string, kokaine/html/property-value) -> <kokaine/reactive/effects/signal-read,exn,div> string */  {
-  return $std_core_hnd._open_at2(0, property_attribute, name_4, _y_x10047);
+export function _mlift_render_attribute_10167(name_4, _y_x10038) /* (name@4 : string, kokaine/html/property-value) -> <kokaine/reactive/effects/signal-read,exn,div> string */  {
+  return $std_core_hnd._open_at2(0, property_attribute, name_4, _y_x10038);
 }
  
  
 // monadic lift
-export function _mlift_render_attribute_10167(wild__) /* (wild_ : string) -> <exn,kokaine/reactive/effects/signal-read,div> string */  {
+export function _mlift_render_attribute_10168(wild__) /* (wild_ : string) -> <exn,kokaine/reactive/effects/signal-read,div> string */  {
   return "";
 }
  
@@ -318,16 +318,16 @@ export function render_attribute(attribute) /* forall<e> (attribute : kokaine/ht
            
           var _x5 = $std_core_hnd._open_none1($kokaine_html.is_valid_attribute_name, name_2);
           if (_x5) {
-            var x_10204 = name_2;
+            var x_10205 = name_2;
           }
           else {
-            var x_10204 = $std_core_exn.$throw($std_core_types._lp__plus__plus__rp_("invalid HTML attribute name: ", name_2));
+            var x_10205 = $std_core_exn.$throw($std_core_types._lp__plus__plus__rp_("invalid HTML attribute name: ", name_2));
           }
           if ($std_core_hnd._yielding()) {
-            return $std_core_hnd.yield_extend(_mlift_render_attribute_10164);
+            return $std_core_hnd.yield_extend(_mlift_render_attribute_10165);
           }
           else {
-            return $std_core_types._lp__plus__plus__rp_(" ", x_10204);
+            return $std_core_types._lp__plus__plus__rp_(" ", x_10205);
           }
         }
         else {
@@ -340,43 +340,43 @@ export function render_attribute(attribute) /* forall<e> (attribute : kokaine/ht
   }
   else if (attribute._tag === 4) {
      
-    var x_0_10207 = $std_core_hnd._open_at0(1, attribute.read);
+    var x_0_10208 = $std_core_hnd._open_at0(1, attribute.read);
     if ($std_core_hnd._yielding()) {
-      return $std_core_hnd.yield_extend(function(_y_x10044 /* maybe<string> */ ) {
-        if (_y_x10044 === null) {
+      return $std_core_hnd.yield_extend(function(_y_x10035 /* maybe<string> */ ) {
+        if (_y_x10035 === null) {
           return "";
         }
         else {
-          return $std_core_hnd._open_at2(0, string_attribute, attribute.name, _y_x10044.value);
+          return $std_core_hnd._open_at2(0, string_attribute, attribute.name, _y_x10035.value);
         }
       });
     }
     else {
-      if (x_0_10207 === null) {
+      if (x_0_10208 === null) {
         return "";
       }
       else {
-        return $std_core_hnd._open_at2(0, string_attribute, attribute.name, x_0_10207.value);
+        return $std_core_hnd._open_at2(0, string_attribute, attribute.name, x_0_10208.value);
       }
     }
   }
   else if (attribute._tag === 5) {
      
-    var x_1_10212 = $std_core_hnd._open_at0(1, attribute.read);
+    var x_1_10213 = $std_core_hnd._open_at0(1, attribute.read);
     if ($std_core_hnd._yielding()) {
-      return $std_core_hnd.yield_extend(function(_y_x10047 /* kokaine/html/property-value */ ) {
-        return $std_core_hnd._open_at2(0, property_attribute, attribute.name, _y_x10047);
+      return $std_core_hnd.yield_extend(function(_y_x10038 /* kokaine/html/property-value */ ) {
+        return $std_core_hnd._open_at2(0, property_attribute, attribute.name, _y_x10038);
       });
     }
     else {
-      return $std_core_hnd._open_at2(0, property_attribute, attribute.name, x_1_10212);
+      return $std_core_hnd._open_at2(0, property_attribute, attribute.name, x_1_10213);
     }
   }
   else {
      
-    var x_2_10217 = $std_core_hnd._open_at1(0, checked_event_name, attribute.name);
+    var x_2_10218 = $std_core_hnd._open_at1(0, checked_event_name, attribute.name);
     if ($std_core_hnd._yielding()) {
-      return $std_core_hnd.yield_extend(_mlift_render_attribute_10167);
+      return $std_core_hnd.yield_extend(_mlift_render_attribute_10168);
     }
     else {
       return "";
@@ -386,18 +386,18 @@ export function render_attribute(attribute) /* forall<e> (attribute : kokaine/ht
  
  
 // monadic lift
-export function _mlift_render_attributes_10168(_y_x10051) /* (list<string>) -> <div,exn,kokaine/reactive/effects/signal-read> string */  {
-  return $std_core_list.joinsep(_y_x10051, "");
+export function _mlift_render_attributes_10169(_y_x10042) /* (list<string>) -> <div,exn,kokaine/reactive/effects/signal-read> string */  {
+  return $std_core_list.joinsep(_y_x10042, "");
 }
  
 export function render_attributes(attributes) /* forall<e> (attributes : list<kokaine/html/attribute<e>>) -> <kokaine/reactive/effects/signal-read,pure> string */  {
    
-  var x_10220 = $std_core_list.map(attributes, render_attribute);
+  var x_10221 = $std_core_list.map(attributes, render_attribute);
   if ($std_core_hnd._yielding()) {
-    return $std_core_hnd.yield_extend(_mlift_render_attributes_10168);
+    return $std_core_hnd.yield_extend(_mlift_render_attributes_10169);
   }
   else {
-    return $std_core_list.joinsep(x_10220, "");
+    return $std_core_list.joinsep(x_10221, "");
   }
 }
  
@@ -452,122 +452,122 @@ export function is_void_element(name) /* (name : string) -> bool */  {
  
  
 // monadic lift
-export function _mlift_render_children_10169(_y_x10052) /* (list<string>) -> <div,exn,kokaine/reactive/effects/signal-read> string */  {
-  return $std_core_list.joinsep(_y_x10052, "");
+export function _mlift_render_children_10170(_y_x10043) /* (list<string>) -> <div,exn,kokaine/reactive/effects/signal-read> string */  {
+  return $std_core_list.joinsep(_y_x10043, "");
 }
  
  
 // monadic lift
-export function _mlift_render_view_10170(_y_x10053) /* (string) -> <kokaine/reactive/effects/signal-read,div,exn> string */  {
-  return (((((_y_x10053).replace(new RegExp((("&")).replace(/[\\\$\^*+\-{}?().]/g,'\\$&'),'g'),("&amp;")))).replace(new RegExp((("<")).replace(/[\\\$\^*+\-{}?().]/g,'\\$&'),'g'),("&lt;")))).replace(new RegExp(((">")).replace(/[\\\$\^*+\-{}?().]/g,'\\$&'),'g'),("&gt;"));
+export function _mlift_render_view_10171(_y_x10044) /* (string) -> <kokaine/reactive/effects/signal-read,div,exn> string */  {
+  return (((((_y_x10044).replace(new RegExp((("&")).replace(/[\\\$\^*+\-{}?().]/g,'\\$&'),'g'),("&amp;")))).replace(new RegExp((("<")).replace(/[\\\$\^*+\-{}?().]/g,'\\$&'),'g'),("&lt;")))).replace(new RegExp(((">")).replace(/[\\\$\^*+\-{}?().]/g,'\\$&'),'g'),("&gt;"));
 }
  
  
 // monadic lift
-export function _mlift_render_view_10171(_y_x10055) /* forall<e> (kokaine/html/view<e>) -> <kokaine/reactive/effects/signal-read,div,exn> string */  {
-  return render_view(_y_x10055);
+export function _mlift_render_view_10172(_y_x10046) /* forall<e> (kokaine/html/view<e>) -> <kokaine/reactive/effects/signal-read,div,exn> string */  {
+  return render_view(_y_x10046);
 }
  
  
 // monadic lift
-export function _mlift_render_view_10172(opening, safe_name, _y_x10060) /* (opening : string, safe-name : string, string) -> <pure,kokaine/reactive/effects/signal-read> string */  {
-  return $std_core_types._lp__plus__plus__rp_(opening, $std_core_types._lp__plus__plus__rp_(_y_x10060, $std_core_types._lp__plus__plus__rp_("</", $std_core_types._lp__plus__plus__rp_(safe_name, ">"))));
+export function _mlift_render_view_10173(opening, safe_name, _y_x10051) /* (opening : string, safe-name : string, string) -> <pure,kokaine/reactive/effects/signal-read> string */  {
+  return $std_core_types._lp__plus__plus__rp_(opening, $std_core_types._lp__plus__plus__rp_(_y_x10051, $std_core_types._lp__plus__plus__rp_("</", $std_core_types._lp__plus__plus__rp_(safe_name, ">"))));
 }
  
  
 // monadic lift
-export function _mlift_render_view_10173(children_0_0, safe_name_0, _y_x10059) /* forall<e> (children@0@0 : list<kokaine/html/view<e>>, safe-name : string, list<string>) -> <div,exn,kokaine/reactive/effects/signal-read> string */  {
+export function _mlift_render_view_10174(children_0_0, safe_name_0, _y_x10050) /* forall<e> (children@0@0 : list<kokaine/html/view<e>>, safe-name : string, list<string>) -> <div,exn,kokaine/reactive/effects/signal-read> string */  {
    
-  var opening_0 = $std_core_types._lp__plus__plus__rp_("<", $std_core_types._lp__plus__plus__rp_(safe_name_0, $std_core_types._lp__plus__plus__rp_($std_core_list.joinsep(_y_x10059, ""), ">")));
+  var opening_0 = $std_core_types._lp__plus__plus__rp_("<", $std_core_types._lp__plus__plus__rp_(safe_name_0, $std_core_types._lp__plus__plus__rp_($std_core_list.joinsep(_y_x10050, ""), ">")));
   var _x6 = $std_core_hnd._open_none1(is_void_element, safe_name_0);
   if (_x6) {
     return opening_0;
   }
   else {
      
-    var x_10223 = render_children(children_0_0);
+    var x_10224 = render_children(children_0_0);
     if ($std_core_hnd._yielding()) {
-      return $std_core_hnd.yield_extend(function(_y_x10060_0 /* string */ ) {
-        return _mlift_render_view_10172(opening_0, safe_name_0, _y_x10060_0);
+      return $std_core_hnd.yield_extend(function(_y_x10051_0 /* string */ ) {
+        return _mlift_render_view_10173(opening_0, safe_name_0, _y_x10051_0);
       });
     }
     else {
-      return _mlift_render_view_10172(opening_0, safe_name_0, x_10223);
+      return _mlift_render_view_10173(opening_0, safe_name_0, x_10224);
     }
   }
 }
  
  
 // monadic lift
-export function _mlift_render_view_10174(attributes, children_0_0_0, safe_name_1) /* forall<e> (attributes : list<kokaine/html/attribute<e>>, children@0@0 : list<kokaine/html/view<e>>, safe-name : string) -> <exn,div,kokaine/reactive/effects/signal-read> string */  {
+export function _mlift_render_view_10175(attributes, children_0_0_0, safe_name_1) /* forall<e> (attributes : list<kokaine/html/attribute<e>>, children@0@0 : list<kokaine/html/view<e>>, safe-name : string) -> <exn,div,kokaine/reactive/effects/signal-read> string */  {
    
-  var x_0_10225 = $std_core_list.map(attributes, render_attribute);
+  var x_0_10226 = $std_core_list.map(attributes, render_attribute);
   if ($std_core_hnd._yielding()) {
-    return $std_core_hnd.yield_extend(function(_y_x10059_0 /* list<string> */ ) {
-      return _mlift_render_view_10173(children_0_0_0, safe_name_1, _y_x10059_0);
+    return $std_core_hnd.yield_extend(function(_y_x10050_0 /* list<string> */ ) {
+      return _mlift_render_view_10174(children_0_0_0, safe_name_1, _y_x10050_0);
     });
   }
   else {
-    return _mlift_render_view_10173(children_0_0_0, safe_name_1, x_0_10225);
+    return _mlift_render_view_10174(children_0_0_0, safe_name_1, x_0_10226);
   }
 }
  
  
 // monadic lift
-export function _mlift_render_keyed_fields_10175(output, _y_x10069) /* forall<_e,_e1> (output : ref<global,list<string>>, string) -> <pure,kokaine/reactive/effects/signal-read> () */  {
+export function _mlift_render_keyed_fields_10176(output, _y_x10060) /* (output : ref<global,list<string>>, string) -> <pure,kokaine/reactive/effects/signal-read> () */  {
    
-  var value_7_10119 = $std_core_types.Cons(_y_x10069, output.value);
-  return ((output).value = value_7_10119);
+  var _x_x2_4_10156 = $std_core_types.Cons(_y_x10060, $std_core_hnd._open_none1(render_load, output));
+  return $std_core_hnd._open_none2(render_store, output, _x_x2_4_10156);
 }
  
  
 // monadic lift
-export function _mlift_render_keyed_fields_10176(output_0, _c_x10068) /* forall<_e,_e1,e2> (output : ref<global,list<string>>, kokaine/html/view<e2>) -> () */  {
+export function _mlift_render_keyed_fields_10177(output_0, _c_x10059) /* forall<e> (output : ref<global,list<string>>, kokaine/html/view<e>) -> () */  {
    
-  var x_1_10227 = render_view(_c_x10068);
+  var x_1_10228 = render_view(_c_x10059);
   if ($std_core_hnd._yielding()) {
-    return $std_core_hnd.yield_extend(function(_y_x10069_0 /* string */ ) {
-      return _mlift_render_keyed_fields_10175(output_0, _y_x10069_0);
+    return $std_core_hnd.yield_extend(function(_y_x10060_0 /* string */ ) {
+      return _mlift_render_keyed_fields_10176(output_0, _y_x10060_0);
     });
   }
   else {
-    return _mlift_render_keyed_fields_10175(output_0, x_1_10227);
+    return _mlift_render_keyed_fields_10176(output_0, x_1_10228);
   }
 }
  
  
 // monadic lift
-export function _mlift_render_keyed_fields_10177(output_1, _y_x10067) /* forall<_e,_e1,e2> (output : ref<global,list<string>>, list<kokaine/html/view<e2>>) -> <kokaine/reactive/effects/signal-read,div,exn> () */  {
+export function _mlift_render_keyed_fields_10178(output_1, _y_x10058) /* forall<e> (output : ref<global,list<string>>, list<kokaine/html/view<e>>) -> <kokaine/reactive/effects/signal-read,div,exn> () */  {
   if ($std_core_hnd._yielding()) {
-    return $std_core_hnd.yield_extend(function(_c_x10068_0 /* kokaine/html/view<1534> */ ) {
-      return _mlift_render_keyed_fields_10176(output_1, _c_x10068_0);
+    return $std_core_hnd.yield_extend(function(_c_x10059_0 /* kokaine/html/view<1534> */ ) {
+      return _mlift_render_keyed_fields_10177(output_1, _c_x10059_0);
     });
   }
   else {
-    if (_y_x10067 === null) {
+    if (_y_x10058 === null) {
       var _x7 = $kokaine_html.Empty;
     }
-    else if (_y_x10067 !== null && _y_x10067.tail === null) {
-      var _x7 = _y_x10067.head;
+    else if (_y_x10058 !== null && _y_x10058.tail === null) {
+      var _x7 = _y_x10058.head;
     }
     else {
-      var _x7 = $kokaine_html.Fragment(_y_x10067);
+      var _x7 = $kokaine_html.Fragment(_y_x10058);
     }
-    return _mlift_render_keyed_fields_10176(output_1, _x7);
+    return _mlift_render_keyed_fields_10177(output_1, _x7);
   }
 }
  
  
 // monadic lift
-export function _mlift_render_keyed_fields_10178(children_1, item, output_2, position, _c_x10065) /* forall<_e,_e1,a,e2> (children@1 : (kokaine/html/accessor<a>, kokaine/html/accessor<int>) -> <kokaine/html/html<e2>,kokaine/reactive/effects/signal-read> (), item : a, output : ref<global,list<string>>, position : ref<global,int>, ()) -> () */  {
+export function _mlift_render_keyed_fields_10179(children_1, item, output_2, position, _c_x10056) /* forall<a,e> (children@1 : (kokaine/html/accessor<a>, kokaine/html/accessor<int>) -> <kokaine/html/html<e>,kokaine/reactive/effects/signal-read> (), item : a, output : ref<global,list<string>>, position : ref<global,int>, ()) -> () */  {
    
-  var current = position.value;
+  var current = $std_core_hnd._open_none1(render_load, position);
    
-  var value_6_10114 = $std_core_types._int_add(current,1);
+  var _x_x2_2_10152 = $std_core_types._int_add(current,1);
    
-  ((position).value = value_6_10114);
+  $std_core_hnd._open_none2(render_store, position, _x_x2_2_10152);
    
-  var x_3_10231 = $kokaine_html.collect(function() {
+  var x_3_10232 = $kokaine_html.collect(function() {
     return $std_core_hnd._open2($std_core_vector.unvlist($std_core_types.Cons(1, $std_core_types.Cons(2, $std_core_types.Nil))), children_1, function() {
         return item;
       }, function() {
@@ -575,67 +575,67 @@ export function _mlift_render_keyed_fields_10178(children_1, item, output_2, pos
       });
   });
   if ($std_core_hnd._yielding()) {
-    return $std_core_hnd.yield_extend(function(_y_x10067_0 /* list<kokaine/html/view<1534>> */ ) {
-      return _mlift_render_keyed_fields_10177(output_2, _y_x10067_0);
+    return $std_core_hnd.yield_extend(function(_y_x10058_0 /* list<kokaine/html/view<1534>> */ ) {
+      return _mlift_render_keyed_fields_10178(output_2, _y_x10058_0);
     });
   }
   else {
-    return _mlift_render_keyed_fields_10177(output_2, x_3_10231);
+    return _mlift_render_keyed_fields_10178(output_2, x_3_10232);
   }
 }
  
  
 // monadic lift
-export function _mlift_render_keyed_fields_10179(output_3, wild___1) /* forall<_e> (output : ref<global,list<string>>, wild_@1 : ()) -> <div,exn,kokaine/reactive/effects/signal-read> string */  {
+export function _mlift_render_keyed_fields_10180(output_3, wild___1) /* (output : ref<global,list<string>>, wild_@1 : ()) -> <div,exn,kokaine/reactive/effects/signal-read> string */  {
    
-  var xs_2_10121 = output_3.value;
-  return $std_core_list.joinsep($std_core_list.reverse_acc($std_core_types.Nil, xs_2_10121), "");
+  var xs_2_10109 = $std_core_hnd._open_none1(render_load, output_3);
+  return $std_core_list.joinsep($std_core_list.reverse_acc($std_core_types.Nil, xs_2_10109), "");
 }
  
  
 // monadic lift
-export function _mlift_render_keyed_fields_10180(children_1_0, compare, key, keys, output_4, position_0, walk, snapshot) /* forall<_e,_e1,a,b,c,e2> (children@1 : (kokaine/html/accessor<b>, kokaine/html/accessor<int>) -> <kokaine/html/html<e2>,kokaine/reactive/effects/signal-read> (), compare : (c, c) -> order, key : (b) -> c, keys : ref<global,kokaine/internal/key-index/key-index<c,()>>, output : ref<global,list<string>>, position : ref<global,int>, walk : forall<e3> (a, (b) -> e3 ()) -> e3 (), snapshot : a) -> <kokaine/reactive/effects/signal-read,div,exn> string */  {
+export function _mlift_render_keyed_fields_10181(children_1_0, compare, key, keys, output_4, position_0, walk, snapshot) /* forall<a,b,c,e> (children@1 : (kokaine/html/accessor<b>, kokaine/html/accessor<int>) -> <kokaine/html/html<e>,kokaine/reactive/effects/signal-read> (), compare : (c, c) -> order, key : (b) -> c, keys : ref<global,kokaine/internal/key-index/key-index<c,()>>, output : ref<global,list<string>>, position : ref<global,int>, walk : forall<e1> (a, (b) -> e1 ()) -> e1 (), snapshot : a) -> <kokaine/reactive/effects/signal-read,div,exn> string */  {
    
-  var x_4_10233 = walk(snapshot, function(item_0 /* 1532 */ ) {
+  var x_4_10234 = walk(snapshot, function(item_0 /* 1532 */ ) {
        
       var identity = $std_core_hnd._open_none1(key, item_0);
        
-      var _x_x1_0_10150 = keys.value;
+      var _x_x1_3_10141 = $std_core_hnd._open_none1(render_load, keys);
        
-      var _x8 = $std_core_hnd._open_none4($kokaine_internal_key_dash_index.insert, _x_x1_0_10150, identity, $std_core_types.Unit, compare);
+      var _x8 = $std_core_hnd._open_none4($kokaine_internal_key_dash_index.insert, _x_x1_3_10141, identity, $std_core_types.Unit, compare);
       if (_x8._tag === 2 && _x8.existing === 1) {
-        var x_5_10235 = $std_core_hnd._open_at2(0, $std_core_exn.$throw, "duplicate key in keyed For");
+        var x_5_10236 = $std_core_hnd._open_at2(0, $std_core_exn.$throw, "duplicate key in keyed For");
       }
       else {
-        var x_5_10235 = ((keys).value = (_x8.index));
+        var x_5_10236 = $std_core_hnd._open_none2(render_store, keys, _x8.index);
       }
       if ($std_core_hnd._yielding()) {
-        return $std_core_hnd.yield_extend(function(_c_x10065_0 /* () */ ) {
-          return _mlift_render_keyed_fields_10178(children_1_0, item_0, output_4, position_0, _c_x10065_0);
+        return $std_core_hnd.yield_extend(function(_c_x10056_0 /* () */ ) {
+          return _mlift_render_keyed_fields_10179(children_1_0, item_0, output_4, position_0, _c_x10056_0);
         });
       }
       else {
-        return _mlift_render_keyed_fields_10178(children_1_0, item_0, output_4, position_0, x_5_10235);
+        return _mlift_render_keyed_fields_10179(children_1_0, item_0, output_4, position_0, x_5_10236);
       }
     });
   if ($std_core_hnd._yielding()) {
     return $std_core_hnd.yield_extend(function(wild___1_0 /* () */ ) {
-      return _mlift_render_keyed_fields_10179(output_4, wild___1_0);
+      return _mlift_render_keyed_fields_10180(output_4, wild___1_0);
     });
   }
   else {
-    return _mlift_render_keyed_fields_10179(output_4, x_4_10233);
+    return _mlift_render_keyed_fields_10180(output_4, x_4_10234);
   }
 }
  
 export function render_children(children) /* forall<e> (children : list<kokaine/html/view<e>>) -> <pure,kokaine/reactive/effects/signal-read> string */  {
    
-  var x_6_10237 = $std_core_list.map(children, render_view);
+  var x_6_10238 = $std_core_list.map(children, render_view);
   if ($std_core_hnd._yielding()) {
-    return $std_core_hnd.yield_extend(_mlift_render_children_10169);
+    return $std_core_hnd.yield_extend(_mlift_render_children_10170);
   }
   else {
-    return $std_core_list.joinsep(x_6_10237, "");
+    return $std_core_list.joinsep(x_6_10238, "");
   }
 }
  
@@ -649,12 +649,12 @@ export function render_view(node) /* forall<e> (node : kokaine/html/view<e>) -> 
   }
   else if (node._tag === 3) {
      
-    var x_7_10240 = $std_core_hnd._open_at0(1, node.read);
+    var x_7_10241 = $std_core_hnd._open_at0(1, node.read);
     if ($std_core_hnd._yielding()) {
-      return $std_core_hnd.yield_extend(_mlift_render_view_10170);
+      return $std_core_hnd.yield_extend(_mlift_render_view_10171);
     }
     else {
-      return (((((x_7_10240).replace(new RegExp((("&")).replace(/[\\\$\^*+\-{}?().]/g,'\\$&'),'g'),("&amp;")))).replace(new RegExp((("<")).replace(/[\\\$\^*+\-{}?().]/g,'\\$&'),'g'),("&lt;")))).replace(new RegExp(((">")).replace(/[\\\$\^*+\-{}?().]/g,'\\$&'),'g'),("&gt;"));
+      return (((((x_7_10241).replace(new RegExp((("&")).replace(/[\\\$\^*+\-{}?().]/g,'\\$&'),'g'),("&amp;")))).replace(new RegExp((("<")).replace(/[\\\$\^*+\-{}?().]/g,'\\$&'),'g'),("&lt;")))).replace(new RegExp(((">")).replace(/[\\\$\^*+\-{}?().]/g,'\\$&'),'g'),("&gt;"));
     }
   }
   else if (node._tag === 5) {
@@ -662,16 +662,16 @@ export function render_view(node) /* forall<e> (node : kokaine/html/view<e>) -> 
   }
   else if (node._tag === 6) {
      
-    var x_8_10243 = $std_core_hnd._open_at0(1, node.read);
+    var x_8_10244 = $std_core_hnd._open_at0(1, node.read);
     if ($std_core_hnd._yielding()) {
-      return $std_core_hnd.yield_extend(function(_y_x10055_0 /* kokaine/html/view<1520> */ ) {
-        return _mlift_render_view_10171(_y_x10055_0);
+      return $std_core_hnd.yield_extend(function(_y_x10046_0 /* kokaine/html/view<1520> */ ) {
+        return _mlift_render_view_10172(_y_x10046_0);
       });
     }
     else {
       {
         // tail call
-        node = x_8_10243;
+        node = x_8_10244;
         continue tailcall;
       }
     }
@@ -686,37 +686,37 @@ export function render_view(node) /* forall<e> (node : kokaine/html/view<e>) -> 
   }
   else {
      
-    var x_9_10246 = $std_core_hnd._open_at1(0, checked_element_name, node.name);
+    var x_9_10247 = $std_core_hnd._open_at1(0, checked_element_name, node.name);
     if ($std_core_hnd._yielding()) {
       return $std_core_hnd.yield_extend(function(safe_name_2 /* string */ ) {
-        return _mlift_render_view_10174(node.attributes, node.children, safe_name_2);
+        return _mlift_render_view_10175(node.attributes, node.children, safe_name_2);
       });
     }
     else {
        
-      var x_10_10249 = $std_core_list.map(node.attributes, render_attribute);
+      var x_10_10250 = $std_core_list.map(node.attributes, render_attribute);
       if ($std_core_hnd._yielding()) {
-        return $std_core_hnd.yield_extend(function(_y_x10059_1 /* list<string> */ ) {
-          return _mlift_render_view_10173(node.children, x_9_10246, _y_x10059_1);
+        return $std_core_hnd.yield_extend(function(_y_x10050_1 /* list<string> */ ) {
+          return _mlift_render_view_10174(node.children, x_9_10247, _y_x10050_1);
         });
       }
       else {
          
-        var opening_1 = $std_core_types._lp__plus__plus__rp_("<", $std_core_types._lp__plus__plus__rp_(x_9_10246, $std_core_types._lp__plus__plus__rp_($std_core_list.joinsep(x_10_10249, ""), ">")));
-        var _x8 = $std_core_hnd._open_none1(is_void_element, x_9_10246);
+        var opening_1 = $std_core_types._lp__plus__plus__rp_("<", $std_core_types._lp__plus__plus__rp_(x_9_10247, $std_core_types._lp__plus__plus__rp_($std_core_list.joinsep(x_10_10250, ""), ">")));
+        var _x8 = $std_core_hnd._open_none1(is_void_element, x_9_10247);
         if (_x8) {
           return opening_1;
         }
         else {
            
-          var x_11_10252 = render_children(node.children);
+          var x_11_10253 = render_children(node.children);
           if ($std_core_hnd._yielding()) {
-            return $std_core_hnd.yield_extend(function(_y_x10060_1 /* string */ ) {
-              return _mlift_render_view_10172(opening_1, x_9_10246, _y_x10060_1);
+            return $std_core_hnd.yield_extend(function(_y_x10051_1 /* string */ ) {
+              return _mlift_render_view_10173(opening_1, x_9_10247, _y_x10051_1);
             });
           }
           else {
-            return $std_core_types._lp__plus__plus__rp_(opening_1, $std_core_types._lp__plus__plus__rp_(x_11_10252, $std_core_types._lp__plus__plus__rp_("</", $std_core_types._lp__plus__plus__rp_(x_9_10246, ">"))));
+            return $std_core_types._lp__plus__plus__rp_(opening_1, $std_core_types._lp__plus__plus__rp_(x_11_10253, $std_core_types._lp__plus__plus__rp_("</", $std_core_types._lp__plus__plus__rp_(x_9_10247, ">"))));
           }
         }
       }
@@ -726,51 +726,51 @@ export function render_view(node) /* forall<e> (node : kokaine/html/view<e>) -> 
  
 export function render_keyed_fields(read_1, walk_0, key_0, compare_0, children_1_1) /* forall<a,b,c,e> (read : () -> kokaine/reactive/effects/signal-read a, walk : forall<e1> (a, (b) -> e1 ()) -> e1 (), key : (b) -> c, compare : (c, c) -> order, children : (kokaine/html/accessor<b>, kokaine/html/accessor<int>) -> <kokaine/html/html<e>,kokaine/reactive/effects/signal-read> ()) -> <pure,kokaine/reactive/effects/signal-read> string */  {
    
-  var keys_0 = { value: ($kokaine_internal_key_dash_index.Key_index_empty) };
+  var keys_0 = $std_core_hnd._open_none1(render_cell, $kokaine_internal_key_dash_index.Key_index_empty);
    
-  var output_5 = { value: ($std_core_types.Nil) };
+  var output_5 = $std_core_hnd._open_none1(render_cell, $std_core_types.Nil);
    
-  var position_1 = { value: 0 };
+  var position_1 = $std_core_hnd._open_none1(render_cell, 0);
    
-  var x_12_10255 = $std_core_hnd._open_at0(1, read_1);
+  var x_12_10256 = $std_core_hnd._open_at0(1, read_1);
   if ($std_core_hnd._yielding()) {
     return $std_core_hnd.yield_extend(function(snapshot_0 /* 1531 */ ) {
-      return _mlift_render_keyed_fields_10180(children_1_1, compare_0, key_0, keys_0, output_5, position_1, walk_0, snapshot_0);
+      return _mlift_render_keyed_fields_10181(children_1_1, compare_0, key_0, keys_0, output_5, position_1, walk_0, snapshot_0);
     });
   }
   else {
      
-    var x_13_10258 = walk_0(x_12_10255, function(item_1 /* 1532 */ ) {
+    var x_13_10259 = walk_0(x_12_10256, function(item_1 /* 1532 */ ) {
          
         var identity_0 = $std_core_hnd._open_none1(key_0, item_1);
          
-        var _x_x1_0_10150_0 = keys_0.value;
+        var _x_x1_3_10141_0 = $std_core_hnd._open_none1(render_load, keys_0);
          
-        var _x9 = $std_core_hnd._open_none4($kokaine_internal_key_dash_index.insert, _x_x1_0_10150_0, identity_0, $std_core_types.Unit, compare_0);
+        var _x9 = $std_core_hnd._open_none4($kokaine_internal_key_dash_index.insert, _x_x1_3_10141_0, identity_0, $std_core_types.Unit, compare_0);
         if (_x9._tag === 2 && _x9.existing === 1) {
-          var x_14_10261 = $std_core_hnd._open_at2(0, $std_core_exn.$throw, "duplicate key in keyed For");
+          var x_14_10262 = $std_core_hnd._open_at2(0, $std_core_exn.$throw, "duplicate key in keyed For");
         }
         else {
-          var x_14_10261 = ((keys_0).value = (_x9.index));
+          var x_14_10262 = $std_core_hnd._open_none2(render_store, keys_0, _x9.index);
         }
         if ($std_core_hnd._yielding()) {
-          return $std_core_hnd.yield_extend(function(_c_x10065_1 /* () */ ) {
-            return _mlift_render_keyed_fields_10178(children_1_1, item_1, output_5, position_1, _c_x10065_1);
+          return $std_core_hnd.yield_extend(function(_c_x10056_1 /* () */ ) {
+            return _mlift_render_keyed_fields_10179(children_1_1, item_1, output_5, position_1, _c_x10056_1);
           });
         }
         else {
-          return _mlift_render_keyed_fields_10178(children_1_1, item_1, output_5, position_1, x_14_10261);
+          return _mlift_render_keyed_fields_10179(children_1_1, item_1, output_5, position_1, x_14_10262);
         }
       });
     if ($std_core_hnd._yielding()) {
       return $std_core_hnd.yield_extend(function(wild___1_1 /* () */ ) {
-        return _mlift_render_keyed_fields_10179(output_5, wild___1_1);
+        return _mlift_render_keyed_fields_10180(output_5, wild___1_1);
       });
     }
     else {
        
-      var xs_2_10121_0 = output_5.value;
-      return $std_core_list.joinsep($std_core_list.reverse_acc($std_core_types.Nil, xs_2_10121_0), "");
+      var xs_2_10109_0 = $std_core_hnd._open_none1(render_load, output_5);
+      return $std_core_list.joinsep($std_core_list.reverse_acc($std_core_types.Nil, xs_2_10109_0), "");
     }
   }
 }

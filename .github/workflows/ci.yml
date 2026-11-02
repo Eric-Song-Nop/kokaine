@@ -19,12 +19,18 @@ env:
 
 jobs:
   native:
-    name: Native Koka suite (${{ matrix.os }})
+    name: Native Koka ${{ matrix.koka }} suite (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        # Both ends of the supported range on Linux; macOS on the newest.
+        include:
+          - { os: ubuntu-latest, koka: 3.2.3 }
+          - { os: ubuntu-latest, koka: 3.2.9 }
+          - { os: macos-latest, koka: 3.2.9 }
+    env:
+      KOKA_VERSION: ${{ matrix.koka }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.4.0
@@ -39,8 +45,14 @@ jobs:
       - run: make test-pocketjs-runtime KOKA="$KOKA_BIN"
 
   browser:
-    name: Browser DOM and report suites
+    name: Browser DOM and report suites (Koka ${{ matrix.koka }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        koka: [3.2.3, 3.2.9]
+    env:
+      KOKA_VERSION: ${{ matrix.koka }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.4.0
