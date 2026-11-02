@@ -163,10 +163,11 @@ export function new_buckets(capacity) /* forall<a> (capacity : int) -> vector<re
     });
 }
  
+ 
+// The bucket table is allocated by the first insert: an async family creates
+// one index per `run-async`, and most families never register a task.
 export function new_int_index() /* forall<a> () -> int-index<a> */  {
-   
-  var n_10009 = ($std_core_types._int_ge(16,16)) ? 16 : 16;
-  return Int_index(cell($std_core_vector.vector_alloc_total($std_core_int.ssize__t(n_10009), function(i /* ssize_t */ ) {
+  return Int_index(cell($std_core_vector.vector_alloc_total(0, function(i /* ssize_t */ ) {
          
         $std_core_types._int_from_int32(i);
         return cell(Int_index_end);
@@ -179,8 +180,8 @@ export function int_index_fs_count(target) /* forall<a> (target : int-index<a>) 
  
 export function int_index_fs_capacity(target) /* forall<a> (target : int-index<a>) -> int */  {
    
-  var v_10013 = load(target.index_buckets);
-  return $std_core_types._int_from_int32((((v_10013).length)));
+  var v_10015 = load(target.index_buckets);
+  return $std_core_types._int_from_int32((((v_10015).length)));
 }
  
 export function normalized_key(key) /* (key : int) -> int */  {
@@ -189,8 +190,8 @@ export function normalized_key(key) /* (key : int) -> int */  {
   }
   else {
      
-    var y_10015 = $std_core_types._int_add(key,1);
-    return $std_core_types._int_sub(0,y_10015);
+    var y_10017 = $std_core_types._int_add(key,1);
+    return $std_core_types._int_sub(0,y_10017);
   }
 }
  
@@ -200,24 +201,24 @@ export function bucket_offset(key, capacity) /* (key : int, capacity : int) -> i
   }
   else {
      
-    var y_10015 = $std_core_types._int_add(key,1);
-    var _x6 = $std_core_types._int_sub(0,y_10015);
+    var y_10017 = $std_core_types._int_add(key,1);
+    var _x6 = $std_core_types._int_sub(0,y_10017);
   }
   return $std_core_types._int_mod(_x6,capacity);
 }
  
 export function bucket_at(buckets, key) /* forall<a> (buckets : vector<ref<global,int-index-link<a>>>, key : int) -> ref<global,int-index-link<a>> */  {
    
-  var capacity_10020 = $std_core_types._int_from_int32((((buckets).length)));
+  var capacity_10022 = $std_core_types._int_from_int32((((buckets).length)));
   if ($std_core_types._int_ge(key,0)) {
     var _x8 = key;
   }
   else {
      
-    var y_10015 = $std_core_types._int_add(key,1);
-    var _x8 = $std_core_types._int_sub(0,y_10015);
+    var y_10017 = $std_core_types._int_add(key,1);
+    var _x8 = $std_core_types._int_sub(0,y_10017);
   }
-  var _x7 = $std_core_vector.at(buckets, $std_core_types._int_mod(_x8,capacity_10020));
+  var _x7 = $std_core_vector.at(buckets, $std_core_types._int_mod(_x8,capacity_10022));
   if (_x7 !== null) {
     return _x7.value;
   }
@@ -258,7 +259,13 @@ export function lookup_link(value, key) /* forall<a> (value : int-index-link<a>,
 export function int_index_fs_lookup(target, key) /* forall<a> (target : int-index<a>, key : int) -> maybe<a> */  {
    
   var buckets = load(target.index_buckets);
-  return lookup_link(load(bucket_at(buckets, key)), key);
+  var _x10 = $std_core_types._int_eq(($std_core_types._int_from_int32((((buckets).length)))),0);
+  if (_x10) {
+    return $std_core_types.Nothing;
+  }
+  else {
+    return lookup_link(load(bucket_at(buckets, key)), key);
+  }
 }
  
 export function move_links(value, buckets) /* forall<a> (value : int-index-link<a>, buckets : vector<ref<global,int-index-link<a>>>) -> () */  {
@@ -271,30 +278,30 @@ export function move_links(value, buckets) /* forall<a> (value : int-index-link<
     var res_0 = $std_core.$while(function() {
         return ((loc_0).value);
       }, function() {
-        var _x10 = ((loc).value);
-        if (_x10 === null) {
+        var _x11 = ((loc).value);
+        if (_x11 === null) {
           return ((loc_0).value = false);
         }
         else {
            
-          var rest = load(_x10.link_next);
+          var rest = load(_x11.link_next);
            
-          var bucket = bucket_at(buckets, _x10.link_key);
+          var bucket = bucket_at(buckets, _x11.link_key);
            
           var successor = load(bucket);
            
-          store(_x10.link_next, successor);
+          store(_x11.link_next, successor);
            
           if (successor === null) {
             $std_core_types.Unit;
           }
           else {
-            store(successor.link_back, _x10.link_next);
+            store(successor.link_back, _x11.link_next);
           }
            
-          store(_x10.link_back, bucket);
+          store(_x11.link_back, bucket);
            
-          store(bucket, _x10);
+          store(bucket, _x11);
           return ((loc).value = rest);
         }
       });
@@ -309,7 +316,7 @@ export function int_index_fs_resize(target, requested) /* forall<a> (target : in
   var old_buckets = load(target.index_buckets);
    
   var next_buckets = new_buckets(requested);
-  var _x10 = function() {
+  var _x11 = function() {
      
     var loc = { value: 0 };
      
@@ -317,20 +324,20 @@ export function int_index_fs_resize(target, requested) /* forall<a> (target : in
         return $std_core_types._int_lt((((loc).value)),($std_core_types._int_from_int32((((old_buckets).length)))));
       }, function() {
          
-        var _x11 = $std_core_vector.at(old_buckets, ((loc).value));
-        if (_x11 === null) {
+        var _x12 = $std_core_vector.at(old_buckets, ((loc).value));
+        if (_x12 === null) {
           $std_core_types.Unit;
         }
         else {
            
-          var values = load(_x11.value);
+          var values = load(_x12.value);
            
-          store(_x11.value, Int_index_end);
+          store(_x12.value, Int_index_end);
           move_links(values, next_buckets);
         }
          
-        var x_10031 = ((loc).value);
-        return ((loc).value = ($std_core_types._int_add(x_10031,1)));
+        var x_10034 = ((loc).value);
+        return ((loc).value = ($std_core_types._int_add(x_10034,1)));
       });
     return $std_core_hnd.prompt_local_var(loc, res);
   }();
@@ -340,32 +347,37 @@ export function int_index_fs_resize(target, requested) /* forall<a> (target : in
 export function int_index_fs_ensure_insert_capacity(target) /* forall<a> (target : int-index<a>) -> () */  {
    
    
-  var v_10034 = load(target.index_buckets);
-  var capacity = $std_core_types._int_from_int32((((v_10034).length)));
-   
-  var x_10035 = load(target.index_count);
-  var _x11 = $std_core_types._int_gt(($std_core_types._int_mul(($std_core_types._int_add(x_10035,1)),4)),($std_core_types._int_mul(capacity,3)));
-  if (_x11) {
-    return int_index_fs_resize(target, $std_core_types._int_mul(capacity,2));
+  var v_10037 = load(target.index_buckets);
+  var capacity = $std_core_types._int_from_int32((((v_10037).length)));
+  if ($std_core_types._int_lt(capacity,16)) {
+    return int_index_fs_resize(target, 16);
   }
   else {
-    return $std_core_types.Unit;
+     
+    var x_10038 = load(target.index_count);
+    var _x12 = $std_core_types._int_gt(($std_core_types._int_mul(($std_core_types._int_add(x_10038,1)),4)),($std_core_types._int_mul(capacity,3)));
+    if (_x12) {
+      return int_index_fs_resize(target, $std_core_types._int_mul(capacity,2));
+    }
+    else {
+      return $std_core_types.Unit;
+    }
   }
 }
  
 export function int_index_fs_reclaim_delete_capacity(target) /* forall<a> (target : int-index<a>) -> () */  {
    
    
-  var v_10039 = load(target.index_buckets);
-  var capacity = $std_core_types._int_from_int32((((v_10039).length)));
+  var v_10042 = load(target.index_buckets);
+  var capacity = $std_core_types._int_from_int32((((v_10042).length)));
   if ($std_core_types._int_gt(capacity,16)) {
-    var _x13 = load(target.index_count);
-    var _x12 = $std_core_types._int_le(($std_core_types._int_mul(_x13,4)),capacity);
-    if (_x12) {
+    var _x14 = load(target.index_count);
+    var _x13 = $std_core_types._int_le(($std_core_types._int_mul(_x14,4)),capacity);
+    if (_x13) {
        
-      var j_10042 = $std_core_types._int_div(capacity,2);
-      var _x14 = ($std_core_types._int_ge(16,j_10042)) ? 16 : j_10042;
-      return int_index_fs_resize(target, _x14);
+      var j_10045 = $std_core_types._int_div(capacity,2);
+      var _x15 = ($std_core_types._int_ge(16,j_10045)) ? 16 : j_10045;
+      return int_index_fs_resize(target, _x15);
     }
     else {
       return $std_core_types.Unit;
@@ -377,8 +389,8 @@ export function int_index_fs_reclaim_delete_capacity(target) /* forall<a> (targe
 }
  
 export function int_index_fs_insert(target, key, value) /* forall<a> (target : int-index<a>, key : int, value : a) -> exn int-index-registration<a> */  {
-  var _x15 = $std_core_hnd._open_none2(int_index_fs_lookup, target, key);
-  if (_x15 !== null) {
+  var _x16 = $std_core_hnd._open_none2(int_index_fs_lookup, target, key);
+  if (_x16 !== null) {
     return $std_core_exn.$throw("cannot register a duplicate integer index key");
   }
   else {
@@ -391,30 +403,30 @@ export function int_index_fs_insert(target, key, value) /* forall<a> (target : i
      
     var slot = $std_core_hnd._open_none1(cell, $std_core_types.Just(value));
      
-    var _x_x1_4_10080 = $std_core_hnd._open_none1(load, bucket);
+    var _x_x1_4_10083 = $std_core_hnd._open_none1(load, bucket);
      
-    var next = $std_core_hnd._open_none1(cell, _x_x1_4_10080);
+    var next = $std_core_hnd._open_none1(cell, _x_x1_4_10083);
      
-    var _x_x1_6_10082 = $std_core_hnd._open_none1(load, next);
+    var _x_x1_6_10085 = $std_core_hnd._open_none1(load, next);
      
-    $std_core_hnd._open_none2(function(value_0 /* int-index-link<1977> */ , pointer /* ref<global,int-index-link<1977>> */ ) {
+    $std_core_hnd._open_none2(function(value_0 /* int-index-link<2189> */ , pointer /* ref<global,int-index-link<2189>> */ ) {
         if (value_0 === null) {
           return $std_core_types.Unit;
         }
         else {
           return store(value_0.link_back, pointer);
         }
-      }, _x_x1_6_10082, next);
+      }, _x_x1_6_10085, next);
      
     var back_0 = $std_core_hnd._open_none1(cell, bucket);
      
     $std_core_hnd._open_none2(store, bucket, Int_index_link(key, slot, back_0, next));
      
-    var x_10069 = $std_core_hnd._open_none1(load, target.index_count);
+    var x_10072 = $std_core_hnd._open_none1(load, target.index_count);
      
-    var _x_x2_3_10090 = $std_core_types._int_add(x_10069,1);
+    var _x_x2_3_10093 = $std_core_types._int_add(x_10072,1);
      
-    $std_core_hnd._open_none2(store, target.index_count, _x_x2_3_10090);
+    $std_core_hnd._open_none2(store, target.index_count, _x_x2_3_10093);
     return Int_index_registration(slot, back_0, next, $std_core_hnd._open_none1(cell, $std_core_types.Just(target)));
   }
 }
@@ -444,11 +456,11 @@ export function int_index_registration_fs_take(registration) /* forall<a> (regis
     }
      
      
-    var x_10048 = load(owner.value.index_count);
+    var x_10051 = load(owner.value.index_count);
      
-    var j_10047 = $std_core_types._int_sub(x_10048,1);
-    var _x16 = ($std_core_types._int_ge(0,j_10047)) ? 0 : j_10047;
-    store(owner.value.index_count, _x16);
+    var j_10050 = $std_core_types._int_sub(x_10051,1);
+    var _x17 = ($std_core_types._int_ge(0,j_10050)) ? 0 : j_10050;
+    store(owner.value.index_count, _x17);
      
     store(registration.registration_back, registration.registration_next);
      
