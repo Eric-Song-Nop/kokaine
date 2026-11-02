@@ -24,7 +24,11 @@ async function readSources(directory, prefix) {
     const diskPath = path.join(directory, entry.name);
     const vfsPath = `${prefix}/${entry.name}`;
     if (entry.isDirectory()) files.push(...await readSources(diskPath, vfsPath));
-    else if (entry.name.endsWith('.kk')) files.push([vfsPath, await readFile(diskPath, 'utf8')]);
+    // `.js` files are sidecars that a module pulls in with
+    // `extern import { js file "..." }`; Koka reads them while parsing.
+    else if (entry.name.endsWith('.kk') || entry.name.endsWith('.js')) {
+      files.push([vfsPath, await readFile(diskPath, 'utf8')]);
+    }
   }
   return files;
 }
@@ -83,7 +87,7 @@ const runtimeGzip = await readFile(path.join(packageRoot, 'public', 'koka', 'kok
 const runtime = JSON.parse(gunzipSync(runtimeGzip).toString('utf8'));
 if (!Array.isArray(runtime?.files)) throw new Error('Invalid Koka browser runtime file table');
 
-const coreSources = await readSources(path.join(repoRoot, 'src', 'kokaine'), '/share/lib/kokaine');
+const coreSources = await readSources(path.join(repoRoot, 'packages', 'core', 'src', 'kokaine'), '/share/lib/kokaine');
 const workbenchSources = await readSources(workbenchRoot, '/src');
 const sourcePath = '/src/playground/main.kk';
 const source = new Map(workbenchSources).get(sourcePath);

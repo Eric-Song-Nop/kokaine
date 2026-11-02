@@ -32,8 +32,10 @@ export interface LoadedRuntimeAssets {
   kokaineFileCount: number;
 }
 
+// `.js` files beside the modules are `extern import { js file ... }` sidecars:
+// any compile or LSP check that re-parses a Kokaine module must find them.
 const rawKokaineModules = import.meta.glob<string>(
-  '../../../../src/kokaine/**/*.kk',
+  '../../../core/src/kokaine/**/*.{kk,js}',
   { query: '?raw', import: 'default', eager: true },
 );
 
