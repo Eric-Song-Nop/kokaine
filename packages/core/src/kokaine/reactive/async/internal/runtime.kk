@@ -18,6 +18,7 @@ import kokaine/reactive/effects
 import kokaine/reactive/internal/model
 import kokaine/reactive/integration/internal/reentry
 import kokaine/reactive/internal/runtime
+import kokaine/reactive/internal/scheduler
 import kokaine/reactive/async/internal/host-turn
 import kokaine/async/internal/one-shot-task
 import kokaine/async/internal/cancellation-supervisor
@@ -106,6 +107,9 @@ type async-family<e::E>
     family-supervisors : registry<runtime-supervisor<e>>,
     family-index       : int-index<runtime-supervisor-bucket<e>>,
     family-canceled    : ref<global,list<async-scope>>,
+    // Set once a task registers under an already-canceled scope (only a
+    // scheduled action can). Until then a canceled scope owns no live task.
+    family-late-tasks  : ref<global,bool>,
     family-root-scope  : async-scope,
     family-dispatcher  : host-turn-dispatcher,
     family-runner      : host-turn-runner<<exn,ui|e>,<exn,ui>>
@@ -119,6 +123,17 @@ type generation-runtime<e::E>
 // A debug-only aggregate is intentionally not an ownership index. Task cells
 // remain owned exclusively by frames and lexical cancellation scopes.
 val outstanding-operations : ref<global,int> = cell(0)
+
+// Debug-only cost counters for the async scale tests. Like the outstanding
+// aggregate above, they never influence scheduling or ownership.
+val supervisor-allocations : ref<global,int> = cell(0)
+val scope-cancellation-scans : ref<global,int> = cell(0)
+
+pub fun generation-async-supervisor-allocations() : int
+  load(supervisor-allocations)
+
+pub fun generation-async-scope-scans() : int
+  load(scope-cancellation-scans)
 
 // Resource loaders need a lifetime which can outlive the create-effect
 // generation that observed their source. A lease group owns only raw host
@@ -346,6 +361,7 @@ fun new-runtime-supervisor(
     root : root<<ui|e>>, family : async-family<e>, scope : async-scope,
     current : frame<<ui|e>>, bucket : runtime-supervisor-bucket<e>)
     : <signal-write,pure,ui|e> runtime-supervisor<e>
+  store(supervisor-allocations,load(supervisor-allocations) + 1)
   val supervisor = Runtime-supervisor(
     scope,new-cancellation-supervisor(),cell(Task-canceled),
     cell(Nothing),cell(Nothing),cell(Nothing))
@@ -365,6 +381,44 @@ fun new-runtime-supervisor(
           current,bucket,bucket-registration)))
   supervisor
 
+fun new-indexed-runtime-supervisor(
+    root : root<<ui|e>>, family : async-family<e>, scope : async-scope,
+    current : frame<<ui|e>>)
+    : <signal-write,pure,ui|e> runtime-supervisor<e>
+  val bucket = new-runtime-supervisor-bucket()
+  val supervisor =
+    new-runtime-supervisor(root,family,scope,current,bucket)
+  // New buckets become discoverable only after their exact frame member
+  // has durable structural and family ownership.
+  val registration =
+    family.family-index.insert(scope.identity-key,bucket)
+  store(bucket.bucket-index,Just(registration))
+  supervisor
+
+// A live completion turn leaves its emptied supervisor attached until the
+// resumed suffix returns (see `run-task-result`), so a suffix which awaits
+// again in the same scope and frame can reuse it instead of rebuilding six
+// cells, a cleanup registration, and two index entries. Reuse is allowed only
+// where a rebuild would be indistinguishable: the owner cleanup is still the
+// newest finalizer of its frame, and the supervisor is still the newest family
+// member. Retirement (LIFO finalizers) and family cancellation (registry
+// snapshot order) therefore visit it exactly where a fresh supervisor would
+// have been registered. Otherwise it is detached and rebuilt as before.
+fun runtime-supervisor/reusable-when-idle(supervisor : runtime-supervisor<e>,
+                                          family : async-family<e>) : bool
+  match load(supervisor.supervisor-bucket-link)
+    Nothing -> False
+    Just(Runtime-supervisor-bucket-link(frame,_,_)) ->
+      match load(supervisor.supervisor-owner)
+        Nothing -> False
+        Just(owner) ->
+          match load(supervisor.supervisor-family)
+            Nothing -> False
+            Just(member) ->
+              frame.frame-lifetime.lifetime-finalizers.is-newest(
+                owner.cleanup-node) &&
+              family.family-supervisors.is-newest(member)
+
 fun runtime/supervisor(
     runtime : generation-runtime<e>, root : root<<ui|e>>, scope : async-scope)
     : <signal-write,pure,ui|e> runtime-supervisor<e>
@@ -373,20 +427,29 @@ fun runtime/supervisor(
   match family.family-index.lookup(scope.identity-key)
     Just(bucket) ->
       match bucket.find-frame(current)
-        Just(supervisor) -> supervisor
+        Just(supervisor) ->
+          if supervisor.supervisor-tasks.count > 0 then supervisor
+          elif supervisor.reusable-when-idle(family) then
+            // A rebuild would validate the frame in `register-cleanup`; keep
+            // that failure identical for a reused supervisor.
+            check-frame-registration(root,current)
+            supervisor
+          else
+            supervisor.detach
+            match load(bucket.bucket-index)
+              Just(_) ->
+                new-runtime-supervisor(root,family,scope,current,bucket)
+              Nothing ->
+                new-indexed-runtime-supervisor(root,family,scope,current)
         Nothing -> new-runtime-supervisor(root,family,scope,current,bucket)
-    Nothing ->
-      val bucket = new-runtime-supervisor-bucket()
-      val supervisor =
-        new-runtime-supervisor(root,family,scope,current,bucket)
-      // New buckets become discoverable only after their exact frame member
-      // has durable structural and family ownership.
-      val registration =
-        family.family-index.insert(scope.identity-key,bucket)
-      store(bucket.bucket-index,Just(registration))
-      supervisor
+    Nothing -> new-indexed-runtime-supervisor(root,family,scope,current)
 
-fun task/detach-cancellation(task : generation-task<a,e>) : ()
+fun runtime-supervisor/detach-if-idle(supervisor : runtime-supervisor<e>) : ()
+  if supervisor.supervisor-tasks.count <= 0
+  then supervisor.detach
+  else ()
+
+fun task/unlink-cancellation(task : generation-task<a,e>) : ()
   val registration = load(task.task-cancel)
   store(task.task-cancel,Nothing)
   match registration
@@ -394,9 +457,10 @@ fun task/detach-cancellation(task : generation-task<a,e>) : ()
     Just(current) ->
       val _ = current.unregister
       ()
-  if task.task-supervisor.supervisor-tasks.count <= 0
-  then task.task-supervisor.detach
-  else ()
+
+fun task/detach-cancellation(task : generation-task<a,e>) : ()
+  task.unlink-cancellation
+  task.task-supervisor.detach-if-idle
 
 // --------------------------------------------------------------------------
 // Completion and retirement
@@ -423,8 +487,10 @@ fun run-task-result(task : generation-task<a,e>, family : async-family<e>)
             Just(Task-claim(payload,result,_disposer)) ->
               // `claim-ready` has already replaced every retained field with
               // Running. No user code runs between the live preflight and this
-              // exact one-shot claim.
-              task.detach-cancellation
+              // exact one-shot claim. An emptied supervisor stays attached
+              // while the suffix runs and is detached after it returns unless
+              // the suffix registered another task in it.
+              task.unlink-cancellation
               decrement-outstanding()
               match payload
                 Task-payload(current-portal,resume-action,label) ->
@@ -436,7 +502,10 @@ fun run-task-result(task : generation-task<a,e>, family : async-family<e>)
                       "uncaught Kokaine async exception (" ++
                       label ++ "): " ++ problem.show)
                   finally(
-                    fn() { val _ = task.task-state.finish; () },
+                    fn() {
+                      val _ = task.task-state.finish
+                      task.task-supervisor.detach-if-idle
+                    },
                     fn()
                       match result
                         Nothing -> ()
@@ -567,6 +636,8 @@ fun register-task(
   // into the existing owner ledger before JavaScript can retain its callback.
   val portal = capture-reentry(root)
   val family = runtime.runtime-family
+  if runtime.is-canceled(scope) then store(family.family-late-tasks,True)
+  else ()
   val supervisor = runtime.supervisor(root,scope)
   val state = new-one-shot-task(Task-payload(portal,resume-action,label))
   val task = Generation-task(state,supervisor,cell(Nothing))
@@ -620,16 +691,26 @@ fun claim-scope-supervisors(
 noinline fun cancel-runtime-scope(runtime : generation-runtime<e>,
                                   scope : async-scope)
                                  : <signal-write,pure,ui|e> ()
-  runtime.record-canceled(scope)
-  val family = runtime.runtime-family
-  // First claim every matching supervisor/task in the immutable registry
-  // snapshot. The family root explicitly includes routed foreign scopes; no
-  // other namespace root can match them. Only after the full subtree is
-  // terminal may cancellation run.
-  val actions = claim-scope-supervisors(
-    family.family-supervisors.snapshot,scope,
-    scope == family.family-root-scope)
-  run-task-cancellations(actions)
+  // When `scope` (or an ancestor) was canceled, that cancellation claimed
+  // every task under it, and awaits and no-awaits under a canceled scope are
+  // refused before registration. Unless a scheduled action has registered
+  // under a canceled scope since, a second scan cannot find anything to
+  // claim, so a race's repeated cancel-outstanding calls skip it.
+  val already-claimed =
+    runtime.is-canceled(scope) &&
+    !load(runtime.runtime-family.family-late-tasks)
+  if already-claimed then () else
+    runtime.record-canceled(scope)
+    store(scope-cancellation-scans,load(scope-cancellation-scans) + 1)
+    val family = runtime.runtime-family
+    // First claim every matching supervisor/task in the immutable registry
+    // snapshot. The family root explicitly includes routed foreign scopes; no
+    // other namespace root can match them. Only after the full subtree is
+    // terminal may cancellation run.
+    val actions = claim-scope-supervisors(
+      family.family-supervisors.snapshot,scope,
+      scope == family.family-root-scope)
+    run-task-cancellations(actions)
 
 noinline fun release-runtime-scope(runtime : generation-runtime<e>,
                                    scope : async-scope) : ()
@@ -677,17 +758,20 @@ fun register-owned-disposer(root : root<<ui|e>>, dispose : dispose-fn)
 // Scheduled host actions are ordinary generation-owned tasks. Keep their
 // structural phase evidence live through registration; erasing it would make
 // owner cleanup masks invalid at runtime on Koka's JavaScript backend.
+//
+// A scheduled action is ready as soon as it is scheduled, so setup completes
+// the task synchronously: the task becomes Ready and the dispatcher posts the
+// one turn which runs the action in a fresh re-entry batch. Cancellation and
+// retirement claim the Ready task exactly as they claimed the Pending one,
+// and a dispatcher rejection cancels it through the ordinary Ready path.
 fun register-scheduled-ioc(root : root<<ui|e>>,
                            runtime : generation-runtime<e>,
                            scope : async-scope,
                            host-action : () -> ui ())
                           : <signal-write,pure,ui|e> ()
   val scheduled-setup = fn(resume)
-    if runtime.runtime-family.family-dispatcher.dispatch(
-         fn() resume(Result(())))
-    then Ok(fn() ())
-    else Error(Exception("async host dispatcher rejected scheduled action",
-                         ExnError))
+    resume(Result(()))
+    Ok(fn() ())
   val scheduled-resume = fn(result)
     match result
       Result(_) -> host-action()
@@ -843,5 +927,6 @@ pub fun run-generation-async-with-host(
     : <signal-read,signal-write,pure,ui|e> ()
   run-generation-async-with-family(
     root,Async-family(new-registry(),new-int-index(),
-                      cell([]),new-runtime-scope-root(),dispatcher,runner),action
+                      cell([]),cell(False),new-runtime-scope-root(),
+                      dispatcher,runner),action
   )

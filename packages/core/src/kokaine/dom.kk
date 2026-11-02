@@ -56,6 +56,14 @@ pub type toggle-state
   Toggle-open
   Toggle-closed
 
+// A listener's guarded event continuation is captured on its first delivery,
+// not at mount: most listeners never fire, and capture needs a nested dispatch
+// and async interpreter. Closing the gate is one-way in every state.
+type listener-gate
+  Gate-pending
+  Gate-captured(gate-continuation : event-continuation<async,event>)
+  Gate-closed
+
 // A keyed row has a lifetime which is deliberately independent from the
 // collection observer generation.  `current-item` and `current-index` are the
 // last committed values; their always-publishing sources are written only
@@ -284,8 +292,8 @@ extern dom-range-next(parent : node, first : node, last : node) : ui node
 // same-realm parent prototype.  No node is cloned, so ordinary object identity,
 // listeners, form values, and owner registrations are retained.
 extern dom-validate-range-move-lifecycle(parent : node, first : node,
-                                         last : node) : ui ()
-  js inline "kokaineDomValidateRangeMoveLifecycle(#1,#2,#3)"
+                                         last : node, session : any) : ui ()
+  js inline "kokaineDomValidateRangeMoveLifecycle(#1,#2,#3,#4)"
 
 extern dom-validate-range-move-focus(parent : node, first : node,
                                      last : node) : ui ()
@@ -296,30 +304,73 @@ extern dom-capture-range-focus(parent : node, first : node,
   js inline "kokaineDomCaptureRangeFocus(#1,#2,#3)"
 
 extern dom-move-range-before(parent : node, first : node, last : node,
-                             before : node, focus : any) : ui ()
-  js inline "kokaineDomMoveRangeBefore(#1,#2,#3,#4,#5)"
+                             before : node, focus : any, session : any) : ui ()
+  js inline "kokaineDomMoveRangeBefore(#1,#2,#3,#4,#5,#6)"
 
-extern dom-set-text(value : node, content : string) : ui ()
-  js inline "((#1).data = #2)"
+// A keyed move session spans one reconciliation's move phase (JavaScript
+// state, type-erased here). Rows validated through it are "planned"; a planned
+// row moves without re-inspection only while the session's mutation observer
+// and the shadow-root tracker prove its lifecycle shape is unchanged since
+// that validation. Otherwise the move re-validates, exactly as an unplanned
+// move does. `dom-keyed-no-session` is the absent session.
+extern dom-keyed-no-session() : any
+  js inline "null"
 
-extern dom-set-attribute(value : element, name : string,
-                         content : string) : ui ()
-  js inline "(#1).setAttribute(#2,#3)"
+extern dom-keyed-open-move-session(parent : node) : ui any
+  js inline "kokaineDomKeyedOpenMoveSession(#1)"
 
-extern dom-remove-attribute(value : element, name : string) : ui ()
-  js inline "(#1).removeAttribute(#2)"
+extern dom-keyed-close-move-session(session : any) : ui ()
+  js inline "kokaineDomKeyedCloseMoveSession(#1)"
 
-extern dom-set-string-property(value : element, name : string,
-                               content : string) : ui ()
-  js inline "((#1)[#2] = #3)"
+extern dom-keyed-session-trusts(session : any, first : node) : ui bool
+  js inline "kokaineDomKeyedSessionTrusts(#1,#2)"
 
-extern dom-set-bool-property(value : element, name : string,
-                             content : bool) : ui ()
-  js inline "((#1)[#2] = #3)"
+extern dom-keyed-session-planned(session : any, first : node) : ui bool
+  js inline "kokaineDomKeyedSessionPlanned(#1,#2)"
 
-extern dom-set-int-property(value : element, name : string,
-                            content : string) : ui ()
-  js inline "((#1)[#2] = Number(#3))"
+// Current DOM order of the expected rows as indices into `firsts`/`lasts`, or
+// null unless the region holds exactly those rows.
+extern dom-keyed-current-order(parent : node, first : node, last : node,
+                               firsts : vector<node>, lasts : vector<node>)
+                              : ui any
+  js inline "kokaineDomKeyedCurrentOrder(#1,#2,#3,#4,#5)"
+
+// Longest-increasing-subsequence membership, indexed by target position.
+extern dom-keyed-stable-rows(order : any) : ui vector<bool>
+  js inline "kokaineDomKeyedStableRows(#1)"
+
+extern dom-keyed-firsts-in-order(parent : node, first : node, last : node,
+                                 firsts : vector<node>) : ui bool
+  js inline "kokaineDomKeyedFirstsInOrder(#1,#2,#3,#4)"
+
+// Single-operation writes used on every live update. Each catches its own
+// host exception and returns null or the message `dom-attempt` would report,
+// avoiding the per-call closure and result box of `dom-attempt-raw`.
+extern dom-try-set-text(value : node, content : string) : ui any
+  js inline "kokaineDomTrySetText(#1,#2)"
+
+extern dom-try-set-attribute(value : element, name : string,
+                             content : string) : ui any
+  js inline "kokaineDomTrySetAttribute(#1,#2,#3)"
+
+extern dom-try-remove-attribute(value : element, name : string) : ui any
+  js inline "kokaineDomTryRemoveAttribute(#1,#2)"
+
+extern dom-try-set-property(value : element, name : string,
+                            content : any) : ui any
+  js inline "kokaineDomTrySetProperty(#1,#2,#3)"
+
+extern string-any(value : string) : any
+  js inline "#1"
+
+extern bool-any(value : bool) : any
+  js inline "#1"
+
+extern int-string-any(value : string) : any
+  js inline "Number(#1)"
+
+extern any-string(value : any) : string
+  js inline "String(#1)"
 
 extern dom-clean-range(first : node, last : node, inclusive : bool) : ui ()
   js inline "kokaineDomCleanRange(#1,#2,#3)"
@@ -641,16 +692,24 @@ fun range-first(parent : node, first : node, last : node) : <ui,exn> node
 fun range-next(parent : node, first : node, last : node) : <ui,exn> node
   dom-attempt{ dom-range-next(parent,first,last) }
 
+// A row planned (validated) by `session` skips the deep lifecycle walk while
+// the session is clean; focus is always re-checked because it can change
+// without a DOM mutation.
 fun move-range-before(parent : node, first : node, last : node,
-                      before : node) : <ui,exn> ()
-  validate-range-move-lifecycle(parent,first,last)
+                      before : node, session : any) : <ui,exn> ()
+  val trusted = dom-attempt{ dom-keyed-session-trusts(session,first) }
+  if trusted then () else
+    dom-attempt{
+      dom-validate-range-move-lifecycle(parent,first,last,dom-keyed-no-session())
+    }
+  dom-attempt{ dom-validate-range-move-focus(parent,first,last) }
   val focus = dom-attempt{ dom-capture-range-focus(parent,first,last) }
-  dom-attempt{ dom-move-range-before(parent,first,last,before,focus) }
+  dom-attempt{ dom-move-range-before(parent,first,last,before,focus,session) }
 
-fun validate-range-move-lifecycle(parent : node, first : node, last : node)
-                                  : <ui,exn> ()
+fun validate-range-move-lifecycle(parent : node, first : node, last : node,
+                                  session : any) : <ui,exn> ()
   dom-attempt{
-    dom-validate-range-move-lifecycle(parent,first,last)
+    dom-validate-range-move-lifecycle(parent,first,last,session)
   }
   dom-attempt{
     dom-validate-range-move-focus(parent,first,last)
@@ -700,42 +759,98 @@ fun insert-html(root : root<<ui>>, parent : node, before : maybe<node>,
       }
   register-owner-cleanup(root,registered)
 
-fun set-attribute(value : element, name : string,
-                  content : maybe<string>) : <ui,exn> ()
-  if !name.is-valid-attribute-name
+fun dom-check(failure : any) : exn ()
+  if failure.any-is-null then ()
+  else throw("browser DOM exception: " ++ failure.any-string)
+
+fun set-text(target : node, content : string) : <ui,exn> ()
+  dom-check(dom-try-set-text(target,content))
+
+// A name is fixed for the lifetime of a binding, so live bindings classify it
+// once (`valid`, and whether it is a URL attribute) and pass the result to
+// every update. The value is still URL-checked on every update.
+fun set-classified-attribute(value : element, name : string, valid : bool,
+                             url : bool, content : maybe<string>)
+                            : <ui,exn> ()
+  if !valid
   then throw("invalid HTML attribute name: " ++ name)
   else match content
-         Nothing -> dom-attempt{ dom-remove-attribute(value,name) }
+         Nothing -> dom-check(dom-try-remove-attribute(value,name))
          Just(text) ->
-           if !is-safe-url-value(name,text) then throw(unsafe-url-message(name))
-           else dom-attempt{ dom-set-attribute(value,name,text) }
+           if url && !is-safe-url-value(name,text)
+           then throw(unsafe-url-message(name))
+           else dom-check(dom-try-set-attribute(value,name,text))
+
+fun set-attribute(value : element, name : string,
+                  content : maybe<string>) : <ui,exn> ()
+  set-classified-attribute(value,name,name.is-valid-attribute-name,
+                           name.is-url-attribute,content)
 
 fun set-trusted-url(value : element, name : string,
                     url : trusted-url) : <ui,exn> ()
   if !name.is-valid-attribute-name
   then throw("invalid HTML attribute name: " ++ name)
-  else dom-attempt{ dom-set-attribute(value,name,trusted-url-content(url)) }
+  else dom-check(dom-try-set-attribute(value,name,trusted-url-content(url)))
 
-fun set-property(value : element, name : string,
-                 content : property-value) : <ui,exn> ()
-  if !name.is-valid-property-name
+fun set-classified-property(value : element, name : string, valid : bool,
+                            url : bool, content : property-value)
+                           : <ui,exn> ()
+  if !valid
   then throw("invalid or markup-writing DOM property: " ++ name)
   else match content
          String-property(text) ->
-           if !is-safe-url-value(name,text) then throw(unsafe-url-message(name))
-           else dom-attempt{ dom-set-string-property(value,name,text) }
+           if url && !is-safe-url-value(name,text)
+           then throw(unsafe-url-message(name))
+           else dom-check(dom-try-set-property(value,name,string-any(text)))
          Bool-property(flag) ->
-           dom-attempt{ dom-set-bool-property(value,name,flag) }
+           dom-check(dom-try-set-property(value,name,bool-any(flag)))
          Int-property(number) ->
-           dom-attempt{ dom-set-int-property(value,name,number.show) }
+           dom-check(dom-try-set-property(
+             value,name,int-string-any(number.show)))
+
+fun set-property(value : element, name : string,
+                 content : property-value) : <ui,exn> ()
+  set-classified-property(value,name,name.is-valid-property-name,
+                          name.is-url-attribute,content)
 
 fun snapshot(value : raw-event) : <ui,exn> event
   dom-attempt fn()
     Event(raw-event-value(value),raw-event-checked(value),raw-event-key(value),
           raw-event-any(value))
 
+fun gate-is-live(gate : ref<global,listener-gate>) : bool
+  match transaction-load(gate)
+    Gate-pending -> True
+    Gate-captured(continuation) -> continuation.is-live
+    Gate-closed -> False
+
+fun close-gate(gate : ref<global,listener-gate>) : ()
+  val current = transaction-load(gate)
+  transaction-store(gate,Gate-closed)
+  match current
+    Gate-captured(continuation) -> continuation.close
+    _ -> ()
+
+fun resume-gate(gate : ref<global,listener-gate>, action : callback,
+                value : event)
+               : <async,signal-read,signal-write,pure,ui> ()
+  match transaction-load(gate)
+    Gate-closed -> ()
+    Gate-captured(continuation) ->
+      val _ = continuation.resume(value)
+      ()
+    Gate-pending ->
+      // `capture-event` reaches its unconditional browser-event suspension
+      // before running any user code, so this publishes the master
+      // continuation before the first (possibly re-entrant) delivery resumes
+      // it. Nested deliveries then resume the same multi-shot master.
+      val continuation = capture-event(action)
+      transaction-store(gate,Gate-captured(continuation))
+      val _ = continuation.resume(value)
+      ()
+
 fun invoke-event(root : root<<ui>>, portal : reentry<<ui>>,
-                 continuation : event-continuation<async,event>,
+                 gate : ref<global,listener-gate>, action : callback,
                  value : raw-event)
                 : ui ()
   // A browser event runs after `main` has returned, so its dynamic exception
@@ -745,11 +860,11 @@ fun invoke-event(root : root<<ui>>, portal : reentry<<ui>>,
     dom-report-error("uncaught Kokaine event exception: " ++ problem.show)
   // Closing the gate must make even a retained/undetachable JavaScript
   // trampoline inert: do not snapshot or touch a stale structural frame.
-  if continuation.is-live then
+  if gate.gate-is-live then
     val captured = snapshot(value)
     // A custom event target getter can synchronously dispose during snapshot.
     // Recheck before touching the structural portal; resume checks once more.
-    if continuation.is-live then
+    if gate.gate-is-live then
       // Re-entry restores Kokaine's structural/reactive handlers; the opaque
       // event capability then resumes the actual multi-shot user continuation.
       // Keeping resume synchronous preserves native nested `dispatchEvent` order.
@@ -757,9 +872,10 @@ fun invoke-event(root : root<<ui>>, portal : reentry<<ui>>,
         // The async delimiter is inside this re-entry batch. Reaching await
         // therefore returns here first, letting the batch close before any
         // later browser completion starts its own generation-bound turn.
+        // The continuation is resumed under these handlers whether it was
+        // captured just now or by an earlier delivery.
         run-async(root,fn()
-          val _ = continuation.resume(captured)
-          ()
+          resume-gate(gate,action,captured)
         )
       )
     else ()
@@ -767,7 +883,7 @@ fun invoke-event(root : root<<ui>>, portal : reentry<<ui>>,
 
 fun retire-event-listener(
       target : element, name : string,
-      continuation : event-continuation<async,event>,
+      gate : ref<global,listener-gate>,
       listener : ref<global,maybe<dom-listener>>)
     : <ui,exn> ()
   // Gate the continuation before detaching the host callback. Even if a
@@ -781,48 +897,33 @@ fun retire-event-listener(
           dom-retire-listener(value)
           dom-attempt{ dom-unlisten(target,name,value) }
     },
-    fn() continuation.close
+    fn() close-gate(gate)
   )
-
-fun capture-event-listener(root : root<<ui>>, action : callback)
-                          : <ui,exn> event-continuation<async,event>
-  val captured = transaction-cell(Nothing)
-  dispatch(root,fn()
-    run-async(root,fn()
-      // `capture-event` reaches its unconditional browser-event suspension
-      // before any user code or Web await, so the capability is published
-      // synchronously while the real async evidence remains installed.
-      transaction-store(captured,Just(capture-event(action)))
-    )
-  )
-  match transaction-load(captured)
-    Just(continuation) -> continuation
-    Nothing -> throw("event continuation capture did not complete synchronously")
 
 fun install-event-listener(root : root<<ui>>, target : element,
                            name : string, action : callback)
                           : <ui,exn> ()
-  // Capture the action before JavaScript retains its ABI trampoline. The
-  // short nested dispatch installs the full reactive handler set required by
-  // the parked continuation, but no user action executes during capture.
-  val continuation = capture-event-listener(root,action)
+  // The gate exists before JavaScript retains its ABI trampoline, so
+  // retirement can always close it. The continuation itself is captured on
+  // first delivery, under that delivery's re-entry and async handlers.
+  val gate = transaction-cell(Gate-pending)
   val portal = capture-reentry(root)
   val listener : ref<global,maybe<dom-listener>> = transaction-cell(Nothing)
   val committed = transaction-cell(False)
   finally(
     fn() {
       if transaction-load(committed) then () else
-        retire-event-listener(target,name,continuation,listener)
+        retire-event-listener(target,name,gate,listener)
     },
     fn()
       val installed = dom-attempt fn()
         dom-listen(target,name,fn(value)
-          invoke-event(root,portal,continuation,value)
+          invoke-event(root,portal,gate,action,value)
         )
       transaction-store(listener,Just(installed))
       on-cleanup(root,fn()
         reactive-ui-exn{
-          retire-event-listener(target,name,continuation,listener)
+          retire-event-listener(target,name,gate,listener)
         }
       )
       transaction-store(committed,True)
@@ -843,13 +944,22 @@ fun mount-attribute(root : root<<ui>>, target : element,
       set-attribute(target,name,if enabled then Just("") else Nothing)
     Property(name,value) -> set-property(target,name,value)
     Live-attribute(name,read) ->
+      // An invalid name still fails on the first run, as before.
+      val valid = name.is-valid-attribute-name
+      val url = name.is-url-attribute
       val dispose = create-effect(root,fn() tracked(read),fn(value)
-        reactive-ui-exn{ set-attribute(target,name,value) }
+        reactive-ui-exn{
+          set-classified-attribute(target,name,valid,url,value)
+        }
       )
       ()
     Live-property(name,read) ->
+      val valid = name.is-valid-property-name
+      val url = name.is-url-attribute
       val dispose = create-effect(root,fn() tracked(read),fn(value)
-        reactive-ui-exn{ set-property(target,name,value) }
+        reactive-ui-exn{
+          set-classified-property(target,name,valid,url,value)
+        }
       )
       ()
     Listener(name,action) ->
@@ -916,20 +1026,93 @@ fun dispose-keyed-rows<a,k,e::E>(rows : list<keyed-row<e,a,k>>)
     row.row-scope.dispose
   )
 
-fun rollback-keyed-order<a,k,e::E>(parent : node, last : node,
-                         rows : list<keyed-row<e,a,k>>) : <ui,exn> ()
+fun rollback-keyed-order<a,k,e::E>(parent : node, first : node, last : node,
+                         rows : list<keyed-row<e,a,k>>, session : any)
+                        : <ui,exn> ()
+  // Only rows planned to move can have left their former relative order.
+  // Back to front, put each planned row before its former successor; the
+  // other former rows stay. Draft rows may remain interleaved until their
+  // disposal. If anything else disturbed the order, fall back to rebuilding
+  // the complete former order at the closing boundary.
+  val anchor = transaction-cell(last)
+  val restored = capture-error(fn()
+    exhaust-keyed-row-actions(rows.reverse,fn(row)
+      val target = transaction-load(anchor)
+      transaction-store(anchor,row.row-first)
+      if dom-keyed-session-planned(session,row.row-first) then
+        val next = range-next(parent,row.row-first,row.row-last)
+        if dom-same-node(next,target) then ()
+        else move-range-before(parent,row.row-first,row.row-last,target,session)
+      else ()
+    )
+  )
+  val firsts = rows.map(fn(row) row.row-first).vector
+  val in-order = dom-attempt{
+    dom-keyed-firsts-in-order(parent,first,last,firsts)
+  }
+  if in-order then restored.untry
+  else rebuild-keyed-order(parent,last,rows,session)
+
+fun rebuild-keyed-order<a,k,e::E>(parent : node, last : node,
+                         rows : list<keyed-row<e,a,k>>, session : any)
+                        : <ui,exn> ()
   // Moving each prior row to the closing boundary in its former order
   // reconstructs that complete order regardless of the partial draft order.
   exhaust-keyed-row-actions(rows,fn(row)
     val next = range-next(parent,row.row-first,row.row-last)
     if dom-same-node(next,last) then ()
-    else move-range-before(parent,row.row-first,row.row-last,last)
+    else move-range-before(parent,row.row-first,row.row-last,last,session)
   )
 
-fun validate-keyed-move-lifecycles<a,k,e::E>(parent : node,
-                         rows : list<keyed-row<e,a,k>>) : <ui,exn> ()
-  rows.foreach fn(row)
-    validate-range-move-lifecycle(parent,row.row-first,row.row-last)
+// Plan placement of `rows` (the complete target order) by a longest
+// increasing subsequence over their current positions: rows on it stay, the
+// rest move. Every row that will move is validated now, before the first
+// move; rollback only moves planned rows, so this is also its validation.
+fun plan-keyed-moves<a,k,e::E>(parent : node, first : node, last : node,
+                     rows : list<keyed-row<e,a,k>>, session : any)
+                    : <ui,exn> list<(keyed-row<e,a,k>,bool)>
+  val firsts = rows.map(fn(row) row.row-first).vector
+  val lasts = rows.map(fn(row) row.row-last).vector
+  val current = dom-attempt{
+    dom-keyed-current-order(parent,first,last,firsts,lasts)
+  }
+  if any-is-null(current)
+  then throw("invalid Kokaine keyed DOM: unmanaged nodes remain in the region")
+  else ()
+  val stable = dom-attempt{ dom-keyed-stable-rows(current) }
+  val plan = rows.zip(stable.list)
+  plan.foreach fn(entry)
+    val (row,keep) = entry
+    if keep then ()
+    else validate-range-move-lifecycle(parent,row.row-first,row.row-last,session)
+  plan
+
+// Walk the plan back to front, moving each unstable row before the row that
+// follows it in the target order (Vue/ivi style).
+fun place-keyed-plan<a,k,e::E>(parent : node, anchor : node,
+                     reversed : list<(keyed-row<e,a,k>,bool)>, session : any)
+                    : <ui,exn> ()
+  match reversed
+    Nil -> ()
+    Cons((row,keep),rest) ->
+      if keep then ()
+      else move-range-before(parent,row.row-first,row.row-last,anchor,session)
+      place-keyed-plan(parent,row.row-first,rest,session)
+
+// Reorder the region to `rows` with as few row moves as the LIS allows.
+fun move-keyed-rows<a,k,e::E>(parent : node, first : node, last : node,
+                    rows : list<keyed-row<e,a,k>>,
+                    session-cell : ref<global,any>,
+                    move-phase : ref<global,bool>) : <ui,exn> ()
+  val session = dom-attempt{ dom-keyed-open-move-session(parent) }
+  transaction-store(session-cell,session)
+  finally(
+    fn() dom-keyed-close-move-session(session),
+    fn()
+      val plan = plan-keyed-moves(parent,first,last,rows,session)
+      transaction-store(move-phase,True)
+      place-keyed-plan(parent,last,plan.reverse,session)
+  )
 
 fun validate-keyed-order<a,k,e::E>(parent : node, last : node, cursor : node,
                          rows : list<keyed-row<e,a,k>>) : <ui,exn> ()
@@ -953,20 +1136,6 @@ fun keyed-order-matches<a,k,e::E>(parent : node, last : node, cursor : node,
       else
         val next = range-next(parent,row.row-first,row.row-last)
         keyed-order-matches(parent,last,next,rest)
-
-fun place-keyed-updates<a,k,e::E>(parent : node, cursor : node,
-                        updates : list<keyed-update<e,a,k>>)
-                       : <ui,exn> node
-  match updates
-    Nil -> cursor
-    Cons(update,rest) ->
-      val row = update.update-row
-      val next = range-next(parent,row.row-first,row.row-last)
-      if dom-same-node(cursor,row.row-first)
-      then place-keyed-updates(parent,next,rest)
-      else
-        move-range-before(parent,row.row-first,row.row-last,cursor)
-        place-keyed-updates(parent,cursor,rest)
 
 fun collect-stale-rows<a,k,e::E>(rows : list<keyed-row<e,a,k>>,
                        next : key-index<k,keyed-row<e,a,k>>,
@@ -1140,6 +1309,7 @@ fun reconcile-keyed<a,k,e::E>(
       val drafts = transaction-cell([])
       val position = transaction-cell(0)
       val move-phase = transaction-cell(False)
+      val move-session : ref<global,any> = transaction-cell(dom-keyed-no-session())
       val committed = transaction-cell(False)
       val enlisted = transaction-cell(False)
       val staged-retirements = transaction-cell([])
@@ -1154,7 +1324,8 @@ fun reconcile-keyed<a,k,e::E>(
               finally(
                 fn() {
                   if transaction-load(move-phase)
-                  then rollback-keyed-order(parent,last,old-order)
+                  then rollback-keyed-order(parent,first,last,old-order,
+                                            transaction-load(move-session))
                   else ()
                 },
                 fn()
@@ -1235,22 +1406,19 @@ fun reconcile-keyed<a,k,e::E>(
               drain-keyed-participation(renderer,participation)
             }
 
-            // Fail closed before the first physical move if a retained custom
-            // or stale element would receive synchronous disconnect/reconnect
-            // callbacks during forward placement or rollback. A matching order
-            // never enters the move phase: later preparation/retirement failure
-            // then has no physical order to restore.
+            // Fail closed before the first physical move if a row that LIS
+            // placement or rollback would move contains a custom element that
+            // would receive synchronous disconnect/reconnect callbacks. A
+            // matching order never enters the move phase: later
+            // preparation/retirement failure then has no physical order to
+            // restore.
             val physical-order = final-order ++ stale
             val current-cursor = range-first(parent,first,last)
             val order-changed = !keyed-order-matches(
               parent,last,current-cursor,physical-order)
             if order-changed then
-              validate-keyed-move-lifecycles(
-                parent,physical-order)
-              transaction-store(move-phase,True)
-              val cursor = range-first(parent,first,last)
-              val _ = place-keyed-updates(parent,cursor,final-updates)
-              ()
+              move-keyed-rows(parent,first,last,physical-order,
+                              move-session,move-phase)
             else ()
 
             // Moving a row may synchronously reconnect custom elements. Validate
@@ -1308,11 +1476,8 @@ fun reconcile-keyed<a,k,e::E>(
                   val order-changed = !keyed-order-matches(
                     parent,last,current-cursor,final-order)
                   if order-changed then
-                    validate-keyed-move-lifecycles(parent,final-order)
-                    transaction-store(move-phase,True)
-                    val cursor = range-first(parent,first,last)
-                    val _ = place-keyed-updates(parent,cursor,final-updates)
-                    ()
+                    move-keyed-rows(parent,first,last,final-order,
+                                    move-session,move-phase)
                   else ()
                   val placed = range-first(parent,first,last)
                   validate-keyed-order(parent,last,placed,final-order)
@@ -1327,7 +1492,8 @@ fun reconcile-keyed<a,k,e::E>(
                   finally(
                     fn() {
                       if transaction-load(move-phase)
-                      then rollback-keyed-order(parent,last,old-order)
+                      then rollback-keyed-order(parent,first,last,old-order,
+                                                transaction-load(move-session))
                       else ()
                     },
                     fn() dispose-keyed-rows(transaction-load(drafts))
@@ -1428,7 +1594,7 @@ fun mount-view(renderer : keyed-context, root : root<<ui>>, parent : node,
       val target = dom-attempt{ dom-create-text("") }
       insert(parent,before,target)
       val dispose = create-effect(root,fn() tracked(read),fn(value)
-        reactive-ui-exn{ dom-attempt{ dom-set-text(target,value) } }
+        reactive-ui-exn{ set-text(target,value) }
       )
       ()
     Element(name,attributes,children) ->
