@@ -872,7 +872,9 @@ with serve_project() as origin:
             "done": True,
             "owned": 0,
             "outstanding": 0,
-            "leasedOwned": 1,
+            # The lease plus the emptied supervisor, which stays attached until
+            # the resumed turn returns; "owned" above is sampled after that.
+            "leasedOwned": 2,
             "leasedOutstanding": 1,
             "leaseDisposals": 0,
             "snapshotLeaseDisposals": 1,
