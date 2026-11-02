@@ -48,6 +48,67 @@ function kokaineWindowEventSetupRaw(name, complete, reject) {
   }
 }
 
+/** Backs `extern window-monitor-open-raw`. */
+function kokaineWindowMonitorOpenRaw() {
+  var state = { closed: false, pending: [], waiter: null, listeners: [] };
+  var install = function (name) {
+    var listener = function () {
+      if (state.closed) {
+        // An earlier removal threw. Retry; this closure is inert either way.
+        kokaineWindowMonitorCloseRaw(state);
+        return;
+      }
+      if (state.pending.indexOf(name) < 0)
+        state.pending.push(name);
+      var waiter = state.waiter;
+      if (waiter) {
+        state.waiter = null;
+        waiter(state.pending.shift());
+      }
+    };
+    state.listeners.push({ name: name, listener: listener });
+    window.addEventListener(name, listener, { passive: name === 'scroll' });
+  };
+  try {
+    install('scroll');
+    install('hashchange');
+    return { ok: true, state: state };
+  } catch (error) {
+    kokaineWindowMonitorCloseRaw(state);
+    return { ok: false, error: error };
+  }
+}
+
+/** Backs `extern window-monitor-wait-raw`. */
+function kokaineWindowMonitorWaitRaw(state, complete) {
+  if (state.closed)
+    return;
+  if (state.pending.length > 0)
+    complete(state.pending.shift());
+  else
+    state.waiter = complete;
+}
+
+/** Backs `extern window-monitor-cancel-wait-raw`. */
+function kokaineWindowMonitorCancelWaitRaw(state) {
+  state.waiter = null;
+}
+
+/** Backs `extern window-monitor-close-raw`. Never throws; idempotent. */
+function kokaineWindowMonitorCloseRaw(state) {
+  state.closed = true;
+  state.waiter = null;
+  state.pending = [];
+  state.listeners = state.listeners.filter(function (entry) {
+    try {
+      window.removeEventListener(entry.name, entry.listener);
+      return false;
+    } catch (_) {
+      return true;
+    }
+  });
+}
+
 /** Backs `extern host-attempt-raw`. */
 function kokaineWindowHostAttemptRaw(action) {
   try {

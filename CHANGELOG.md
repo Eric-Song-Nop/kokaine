@@ -15,6 +15,8 @@ Versions are per package. Entries list the package and version they shipped in.
   similar schemes; `unsafe-trusted-url` opts in explicitly.
 - `@kokaine/core`: SVG and MathML elements are created in their namespaces.
 - `@kokaine/core`: a later patch of `attachShadow` no longer breaks mounting.
+- `@kokaine/core`: `monitor-window-events` no longer drops events fired between
+  iterations or while its action runs; repeats of a pending kind coalesce.
 - `@kokaine/cli`: the compiler archive extractor refuses entries written through
   an extracted symlink.
 
