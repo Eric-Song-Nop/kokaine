@@ -106,6 +106,8 @@ def exercise_report(page) -> None:
     expect(toc).to_have_class("toc")
 
     # A TOC selection also owns and closes the drawer state.
+    page.on("console", lambda m: print("DIAG console", m.type, m.text, flush=True))
+    page.on("pageerror", lambda e: print("DIAG pageerror", e, flush=True))
     toc_toggle.dispatch_event("click")
     flow_link = toc.locator('a[href="#flow-lab"]')
     flow_link.click()
@@ -118,6 +120,23 @@ def exercise_report(page) -> None:
         "node => node.scrollIntoView({block: 'start', behavior: 'instant'})"
     )
     scheduler_link = toc.locator('a[href="#scheduler"]')
+    # TEMP-DIAG
+    try:
+        expect(scheduler_link).to_have_class("is-active", timeout=3000)
+    except AssertionError:
+        print("DIAG geometry", page.evaluate("""() => ({
+            scrollY: window.scrollY, h: window.innerHeight, hash: location.hash,
+            active: [...document.querySelectorAll('#toc a.is-active')].map(a => a.getAttribute('href')),
+            sched: document.querySelector('#scheduler').getBoundingClientRect().top,
+            flow: document.querySelector('#flow-lab').getBoundingClientRect().top,
+            log: globalThis.__diag || null })"""), flush=True)
+        page.evaluate("window.dispatchEvent(new Event('scroll'))")
+        page.wait_for_timeout(500)
+        print("DIAG after synthetic scroll", page.evaluate("[...document.querySelectorAll('#toc a.is-active')].map(a => a.getAttribute('href'))"), flush=True)
+        page.evaluate("window.dispatchEvent(new Event('scroll'))")
+        page.wait_for_timeout(500)
+        print("DIAG after second synthetic scroll", page.evaluate("[...document.querySelectorAll('#toc a.is-active')].map(a => a.getAttribute('href'))"), flush=True)
+        raise
     expect(scheduler_link).to_have_class("is-active")
     expect(scheduler_link).to_have_attribute("aria-current", "true")
     page.evaluate("window.location.hash = '#wasm'")
