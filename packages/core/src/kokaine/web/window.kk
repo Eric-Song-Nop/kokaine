@@ -10,7 +10,6 @@
 module kokaine/web/window
 
 import kokaine/async/effects
-import kokaine/async/structured
 
 extern import
   js file "window-inline.js"
@@ -22,6 +21,9 @@ pub type window-event
 
 abstract type window-event-subscription
   Window-event-subscription(value : any)
+
+abstract type window-monitor
+  Window-monitor(value : any)
 
 
 fun window-event/name(value : window-event) : string
@@ -54,6 +56,22 @@ extern host-error-message(value : any) : string
 
 extern retire-window-event(value : window-event-subscription) : ui ()
   js inline "kokaineWindowRetireWindowEvent(#1)"
+
+extern window-monitor-open-raw() : ui any
+  js inline "kokaineWindowMonitorOpenRaw()"
+
+extern host-result-monitor(value : any) : window-monitor
+  js inline "(#1).state"
+
+extern window-monitor-wait-raw(monitor : window-monitor,
+                               complete : string -> ui ()) : ui ()
+  js inline "kokaineWindowMonitorWaitRaw(#1,#2)"
+
+extern window-monitor-cancel-wait-raw(monitor : window-monitor) : ui ()
+  js inline "kokaineWindowMonitorCancelWaitRaw(#1)"
+
+extern window-monitor-close-raw(monitor : window-monitor) : ui ()
+  js inline "kokaineWindowMonitorCloseRaw(#1)"
 
 extern focus-selector-raw(selector : string) : ui any
   js inline "kokaineWindowFocusSelectorRaw(#1)"
@@ -110,20 +128,34 @@ pub fun await-window-event(value : window-event) : <async,exn> ()
       Ok(fn() retire-window-event(subscription))
   )
 
+fun window-event/from-name(name : string) : window-event
+  if name == "hashchange" then Window-hash-change else Window-scroll
+
+// Follow scroll and hash changes until cancelled or `action` fails. Listeners
+// stay installed for the whole monitor and write into a mailbox, so an event
+// fired while `action` is running or between iterations is never lost. Repeats
+// of a kind that is already pending coalesce; kinds are delivered in the order
+// they first arrived. A lease closes the listeners when the owner retires.
 pub fun monitor-window-events(action : window-event -> <async,div,exn|e> ())
                              : <async,div,exn|e> ()
-  while { True }
-    val changed = race(
-      fn() {
-        await-window-event(Window-scroll)
-        Window-scroll
-      },
-      fn() {
-        await-window-event(Window-hash-change)
-        Window-hash-change
-      }
-    )
-    action(changed)
+  val opened = async-host(fn() window-monitor-open-raw())
+  if !host-result-ok(opened) then
+    throw("browser window event setup failed: " ++
+          host-error-message(host-result-error(opened)))
+  val monitor = host-result-monitor(opened)
+  val release = async-own(fn() window-monitor-close-raw(monitor))
+  // `release` only gives up the lease; it does not run the disposer.
+  val close = fn()
+    release()
+    window-monitor-close-raw(monitor)
+  finally(fn() async-host(close),fn()
+    while { True }
+      val name = setup/await-noexn("window event",fn(complete)
+        window-monitor-wait-raw(monitor,complete)
+        fn() window-monitor-cancel-wait-raw(monitor)
+      )
+      action(name.from-name)
+  )
 
 pub fun focus-selector(selector : string) : <ui,exn> ()
   require-host-result(focus-selector-raw(selector),"focus")

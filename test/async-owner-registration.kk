@@ -164,9 +164,14 @@ fun exercise-completed-owner-registration() : <ui,exn> ()
       val leased-owned = root-owned-resource-count(root)
       val leased-outstanding = generation-async-outstanding()
       release()
-      publish-result(
-        root-owned-resource-count(root),generation-async-outstanding(),
-        leased-owned,leased-outstanding)
+      // The emptied supervisor stays attached until this resumed turn returns,
+      // so a later await can reuse it. Sample from the next microtask: nothing
+      // may remain registered once the turn has ended.
+      queue-host-action(fn()
+        publish-result(
+          root-owned-resource-count(root),generation-async-outstanding(),
+          leased-owned,leased-outstanding)
+      )
     )
   )
 

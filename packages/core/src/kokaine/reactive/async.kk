@@ -8,8 +8,9 @@ module kokaine/reactive/async
 
 import kokaine/reactive
 import kokaine/async/effects
-import kokaine/async/internal/web-schedule
 import kokaine/reactive/async/integration
+import kokaine/reactive/async/internal/host-turn
+import kokaine/reactive/async/internal/web-runtime
 
 
 pub fun run-async(
@@ -18,8 +19,5 @@ pub fun run-async(
     : <signal-read,signal-write,pure,ui> ()
   run-async-with-dispatcher(
     root,
-    new-async-host-dispatcher(fn(turn) {
-      enqueue-microtask(turn)
-      True
-    }),
+    new-async-host-dispatcher(fn(turn) web-host-turns.post(turn)),
     action)

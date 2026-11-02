@@ -53,8 +53,10 @@ fun new-buckets(capacity : int)
   vector-init-total(max(minimum-capacity,capacity),
                     fn(_) cell(Int-index-end))
 
+// The bucket table is allocated by the first insert: an async family creates
+// one index per `run-async`, and most families never register a task.
 pub fun new-int-index() : int-index<a>
-  Int-index(cell(new-buckets(minimum-capacity)),cell(0))
+  Int-index(cell(vector-init-total(0,fn(_) cell(Int-index-end))),cell(0))
 
 pub fun int-index/count(target : int-index<a>) : int
   match target
@@ -95,7 +97,8 @@ pub fun int-index/lookup(target : int-index<a>, key : int) : maybe<a>
   match target
     Int-index(bucket-store,_) ->
       val buckets = load(bucket-store)
-      pretend-no-div { lookup-link(load(bucket-at(buckets,key)),key) }
+      if buckets.length == 0 then Nothing
+      else pretend-no-div { lookup-link(load(bucket-at(buckets,key)),key) }
 
 fun move-links(
     value : int-index-link<a>,
@@ -137,7 +140,8 @@ fun int-index/resize(target : int-index<a>, requested : int) : ()
 
 fun int-index/ensure-insert-capacity(target : int-index<a>) : ()
   val capacity = target.capacity
-  if (target.count + 1) * 4 > capacity * 3
+  if capacity < minimum-capacity then target.resize(minimum-capacity)
+  elif (target.count + 1) * 4 > capacity * 3
   then target.resize(capacity * 2)
   else ()
 

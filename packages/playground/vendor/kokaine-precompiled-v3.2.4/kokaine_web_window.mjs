@@ -25,7 +25,6 @@ import * as $std_core_delayed from './std_core_delayed.mjs';
 import * as $std_core_console from './std_core_console.mjs';
 import * as $std_core from './std_core.mjs';
 import * as $kokaine_async_effects from './kokaine_async_effects.mjs';
-import * as $kokaine_async_structured from './kokaine_async_structured.mjs';
  
 // externals
 // JavaScript primitives for the Koka module `kokaine/web/window` (kokaine/web/window.kk).
@@ -75,6 +74,63 @@ function kokaineWindowEventSetupRaw(name, complete, reject) {
     }
     return { ok: false, error: error };
   }
+}
+/** Backs `extern window-monitor-open-raw`. */
+function kokaineWindowMonitorOpenRaw() {
+  var state = { closed: false, pending: [], waiter: null, listeners: [] };
+  var install = function (name) {
+    var listener = function () {
+      if (state.closed) {
+        // An earlier removal threw. Retry; this closure is inert either way.
+        kokaineWindowMonitorCloseRaw(state);
+        return;
+      }
+      if (state.pending.indexOf(name) < 0)
+        state.pending.push(name);
+      var waiter = state.waiter;
+      if (waiter) {
+        state.waiter = null;
+        waiter(state.pending.shift());
+      }
+    };
+    state.listeners.push({ name: name, listener: listener });
+    window.addEventListener(name, listener, { passive: name === 'scroll' });
+  };
+  try {
+    install('scroll');
+    install('hashchange');
+    return { ok: true, state: state };
+  } catch (error) {
+    kokaineWindowMonitorCloseRaw(state);
+    return { ok: false, error: error };
+  }
+}
+/** Backs `extern window-monitor-wait-raw`. */
+function kokaineWindowMonitorWaitRaw(state, complete) {
+  if (state.closed)
+    return;
+  if (state.pending.length > 0)
+    complete(state.pending.shift());
+  else
+    state.waiter = complete;
+}
+/** Backs `extern window-monitor-cancel-wait-raw`. */
+function kokaineWindowMonitorCancelWaitRaw(state) {
+  state.waiter = null;
+}
+/** Backs `extern window-monitor-close-raw`. Never throws; idempotent. */
+function kokaineWindowMonitorCloseRaw(state) {
+  state.closed = true;
+  state.waiter = null;
+  state.pending = [];
+  state.listeners = state.listeners.filter(function (entry) {
+    try {
+      window.removeEventListener(entry.name, entry.listener);
+      return false;
+    } catch (_) {
+      return true;
+    }
+  });
 }
 /** Backs `extern host-attempt-raw`. */
 function kokaineWindowHostAttemptRaw(action) {
@@ -171,6 +227,10 @@ export const Window_hash_change = 2; // window-event
 export function Window_event_subscription(value) /* (value : any) -> window-event-subscription */  {
   return value;
 }
+// type window-monitor
+export function Window_monitor(value) /* (value : any) -> window-monitor */  {
+  return value;
+}
  
 // declarations
  
@@ -200,6 +260,22 @@ export function window_event_subscription_fs__copy(_this, value) /* (window-even
     var _x0 = _this;
   }
   return _x0;
+}
+ 
+ 
+// Automatically generated. Retrieves the `value` constructor field of the `:window-monitor` type.
+export function window_monitor_fs_value(_this) /* (window-monitor) -> any */  {
+  return _this;
+}
+ 
+export function window_monitor_fs__copy(_this, value) /* (window-monitor, value : ? any) -> window-monitor */  {
+  if (value !== undefined) {
+    var _x1 = value;
+  }
+  else {
+    var _x1 = _this;
+  }
+  return _x1;
 }
  
 export function window_event_fs_name(value) /* (value : window-event) -> string */  {
@@ -238,6 +314,26 @@ export function retire_window_event(value) /* (value : window-event-subscription
   return kokaineWindowRetireWindowEvent(value);
 }
  
+export function window_monitor_open_raw() /* () -> ui any */  {
+  return kokaineWindowMonitorOpenRaw();
+}
+ 
+export function host_result_monitor(value) /* (value : any) -> window-monitor */  {
+  return (value).state;
+}
+ 
+export function window_monitor_wait_raw(monitor, complete) /* (monitor : window-monitor, complete : (string) -> ui ()) -> ui () */  {
+  return kokaineWindowMonitorWaitRaw(monitor,complete);
+}
+ 
+export function window_monitor_cancel_wait_raw(monitor) /* (monitor : window-monitor) -> ui () */  {
+  return kokaineWindowMonitorCancelWaitRaw(monitor);
+}
+ 
+export function window_monitor_close_raw(monitor) /* (monitor : window-monitor) -> ui () */  {
+  return kokaineWindowMonitorCloseRaw(monitor);
+}
+ 
 export function focus_selector_raw(selector) /* (selector : string) -> ui any */  {
   return kokaineWindowFocusSelectorRaw(selector);
 }
@@ -267,20 +363,20 @@ export function prefers_reduced_motion_raw() /* () -> ui bool */  {
 }
  
 export function require_host_result(result, operation) /* (result : any, operation : string) -> exn () */  {
-  var _x1 = $std_core_hnd._open_none1(host_result_ok, result);
-  if (_x1) {
+  var _x2 = $std_core_hnd._open_none1(host_result_ok, result);
+  if (_x2) {
     return $std_core_types.Unit;
   }
   else {
      
-    var _x_x1_0_10041 = $std_core_hnd._open_none1(host_result_error, result);
-    return $std_core_exn.$throw($std_core_types._lp__plus__plus__rp_("browser window ", $std_core_types._lp__plus__plus__rp_(operation, $std_core_types._lp__plus__plus__rp_(" failed: ", $std_core_hnd._open_none1(host_error_message, _x_x1_0_10041)))));
+    var _x_x1_0_10055 = $std_core_hnd._open_none1(host_result_error, result);
+    return $std_core_exn.$throw($std_core_types._lp__plus__plus__rp_("browser window ", $std_core_types._lp__plus__plus__rp_(operation, $std_core_types._lp__plus__plus__rp_(" failed: ", $std_core_hnd._open_none1(host_error_message, _x_x1_0_10055)))));
   }
 }
  
  
 // monadic lift
-export function _mlift_host_attempt_10058(result, wild__) /* forall<a> (result : any, wild_ : ()) -> exn a */  {
+export function _mlift_host_attempt_10083(result, wild__) /* forall<a> (result : any, wild_ : ()) -> exn a */  {
   return $std_core_hnd._open_none1(host_result_value, result);
 }
  
@@ -292,7 +388,7 @@ export function host_attempt(operation, action) /* forall<a> (operation : string
    
   var result = $std_core_hnd._open_none1(host_attempt_raw, action);
    
-  var x_10065 = require_host_result(result, operation);
+  var x_10092 = require_host_result(result, operation);
   if ($std_core_hnd._yielding()) {
     return $std_core_hnd.yield_extend(function(wild__ /* () */ ) {
       return $std_core_hnd._open_none1(host_result_value, result);
@@ -316,8 +412,8 @@ export function await_window_event(value) /* (value : window-event) -> <kokaine/
           return resume($std_core_types.$Error($std_core_exn.Exception($std_core_types._lp__plus__plus__rp_("browser window event completion failed: ", host_error_message(reason)), $std_core_exn.ExnError)));
         });
        
-      var b_10001 = host_result_ok(installed);
-      if (b_10001) {
+      var b_10002 = host_result_ok(installed);
+      if (b_10002) {
          
         var subscription = host_result_state(installed);
         return $std_core_types.Ok(function() {
@@ -330,72 +426,202 @@ export function await_window_event(value) /* (value : window-event) -> <kokaine/
     });
 }
  
- 
-// monadic lift
-export function _mlift_monitor_window_events_10059(wild__) /* forall<e> (wild_ : ()) -> <kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue,exn,div|e> window-event */  {
-  return Window_scroll;
+export function window_event_fs_from_name(name) /* (name : string) -> window-event */  {
+  return ((name === ("hashchange"))) ? Window_hash_change : Window_scroll;
 }
  
  
 // monadic lift
-export function _mlift_monitor_window_events_10060(wild___0) /* forall<e> (wild_@0 : ()) -> <kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue,exn,div|e> window-event */  {
-  return Window_hash_change;
+export function _mlift_monitor_window_events_10084(action, name) /* forall<e> (action : (window-event) -> <kokaine/async/effects/async,div,exn|e> (), name : string) -> <kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue,div,exn|e> () */  {
+  return action($std_core_hnd._open_none1(function(name_0 /* string */ ) {
+      return ((name_0 === ("hashchange"))) ? Window_hash_change : Window_scroll;
+    }, name));
 }
  
+ 
+// monadic lift
+export function _mlift_monitor_window_events_10085(action, monitor, release) /* forall<e> (action : (window-event) -> <kokaine/async/effects/async,div,exn|e> (), monitor : window-monitor, release : () -> ui ()) -> <kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue,div,exn|e> () */  {
+  return $std_core_hnd.finally_prompt(function() {
+      return $std_core_hnd._open1($std_core_vector.unvlist($std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_await_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_cancel_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_ioc_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_ownership_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.discontinue_fs__tag), $std_core_types.Nil)))))), $kokaine_async_effects.async_host, function() {
+           
+          release();
+          return window_monitor_close_raw(monitor);
+        });
+    }, $std_core.$while(function() {
+        return true;
+      }, function() {
+         
+        var x_10099 = $std_core_hnd._open2($std_core_vector.unvlist($std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_await_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_cancel_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_ioc_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_ownership_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.discontinue_fs__tag), $std_core_types.Nil)))))), $kokaine_async_effects.setup_fs_await_noexn, "window event", function(complete /* (string) -> ui () */ ) {
+             
+            window_monitor_wait_raw(monitor, complete);
+            return function() {
+              return window_monitor_cancel_wait_raw(monitor);
+            };
+          });
+         
+        function next_10100(name) /* (string) -> <kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue,div,exn|957> () */  {
+          return action($std_core_hnd._open_none1(function(name_0_0 /* string */ ) {
+              return ((name_0_0 === ("hashchange"))) ? Window_hash_change : Window_scroll;
+            }, name));
+        }
+        if ($std_core_hnd._yielding()) {
+          return $std_core_hnd.yield_extend(next_10100);
+        }
+        else {
+          return next_10100(x_10099);
+        }
+      }));
+}
+ 
+ 
+// monadic lift
+export function _mlift_monitor_window_events_10086(action, opened, _c_x10015) /* forall<e> (action : (window-event) -> <kokaine/async/effects/async,div,exn|e> (), opened : any, ()) -> () */  {
+   
+  var monitor = $std_core_hnd._open_none1(host_result_monitor, opened);
+   
+  var x_10103 = $std_core_hnd._open1($std_core_vector.unvlist($std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_await_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_cancel_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_ioc_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_ownership_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.discontinue_fs__tag), $std_core_types.Nil)))))), $kokaine_async_effects.async_own, function() {
+      return window_monitor_close_raw(monitor);
+    });
+  if ($std_core_hnd._yielding()) {
+    return $std_core_hnd.yield_extend(function(release /* () -> ui () */ ) {
+      return _mlift_monitor_window_events_10085(action, monitor, release);
+    });
+  }
+  else {
+    return _mlift_monitor_window_events_10085(action, monitor, x_10103);
+  }
+}
+ 
+ 
+// monadic lift
+export function _mlift_monitor_window_events_10087(action, opened) /* forall<e> (action : (window-event) -> <kokaine/async/effects/async,div,exn|e> (), opened : any) -> <kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue,div,exn|e> () */  {
+   
+  var _x_x1_0_10061 = $std_core_hnd._open_none1(host_result_ok, opened);
+   
+  var _x3 = $std_core_hnd._open_none1(function(b /* bool */ ) {
+      return (b) ? false : true;
+    }, _x_x1_0_10061);
+  if (_x3) {
+     
+    var _x_x1_3_10065 = $std_core_hnd._open_none1(host_result_error, opened);
+     
+    var _x_x1_2_10063 = $std_core_types._lp__plus__plus__rp_("browser window event setup failed: ", $std_core_hnd._open_none1(host_error_message, _x_x1_3_10065));
+    var x_10105 = $std_core_hnd._open_at2($std_core_hnd._evv_index($std_core_exn.exn_fs__tag), $std_core_exn.$throw, _x_x1_2_10063);
+  }
+  else {
+    var x_10105 = $std_core_types.Unit;
+  }
+  if ($std_core_hnd._yielding()) {
+    return $std_core_hnd.yield_extend(function(_c_x10015 /* () */ ) {
+      return _mlift_monitor_window_events_10086(action, opened, _c_x10015);
+    });
+  }
+  else {
+    return _mlift_monitor_window_events_10086(action, opened, x_10105);
+  }
+}
+ 
+ 
+// Follow scroll and hash changes until cancelled or `action` fails. Listeners
+// stay installed for the whole monitor and write into a mailbox, so an event
+// fired while `action` is running or between iterations is never lost. Repeats
+// of a kind that is already pending coalesce; kinds are delivered in the order
+// they first arrived. A lease closes the listeners when the owner retires.
 export function monitor_window_events(action) /* forall<e> (action : (window-event) -> <kokaine/async/effects/async,div,exn|e> ()) -> <kokaine/async/effects/async,div,exn|e> () */  {
-  return $std_core.$while(function() {
-      return true;
-    }, function() {
+   
+  var x_10107 = $std_core_hnd._open1($std_core_vector.unvlist($std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_await_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_cancel_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_ioc_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_ownership_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.discontinue_fs__tag), $std_core_types.Nil)))))), $kokaine_async_effects.async_host, window_monitor_open_raw);
+  if ($std_core_hnd._yielding()) {
+    return $std_core_hnd.yield_extend(function(opened /* any */ ) {
+      return _mlift_monitor_window_events_10087(action, opened);
+    });
+  }
+  else {
+     
+    var _x_x1_0_10061 = $std_core_hnd._open_none1(host_result_ok, x_10107);
+     
+    var _x3 = $std_core_hnd._open_none1(function(b /* bool */ ) {
+        return (b) ? false : true;
+      }, _x_x1_0_10061);
+    if (_x3) {
        
-      var x_10070 = $kokaine_async_structured.race(function() {
-           
-          var x_0_10072 = $std_core_hnd._open1($std_core_vector.unvlist($std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_await_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_cancel_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_ioc_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_ownership_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.discontinue_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($std_core_exn.exn_fs__tag), $std_core_types.Nil))))))), await_window_event, Window_scroll);
-          if ($std_core_hnd._yielding()) {
-            return $std_core_hnd.yield_extend(function(wild__ /* () */ ) {
-              return Window_scroll;
-            });
-          }
-          else {
-            return Window_scroll;
-          }
-        }, function() {
-           
-          var x_1_10075 = $std_core_hnd._open1($std_core_vector.unvlist($std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_await_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_cancel_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_ioc_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_ownership_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.discontinue_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($std_core_exn.exn_fs__tag), $std_core_types.Nil))))))), await_window_event, Window_hash_change);
-          if ($std_core_hnd._yielding()) {
-            return $std_core_hnd.yield_extend(function(wild___0_0 /* () */ ) {
-              return Window_hash_change;
-            });
-          }
-          else {
-            return Window_hash_change;
-          }
+      var _x_x1_3_10065 = $std_core_hnd._open_none1(host_result_error, x_10107);
+       
+      var _x_x1_2_10063 = $std_core_types._lp__plus__plus__rp_("browser window event setup failed: ", $std_core_hnd._open_none1(host_error_message, _x_x1_3_10065));
+      var x_0_10110 = $std_core_hnd._open_at2($std_core_hnd._evv_index($std_core_exn.exn_fs__tag), $std_core_exn.$throw, _x_x1_2_10063);
+    }
+    else {
+      var x_0_10110 = $std_core_types.Unit;
+    }
+    if ($std_core_hnd._yielding()) {
+      return $std_core_hnd.yield_extend(function(_c_x10015 /* () */ ) {
+        return _mlift_monitor_window_events_10086(action, x_10107, _c_x10015);
+      });
+    }
+    else {
+       
+      var monitor = $std_core_hnd._open_none1(host_result_monitor, x_10107);
+       
+      var x_1_10113 = $std_core_hnd._open1($std_core_vector.unvlist($std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_await_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_cancel_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_ioc_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_ownership_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.discontinue_fs__tag), $std_core_types.Nil)))))), $kokaine_async_effects.async_own, function() {
+          return window_monitor_close_raw(monitor);
         });
       if ($std_core_hnd._yielding()) {
-        return $std_core_hnd.yield_extend(action);
+        return $std_core_hnd.yield_extend(function(release /* () -> ui () */ ) {
+          return _mlift_monitor_window_events_10085(action, monitor, release);
+        });
       }
       else {
-        return action(x_10070);
+        return $std_core_hnd.finally_prompt(function() {
+            return $std_core_hnd._open1($std_core_vector.unvlist($std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_await_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_cancel_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_ioc_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_ownership_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.discontinue_fs__tag), $std_core_types.Nil)))))), $kokaine_async_effects.async_host, function() {
+                 
+                x_1_10113();
+                return window_monitor_close_raw(monitor);
+              });
+          }, $std_core.$while(function() {
+              return true;
+            }, function() {
+               
+              var x_2_10118 = $std_core_hnd._open2($std_core_vector.unvlist($std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_await_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_cancel_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_ioc_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_ownership_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.discontinue_fs__tag), $std_core_types.Nil)))))), $kokaine_async_effects.setup_fs_await_noexn, "window event", function(complete /* (string) -> ui () */ ) {
+                   
+                  window_monitor_wait_raw(monitor, complete);
+                  return function() {
+                    return window_monitor_cancel_wait_raw(monitor);
+                  };
+                });
+               
+              var next_2_10119 = function(name /* string */ ) {
+                return action($std_core_hnd._open_none1(function(name_0_0 /* string */ ) {
+                    return ((name_0_0 === ("hashchange"))) ? Window_hash_change : Window_scroll;
+                  }, name));
+              };
+              if ($std_core_hnd._yielding()) {
+                return $std_core_hnd.yield_extend(next_2_10119);
+              }
+              else {
+                return next_2_10119(x_2_10118);
+              }
+            }));
       }
-    });
+    }
+  }
 }
  
 export function focus_selector(selector) /* (selector : string) -> <exn,ui> () */  {
    
-  var result_10078 = $std_core_hnd._open_none1(focus_selector_raw, selector);
-  var _x2 = $std_core_hnd._open_none1(host_result_ok, result_10078);
-  if (_x2) {
+  var result_10122 = $std_core_hnd._open_none1(focus_selector_raw, selector);
+  var _x3 = $std_core_hnd._open_none1(host_result_ok, result_10122);
+  if (_x3) {
     return $std_core_types.Unit;
   }
   else {
      
-    var _x_x1_0_10041 = $std_core_hnd._open_none1(host_result_error, result_10078);
-    return $std_core_exn.$throw($std_core_types._lp__plus__plus__rp_("browser window ", $std_core_types._lp__plus__plus__rp_("focus", $std_core_types._lp__plus__plus__rp_(" failed: ", $std_core_hnd._open_none1(host_error_message, _x_x1_0_10041)))));
+    var _x_x1_0_10055 = $std_core_hnd._open_none1(host_result_error, result_10122);
+    return $std_core_exn.$throw($std_core_types._lp__plus__plus__rp_("browser window ", $std_core_types._lp__plus__plus__rp_("focus", $std_core_types._lp__plus__plus__rp_(" failed: ", $std_core_hnd._open_none1(host_error_message, _x_x1_0_10055)))));
   }
 }
  
  
 // monadic lift
-export function _mlift_viewport_bounds_10061(result, wild__) /* (result : any, wild_ : ()) -> exn (int, int) */  {
+export function _mlift_viewport_bounds_10088(result, wild__) /* (result : any, wild_ : ()) -> exn (int, int) */  {
   return $std_core_types.Tuple2($std_core_hnd._open_none1(viewport_result_top, result), $std_core_hnd._open_none1(viewport_result_bottom, result));
 }
  
@@ -403,14 +629,14 @@ export function viewport_bounds(selector) /* (selector : string) -> <exn,ui> (in
    
   var result = $std_core_hnd._open_none1(viewport_bounds_raw, selector);
    
-  var _x3 = $std_core_hnd._open_none1(host_result_ok, result);
-  if (_x3) {
-    var x_10080 = $std_core_types.Unit;
+  var _x4 = $std_core_hnd._open_none1(host_result_ok, result);
+  if (_x4) {
+    var x_10124 = $std_core_types.Unit;
   }
   else {
      
-    var _x_x1_0_10041 = $std_core_hnd._open_none1(host_result_error, result);
-    var x_10080 = $std_core_exn.$throw($std_core_types._lp__plus__plus__rp_("browser window ", $std_core_types._lp__plus__plus__rp_("geometry query", $std_core_types._lp__plus__plus__rp_(" failed: ", $std_core_hnd._open_none1(host_error_message, _x_x1_0_10041)))));
+    var _x_x1_0_10055 = $std_core_hnd._open_none1(host_result_error, result);
+    var x_10124 = $std_core_exn.$throw($std_core_types._lp__plus__plus__rp_("browser window ", $std_core_types._lp__plus__plus__rp_("geometry query", $std_core_types._lp__plus__plus__rp_(" failed: ", $std_core_hnd._open_none1(host_error_message, _x_x1_0_10055)))));
   }
   if ($std_core_hnd._yielding()) {
     return $std_core_hnd.yield_extend(function(wild__ /* () */ ) {
@@ -424,7 +650,7 @@ export function viewport_bounds(selector) /* (selector : string) -> <exn,ui> (in
  
  
 // monadic lift
-export function _mlift_viewport_height_10062(result, wild__) /* (result : any, wild_ : ()) -> exn int */  {
+export function _mlift_viewport_height_10089(result, wild__) /* (result : any, wild_ : ()) -> exn int */  {
   return $std_core_hnd._open_none1(host_result_value, result);
 }
  
@@ -432,14 +658,14 @@ export function viewport_height() /* () -> <exn,ui> int */  {
    
   var result = $std_core_hnd._open_none1(host_attempt_raw, viewport_height_raw);
    
-  var _x3 = $std_core_hnd._open_none1(host_result_ok, result);
-  if (_x3) {
-    var x_10087 = $std_core_types.Unit;
+  var _x4 = $std_core_hnd._open_none1(host_result_ok, result);
+  if (_x4) {
+    var x_10131 = $std_core_types.Unit;
   }
   else {
      
-    var _x_x1_0_10041 = $std_core_hnd._open_none1(host_result_error, result);
-    var x_10087 = $std_core_exn.$throw($std_core_types._lp__plus__plus__rp_("browser window ", $std_core_types._lp__plus__plus__rp_("viewport height", $std_core_types._lp__plus__plus__rp_(" failed: ", $std_core_hnd._open_none1(host_error_message, _x_x1_0_10041)))));
+    var _x_x1_0_10055 = $std_core_hnd._open_none1(host_result_error, result);
+    var x_10131 = $std_core_exn.$throw($std_core_types._lp__plus__plus__rp_("browser window ", $std_core_types._lp__plus__plus__rp_("viewport height", $std_core_types._lp__plus__plus__rp_(" failed: ", $std_core_hnd._open_none1(host_error_message, _x_x1_0_10055)))));
   }
   if ($std_core_hnd._yielding()) {
     return $std_core_hnd.yield_extend(function(wild__ /* () */ ) {
@@ -453,7 +679,7 @@ export function viewport_height() /* () -> <exn,ui> int */  {
  
  
 // monadic lift
-export function _mlift_location_fragment_10063(result, wild__) /* (result : any, wild_ : ()) -> exn string */  {
+export function _mlift_location_fragment_10090(result, wild__) /* (result : any, wild_ : ()) -> exn string */  {
   return $std_core_hnd._open_none1(host_result_value, result);
 }
  
@@ -461,14 +687,14 @@ export function location_fragment() /* () -> <exn,ui> string */  {
    
   var result = $std_core_hnd._open_none1(host_attempt_raw, location_fragment_raw);
    
-  var _x3 = $std_core_hnd._open_none1(host_result_ok, result);
-  if (_x3) {
-    var x_10094 = $std_core_types.Unit;
+  var _x4 = $std_core_hnd._open_none1(host_result_ok, result);
+  if (_x4) {
+    var x_10138 = $std_core_types.Unit;
   }
   else {
      
-    var _x_x1_0_10041 = $std_core_hnd._open_none1(host_result_error, result);
-    var x_10094 = $std_core_exn.$throw($std_core_types._lp__plus__plus__rp_("browser window ", $std_core_types._lp__plus__plus__rp_("location fragment", $std_core_types._lp__plus__plus__rp_(" failed: ", $std_core_hnd._open_none1(host_error_message, _x_x1_0_10041)))));
+    var _x_x1_0_10055 = $std_core_hnd._open_none1(host_result_error, result);
+    var x_10138 = $std_core_exn.$throw($std_core_types._lp__plus__plus__rp_("browser window ", $std_core_types._lp__plus__plus__rp_("location fragment", $std_core_types._lp__plus__plus__rp_(" failed: ", $std_core_hnd._open_none1(host_error_message, _x_x1_0_10055)))));
   }
   if ($std_core_hnd._yielding()) {
     return $std_core_hnd.yield_extend(function(wild__ /* () */ ) {
@@ -482,7 +708,7 @@ export function location_fragment() /* () -> <exn,ui> string */  {
  
  
 // monadic lift
-export function _mlift_prefers_reduced_motion_10064(result, wild__) /* (result : any, wild_ : ()) -> exn bool */  {
+export function _mlift_prefers_reduced_motion_10091(result, wild__) /* (result : any, wild_ : ()) -> exn bool */  {
   return $std_core_hnd._open_none1(host_result_value, result);
 }
  
@@ -490,14 +716,14 @@ export function prefers_reduced_motion() /* () -> <exn,ui> bool */  {
    
   var result = $std_core_hnd._open_none1(host_attempt_raw, prefers_reduced_motion_raw);
    
-  var _x3 = $std_core_hnd._open_none1(host_result_ok, result);
-  if (_x3) {
-    var x_10101 = $std_core_types.Unit;
+  var _x4 = $std_core_hnd._open_none1(host_result_ok, result);
+  if (_x4) {
+    var x_10145 = $std_core_types.Unit;
   }
   else {
      
-    var _x_x1_0_10041 = $std_core_hnd._open_none1(host_result_error, result);
-    var x_10101 = $std_core_exn.$throw($std_core_types._lp__plus__plus__rp_("browser window ", $std_core_types._lp__plus__plus__rp_("reduced motion query", $std_core_types._lp__plus__plus__rp_(" failed: ", $std_core_hnd._open_none1(host_error_message, _x_x1_0_10041)))));
+    var _x_x1_0_10055 = $std_core_hnd._open_none1(host_result_error, result);
+    var x_10145 = $std_core_exn.$throw($std_core_types._lp__plus__plus__rp_("browser window ", $std_core_types._lp__plus__plus__rp_("reduced motion query", $std_core_types._lp__plus__plus__rp_(" failed: ", $std_core_hnd._open_none1(host_error_message, _x_x1_0_10055)))));
   }
   if ($std_core_hnd._yielding()) {
     return $std_core_hnd.yield_extend(function(wild__ /* () */ ) {
