@@ -24,7 +24,7 @@ importers:
         version: 7.8.5
       vite:
         specifier: ^8.1.5
-        version: 8.1.5(@types/node@24.10.1)
+        version: 8.1.5(@types/node@26.6.6)
 
   packages/core: {}
 
@@ -64,8 +64,8 @@ importers:
         version: 9.0.1
     devDependencies:
       '@types/node':
-        specifier: 24.10.1
-        version: 24.10.1
+        specifier: 26.6.6
+        version: 26.6.6
       chii:
         specifier: 1.15.0
         version: 1.15.0
@@ -80,10 +80,10 @@ importers:
         version: 6.0.3
       vite:
         specifier: 8.0.0
-        version: 8.0.0(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@24.10.1)
+        version: 8.0.0(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.6.6)
       vitest:
         specifier: ^4.1.10
-        version: 4.1.10(@types/node@24.10.1)(vite@8.0.0(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@24.10.1))
+        version: 4.1.10(@types/node@26.6.6)(vite@8.0.0(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.6.6))
 
   packages/pocketjs:
     devDependencies:
@@ -92,7 +92,7 @@ importers:
         version: link:../core
       '@pocketjs/framework':
         specifier: 0.6.0
-        version: 0.6.0(csstype@3.2.3)(rolldown@1.1.5)(typescript@6.0.3)(vite@8.1.5(@types/node@24.10.1))
+        version: 0.6.0(csstype@3.2.3)(rolldown@1.1.5)(typescript@6.0.3)(vite@8.1.5(@types/node@26.6.6))
 
 packages:
 
@@ -521,8 +521,8 @@ packages:
   '@types/estree@1.0.9':
     resolution: {integrity: sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg==}
 
-  '@types/node@24.10.1':
-    resolution: {integrity: sha512-GNWcUTRBgIRJD5zj+Tq0fKOJ5XZajIiBroOF0yvj2bSU1WvNdYS/dn9UxwsujGW4JX06dnHyjV2y9rRaybH0iQ==}
+  '@types/node@26.6.6':
+    resolution: {integrity: sha512-MzQj+8Kx3XI40OmUAE6Qoh58ZMNstNNMwn2nfd3qWsfe7nDNSqJNzes4njhz6AHwrSHOffSLwXU6yb474Q4aog==}
 
   '@types/trusted-types@2.0.7':
     resolution: {integrity: sha512-ScaPdn1dQczgbl0QFTeTOmVHFULt394XJgOQNoyVhZ6r2vLnMLJfBPd53SB52T/3G36VI1/g2MZaX0cwDuXsfw==}
@@ -1479,8 +1479,8 @@ packages:
     engines: {node: '>=0.8.0'}
     hasBin: true
 
-  undici-types@7.16.0:
-    resolution: {integrity: sha512-Zz+aZWSj8LE6zoxD+xrjh4VfkIG8Ya6LvYkZqtUQGJPZjYl53ypCaUwWqo7eI0x66KBGeRo+mlBEkMSeSZ38Nw==}
+  undici-types@8.9.0:
+    resolution: {integrity: sha512-KTDyRTYX8sWmKXAikPHHSyc63CRPETMctyjKFupcC6OBLXT3xsN0e9aF7m+mIXutFWpUXuedtowG7iLOzp0kQg==}
 
   unplugin-utils@0.3.2:
     resolution: {integrity: sha512-xVToRh2CTmLk2HnEG7ac4rl1MJTT3RFkpS8B++/SnB0kXvuaavD+n3m/vrzyWQOdJNSZQACnbz01pnppbwV5BA==}
@@ -2056,12 +2056,12 @@ snapshots:
 
   '@oxc-project/types@0.139.0': {}
 
-  '@pocketjs/framework@0.6.0(csstype@3.2.3)(rolldown@1.1.5)(typescript@6.0.3)(vite@8.1.5(@types/node@24.10.1))':
+  '@pocketjs/framework@0.6.0(csstype@3.2.3)(rolldown@1.1.5)(typescript@6.0.3)(vite@8.1.5(@types/node@26.6.6))':
     dependencies:
       '@vue/compiler-vapor': 3.6.0-beta.17
       solid-js: 1.9.12
       vue: 3.6.0-beta.17(typescript@6.0.3)
-      vue-jsx-vapor: 3.2.17(csstype@3.2.3)(rolldown@1.1.5)(vite@8.1.5(@types/node@24.10.1))(vue@3.6.0-beta.17(typescript@6.0.3))
+      vue-jsx-vapor: 3.2.17(csstype@3.2.3)(rolldown@1.1.5)(vite@8.1.5(@types/node@26.6.6))(vue@3.6.0-beta.17(typescript@6.0.3))
     transitivePeerDependencies:
       - '@farmfe/core'
       - '@nuxt/kit'
@@ -2196,9 +2196,9 @@ snapshots:
 
   '@types/estree@1.0.9': {}
 
-  '@types/node@24.10.1':
+  '@types/node@26.6.6':
     dependencies:
-      undici-types: 7.16.0
+      undici-types: 8.9.0
 
   '@types/trusted-types@2.0.7':
     optional: true
@@ -2212,13 +2212,13 @@ snapshots:
       chai: 6.2.2
       tinyrainbow: 3.1.1
 
-  '@vitest/mocker@4.1.10(vite@8.0.0(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@24.10.1))':
+  '@vitest/mocker@4.1.10(vite@8.0.0(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.6.6))':
     dependencies:
       '@vitest/spy': 4.1.10
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
-      vite: 8.0.0(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@24.10.1)
+      vite: 8.0.0(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.6.6)
 
   '@vitest/pretty-format@4.1.10':
     dependencies:
@@ -2309,16 +2309,16 @@ snapshots:
       '@vue-jsx-vapor/compiler-rs-win32-ia32-msvc': 3.2.17
       '@vue-jsx-vapor/compiler-rs-win32-x64-msvc': 3.2.17
 
-  '@vue-jsx-vapor/macros@3.2.17(rolldown@1.1.5)(vite@8.1.5(@types/node@24.10.1))(vue@3.6.0-beta.17(typescript@6.0.3))':
+  '@vue-jsx-vapor/macros@3.2.17(rolldown@1.1.5)(vite@8.1.5(@types/node@26.6.6))(vue@3.6.0-beta.17(typescript@6.0.3))':
     dependencies:
       hash-sum: 2.0.0
       magic-string: 0.30.21
       ts-macro: 0.3.7
-      unplugin: 3.3.0(rolldown@1.1.5)(vite@8.1.5(@types/node@24.10.1))
+      unplugin: 3.3.0(rolldown@1.1.5)(vite@8.1.5(@types/node@26.6.6))
       unplugin-utils: 0.3.2
       vue: 3.6.0-beta.17(typescript@6.0.3)
     optionalDependencies:
-      vite: 8.1.5(@types/node@24.10.1)
+      vite: 8.1.5(@types/node@26.6.6)
     transitivePeerDependencies:
       - '@farmfe/core'
       - '@rspack/core'
@@ -3196,21 +3196,21 @@ snapshots:
   uglify-js@3.19.3:
     optional: true
 
-  undici-types@7.16.0: {}
+  undici-types@8.9.0: {}
 
   unplugin-utils@0.3.2:
     dependencies:
       pathe: 2.0.3
       picomatch: 4.0.5
 
-  unplugin@3.3.0(rolldown@1.1.5)(vite@8.1.5(@types/node@24.10.1)):
+  unplugin@3.3.0(rolldown@1.1.5)(vite@8.1.5(@types/node@26.6.6)):
     dependencies:
       '@jridgewell/remapping': 2.3.5
       picomatch: 4.0.5
       webpack-virtual-modules: 0.6.2
     optionalDependencies:
       rolldown: 1.1.5
-      vite: 8.1.5(@types/node@24.10.1)
+      vite: 8.1.5(@types/node@26.6.6)
 
   utrie@1.0.2:
     dependencies:
@@ -3226,7 +3226,7 @@ snapshots:
       core-util-is: 1.0.2
       extsprintf: 1.3.0
 
-  vite@8.0.0(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@24.10.1):
+  vite@8.0.0(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.6.6):
     dependencies:
       '@oxc-project/runtime': 0.115.0
       lightningcss: 1.32.0
@@ -3235,13 +3235,13 @@ snapshots:
       rolldown: 1.0.0-rc.9(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)
       tinyglobby: 0.2.17
     optionalDependencies:
-      '@types/node': 24.10.1
+      '@types/node': 26.6.6
       fsevents: 2.3.3
     transitivePeerDependencies:
       - '@emnapi/core'
       - '@emnapi/runtime'
 
-  vite@8.1.5(@types/node@24.10.1):
+  vite@8.1.5(@types/node@26.6.6):
     dependencies:
       lightningcss: 1.32.0
       picomatch: 4.0.5
@@ -3249,13 +3249,13 @@ snapshots:
       rolldown: 1.1.5
       tinyglobby: 0.2.17
     optionalDependencies:
-      '@types/node': 24.10.1
+      '@types/node': 26.6.6
       fsevents: 2.3.3
 
-  vitest@4.1.10(@types/node@24.10.1)(vite@8.0.0(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@24.10.1)):
+  vitest@4.1.10(@types/node@26.6.6)(vite@8.0.0(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.6.6)):
     dependencies:
       '@vitest/expect': 4.1.10
-      '@vitest/mocker': 4.1.10(vite@8.0.0(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@24.10.1))
+      '@vitest/mocker': 4.1.10(vite@8.0.0(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.6.6))
       '@vitest/pretty-format': 4.1.10
       '@vitest/runner': 4.1.10
       '@vitest/snapshot': 4.1.10
@@ -3272,10 +3272,10 @@ snapshots:
       tinyexec: 1.3.0
       tinyglobby: 0.2.17
       tinyrainbow: 3.1.1
-      vite: 8.0.0(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@24.10.1)
+      vite: 8.0.0(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@26.6.6)
       why-is-node-running: 2.3.0
     optionalDependencies:
-      '@types/node': 24.10.1
+      '@types/node': 26.6.6
     transitivePeerDependencies:
       - msw
 
@@ -3300,19 +3300,19 @@ snapshots:
     dependencies:
       vscode-jsonrpc: 8.2.1
 
-  vue-jsx-vapor@3.2.17(csstype@3.2.3)(rolldown@1.1.5)(vite@8.1.5(@types/node@24.10.1))(vue@3.6.0-beta.17(typescript@6.0.3)):
+  vue-jsx-vapor@3.2.17(csstype@3.2.3)(rolldown@1.1.5)(vite@8.1.5(@types/node@26.6.6))(vue@3.6.0-beta.17(typescript@6.0.3)):
     dependencies:
       '@vue-jsx-vapor/compiler-rs': 3.2.17
-      '@vue-jsx-vapor/macros': 3.2.17(rolldown@1.1.5)(vite@8.1.5(@types/node@24.10.1))(vue@3.6.0-beta.17(typescript@6.0.3))
+      '@vue-jsx-vapor/macros': 3.2.17(rolldown@1.1.5)(vite@8.1.5(@types/node@26.6.6))(vue@3.6.0-beta.17(typescript@6.0.3))
       '@vue-jsx-vapor/runtime': 3.2.17(csstype@3.2.3)(vue@3.6.0-beta.17(typescript@6.0.3))
       '@vue/shared': 3.6.0-beta.15
       pathe: 2.0.3
       ts-macro: 0.3.7
-      unplugin: 3.3.0(rolldown@1.1.5)(vite@8.1.5(@types/node@24.10.1))
+      unplugin: 3.3.0(rolldown@1.1.5)(vite@8.1.5(@types/node@26.6.6))
       unplugin-utils: 0.3.2
       vue: 3.6.0-beta.17(typescript@6.0.3)
     optionalDependencies:
-      vite: 8.1.5(@types/node@24.10.1)
+      vite: 8.1.5(@types/node@26.6.6)
     transitivePeerDependencies:
       - '@farmfe/core'
       - '@rspack/core'
