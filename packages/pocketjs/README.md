@@ -5,6 +5,7 @@
 > now. It keeps working against PocketJS 0.6 and its exact-checkout CI lane
 > runs weekly; new work should not depend on it. Porting to a current
 > PocketJS is welcome as a separate effort.
+> It is not published to npm; use it from this repository.
 
 Experimental retained-mode PocketJS 0.6 adapter for Kokaine. It provides the
 Koka modules `kokaine/pocket` and `kokaine/pocket/async`, plus small JavaScript

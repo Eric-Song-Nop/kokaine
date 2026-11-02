@@ -1,6 +1,6 @@
 {
   "name": "@kokaine/core",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "A fine-grained UI runtime for Koka",
   "license": "MIT",
   "repository": {

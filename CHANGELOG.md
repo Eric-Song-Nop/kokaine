@@ -2,7 +2,7 @@
 
 Versions are per package. Entries list the package and version they shipped in.
 
-## Unreleased
+## @kokaine/core 0.2.0, @kokaine/cli 0.2.0, @kokaine/create 0.2.0
 
 ### Fixed
 - `@kokaine/core`: clean memo reads validate each producer once per read
@@ -41,8 +41,8 @@ Versions are per package. Entries list the package and version they shipped in.
   `kokaine/async/structured` no longer depends on the standard-library
   finalization primitives that Koka 3.2.8 renamed.
 
-## @kokaine/core 0.1.1, @kokaine/cli 0.1.0, @kokaine/create 0.1.0
+## @kokaine/core 0.1.0, @kokaine/cli 0.1.0, @kokaine/create 0.1.0
 
-First npm releases of core (0.1.0), cli, and create. The repository's core
-version is 0.1.1, which has not been published yet; `@kokaine/pocketjs` 0.1.0
-has not been published either.
+First npm releases. The repository's core version reached 0.1.1 but that
+version was never published. `@kokaine/pocketjs` has not been published; it is
+frozen at PocketJS 0.6 and marked private.

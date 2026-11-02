@@ -1,6 +1,6 @@
 {
   "name": "@kokaine/create",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Create a Kokaine application backed by npm and Vite",
   "license": "MIT",
   "repository": {
@@ -23,7 +23,8 @@
     "bin",
     "src",
     "template",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "test": "node --test"
