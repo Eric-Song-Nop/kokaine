@@ -35,7 +35,7 @@
     "monaco-languageclient": "10.7.0",
     "vscode": "npm:@codingame/monaco-vscode-extension-api@25.1.2",
     "vscode-jsonrpc": "8.2.1",
-    "vscode-languageclient": "9.0.1"
+    "vscode-languageclient": "11.0.0"
   },
   "devDependencies": {
     "@types/node": "24.10.1",
