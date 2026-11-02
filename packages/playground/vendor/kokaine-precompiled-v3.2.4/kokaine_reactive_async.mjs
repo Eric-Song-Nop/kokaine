@@ -27,9 +27,9 @@ import * as $kokaine_reactive_effects from './kokaine_reactive_effects.mjs';
 import * as $std_core from './std_core.mjs';
 import * as $kokaine_reactive from './kokaine_reactive.mjs';
 import * as $kokaine_async_effects from './kokaine_async_effects.mjs';
-import * as $kokaine_async_internal_web_dash_schedule from './kokaine_async_internal_web_dash_schedule.mjs';
 import * as $kokaine_reactive_async_integration from './kokaine_reactive_async_integration.mjs';
 import * as $kokaine_reactive_async_internal_host_dash_turn from './kokaine_reactive_async_internal_host_dash_turn.mjs';
+import * as $kokaine_reactive_async_internal_web_dash_runtime from './kokaine_reactive_async_internal_web_dash_runtime.mjs';
  
 // externals
  
@@ -41,8 +41,6 @@ export function run_async(root, action) /* (root : kokaine/reactive/root<ui>, ac
   return $kokaine_reactive_async_integration.run_async_with_dispatcher(root, $std_core_hnd._open_none1(function(post_host_turn /* (() -> ui ()) -> ui bool */ ) {
         return post_host_turn;
       }, function(turn /* () -> ui () */ ) {
-         
-        $kokaine_async_internal_web_dash_schedule.enqueue_microtask(turn);
-        return true;
+        return $kokaine_reactive_async_internal_host_dash_turn.host_turn_coalescer_fs_post($kokaine_reactive_async_internal_web_dash_runtime.web_host_turns, turn);
       }), action);
 }

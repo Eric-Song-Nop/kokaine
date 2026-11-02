@@ -1,5 +1,11 @@
 # `@kokaine/pocketjs`
 
+> **Status: frozen at PocketJS 0.6.** This adapter targets `@pocketjs/framework`
+> `>=0.6.0 <0.7.0` (upstream is at 0.15) and is not being ported forward for
+> now. It keeps working against PocketJS 0.6 and its exact-checkout CI lane
+> runs weekly; new work should not depend on it. Porting to a current
+> PocketJS is welcome as a separate effort.
+
 Experimental retained-mode PocketJS 0.6 adapter for Kokaine. It provides the
 Koka modules `kokaine/pocket` and `kokaine/pocket/async`, plus small JavaScript
 bridges over PocketJS's public renderer and lifecycle primitives.

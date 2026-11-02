@@ -85,7 +85,7 @@ fi
 "$koka" \
   --target=wasmweb \
   --cc="$emcc" \
-  --include="$repo_root/src" \
+  --include="$repo_root/packages/core/src" \
   --builddir="$work_dir/koka" \
   --heap=67108864 \
   --ccopts="-Dmain=koka_generated_main -DKOKAINE_WASM_PROOF_CUSTOM_MAIN" \

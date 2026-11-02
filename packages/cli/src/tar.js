@@ -1,6 +1,7 @@
 import {
   chmodSync,
   closeSync,
+  lstatSync,
   mkdirSync,
   openSync,
   symlinkSync,
@@ -26,6 +27,27 @@ function safeDestination(root, name) {
     throw new KokaineError("TOOLCHAIN_ARCHIVE_ESCAPE", "Compiler archive contains an unsafe path", [name]);
   }
   return destination;
+}
+
+// Link targets are only checked lexically, so a later entry must never be
+// written through an already-extracted symlink (a chain like `b -> ../..`,
+// `l -> b/..` would otherwise escape the root).
+function assertNoSymlinkParent(root, destination, name) {
+  const parts = path.relative(root, path.dirname(destination)).split(path.sep).filter(Boolean);
+  let current = root;
+  for (const part of parts) {
+    current = path.join(current, part);
+    let stats;
+    try {
+      stats = lstatSync(current);
+    } catch (error) {
+      if (error.code === "ENOENT") return;
+      throw error;
+    }
+    if (stats.isSymbolicLink()) {
+      throw new KokaineError("TOOLCHAIN_ARCHIVE_ESCAPE", "Compiler archive writes through a symlink", [name]);
+    }
+  }
 }
 
 class TarExtractor extends Writable {
@@ -99,6 +121,7 @@ class TarExtractor extends Writable {
       throw new KokaineError("TOOLCHAIN_ARCHIVE_INVALID", "Compiler archive has an invalid entry size", [fullName]);
     }
     const destination = safeDestination(this.root, fullName);
+    assertNoSymlinkParent(this.root, destination, fullName);
     this.remaining = size;
     this.padding = (512 - (size % 512)) % 512;
     this.mode = mode;

@@ -8,6 +8,8 @@ import kokaine/reactive/async
 import kokaine/html
 import kokaine/dom
 import kokaine/web/window
+import kokaine/async/effects
+import kokaine/async/structured
 
 
 extern begin-fixture() : ui ()
@@ -26,6 +28,23 @@ fun safe-dispose-root(root : root<<ui>>) : ui ()
 
 fun show-error(problem : exception) : string
   problem.message
+
+// The one-shot `await-window-event` lifecycle, raced per iteration.
+// `monitor-window-events` has its own fixture, test/window-monitor.kk.
+fun one-shot-window-loop(action : window-event -> <async,div,exn|e> ())
+                        : <async,div,exn|e> ()
+  while { True }
+    val changed = race(
+      fn() {
+        await-window-event(Window-scroll)
+        Window-scroll
+      },
+      fn() {
+        await-window-event(Window-hash-change)
+        Window-hash-change
+      }
+    )
+    action(changed)
 
 
 pub fun main()
@@ -79,7 +98,7 @@ pub fun main()
     run-async(root,fn()
       with catch fn(problem)
         phase.set("monitor-error:" ++ show-error(problem))
-      monitor-window-events(fn(_changed)
+      one-shot-window-loop(fn(_changed)
         record-window-event()
       )
     )
