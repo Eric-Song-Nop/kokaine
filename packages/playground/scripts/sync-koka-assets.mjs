@@ -1,28 +1,36 @@
 // Fetch, verify, and stage the pinned Koka browser assets.
 //
 //   node scripts/sync-koka-assets.mjs           ensure (default): make
-//       public/koka/{koka-playground.wasm,koka-lsp.wasm,koka-runtime.json.gz}
-//       match the SHA-256 pins in the tracked public/koka/assets.json, using the
-//       local cache or the network. Never rewrites assets.json.
+//       public/koka/{koka-playground.wasm,koka-lsp.wasm,koka-browser-repl.wasm,
+//       koka-runtime.json.gz} match the SHA-256 pins in the tracked
+//       public/koka/assets.json, using the local cache or the network. Never
+//       rewrites assets.json.
 //   node scripts/sync-koka-assets.mjs --update  rebuild the runtime bundle from
-//       the pinned upstream sources plus vendor/kokaine-precompiled-v3.2.4 and
+//       the pinned library archive plus vendor/kokaine-precompiled-v3.2.9 and
 //       rewrite public/koka/assets.json (after `smoke-wasm --update-kokaine-cache`).
 //
-// Downloads are cached outside the repository in a content-addressed store
-// (KOKAINE_CACHE_DIR, else $XDG_CACHE_HOME/kokaine, else %LOCALAPPDATA%/kokaine/cache,
-// else ~/.cache/kokaine, under `playground/`). Set KOKAINE_OFFLINE=1 to forbid
-// network access and use only that cache.
+// The assets are files of a GitHub Release of this repository, built as described
+// in docs/maintainers/playground-compiler.md. Downloads are cached outside the
+// repository in a content-addressed store (KOKAINE_CACHE_DIR, else
+// $XDG_CACHE_HOME/kokaine, else %LOCALAPPDATA%/kokaine/cache, else ~/.cache/kokaine,
+// under `playground/`). Set KOKAINE_OFFLINE=1 to forbid network access and use only
+// that cache. Set KOKAINE_PLAYGROUND_ASSET_DIR to take them from a local directory
+// instead of the release; they are verified against the same pins.
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { gzipSync } from 'node:zlib';
+import { gunzipSync, gzipSync } from 'node:zlib';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const UPSTREAM_COMMIT = 'c0f1a10a60b8644fd6f08dfcec654fa815c06e3f';
-const COMPILER_VERSION = '3.2.4';
-const BROWSER_REPL_COMMIT = '32fee7eda6397dee81f4752ff7cab4e4001d3eb2';
-const RAW_ROOT = `https://raw.githubusercontent.com/koka-lang/koka/${UPSTREAM_COMMIT}/playground`;
+const COMPILER_VERSION = '3.2.9';
+// The koka-lang/koka commit of tag v3.2.9.
+const UPSTREAM_COMMIT = 'facb7932ce6871fdb063f762a304bd8238f35fba';
+// v3.2.9 plus the commits in docs/maintainers/playground-compiler.md; all three
+// WASM programs are built from it.
+const BUILD_COMMIT = '41c5ba15b9c14ea64b2af167cae80f2a41860369';
+const RELEASE_TAG = 'playground-koka-3.2.9-1';
+const RELEASE_ROOT = `https://github.com/Eric-Song-Nop/kokaine/releases/download/${RELEASE_TAG}`;
 const PACKAGE_ROOT = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const KOKA_DIR = path.join(PACKAGE_ROOT, 'public', 'koka');
 const MANIFEST_PATH = path.join(KOKA_DIR, 'assets.json');
@@ -31,17 +39,16 @@ const RUNTIME_PATH = path.join(KOKA_DIR, 'koka-runtime.json.gz');
 // it (the served copy is staged under releases/<id>/precompiled/ by
 // stage-runtime-release.mjs), so it is removed rather than regenerated.
 const LEGACY_PRECOMPILED_DIR = path.join(KOKA_DIR, 'precompiled');
-const KOKAINE_PRECOMPILED_DIR = path.join(PACKAGE_ROOT, 'vendor', 'kokaine-precompiled-v3.2.4');
-// Downloaded from the pinned upstream commit; not tracked in git.
+const KOKAINE_PRECOMPILED_DIR = path.join(PACKAGE_ROOT, 'vendor', 'kokaine-precompiled-v3.2.9');
+// Release assets; none of them is tracked in git.
 const EXPECTED_WASM = {
-  'koka-playground.wasm': 'e4c77ffd06391435865d7e6aef7d7ecabb211601dfa181e1c6b819633959c660',
-  'koka-lsp.wasm': 'ce950710f27fda0f325d9046885d525f3e87daf30d93be1d45058d556c6039c0',
+  'koka-playground.wasm': '61a8afbffd217d5c53af9f7ab8f9d6325546efd3a58ef65cb5a13af2dc1e5bf8',
+  'koka-lsp.wasm': 'e551795d7758ec08acc811b428cd8faa1c037dbd05f82125714a3d958a24f9ad',
+  'koka-browser-repl.wasm': '33088e1a3e50cc1de11d2e9fdf7fd9bd49eaf591349b27ba18a318a257f88092',
 };
-// Built from the BROWSER_REPL_COMMIT fork and checked in: there is no
-// immutable upstream download for it, so it stays tracked.
-const BUNDLED_WASM = {
-  'koka-browser-repl.wasm': '5ee587122a58da95b4bbbaaee8d946ef3f2bec1c9da4a21d70fdb34e2ad80afd',
-};
+// The Koka standard library sources and their precompiled JavaScript modules.
+const LIBRARY_ARCHIVE = 'koka-browser-lib.tar.gz';
+const LIBRARY_ARCHIVE_SHA256 = 'af631c136f9aca5ceb3813b1f7b2a254b3aaf436a4b1d4cb4fa1765cd13ff0d2';
 
 const update = process.argv.includes('--update');
 const offline = process.argv.includes('--offline') || /^(1|true|yes)$/i.test(process.env.KOKAINE_OFFLINE ?? '');
@@ -57,6 +64,9 @@ function cacheRoot(environment = process.env, platform = process.platform) {
 }
 
 const CACHE_ROOT = cacheRoot();
+const LOCAL_ASSET_DIR = process.env.KOKAINE_PLAYGROUND_ASSET_DIR
+  ? path.resolve(process.env.KOKAINE_PLAYGROUND_ASSET_DIR)
+  : null;
 const stats = { downloadedFiles: 0, downloadedBytes: 0, cachedFiles: 0, downloadMs: 0 };
 
 function sha256(bytes) {
@@ -83,23 +93,22 @@ async function writeAtomic(filePath, bytes) {
   await rename(temporary, filePath);
 }
 
-function assertRelativeAsset(asset) {
-  if (typeof asset !== 'string' || asset.length === 0 || asset.startsWith('/') || asset.includes('..')) {
-    throw new Error(`Unsafe upstream asset path: ${String(asset)}`);
-  }
-  return asset;
-}
-
 class OfflineError extends Error {}
 
-async function download(relativePath, attempts = 5) {
+async function download(filename, attempts = 5) {
+  if (LOCAL_ASSET_DIR) {
+    const bytes = await readOptional(path.join(LOCAL_ASSET_DIR, filename));
+    if (!bytes) throw new OfflineError(`${filename} is not in KOKAINE_PLAYGROUND_ASSET_DIR (${LOCAL_ASSET_DIR}).`);
+    stats.downloadedFiles += 1;
+    stats.downloadedBytes += bytes.byteLength;
+    return bytes;
+  }
   if (offline) {
     throw new OfflineError(
-      `${relativePath} is not in the local cache (${CACHE_ROOT}) and KOKAINE_OFFLINE is set.`,
+      `${filename} is not in the local cache (${CACHE_ROOT}) and KOKAINE_OFFLINE is set.`,
     );
   }
-  const safePath = relativePath.split('/').map(encodeURIComponent).join('/');
-  const url = `${RAW_ROOT}/${safePath}`;
+  const url = `${RELEASE_ROOT}/${encodeURIComponent(filename)}`;
   let lastError;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     const startedAt = performance.now();
@@ -122,35 +131,44 @@ async function download(relativePath, attempts = 5) {
   );
 }
 
-// Content-addressed by SHA-256: used for the WASM programs and the runtime bundle.
-async function fetchPinned(relativePath, expectedHash) {
+// Content-addressed by SHA-256: used for the release assets and the runtime bundle.
+async function fetchPinned(filename, expectedHash) {
   const cachePath = path.join(CACHE_ROOT, 'sha256', expectedHash);
   const cached = await readOptional(cachePath);
   if (cached && sha256(cached) === expectedHash) {
     stats.cachedFiles += 1;
     return cached;
   }
-  const bytes = await download(relativePath);
+  const bytes = await download(filename);
   const actualHash = sha256(bytes);
   if (actualHash !== expectedHash) {
-    throw new Error(`${relativePath} SHA-256 mismatch: expected ${expectedHash}, received ${actualHash}`);
+    throw new Error(`${filename} SHA-256 mismatch: expected ${expectedHash}, received ${actualHash}`);
   }
   await writeAtomic(cachePath, bytes);
   return bytes;
 }
 
-// Upstream text sources are addressed by the immutable commit. The rebuilt
-// runtime bundle is verified against its pinned SHA-256 in ensure mode.
-async function fetchUpstreamSource(relativePath) {
-  const cachePath = path.join(CACHE_ROOT, 'koka-src', UPSTREAM_COMMIT, ...relativePath.split('/'));
-  const cached = await readOptional(cachePath);
-  if (cached) {
-    stats.cachedFiles += 1;
-    return cached;
+// The archive is pinned and written by pack-koka-release.mjs: USTAR, regular files only.
+function readLibraryArchive(gzipped) {
+  const tar = gunzipSync(gzipped);
+  const text = (start, length) => {
+    const field = tar.subarray(start, start + length);
+    const end = field.indexOf(0);
+    return field.subarray(0, end < 0 ? length : end).toString('utf8');
+  };
+  const files = new Map();
+  for (let offset = 0; offset + 512 <= tar.length && tar[offset] !== 0;) {
+    const prefix = text(offset + 345, 155);
+    const name = prefix ? `${prefix}/${text(offset, 100)}` : text(offset, 100);
+    const type = text(offset + 156, 1);
+    if (text(offset + 257, 5) !== 'ustar' || type !== '0') {
+      throw new Error(`Unexpected entry in ${LIBRARY_ARCHIVE}: ${name}`);
+    }
+    const size = Number.parseInt(text(offset + 124, 12), 8);
+    files.set(name, tar.subarray(offset + 512, offset + 512 + size));
+    offset += 512 + Math.ceil(size / 512) * 512;
   }
-  const bytes = await download(relativePath);
-  await writeAtomic(cachePath, bytes);
-  return bytes;
+  return files;
 }
 
 async function mapConcurrent(values, concurrency, worker) {
@@ -168,28 +186,24 @@ async function mapConcurrent(values, concurrency, worker) {
 }
 
 async function buildRuntime() {
-  const [stdlibManifest, precompiledManifest] = await Promise.all([
-    fetchUpstreamSource('stdlib-manifest.json').then((bytes) => JSON.parse(bytes.toString('utf8'))),
-    fetchUpstreamSource('precompiled-manifest.json').then((bytes) => JSON.parse(bytes.toString('utf8'))),
-  ]);
-  if (!Array.isArray(stdlibManifest) || !Array.isArray(precompiledManifest)) {
-    throw new Error('Unexpected Koka playground manifest format.');
+  const archive = readLibraryArchive(await fetchPinned(LIBRARY_ARCHIVE, LIBRARY_ARCHIVE_SHA256));
+  const stdlibFiles = [];
+  const precompiledFiles = [];
+  for (const [name, bytes] of archive) {
+    if (name.startsWith('lib/')) stdlibFiles.push([`/share/${name}`, bytes.toString('utf8')]);
+    else if (name.startsWith('precompiled/')) {
+      precompiledFiles.push([`/lib/js-debug/${name.slice('precompiled/'.length)}`, bytes.toString('utf8')]);
+    }
   }
-
-  const stdlibFiles = await mapConcurrent(stdlibManifest.map(assertRelativeAsset), 12, async (filename) => {
-    const source = (await fetchUpstreamSource(`lib/${filename}`)).toString('utf8');
-    return [`/share/lib/${filename}`, source];
-  });
-  const precompiledFiles = await mapConcurrent(precompiledManifest.map(assertRelativeAsset), 12, async (filename) => {
-    const source = (await fetchUpstreamSource(`precompiled/${filename}`)).toString('utf8');
-    return [`/lib/js-debug/${filename}`, source];
-  });
+  if (stdlibFiles.length === 0 || precompiledFiles.length === 0) {
+    throw new Error(`${LIBRARY_ARCHIVE} has no standard library or precompiled modules.`);
+  }
 
   const kokaineManifest = JSON.parse(
     await readFile(path.join(KOKAINE_PRECOMPILED_DIR, 'manifest.json'), 'utf8'),
   );
   if (kokaineManifest.compilerVersion !== COMPILER_VERSION
-      || kokaineManifest.compilerCommit !== UPSTREAM_COMMIT
+      || kokaineManifest.compilerCommit !== BUILD_COMMIT
       || !Array.isArray(kokaineManifest.files)) {
     throw new Error('Vendored Kokaine precompiled manifest does not match the pinned compiler.');
   }
@@ -222,7 +236,7 @@ async function buildRuntime() {
       gzipBytes: runtimeGzip.byteLength,
       sha256: sha256(runtimeGzip),
     },
-    staticPrecompiledModules: precompiledManifest.filter((name) => name.endsWith('.mjs')).length
+    staticPrecompiledModules: precompiledFiles.filter(([name]) => name.endsWith('.mjs')).length
       + kokaineManifest.files.filter((entry) => entry.name.endsWith('.mjs')).length,
     kokainePrecompiledFiles: kokainePrecompiledFiles.length,
   };
@@ -237,30 +251,18 @@ async function ensureWasm(filename, expectedHash) {
   return bytes;
 }
 
-async function verifyBundledWasm() {
-  const metadata = {};
-  for (const [filename, expectedHash] of Object.entries(BUNDLED_WASM)) {
-    const bytes = await readFile(path.join(KOKA_DIR, filename));
-    const actualHash = sha256(bytes);
-    if (actualHash !== expectedHash) {
-      throw new Error(`${filename} SHA-256 mismatch: expected ${expectedHash}, received ${actualHash}`);
-    }
-    metadata[filename] = { bytes: bytes.byteLength, sha256: actualHash };
-  }
-  return metadata;
-}
-
 async function ensure() {
   const manifest = JSON.parse(await readFile(MANIFEST_PATH, 'utf8'));
-  if (manifest.upstreamCommit !== UPSTREAM_COMMIT || manifest.compilerVersion !== COMPILER_VERSION) {
+  if (manifest.upstreamCommit !== UPSTREAM_COMMIT
+      || manifest.buildCommit !== BUILD_COMMIT
+      || manifest.compilerVersion !== COMPILER_VERSION) {
     throw new Error(`${MANIFEST_PATH} does not match the pins in sync-koka-assets.mjs; run with --update.`);
   }
-  for (const [filename, expectedHash] of Object.entries({ ...EXPECTED_WASM, ...BUNDLED_WASM })) {
+  for (const [filename, expectedHash] of Object.entries(EXPECTED_WASM)) {
     if (manifest.wasm?.[filename]?.sha256 !== expectedHash) {
       throw new Error(`${MANIFEST_PATH} pins a different ${filename}; run with --update.`);
     }
   }
-  await verifyBundledWasm();
   for (const [filename, expectedHash] of Object.entries(EXPECTED_WASM)) {
     await ensureWasm(filename, expectedHash);
   }
@@ -281,9 +283,9 @@ async function ensure() {
       if (actualHash !== expectedRuntimeHash) {
         throw new Error(
           `Rebuilt koka-runtime.json.gz does not match ${MANIFEST_PATH}: expected ${expectedRuntimeHash}, `
-          + `received ${actualHash}. If vendor/kokaine-precompiled-v3.2.4 changed, run `
+          + `received ${actualHash}. If vendor/kokaine-precompiled-v3.2.9 changed, run `
           + '`pnpm --filter @kokaine/playground run assets:koka:update` and commit assets.json; '
-          + `otherwise delete the source cache at ${path.join(CACHE_ROOT, 'koka-src')} and retry.`,
+          + 'otherwise the bundle is not reproducible on this Node.js version.',
         );
       }
       await writeAtomic(runtimeCachePath, runtimeGzip);
@@ -300,7 +302,6 @@ async function rebuildManifest() {
     const bytes = await ensureWasm(filename, expectedHash);
     wasmMetadata[filename] = { bytes: bytes.byteLength, sha256: expectedHash };
   }
-  Object.assign(wasmMetadata, await verifyBundledWasm());
 
   const { runtimeGzip, info, staticPrecompiledModules, kokainePrecompiledFiles } = await buildRuntime();
   await writeAtomic(path.join(CACHE_ROOT, 'sha256', info.sha256), runtimeGzip);
@@ -311,14 +312,16 @@ async function rebuildManifest() {
     schemaVersion: 1,
     compilerVersion: COMPILER_VERSION,
     upstreamCommit: UPSTREAM_COMMIT,
-    browserReplCommit: BROWSER_REPL_COMMIT,
+    buildCommit: BUILD_COMMIT,
+    releaseTag: RELEASE_TAG,
+    libraryArchive: { name: LIBRARY_ARCHIVE, sha256: LIBRARY_ARCHIVE_SHA256 },
     wasm: wasmMetadata,
     runtime: info,
     staticPrecompiledModules,
     kokainePrecompiledFiles,
   };
   await writeFile(MANIFEST_PATH, `${JSON.stringify(metadata, null, 2)}\n`, 'utf8');
-  console.log(`Pinned Koka ${COMPILER_VERSION} browser assets from ${UPSTREAM_COMMIT}.`);
+  console.log(`Pinned Koka ${COMPILER_VERSION} browser assets from ${RELEASE_TAG}.`);
   console.log(`${info.files} VFS files; runtime bundle ${mib(info.gzipBytes)}.`);
 }
 

@@ -1,0 +1,78 @@
+/*--------------------------------------------------------------------------
+  Copyright (c) 2026 Kokaine contributors. SPDX-License-Identifier: MIT
+
+  Compatibility adapters for the Koka standard library surface used by the
+  runtime. The standard library's `try` overloads changed shape between
+  releases: Koka 3.2.3 takes `try(action, handler)` while 3.2.8+ takes
+  `try(handler, action)` and turns `error<a>` into an alias of
+  `result<a,exception>`. Handling the `exn` effect's `throw-exn` operation
+  directly is stable across both, so keep that behind one Kokaine-owned
+  boundary.
+--------------------------------------------------------------------------*/
+module interface kokaine/internal/compat
+ 
+//------------------------------
+//#kki: import declarations
+ 
+import std/core/types = std/core/types pub = "";
+import std/core/hnd = std/core/hnd pub = "";
+import std/core/exn = std/core/exn pub = "";
+import std/core/bool = std/core/bool pub = "";
+import std/core/order = std/core/order pub = "";
+import std/core/char = std/core/char pub = "";
+import std/core/int = std/core/int pub = "";
+import std/core/vector = std/core/vector pub = "";
+import std/core/bytes = std/core/bytes pub = "";
+import std/core/bslice = std/core/bslice pub = "";
+import std/core/string = std/core/string pub = "";
+import std/core/sslice = std/core/sslice pub = "";
+import std/core/list = std/core/list pub = "";
+import std/core/maybe = std/core/maybe pub = "";
+import std/core/maybe2 = std/core/maybe2 pub = "";
+import std/core/either = std/core/either pub = "";
+import std/core/result = std/core/result pub = "";
+import std/core/tuple = std/core/tuple pub = "";
+import std/core/lazy = std/core/lazy pub = "";
+import std/core/show = std/core/show pub = "";
+import std/core/debug = std/core/debug pub = "";
+import std/core/delayed = std/core/delayed pub = "";
+import std/core/console = std/core/console pub = "";
+import std/core = std/core = "";
+ 
+//------------------------------
+//#kki: external imports
+ 
+ 
+//------------------------------
+//#kki: fixity declarations
+ 
+ 
+//------------------------------
+//#kki: local imported aliases
+ 
+// An `:error<a>` type represents a first-class exception result as a `:result<a,exception>`.
+local alias std/core/exn/error[63,1,63,40]<a> :: V -> V = (std/core/types/result :: (V, V) -> V)<a,std/core/exn/exception> = 1;
+ 
+//------------------------------
+//#kki: type declarations
+ 
+ 
+//------------------------------
+//#kki: declarations
+ 
+// monadic lift
+fun @mlift-capture-error@10002[1,0,1,0] : forall<a,(e :: E)> (@y-x10000 : a) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> (std/core/types/result :: (V, V) -> V)<a,std/core/exn/exception>;
+pub fun capture-error[14,9,14,21] : forall<a,(e :: E)> (action : () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a) -> (e :: E) (std/core/exn/error :: V -> V)<a>;
+ 
+fun @kokaine-cache-phase[1,0,1,0] : () -> std/core/types/int;
+ 
+//------------------------------
+//#kki: external declarations
+ 
+ 
+//------------------------------
+//#kki: inline definitions
+
+//.inline-section
+fun @kokaine-cache-phase // inline size: 1
+  = fn(){ 0; };

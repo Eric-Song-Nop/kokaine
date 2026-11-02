@@ -14,8 +14,7 @@ import {
 
 const PACKAGE_ROOT = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const REPO_ROOT = path.resolve(PACKAGE_ROOT, '../..');
-const KOKAINE_CACHE_DIR = path.join(PACKAGE_ROOT, 'vendor', 'kokaine-precompiled-v3.2.4');
-const UPSTREAM_COMMIT = 'c0f1a10a60b8644fd6f08dfcec654fa815c06e3f';
+const KOKAINE_CACHE_DIR = path.join(PACKAGE_ROOT, 'vendor', 'kokaine-precompiled-v3.2.9');
 const PRECOMPILED_MTIME_NS = 2_000_000_000_000_000_000n;
 const KOKAINE_PRECOMPILED_PATH = /^\/lib\/js-debug\/kokaine_[^/]+\.(?:kki|mjs)$/;
 const KOKAINE_BUILD_CACHE_PATH = /^\/\.koka\/v[^/]+\/js-debug-[^/]+\/kokaine_[^/]+\.(?:kki|mjs)$/;
@@ -122,14 +121,12 @@ function collect(directory, prefix, output) {
   }
 }
 
-// Koka 3.2.4 marks an interface with no inline body as PhaseLinked, while an
-// interface with inline bodies is PhaseIfaceLoaded. A PhaseLinked module that
-// imports a PhaseIfaceLoaded module is then force-reloaded from source by
-// validateDependencies, which cascades through Kokaine's graph. In addition,
-// some higher-effect inline bodies emitted by 3.2.4 do not parse back. Treat
-// vendored Kokaine as an opaque precompiled library: retain its declarations
+// Treat vendored Kokaine as an opaque precompiled library: retain its declarations
 // and JavaScript implementation, but replace cross-module inline IR with one
-// private, inert marker so every interface has the same load phase.
+// private, inert marker so every interface has the same load phase. Koka 3.2.4
+// needed this to load the cache at all. Koka 3.2.9 loads the unmodified interfaces,
+// but parsing and applying their inline IR doubles the time of every browser compile
+// (a small program takes 7.7s instead of 3.9s) and adds 1.3 MB to the cache.
 function makeOpaqueKokaineInterface(content, name) {
   if (!content.includes(INTERFACE_EXTERNALS_HEADER)) {
     throw new Error(`Kokaine interface has no external-declarations section: ${name}`);
@@ -146,6 +143,7 @@ function makeOpaqueKokaineInterface(content, name) {
   return `${declarations}${CACHE_PHASE_INLINE}`;
 }
 
+const assetManifest = JSON.parse(await readFile(path.join(PACKAGE_ROOT, 'public/koka/assets.json'), 'utf8'));
 const runtimeGzip = await readFile(path.join(PACKAGE_ROOT, 'public/koka/koka-runtime.json.gz'));
 const runtime = JSON.parse(gunzipSync(runtimeGzip).toString('utf8'));
 const kokaineSources = await readSources(path.join(REPO_ROOT, 'packages/core/src/kokaine'));
@@ -161,6 +159,10 @@ const files = new Map([
   ...kokaineSources,
   ...runtimeFiles,
   ['/workspace/fixture/copy.kk', HELPER_SOURCE],
+  // Stdin is the root module, but its generated `@main` imports it by name, and
+  // Koka 3.2.9 resolves that against the include path. The compiler Worker
+  // has the entry module in the project filesystem too.
+  ['/workspace/playground.kk', SOURCE],
 ]);
 const root = buildTree(files);
 const stdout = [];
@@ -242,7 +244,7 @@ if (updateKokaineCache) {
   }
   await writeFile(path.join(KOKAINE_CACHE_DIR, 'manifest.json'), `${JSON.stringify({
     compilerVersion: runtime.compilerVersion,
-    compilerCommit: UPSTREAM_COMMIT,
+    compilerCommit: assetManifest.buildCommit,
     vfsDestination: '/lib/js-debug',
     files: manifestFiles,
   }, null, 2)}\n`);

@@ -89,7 +89,7 @@ goes away. See the [API overview](docs/api.md).
 ## Requirements
 
 - **Koka** `>=3.2.3 <3.3.0`. Generated applications pin Koka 3.2.9, and the
-  CLI installs it for you. The Playground runs a Koka 3.2.4 browser build.
+  CLI installs it for you. The Playground runs a Koka 3.2.9 browser build.
 - **Node.js** `>=22.12.0` for the CLI, the Playground, and repository
   tooling.
 
