@@ -78,9 +78,9 @@ pub type task-phase[30,1,34,52] {
 //------------------------------
 //#kki: declarations
  
-fun cell[12,5,12,8] : forall<a> (value : a) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>;
-fun load[15,5,15,8] : forall<a> (value : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>) -> a;
-fun store[18,5,18,9] : forall<a> (target : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>, value : a) -> ();
+fun cell[12,14,12,17] : forall<a> (value : a) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>;
+fun load[15,14,15,17] : forall<a> (value : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>) -> a;
+fun store[18,14,18,18] : forall<a> (target : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>, value : a) -> ();
 // Automatically generated. Tests for the `Task-canceled` constructor of the `:task-stop-reason` type.
 pub fip fun is-task-canceled[23,3,23,15] : (^ task-stop-reason : task-stop-reason) -> std/core/types/bool;
 // Automatically generated. Tests for the `Task-retired` constructor of the `:task-stop-reason` type.

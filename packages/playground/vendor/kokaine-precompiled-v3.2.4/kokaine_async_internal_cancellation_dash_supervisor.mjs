@@ -94,12 +94,12 @@ export function cancellation_registration_fs__copy(_this, cancellation_node) /* 
 }
  
 export function new_cancellation_supervisor() /* forall<a> () -> cancellation-supervisor<a> */  {
-  return $kokaine_internal_registry.new_registry();
+  return $kokaine_internal_registry.Registry($kokaine_internal_registry.cell(false), $kokaine_internal_registry.cell($kokaine_internal_registry.Registry_end), $kokaine_internal_registry.cell(0));
 }
  
  
 // monadic lift
-export function cancellation_supervisor_fs__mlift_register_10025(_c_x10015) /* forall<a> (kokaine/internal/registry/registry-registration<cancellation-entry<a>>) -> cancellation-registration<a> */  {
+export function cancellation_supervisor_fs__mlift_register_10021(_c_x10015) /* forall<a> (kokaine/internal/registry/registry-registration<cancellation-entry<a>>) -> cancellation-registration<a> */  {
   return _c_x10015;
 }
  
@@ -111,10 +111,10 @@ export function cancellation_supervisor_fs_register(supervisor, claim) /* forall
    
   var _x3 = $std_core_hnd._open_none2($kokaine_internal_registry.registry_fs_try_insert, target_10003, claim);
   if (_x3 === null) {
-    var x_10026 = $std_core_exn.$throw("cannot register with a sealed lifetime registry");
+    var x_10022 = $std_core_exn.$throw("cannot register with a sealed lifetime registry");
   }
   else {
-    var x_10026 = _x3.value;
+    var x_10022 = _x3.value;
   }
   if ($std_core_hnd._yielding()) {
     return $std_core_hnd.yield_extend(function(_c_x10015 /* kokaine/internal/registry/registry-registration<cancellation-entry<289>> */ ) {
@@ -122,7 +122,7 @@ export function cancellation_supervisor_fs_register(supervisor, claim) /* forall
     });
   }
   else {
-    return x_10026;
+    return x_10022;
   }
 }
  
@@ -171,9 +171,9 @@ export function cancellation_supervisor_fs_claim_cancel(supervisor) /* forall<a>
 }
  
 export function cancellation_supervisor_fs_is_canceled(supervisor) /* forall<a> (supervisor : cancellation-supervisor<a>) -> bool */  {
-  return (supervisor.registry_is_sealed).value;
+  return $kokaine_internal_registry.load(supervisor.registry_is_sealed);
 }
  
 export function cancellation_supervisor_fs_count(supervisor) /* forall<a> (supervisor : cancellation-supervisor<a>) -> int */  {
-  return (supervisor.registry_count).value;
+  return $kokaine_internal_registry.load(supervisor.registry_count);
 }

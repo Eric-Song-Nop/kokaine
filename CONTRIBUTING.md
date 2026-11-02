@@ -7,19 +7,18 @@ pull request with a test that fails before the change and passes after it.
 
 | You are changing | You need |
 | --- | --- |
-| The runtime (`packages/core/src/`), tests in `test/` | Koka **3.2.3**, Python 3, `make` |
+| The runtime (`packages/core/src/`), tests in `test/` | Koka **3.2.3–3.2.9** (CI runs both ends), Python 3, `make` |
 | DOM, HTML, SSR, or the report example | additionally [`uv`](https://docs.astral.sh/uv/) (runs Playwright) |
 | The CLI, create package, or Playground | Node.js `>=22.12.0` and pnpm |
 | The PocketJS adapter | additionally bun; Rust with `wasm32-unknown-unknown` for the exact lane |
 | The `wasmweb` proof | additionally Emscripten 6.0.13 |
 
-Koka 3.2.8 and later are not supported yet (they renamed standard-library
-finalization primitives that `kokaine/async/structured` uses). If your system
-Koka is newer, use the checksummed compiler the CLI manages:
+Any Koka from 3.2.3 to 3.2.9 works. If your system Koka is outside that range,
+use the checksummed compiler the CLI manages:
 
 ```sh
 pnpm install
-make test-native KOKA="$(make -s print-managed-koka)"
+make test-native KOKA="$(make -s print-managed-koka KOKA_VERSION=3.2.9)"
 ```
 
 ## Everyday commands

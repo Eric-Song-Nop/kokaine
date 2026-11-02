@@ -1,7 +1,8 @@
-# Supported compilers: Koka >=3.2.3 <3.2.8. Koka 3.2.8 renamed the
-# finalization primitives used by kokaine/async/structured. Run
-# `make print-managed-koka` for the checksummed 3.2.3 that the CLI installs.
+# Supported compilers: Koka >=3.2.3 <3.3.0; CI tests 3.2.3 and 3.2.9. Run
+# `make print-managed-koka [KOKA_VERSION=3.2.9]` for the checksummed compiler
+# the CLI installs.
 KOKA ?= koka
+KOKA_VERSION ?= 3.2.3
 PYTHON ?= python3
 UV ?= uv
 PLAYWRIGHT ?= playwright==1.61.0
@@ -24,7 +25,7 @@ KOKA_TEST = $(PYTHON) "$(PROJECT_ROOT)/support/run_koka_test.py" $(KOKA) $(KOKA_
 DIST_KOKA = $(PYTHON) "$(RUN_LOCKED)" dist/.koka-build.lock \
 	$(KOKA) $(KOKA_FLAGS) --target=jsweb --outputdir=dist
 
-.PHONY: check-koka print-managed-koka test test-native test-sidecar test-pocketjs-runtime test-pocketjs-bridge test-pocketjs-bundle test-pocketjs-wasm test-pocketjs-browser test-tooling test-all test-wasm test-report build-counter build-top-layer build-keyed build-report build-pocketjs-example compile-pocketjs-example build-window-fixture build-browser-fixtures browser-install test-browser serve serve-pocketjs-example serve-top-layer serve-keyed serve-report
+.PHONY: check-koka print-managed-koka bench-keyed test test-native test-sidecar test-pocketjs-runtime test-pocketjs-bridge test-pocketjs-bundle test-pocketjs-wasm test-pocketjs-browser test-tooling test-all test-wasm test-report build-counter build-top-layer build-keyed build-report build-pocketjs-example compile-pocketjs-example build-window-fixture build-browser-fixtures browser-install test-browser bench-browser serve serve-pocketjs-example serve-top-layer serve-keyed serve-report
 .PHONY: playground-install playground-assets playground-precompile playground-sync-assets playground-build playground-preview playground-release playground-deploy serve-playground
 
 test: test-native test-pocketjs-runtime
@@ -32,14 +33,14 @@ test: test-native test-pocketjs-runtime
 check-koka:
 	@version="$$($(KOKA) --version 2>/dev/null | sed -n 's/^version: //p')"; \
 	case "$$version" in \
-		3.2.[3-7]) ;; \
-		*) echo "Kokaine needs Koka >=3.2.3 <3.2.8, but '$(KOKA)' reports '$${version:-nothing}'."; \
+		3.2.[3-9]) ;; \
+		*) echo "Kokaine needs Koka >=3.2.3 <3.3.0, but '$(KOKA)' reports '$${version:-nothing}'."; \
 		   echo "Use the managed compiler: make KOKA=\"\$$(make -s print-managed-koka)\" ..."; \
 		   exit 2 ;; \
 	esac
 
 print-managed-koka:
-	@$(NODE) --input-type=module -e "import { resolveCompiler } from './packages/cli/src/toolchain.js'; const { binary } = await resolveCompiler('3.2.3'); console.log(binary);"
+	@$(NODE) --input-type=module -e "import { resolveCompiler } from './packages/cli/src/toolchain.js'; const { binary } = await resolveCompiler('$(KOKA_VERSION)'); console.log(binary);"
 
 # `pnpm test` covers the CLI packages and the JavaScript sidecars that Koka
 # pastes into generated modules (`extern import { js file ... }`).
@@ -88,6 +89,8 @@ serve-playground: playground-install
 # and exits nonzero when any suite fails.
 test-native: check-koka
 	$(KOKA_TEST) test/all.kk
+	$(PYTHON) "$(PROJECT_ROOT)/support/run_koka_test.py" \
+		$(KOKA) $(KOKA_FLAGS) --target=jsnode -e test/structured-escape.kk
 	$(PYTHON) test/keyed_transaction_boundary.py
 	$(PYTHON) test/event_effect_boundary.py $(KOKA)
 	$(PYTHON) test/async_effect_boundary.py $(KOKA)
@@ -166,6 +169,8 @@ test-pocketjs-browser: test-pocketjs-bundle
 build-window-fixture:
 	$(DIST_KOKA) \
 		--buildname=window-event-lifecycle test/window-event-lifecycle.kk
+	$(DIST_KOKA) \
+		--buildname=window-monitor test/window-monitor.kk
 
 build-browser-fixtures: build-counter build-top-layer build-keyed
 	$(DIST_KOKA) \
@@ -187,6 +192,8 @@ build-browser-fixtures: build-counter build-top-layer build-keyed
 	$(DIST_KOKA) \
 		--buildname=dom-keyed test/dom-keyed.kk
 	$(DIST_KOKA) \
+		--buildname=keyed-bench test/keyed-bench.kk
+	$(DIST_KOKA) \
 		--buildname=dom-async-runtime test/dom-async-runtime.kk
 	$(DIST_KOKA) \
 		--buildname=async-resource test/async-resource.kk
@@ -194,6 +201,8 @@ build-browser-fixtures: build-counter build-top-layer build-keyed
 		--buildname=async-owner-registration test/async-owner-registration.kk
 	$(DIST_KOKA) \
 		--buildname=async-runtime-scale test/async-runtime-scale.kk
+	$(DIST_KOKA) \
+		--buildname=dom-perf-mount test/dom-perf-mount.kk
 
 browser-install:
 	$(UV) run --with "$(PLAYWRIGHT)" python -m playwright install chromium
@@ -203,6 +212,16 @@ test-browser: build-browser-fixtures
 	$(UV) run --with "$(PLAYWRIGHT)" python test/browser_top_layer.py
 	$(UV) run --with "$(PLAYWRIGHT)" python test/browser_keyed.py
 	$(UV) run --with "$(PLAYWRIGHT)" python test/browser_async.py
+
+# Keyed reorder benchmark: row moves and timings for drag/reverse/shuffle/append.
+bench-keyed:
+	$(DIST_KOKA) \
+		--buildname=keyed-bench test/keyed-bench.kk
+	$(UV) run --with "$(PLAYWRIGHT)" python test/bench_keyed.py
+# Not part of test-all: timings are machine-dependent. Prints median mount,
+# region toggle and live-update times plus heap allocation estimates.
+bench-browser: build-browser-fixtures
+	$(UV) run --with "$(PLAYWRIGHT)" python test/browser_perf_mount.py
 
 test-wasm:
 	./support/wasmweb-proof/run.sh test

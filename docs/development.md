@@ -5,7 +5,7 @@ Kokaine, start from the [README quick start](../README.md#quick-start).
 
 ## Prerequisites and tests
 
-Prerequisites are Koka 3.2.3, Python 3, and `make`. Set `PYTHON=/path/to/python`
+Prerequisites are Koka 3.2.3–3.2.9 (CI runs both), Python 3, and `make`. Set `PYTHON=/path/to/python`
 when the Python 3 executable is not named `python3`. The browser checks
 additionally use [`uv`](https://docs.astral.sh/uv/) to run Playwright without
 adding project dependencies.

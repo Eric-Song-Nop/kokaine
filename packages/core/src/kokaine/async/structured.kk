@@ -19,13 +19,15 @@ type strand-outcome<a>
   Strand-value(value : a)
   Strand-exception(error : exception)
   Strand-canceled
-  Strand-finalized(yield : yield-info)
+  // Unwound by a final control operation whose handler lies outside the
+  // group. The control itself keeps propagating; it is never reified.
+  Strand-finalized
 
 type group-outcome<a>
   Group-values(values : list<(int,a)>)
   Group-exception(error : exception)
   Group-canceled
-  Group-finalized(yield : yield-info)
+  Group-finalized
 
 type group-owned
   Group-owned(
@@ -39,9 +41,12 @@ abstract value type group-owned-registration
     registration-discard : ref<global,maybe<dispose-fn>>
   )
 
+// `escapes` counts strands unwound by an outer final control. While it is
+// positive, the driver and `run-group` are themselves unwinding that control
+// through their `finally` clauses.
 type group-state<a>
   Group-state(active : int, outcome : group-outcome<a>,
-              owned : registry<group-owned>)
+              owned : registry<group-owned>, escapes : int)
 
 // Structured awaits are one-shot. An invocation-local cell can consequently
 // hold the drain ledger without adding a private effect to every user thunk.
@@ -56,13 +61,13 @@ abstract value type strand-group<a>
 abstract value type ownership-guard
   Ownership-guard(disposer : ref<global,maybe<dispose-fn>>)
 
-fun group-cell(value : a) : ref<global,a>
+noinline fun group-cell(value : a) : ref<global,a>
   unsafe-total { ref(value) }
 
-fun group-load(value : ref<global,a>) : a
+noinline fun group-load(value : ref<global,a>) : a
   unsafe-total { !value }
 
-fun group-store(target : ref<global,a>, value : a) : ()
+noinline fun group-store(target : ref<global,a>, value : a) : ()
   unsafe-total { target := value }
 
 fun new-ownership-guard(dispose : dispose-fn) : ownership-guard
@@ -110,7 +115,7 @@ fun group-lift-exn(action : () -> e a) : <exn|e> a
 
 fun new-strand-group(require-all : bool) : strand-group<a>
   Strand-group(
-    group-cell(Group-state(0,Group-values([]),new-registry())),require-all)
+    group-cell(Group-state(0,Group-values([]),new-registry(),0)),require-all)
 
 tail fun ordered-insert(values : list<(int,a)>, entry : (int,a))
                        : list<(int,a)>
@@ -128,7 +133,7 @@ fun group-outcome/add(current : group-outcome<a>, index : int,
     // follows Koka's `finally` rule by replacing the earlier body outcome.
     match outcome
       Strand-exception(error) -> Group-exception(error)
-      Strand-finalized(yield) -> Group-finalized(yield)
+      Strand-finalized -> Group-finalized
       Strand-value(value) ->
         match current
           Group-values(Nil) -> Group-values([(index,value)])
@@ -146,8 +151,8 @@ fun group-outcome/add(current : group-outcome<a>, index : int,
           _ -> current
       Strand-exception(error) ->
         Group-exception(error)
-      Strand-finalized(yield) ->
-        Group-finalized(yield)
+      Strand-finalized ->
+        Group-finalized
       Strand-canceled ->
         match current
           Group-values(_) -> Group-canceled
@@ -158,7 +163,8 @@ fun group-outcome/resume(current : group-outcome<a>) : <async,exn> list<a>
     Group-values(values) -> values.map(snd)
     Group-exception(error) -> Error(error).untry
     Group-canceled -> discontinue()
-    Group-finalized(yield) -> unsafe-reyield(yield)
+    // A final control never lets the driver return normally.
+    Group-finalized -> impossible("structured group returned after a final control")
 
 fun group-outcome/keeps-owned(current : group-outcome<a>, index : int,
                               require-all : bool) : bool
@@ -175,20 +181,28 @@ fun strand-group/start(group : strand-group<a>) : ()
   match group
     Strand-group(state,_) ->
       match group-load(state)
-        Group-state(active,outcome,owned) ->
-          group-store(state,Group-state(active + 1,outcome,owned))
+        Group-state(active,outcome,owned,escapes) ->
+          group-store(state,Group-state(active + 1,outcome,owned,escapes))
 
 fun strand-group/finish(group : strand-group<a>, index : int,
                         result : strand-outcome<a>) : ()
   match group
     Strand-group(state,require-all) ->
       match group-load(state)
-        Group-state(active,outcome,owned) ->
+        Group-state(active,outcome,owned,escapes) ->
+          val escaped = match result
+            Strand-finalized -> 1
+            _ -> 0
           group-store(state,Group-state(
             active - 1,
             outcome.add(index,result,require-all),
-            owned
+            owned,
+            escapes + escaped
           ))
+
+fun strand-group/escapes(group : strand-group<a>) : int
+  match group
+    Strand-group(state,_) -> group-load(state).escapes
 
 fun strand-group/track-owned(group : strand-group<a>, index : int,
                              discard : dispose-fn)
@@ -196,7 +210,7 @@ fun strand-group/track-owned(group : strand-group<a>, index : int,
   match group
     Strand-group(state,_) ->
       match group-load(state)
-        Group-state(_,_,owned) ->
+        Group-state(_,_,owned,_) ->
           val discard-slot = group-cell(Just(discard))
           val node = owned.try-insert(Group-owned(index,discard-slot))
           Group-owned-registration(node,discard-slot)
@@ -252,11 +266,11 @@ fun collect-group-discards(values : list<group-owned>,
           Just(action) -> Cons(
             action,collect-group-discards(rest,outcome,require-all))
 
-fun strand-group/results(group : strand-group<a>) : <async,exn> list<a>
+fun strand-group/discard-losers(group : strand-group<a>) : async ()
   match group
     Strand-group(state,require-all) ->
       match group-load(state)
-        Group-state(_,outcome,owned) ->
+        Group-state(_,outcome,owned,_) ->
           // Detach the rollback ledger before invoking untrusted host
           // disposers, then claim every loser slot from the detached snapshot.
           val snapshot = match owned.seal-detach
@@ -265,7 +279,24 @@ fun strand-group/results(group : strand-group<a>) : <async,exn> list<a>
           val discards = collect-group-discards(
             snapshot,outcome,require-all)
           discards.foreach fn(discard) async-host(discard)
-          outcome.resume
+
+fun strand-group/results(group : strand-group<a>) : <async,exn> list<a>
+  group.discard-losers
+  match group
+    Strand-group(state,_) -> group-load(state).outcome.resume
+
+// Runs from `run-group`'s `finally`. Only an outer final control raised by a
+// child reaches here with `escapes > 0`; parent retirement keeps its existing
+// path. The rollback matches `results`, and a later cleanup exception
+// replaces the pending control, as Koka's `finally` rule prescribes.
+fun strand-group/unwind-escape(group : strand-group<a>) : <async,exn> ()
+  if group.escapes > 0 then
+    group.discard-losers
+    match group
+      Strand-group(state,_) ->
+        match group-load(state).outcome
+          Group-exception(error) -> Error(error).untry
+          _ -> ()
 
 // Once a race has a winner, or a parallel group has failed/canceled, every
 // later queued ordinary result is a loser. It must take the retained Cancel
@@ -319,22 +350,37 @@ fun run-strand(
       if is-canceled() then
         group.finish(index,Strand-canceled)
       else
-        val outcome =
-          with unsafe-try-finalize
-          with unsafe-uncancel
-          capture-error(fn() action())
+        // Exceptions and cancellation return through the body, so the
+        // `finally` clause sees an incomplete body only while a final control
+        // targeting a handler outside the group unwinds this strand. It
+        // records the escape and cancels the siblings; the control then
+        // continues into the driver, whose own `finally` drains them before
+        // Koka re-raises it. Nothing reifies the yield, which keeps this
+        // independent of the `std/core/hnd` finalization API.
+        val body-done = group-cell(False)
+        val outcome = finally(
+          fn() {
+            if !group-load(body-done) then
+              group.finish(index,Strand-finalized)
+              cancel-outstanding()
+          },
+          fn() {
+            val result =
+              with unsafe-uncancel
+              capture-error(fn() action())
+            group-store(body-done,True)
+            result
+          }
+        )
         match outcome
-          Right(Just(Ok(value))) ->
+          Just(Ok(value)) ->
             group.finish(index,Strand-value(value))
             if !require-all then cancel-outstanding()
-          Right(Just(Error(error))) ->
+          Just(Error(error)) ->
             group.finish(index,Strand-exception(error))
             cancel-outstanding()
-          Right(Nothing) ->
+          Nothing ->
             group.finish(index,Strand-canceled)
-            cancel-outstanding()
-          Left(yield) ->
-            group.finish(index,Strand-finalized(yield))
             cancel-outstanding()
     )
   )
@@ -351,15 +397,39 @@ noinline fun cancel-queued(queue : resume-queue<(bool) -> e ()>) : <div|e> ()
       Nothing -> ()
       Just(select) -> group-lift-div(fn() select(True))
 
+// A child's outer final control is unwinding the driver. Keep driving every
+// remaining strand, across browser turns if their cleanup awaits, exactly as
+// the ordinary loop would after a settled outcome. A further escape from a
+// sibling's cleanup restarts this drain (and later replaces the pending
+// control); a parent cancellation falls back to the synchronous drain.
+// `step` and `fallback` are the driver's own loop body and synchronous drain,
+// passed as closures so the queue row stays inferred in `drive-strands`.
+noinline fun drain-escaped(group : strand-group<b>, step : () -> <div|e> (),
+                           fallback : () -> <div|e> ()) : <div|e> ()
+  val seen = group.escapes
+  finally(
+    fn() {
+      if group.active then
+        if group.escapes > seen then drain-escaped(group,step,fallback)
+        else fallback()
+    },
+    fn() {
+      while { group.active }
+        step()
+    }
+  )
+
 fun drive-strands(actions : list<() -> <async,exn|e> a>, require-all : bool,
                    group : strand-group<a>) : <async|e> ()
   // Every iteration consumes one completion registered by a fixed child
   // strand; the effectful condition keeps this an event-loop wait.
   val queue = new-resume-queue()
   val scope = new-child-scope(async-scope)
-  val () =
-    actions.list/foreach-indexed fn(index,action)
-      run-strand(require-all,group,queue,scope,index,action)
+  val step = fn()
+    group-lift-div(fn()
+      val select = queue.take()
+      select(group.is-settled)
+    )
   pretend-no-div(fn()
     finally(
       fn() {
@@ -370,16 +440,21 @@ fun drive-strands(actions : list<() -> <async,exn|e> a>, require-all : bool,
           fn() release-canceled-scope(scope),
           fn() {
             cancel-scope(scope)
-            cancel-queued(queue)
+            if group.escapes > 0 then
+              drain-escaped(group,step,fn() cancel-queued(queue))
+            else cancel-queued(queue)
           }
         )
       },
       fn() {
+        // Strands start inside the `finally`, so a final control raised
+        // before a strand's first await still drains the earlier siblings.
+        group-lift-div(fn()
+          actions.list/foreach-indexed fn(index,action)
+            run-strand(require-all,group,queue,scope,index,action)
+        )
         while { group-lift-div(fn() group.active) }
-          group-lift-div(fn()
-            val select = queue.take()
-            select(group.is-settled)
-          )
+          step()
       }
     )
   )
@@ -387,8 +462,13 @@ fun drive-strands(actions : list<() -> <async,exn|e> a>, require-all : bool,
 fun run-group(actions : list<() -> <async,exn|e> a>, require-all : bool)
               : <async,exn|e> list<a>
   val group = new-strand-group(require-all)
-  group-lift-exn(fn() drive-strands(actions,require-all,group))
-  group.results
+  finally(
+    fn() group.unwind-escape,
+    fn() {
+      group-lift-exn(fn() drive-strands(actions,require-all,group))
+      group.results
+    }
+  )
 
 // Run both actions concurrently and preserve argument/result order. Internal
 // completion order is nondeterministic, but a successful pair is not.

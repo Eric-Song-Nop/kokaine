@@ -11,13 +11,13 @@ import std/core/unsafe
 import std/core/undiv
 
 
-fun cell(value : a) : ref<global,a>
+noinline fun cell(value : a) : ref<global,a>
   unsafe-total { ref(value) }
 
-fun load(value : ref<global,a>) : a
+noinline fun load(value : ref<global,a>) : a
   unsafe-total { !value }
 
-fun store(target : ref<global,a>, value : a) : ()
+noinline fun store(target : ref<global,a>, value : a) : ()
   unsafe-total { target := value }
 
 
@@ -110,6 +110,18 @@ pub fun registry-registration/take(
           store(back,next)
           store(next,Registry-end)
           Just(current)
+
+// Is `registration` live and the most recent live insertion in `target`?
+// Insertion prepends, so this holds exactly when its node is the head: the
+// pointer-to-pointer back link of the head node is the registry head cell.
+// Unlinking and re-inserting such an entry would leave every order unchanged.
+pub fun registry/is-newest(target : registry<a>,
+                           registration : registry-registration<a>) : bool
+  match target
+    Registry(_,head,_) ->
+      match registration
+        Registry-registration(slot,back,_,_) ->
+          load(slot).is-just && unsafe-ptr-eq(load(back),head)
 
 tail fun snapshot-loop(values : registry-link<a>,
                        collected : list<a>) : <div> list<a>

@@ -108,9 +108,20 @@ def exercise_report(page) -> None:
     # A TOC selection also owns and closes the drawer state.
     toc_toggle.dispatch_event("click")
     flow_link = toc.locator('a[href="#flow-lab"]')
+    # The click handler sets the class before the browser fires the navigation's
+    # hashchange. Wait for that event: if it were handled after the scroll below,
+    # it would correctly re-apply the URL fragment over the scrolled section.
+    page.evaluate(
+        """() => {
+            globalThis.__flowHashChange = new Promise(resolve =>
+                window.addEventListener('hashchange', resolve, { once: true }));
+        }"""
+    )
     flow_link.click()
     expect(flow_link).to_have_class("is-active")
     expect(toc).to_have_class("toc")
+    page.evaluate("async () => { await globalThis.__flowHashChange; }")
+    expect(flow_link).to_have_class("is-active")
 
     # Manual scrolling and hash/history navigation feed generic browser
     # geometry into the Koka-owned section-selection policy.

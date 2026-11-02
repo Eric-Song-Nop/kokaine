@@ -26,6 +26,8 @@ tail fun take-all(
 
 pub fun main()
   val index = new-int-index()
+  check(index.capacity == 0 && index.lookup(3).is-nothing,
+        "a new index allocates no buckets before its first insert")
   val registrations = insert-range(index,0,12000,[])
   check(index.count == 12000,"index counts every active key")
   check(index.lookup(0) == Just(0),"index finds the first key")
