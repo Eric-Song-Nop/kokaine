@@ -52,10 +52,10 @@ An application pins one exact Koka compiler and the `jsweb` target:
     "doctor": "kokaine doctor"
   },
   "dependencies": {
-    "@kokaine/core": "^0.1.0"
+    "@kokaine/core": "^0.2.0"
   },
   "devDependencies": {
-    "@kokaine/cli": "^0.1.0",
+    "@kokaine/cli": "^0.2.0",
     "vite": "^8.1.5"
   },
   "kokaine": {
@@ -86,7 +86,7 @@ Any npm package can expose Koka sources with a `koka` field:
   "version": "1.0.0",
   "files": ["src", "js"],
   "peerDependencies": {
-    "@kokaine/core": "^0.1.0"
+    "@kokaine/core": "^0.2.0"
   },
   "koka": {
     "schemaVersion": 1,

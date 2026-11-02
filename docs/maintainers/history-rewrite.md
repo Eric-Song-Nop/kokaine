@@ -1,14 +1,12 @@
 # Removing synced playground assets from git history
 
-> **Warning: this has not been run, and running it is destructive.** It rewrites
-> every commit that touched the paths below. Running it means force-pushing
-> `main` and every other branch and tag. **Every commit SHA from the first
-> playground commit onward changes.** Open pull requests, local clones, forks,
-> worktrees, links to commits, and signed tags all point at the old history and
-> must be recreated or rebased. Run it only after the maintainers agree, during
-> a window with no open PRs, and only after the untracking change
-> (`chore(playground): stop tracking synced Koka and DevTools assets`) is on
-> `main`.
+> **Status: this was run once, on 2026-11-02.** `main`, `feat/pocketjs` and
+> `chore/publish-npm-packages` were force-pushed; commits from the first
+> playground commit onward changed SHA, and `main`'s tree was unchanged. A fresh
+> clone went from about 20 MiB to 6.3 MB. Clones made before that date must be
+> replaced (see "What collaborators must do"). This page stays as the procedure
+> for any future rewrite, which is just as destructive: it needs a window with
+> no open PRs and invalidates every SHA, clone, fork and link to a commit.
 
 ## What it removes
 

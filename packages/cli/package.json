@@ -1,6 +1,6 @@
 {
   "name": "@kokaine/cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "npm-native build, development, and diagnostics tooling for Kokaine",
   "license": "MIT",
   "repository": {
@@ -27,7 +27,8 @@
     "bin",
     "src",
     "compiler-releases.json",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "test": "node --test test/*.test.js",
