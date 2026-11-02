@@ -474,14 +474,14 @@
     {
       "sourcePath": "/.koka/v3.2.4/js-debug-466d29/kokaine_web_window.kki",
       "name": "kokaine_web_window.kki",
-      "bytes": 11045,
-      "sha256": "7707741ab8003fe7a15216cac4efc8debe7526d2787f420df138950c381ee762"
+      "bytes": 14186,
+      "sha256": "e19ea888fc49b4e3b2693e5737db3094abb59629e5231698e2f47b3ce3ff3518"
     },
     {
       "sourcePath": "/.koka/v3.2.4/js-debug-466d29/kokaine_web_window.mjs",
       "name": "kokaine_web_window.mjs",
-      "bytes": 20579,
-      "sha256": "b811e467532bcae469acbc2bcbc94c2e9687bdf446c0af4b3bddc00512d6c32d"
+      "bytes": 32071,
+      "sha256": "ede16776f628e7e178354c3fc914bfb6e4a22403b43119bbe7243071d744758f"
     }
   ]
 }
