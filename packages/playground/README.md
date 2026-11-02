@@ -35,7 +35,7 @@ make serve-playground
 
 Vite binds to `127.0.0.1`, serves the required cross-origin isolation headers,
 and stages the pinned local DevTools and content-addressed runtime assets before
-startup. The first run downloads about 38 MiB of pinned Koka WASM and library
+startup. The first run downloads about 50 MiB of pinned Koka WASM and library
 sources into a local cache (see [Pinned assets](#pinned-assets)); later runs
 work offline. Open the URL it prints and press Command/Control+Enter to compile.
 
@@ -106,16 +106,18 @@ package contents without restoring a server or native compiler path.
 
 ## Pinned assets
 
-The browser toolchain is reproducible from pins, so only the pins and the
-inputs that cannot be downloaded are tracked in git:
+The browser toolchain is pinned, not vendored. Koka 3.2.9 and its browser REPL
+are built by this project and published as files of the immutable GitHub Release
+`playground-koka-3.2.9-1`; see
+[Building the Playground's Koka compiler](../../docs/maintainers/playground-compiler.md).
+Only the pins and the Kokaine cache are tracked in git:
 
 | Path | Tracked | Source |
 | --- | --- | --- |
 | `public/koka/assets.json` | yes | SHA-256 pins for every WASM program and the runtime bundle |
-| `public/koka/koka-browser-repl.wasm` | yes | built from the recorded browser-REPL fork commit; no upstream download exists |
-| `vendor/kokaine-precompiled-v3.2.4/` | yes | the single copy of the Kokaine precompiled cache (`.kki` + `.mjs` + `manifest.json`) |
-| `public/koka/koka-playground.wasm`, `koka-lsp.wasm` | no | downloaded from the pinned upstream Koka commit |
-| `public/koka/koka-runtime.json.gz` | no | rebuilt from the pinned upstream stdlib/precompiled sources plus `vendor/kokaine-precompiled-v3.2.4/` |
+| `vendor/kokaine-precompiled-v3.2.9/` | yes | the single copy of the Kokaine precompiled cache (`.kki` + `.mjs` + `manifest.json`) |
+| `public/koka/koka-playground.wasm`, `koka-lsp.wasm`, `koka-browser-repl.wasm` | no | downloaded from the pinned release |
+| `public/koka/koka-runtime.json.gz` | no | rebuilt from the release's `koka-browser-lib.tar.gz` plus `vendor/kokaine-precompiled-v3.2.9/` |
 | `public/devtools/` | no | copied from the `chii` and `chobitsu` devDependencies |
 | `public/koka/releases/`, `release.json` | no | staged per build under a content-derived release ID |
 
@@ -125,17 +127,17 @@ manual step. To populate the assets explicitly, run `make playground-assets`
 (`pnpm --filter @kokaine/playground run assets`).
 
 - `scripts/sync-koka-assets.mjs` (`assets:koka`) makes the untracked Koka files
-  match the SHA-256 pins in `public/koka/assets.json`, verifies the checked-in
-  browser REPL, and never rewrites the manifest. Downloads (about 38 MiB on a
-  cold cache) are kept in a content-addressed cache outside the repository:
-  `$KOKAINE_CACHE_DIR`, else `$XDG_CACHE_HOME/kokaine`, else
-  `%LOCALAPPDATA%\kokaine\cache` on Windows, else `~/.cache/kokaine`, under
-  `playground/` (`sha256/<hash>` for pinned blobs, `koka-src/<commit>/` for
-  upstream sources). Later runs are offline. With no network and no cache it
-  fails with an explicit message; set `KOKAINE_OFFLINE=1` to forbid network
-  access and use only the cache.
+  match the SHA-256 pins in `public/koka/assets.json` and never rewrites the
+  manifest. Downloads (about 50 MiB on a cold cache) are kept in a
+  content-addressed cache outside the repository: `$KOKAINE_CACHE_DIR`, else
+  `$XDG_CACHE_HOME/kokaine`, else `%LOCALAPPDATA%\kokaine\cache` on Windows, else
+  `~/.cache/kokaine`, under `playground/sha256/<hash>`. Later runs are offline.
+  With no network and no cache it fails with an explicit message; set
+  `KOKAINE_OFFLINE=1` to forbid network access and use only the cache, or
+  `KOKAINE_PLAYGROUND_ASSET_DIR=<dir>` to take the files from a local directory
+  instead of the release, still verified against the pins.
 - `assets:koka:update` (`--update`) rebuilds the runtime bundle from the pinned
-  upstream sources and the vendored Kokaine cache, then rewrites
+  library archive and the vendored Kokaine cache, then rewrites
   `public/koka/assets.json`.
 - `scripts/sync-devtools-assets.mjs` copies Chii and Chobitsu from the exact npm
   versions pinned in `pnpm-lock.yaml`, including their license files, into
@@ -149,17 +151,15 @@ make playground-precompile
 ```
 
 This uses the pinned browser compiler, verifies that it loads the generated
-interfaces, rewrites `vendor/kokaine-precompiled-v3.2.4/`, and then rebuilds
+interfaces, rewrites `vendor/kokaine-precompiled-v3.2.9/`, and then rebuilds
 the runtime bundle and `public/koka/assets.json` from it. Commit both. It needs
 network access only when the local asset cache is cold. Do not hand-edit files
 under `vendor/kokaine-precompiled-*`; the served `precompiled/` directory is
 derived from the runtime bundle by `scripts/stage-runtime-release.mjs` at build
 time.
 
-When deliberately changing a pin, update the commit, compiler version, and
-expected hashes in `scripts/sync-koka-assets.mjs` together, run
-`make playground-sync-assets` to rewrite `public/koka/assets.json`, then compile
-a representative Kokaine program and exercise the LSP before committing.
+A new compiler build is a new release and a new set of pins; follow
+[Bumping Koka](../../docs/maintainers/playground-compiler.md#bumping-koka).
 
 ## Cross-origin isolation
 
@@ -229,8 +229,8 @@ For CI, build the browser assets ahead of deployment and run Wrangler Direct
 Upload with `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, and
 explicit `--project-name` and `--branch` values. Never build a native Koka
 toolchain inside Pages. The deploy machine needs network access to
-`raw.githubusercontent.com` or a warm asset cache (`KOKAINE_CACHE_DIR`), because
-the compiler/LSP WASM and runtime bundle are not in the git checkout; cache
+`github.com` or a warm asset cache (`KOKAINE_CACHE_DIR`), because the compiler,
+LSP and REPL WASM and the runtime bundle are not in the git checkout; cache
 `~/.cache/kokaine/playground` keyed on `public/koka/assets.json` as the CI
 workflow does. Do not use Cloudflare Pages Git integration with a build command
 that cannot reach the network.

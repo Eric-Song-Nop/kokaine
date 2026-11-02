@@ -15,9 +15,9 @@ packages/playground/src/generated/
 
 # Playground assets fetched/staged by packages/playground/scripts/sync-*.mjs
 # (verified against the pins in public/koka/assets.json; see the playground README).
-# koka-browser-repl.wasm has no upstream download and stays tracked.
 packages/playground/public/koka/koka-playground.wasm
 packages/playground/public/koka/koka-lsp.wasm
+packages/playground/public/koka/koka-browser-repl.wasm
 packages/playground/public/koka/koka-runtime.json.gz
 packages/playground/public/koka/precompiled/
 packages/playground/public/devtools/

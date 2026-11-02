@@ -2,24 +2,45 @@
 
 This playground redistributes or adapts the following upstream work. Version
 pins for npm packages are recorded in the repository root `pnpm-lock.yaml`;
-the Koka compiler pin and artifact hashes are recorded in
+the Koka source pins and artifact hashes are recorded in
 `scripts/sync-koka-assets.mjs` and `public/koka/assets.json`.
 
 ## Koka browser compiler, language server, libraries, and playground design
 
-- Source: <https://github.com/koka-lang/koka>
-- Pinned source: commit `c0f1a10a60b8644fd6f08dfcec654fa815c06e3f`
+- Upstream source: <https://github.com/koka-lang/koka>, tag `v3.2.9`
+  (commit `facb7932ce6871fdb063f762a304bd8238f35fba`)
+- Source of this build: <https://github.com/Eric-Song-Nop/koka>, branch
+  `kokaine-playground-3.2.9` (commit `41c5ba15b9c14ea64b2af167cae80f2a41860369`)
 - Copyright 2012-2023, Microsoft Research, Daan Leijen
 - License: Apache-2.0
 
-The Koka WebAssembly binaries, standard-library sources, and precompiled
-JavaScript modules are copied from the pinned upstream browser playground.
-Except for `public/koka/koka-browser-repl.wasm` (built from fork commit
-`32fee7eda6397dee81f4752ff7cab4e4001d3eb2`), they are not stored in this
-repository: `scripts/sync-koka-assets.mjs` downloads and hash-verifies them at
-build time, and they are redistributed only in the deployed site.
+The Koka WebAssembly binaries (`koka-playground.wasm`, `koka-lsp.wasm`,
+`koka-browser-repl.wasm`) are built by this project from the commit above, not by
+upstream. That commit modifies Koka v3.2.9 by adding four commits:
+
+- by Yifan Song, a persistent browser REPL (`src/Main/repl/**`,
+  `test-browser-repl/**`, and its entries in `koka.cabal`, `package.yaml`, and
+  `.github/workflows/playground.yml`), and that REPL's invalidation of changed
+  project modules;
+- by Tim Whiting, upstream's post-v3.2.9 fix `e38005d977eb337e58f00eac4857da087a3ebd23`
+  to `src/Compile/Build.hs` (and a test message), without which the v3.2.9 browser
+  compiler cannot read its own input;
+- by Yifan Song, a fix to `realPath` in `src/Platform/wasm/Platform/FileIO.hs` so
+  that it resolves `..` on WASI.
+
+No other Koka source is changed.
+
+The standard-library sources are unmodified Koka v3.2.9. The precompiled
+JavaScript modules are compiled from them and from the upstream samples by the
+unmodified Koka v3.2.9 release compiler.
+
+None of these are stored in this repository. They are published with the Koka
+license as files of the GitHub Release `playground-koka-3.2.9-1` of this project;
+`scripts/sync-koka-assets.mjs` downloads and hash-verifies them at build time,
+and they are redistributed in the deployed site, next to a copy of this file. See
+`docs/maintainers/playground-compiler.md` for how they are built.
 The Kokaine worker integration, asset packaging, and user interface are
-modified for this project.
+written for this project.
 
 ## browser_wasi_shim
 

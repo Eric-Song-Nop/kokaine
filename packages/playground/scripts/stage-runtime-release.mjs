@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gunzipSync } from 'node:zlib';
@@ -13,9 +13,9 @@ const releaseManifestPath = path.join(kokaRoot, 'release.json');
 const wasmFilenames = ['koka-playground.wasm', 'koka-lsp.wasm', 'koka-browser-repl.wasm'];
 
 const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
-const browserReplCommit = manifest?.browserReplCommit;
-if (typeof browserReplCommit !== 'string' || !/^[0-9a-f]{40}$/i.test(browserReplCommit)) {
-  throw new Error(`Invalid browser REPL commit in ${manifestPath}`);
+const buildCommit = manifest?.buildCommit;
+if (typeof buildCommit !== 'string' || !/^[0-9a-f]{40}$/i.test(buildCommit)) {
+  throw new Error(`Invalid build commit in ${manifestPath}`);
 }
 const expectedRuntimeHash = manifest?.runtime?.sha256;
 if (typeof expectedRuntimeHash !== 'string' || !/^[0-9a-f]{64}$/i.test(expectedRuntimeHash)) {
@@ -42,7 +42,7 @@ const releaseDescriptor = {
   schemaVersion: 1,
   compilerVersion: manifest.compilerVersion,
   upstreamCommit: manifest.upstreamCommit,
-  browserReplCommit,
+  buildCommit,
   runtimeSha256: runtimeHash,
   wasmSha256: Object.fromEntries(wasmAssets.map(({ filename, sha256 }) => [filename, sha256])),
 };
@@ -83,6 +83,9 @@ await rm(releasesRoot, { recursive: true, force: true });
 await mkdir(precompiledTarget, { recursive: true });
 await Promise.all([
   writeFile(path.join(target, 'koka-runtime.json.gz'), runtimeGzip),
+  // The deployed WASM programs are a modified Koka: Apache-2.0 requires its licence
+  // and the notice of the changes to travel with them.
+  copyFile(path.join(packageRoot, 'THIRD_PARTY_NOTICES.md'), path.join(target, 'THIRD_PARTY_NOTICES.md')),
   ...wasmAssets.map(({ filename, bytes }) => writeFile(path.join(target, filename), bytes)),
   ...modules.map(([filename, source]) => (
     writeFile(path.join(precompiledTarget, filename), source, 'utf8')

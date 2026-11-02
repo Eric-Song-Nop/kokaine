@@ -153,10 +153,10 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
-      # The Koka compiler/LSP WASM (~34 MiB) and the upstream stdlib sources
-      # behind koka-runtime.json.gz are not tracked in git. sync-koka-assets.mjs
-      # keeps them in a content-addressed cache under ~/.cache/kokaine/playground
-      # and verifies every file against the pins in public/koka/assets.json.
+      # The Koka compiler, LSP and REPL WASM and the library archive behind
+      # koka-runtime.json.gz are GitHub Release assets, not tracked in git.
+      # sync-koka-assets.mjs keeps them in a content-addressed cache under
+      # ~/.cache/kokaine/playground and verifies every file against its pin.
       - name: Cache pinned Koka browser assets
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
@@ -167,14 +167,14 @@ jobs:
         run: pnpm --filter @kokaine/playground run assets:koka
       - name: Regenerate the pinned Kokaine cache
         run: pnpm --filter @kokaine/playground run precompile:kokaine
-      # vendor/kokaine-precompiled-v3.2.4 is the only tracked copy of the
+      # vendor/kokaine-precompiled-v3.2.9 is the only tracked copy of the
       # Kokaine precompiled cache; public/koka/assets.json pins the runtime
       # bundle derived from it. Everything else under public/ is gitignored.
       - name: Reject generated cache drift
         shell: bash
         run: |
           paths=(
-            packages/playground/vendor/kokaine-precompiled-v3.2.4
+            packages/playground/vendor/kokaine-precompiled-v3.2.9
             packages/playground/public/koka/assets.json
           )
           status="$(git status --porcelain=v1 --untracked-files=all -- "${paths[@]}")"

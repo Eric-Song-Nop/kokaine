@@ -1,0 +1,150 @@
+/*--------------------------------------------------------------------------
+  Structural lifetime and draft-transaction operations for captured traces.
+--------------------------------------------------------------------------*/
+module interface kokaine/reactive/internal/lifetime
+ 
+//------------------------------
+//#kki: import declarations
+ 
+import std/core/types = std/core/types pub = "";
+import std/core/hnd = std/core/hnd pub = "";
+import std/core/exn = std/core/exn pub = "";
+import std/core/bool = std/core/bool pub = "";
+import std/core/order = std/core/order pub = "";
+import std/core/char = std/core/char pub = "";
+import std/core/int = std/core/int pub = "";
+import std/core/vector = std/core/vector pub = "";
+import std/core/bytes = std/core/bytes pub = "";
+import std/core/bslice = std/core/bslice pub = "";
+import std/core/string = std/core/string pub = "";
+import std/core/sslice = std/core/sslice pub = "";
+import std/core/list = std/core/list pub = "";
+import std/core/maybe = std/core/maybe pub = "";
+import std/core/maybe2 = std/core/maybe2 pub = "";
+import std/core/either = std/core/either pub = "";
+import std/core/result = std/core/result pub = "";
+import std/core/tuple = std/core/tuple pub = "";
+import std/core/lazy = std/core/lazy pub = "";
+import std/core/show = std/core/show pub = "";
+import std/core/debug = std/core/debug pub = "";
+import std/core/delayed = std/core/delayed pub = "";
+import std/core/console = std/core/console pub = "";
+import std/core = std/core = "";
+import kokaine/reactive/internal/model = kokaine/reactive/internal/model = "";
+import kokaine/internal/compat = kokaine/internal/compat = "";
+import kokaine/internal/registry = kokaine/internal/registry = "";
+import std/core/undiv = std/core/undiv = "";
+import kokaine/reactive/internal/work-transaction = kokaine/reactive/internal/work-transaction inline = "";
+ 
+//------------------------------
+//#kki: external imports
+ 
+ 
+//------------------------------
+//#kki: fixity declarations
+ 
+ 
+//------------------------------
+//#kki: local imported aliases
+ 
+// An `:error<a>` type represents a first-class exception result as a `:result<a,exception>`.
+local alias std/core/exn/error[63,1,63,40]<a> :: V -> V = (std/core/types/result :: (V, V) -> V)<a,std/core/exn/exception> = 1;
+// Index into an evidence vector
+local alias std/core/hnd/ev-index[138,1,138,28] = std/core/types/ssize_t = 1;
+// An alias for pure effects: a pure function always returns the same result
+// when called with the same arguments but may not terminate or raise an exception.
+local alias std/core/pure[57,1,57,26] :: E = <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/div :: X)> = 1;
+ 
+//------------------------------
+//#kki: type declarations
+ 
+pub alias retirement[38,1,38,44]<(e :: E)> :: E -> V = (kokaine/reactive/internal/model/retirement-work :: E -> V)<(e :: E)> = 1;
+ 
+//------------------------------
+//#kki: declarations
+ 
+// `noinline`: Koka 3.2.8+ exports this body's inlined `unsafe-total` with a
+// fresh `_e1` effect variable that its own `.kki` parser rejects, so every
+// incremental build after the first fails. Keeping it out of the interface's
+// inline section is stable on 3.2.3 through 3.2.9.
+pub fun trace-state-of[19,18,19,31] : forall<(e :: E)> (current : (kokaine/reactive/internal/model/trace :: E -> V)<(e :: E)>) -> kokaine/reactive/internal/model/capture-state;
+pub fun trace-gate-of[24,9,24,21] : forall<(e :: E)> (current : (kokaine/reactive/internal/model/trace :: E -> V)<(e :: E)>) -> (std/core/types/maybe :: V -> V)<kokaine/reactive/internal/model/continuation-gate>;
+pub fun trace-parent-of[29,9,29,23] : forall<(e :: E)> (current : (kokaine/reactive/internal/model/trace :: E -> V)<(e :: E)>) -> (std/core/types/maybe :: V -> V)<kokaine/reactive/internal/model/continuation-gate>;
+pub fun new-retirement-coordinator[40,9,40,34] : forall<(e :: E)> () -> (kokaine/reactive/internal/model/retirement-coordinator :: E -> V)<(e :: E)>;
+pub fun retirement-coordinator/install-root-disposal[43,9,43,52] : forall<(e :: E)> (coordinator : (kokaine/reactive/internal/model/retirement-coordinator :: E -> V)<(e :: E)>, dispose : () -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ()) -> ();
+pub fun retirement-coordinator/request-root-disposal[48,9,48,52] : forall<(e :: E)> (coordinator : (kokaine/reactive/internal/model/retirement-coordinator :: E -> V)<(e :: E)>) -> std/core/types/bool;
+pub fun new-lifetime-owner[54,9,54,26] : forall<(e :: E)> (state : kokaine/reactive/internal/model/scope-state, coordinator : (kokaine/reactive/internal/model/retirement-coordinator :: E -> V)<(e :: E)>) -> (kokaine/reactive/internal/model/lifetime-owner :: E -> V)<(e :: E)>;
+pub fun lifetime-owner/register-child[59,9,59,37] : forall<(e :: E)> (owner : (kokaine/reactive/internal/model/lifetime-owner :: E -> V)<(e :: E)>, work : (kokaine/reactive/internal/model/retirement-work :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (kokaine/internal/registry/registry-registration :: V -> V)<(kokaine/reactive/internal/model/retirement-work :: E -> V)<(e :: E)>>;
+pub fun lifetime-owner/register-finalizer[64,9,64,41] : forall<(e :: E)> (owner : (kokaine/reactive/internal/model/lifetime-owner :: E -> V)<(e :: E)>, work : (kokaine/reactive/internal/model/retirement-work :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (kokaine/internal/registry/registry-registration :: V -> V)<(kokaine/reactive/internal/model/retirement-work :: E -> V)<(e :: E)>>;
+// Empty generations still need an atomic structural close so stale frames
+// cannot accept later children or finalizers.
+pub fun lifetime-owner/try-retire-empty[71,9,71,39] : forall<(e :: E)> (owner : (kokaine/reactive/internal/model/lifetime-owner :: E -> V)<(e :: E)>) -> std/core/types/bool;
+fun unlink-scope-owner[85,5,85,22] : forall<(e :: E)> (current : (kokaine/reactive/internal/model/continuation-scope :: E -> V)<(e :: E)>) -> ();
+tail fun reverse-onto[94,10,94,21] : forall<a> (values : (std/core/types/list :: V -> V)<a>, target : (std/core/types/list :: V -> V)<a>) -> <(std/core/types/div :: X)> (std/core/types/list :: V -> V)<a>;
+fun prepend-in-order[99,5,99,20] : forall<a> (values : (std/core/types/list :: V -> V)<a>, target : (std/core/types/list :: V -> V)<a>) -> <(std/core/types/div :: X)> (std/core/types/list :: V -> V)<a>;
+fun append-in-order[102,5,102,19] : forall<a> (left : (std/core/types/list :: V -> V)<a>, right : (std/core/types/list :: V -> V)<a>) -> <(std/core/types/div :: X)> (std/core/types/list :: V -> V)<a>;
+pub fun widen-pure-retirement[113,9,113,29] : forall<(e :: E)> (current : (kokaine/reactive/internal/model/retirement-work :: E -> V)<(std/core/types/total :: E)>) -> <(std/core/types/div :: X)> (kokaine/reactive/internal/model/retirement-work :: E -> V)<(e :: E)>;
+fun widen-work-list[105,5,105,19] : forall<(e :: E)> (values : (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/retirement-work :: E -> V)<(std/core/types/total :: E)>>, collected : (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/retirement-work :: E -> V)<(e :: E)>>) -> <(std/core/types/div :: X)> (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/retirement-work :: E -> V)<(e :: E)>>;
+fun lifetime-retirement-expand[123,5,123,30] : forall<(e :: E)> (owner : (kokaine/reactive/internal/model/lifetime-owner :: E -> V)<(e :: E)>) -> <(std/core/types/div :: X)> (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/retirement-work :: E -> V)<(e :: E)>>;
+pub fun lifetime-retirement-work[134,9,134,32] : forall<(e :: E)> (owner : (kokaine/reactive/internal/model/lifetime-owner :: E -> V)<(e :: E)>) -> (kokaine/reactive/internal/model/retirement-work :: E -> V)<(e :: E)>;
+fun trace-retirement-expand[138,5,138,27] : forall<(e :: E)> (current : (kokaine/reactive/internal/model/trace :: E -> V)<(e :: E)>) -> <(std/core/types/div :: X)> (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/retirement-work :: E -> V)<(e :: E)>>;
+pub fun trace-retirement-work[158,9,158,29] : forall<(e :: E)> (current : (kokaine/reactive/internal/model/trace :: E -> V)<(e :: E)>) -> <(std/core/types/div :: X)> (kokaine/reactive/internal/model/retirement-work :: E -> V)<(e :: E)>;
+fun scope-retirement-expand[162,5,162,27] : forall<(e :: E)> (current : (kokaine/reactive/internal/model/continuation-scope :: E -> V)<(e :: E)>) -> <(std/core/types/div :: X)> (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/retirement-work :: E -> V)<(e :: E)>>;
+pub fun scope-retirement-work[175,9,175,29] : forall<(e :: E)> (current : (kokaine/reactive/internal/model/continuation-scope :: E -> V)<(e :: E)>) -> (kokaine/reactive/internal/model/retirement-work :: E -> V)<(e :: E)>;
+tail fun collect-retirement-loop[179,10,179,32] : forall<(e :: E)> (pending : (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/retirement-work :: E -> V)<(e :: E)>>, collected : (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/retirement-work :: E -> V)<(e :: E)>>) -> <(std/core/types/div :: X)> (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/retirement-work :: E -> V)<(e :: E)>>;
+pub fun collect-retirement-work[192,9,192,31] : forall<(e :: E)> (values : (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/retirement-work :: E -> V)<(e :: E)>>) -> <(std/core/types/div :: X)> (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/retirement-work :: E -> V)<(e :: E)>>;
+pub fun collect-scope[196,9,196,21] : forall<(e :: E)> (current : (kokaine/reactive/internal/model/continuation-scope :: E -> V)<(e :: E)>) -> <(std/core/types/div :: X)> (std/core/types/list :: V -> V)<(retirement :: E -> V)<(e :: E)>>;
+pub fun collect-lifetime[200,9,200,24] : forall<(e :: E)> (owner : (kokaine/reactive/internal/model/lifetime-owner :: E -> V)<(e :: E)>) -> <(std/core/types/div :: X)> (std/core/types/list :: V -> V)<(retirement :: E -> V)<(e :: E)>>;
+// monadic lift
+fun @mlift-run-finalizers-loop@10281[1,0,1,0] : forall<(e :: E)> (coordinator : (kokaine/reactive/internal/model/retirement-coordinator :: E -> V)<(e :: E)>, latest : (std/core/types/maybe :: V -> V)<std/core/exn/exception>, @y-x10093 : (std/core/types/list :: V -> V)<(retirement :: E -> V)<(e :: E)>>) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+// monadic lift
+fun @mlift-run-finalizers-loop@10282[1,0,1,0] : forall<(e :: E)> (completed : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>, result : (std/core/exn/error :: V -> V)<()>) -> <(std/core/types/div :: X)|(e :: E)> (std/core/exn/error :: V -> V)<()>;
+// monadic lift
+fun @mlift-run-finalizers-loop@10283[1,0,1,0] : forall<(e :: E)> (completed : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),std/core/types/bool>, finalize : () -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> (), @y-x10097 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/div :: X)|(e :: E)> (std/core/exn/error :: V -> V)<()>;
+// monadic lift
+fun @mlift-run-finalizers-loop@10284[1,0,1,0] : forall<(e :: E)> (coordinator : (kokaine/reactive/internal/model/retirement-coordinator :: E -> V)<(e :: E)>, latest : (std/core/types/maybe :: V -> V)<std/core/exn/exception>, rest : (std/core/types/list :: V -> V)<(retirement :: E -> V)<(e :: E)>>, attempted : (std/core/exn/error :: V -> V)<()>) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+fun run-finalizers-loop[204,5,204,23] : forall<(e :: E)> (coordinator : (kokaine/reactive/internal/model/retirement-coordinator :: E -> V)<(e :: E)>, finalizers : (std/core/types/list :: V -> V)<(retirement :: E -> V)<(e :: E)>>, latest : (std/core/types/maybe :: V -> V)<std/core/exn/exception>) -> <(std/core/pure :: E)|(e :: E)> ();
+fun retirement-coordinator/leave[238,5,238,32] : forall<(e :: E)> (coordinator : (kokaine/reactive/internal/model/retirement-coordinator :: E -> V)<(e :: E)>) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+pub fun run-finalizers[250,9,250,22] : forall<(e :: E)> (coordinator : (kokaine/reactive/internal/model/retirement-coordinator :: E -> V)<(e :: E)>, finalizers : (std/core/types/list :: V -> V)<(retirement :: E -> V)<(e :: E)>>) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+fun trace-retirement-coordinator[260,5,260,32] : forall<(e :: E)> (current : (kokaine/reactive/internal/model/trace :: E -> V)<(e :: E)>) -> (std/core/types/maybe :: V -> V)<(kokaine/reactive/internal/model/retirement-coordinator :: E -> V)<(e :: E)>>;
+tail fun traces-retirement-coordinator[267,10,267,38] : forall<(e :: E)> (values : (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/trace :: E -> V)<(e :: E)>>) -> (std/core/types/maybe :: V -> V)<(kokaine/reactive/internal/model/retirement-coordinator :: E -> V)<(e :: E)>>;
+// monadic lift
+fun @mlift-retire-lifetime@10285[1,0,1,0] : forall<(e :: E)> (owner : (kokaine/reactive/internal/model/lifetime-owner :: E -> V)<(e :: E)>, finalizers : (std/core/types/list :: V -> V)<(retirement :: E -> V)<(e :: E)>>) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+pub fun retire-lifetime[276,9,276,23] : forall<(e :: E)> (owner : (kokaine/reactive/internal/model/lifetime-owner :: E -> V)<(e :: E)>) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+// monadic lift
+fun @mlift-retire-scope@10286[1,0,1,0] : forall<(e :: E)> (current : (kokaine/reactive/internal/model/continuation-scope :: E -> V)<(e :: E)>, finalizers : (std/core/types/list :: V -> V)<(retirement :: E -> V)<(e :: E)>>) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+pub fun retire-scope[280,9,280,20] : forall<(e :: E)> (current : (kokaine/reactive/internal/model/continuation-scope :: E -> V)<(e :: E)>) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+tail fun draft-work-list[284,10,284,24] : forall<(e :: E)> (values : (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/trace :: E -> V)<(e :: E)>>, collected : (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/retirement-work :: E -> V)<(e :: E)>>) -> <(std/core/types/div :: X)> (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/retirement-work :: E -> V)<(e :: E)>>;
+pub fun collect-scope-drafts[292,9,292,28] : forall<(e :: E)> (current : (kokaine/reactive/internal/model/continuation-scope :: E -> V)<(e :: E)>, values : (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/trace :: E -> V)<(e :: E)>>) -> <(std/core/types/div :: X)> (std/core/types/list :: V -> V)<(retirement :: E -> V)<(e :: E)>>;
+pub fun collect-lifetime-drafts[298,9,298,31] : forall<(e :: E)> (owner : (kokaine/reactive/internal/model/lifetime-owner :: E -> V)<(e :: E)>, values : (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/trace :: E -> V)<(e :: E)>>) -> <(std/core/types/div :: X)> (std/core/types/list :: V -> V)<(retirement :: E -> V)<(e :: E)>>;
+// monadic lift
+fun @mlift-retire-scope-drafts@10287[1,0,1,0] : forall<(e :: E)> (current : (kokaine/reactive/internal/model/continuation-scope :: E -> V)<(e :: E)>, finalizers : (std/core/types/list :: V -> V)<(retirement :: E -> V)<(e :: E)>>) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+pub fun retire-scope-drafts[304,9,304,27] : forall<(e :: E)> (current : (kokaine/reactive/internal/model/continuation-scope :: E -> V)<(e :: E)>, values : (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/trace :: E -> V)<(e :: E)>>) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+// monadic lift
+fun @mlift-retire-lifetime-drafts@10288[1,0,1,0] : forall<(e :: E)> (owner : (kokaine/reactive/internal/model/lifetime-owner :: E -> V)<(e :: E)>, finalizers : (std/core/types/list :: V -> V)<(retirement :: E -> V)<(e :: E)>>) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+pub fun retire-lifetime-drafts[310,9,310,30] : forall<(e :: E)> (owner : (kokaine/reactive/internal/model/lifetime-owner :: E -> V)<(e :: E)>, values : (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/trace :: E -> V)<(e :: E)>>) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+// monadic lift
+fun @mlift-retire-drafts@10289[1,0,1,0] : forall<(e :: E)> (coordinator : (kokaine/reactive/internal/model/retirement-coordinator :: E -> V)<(e :: E)>, finalizers : (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/retirement-work :: E -> V)<(e :: E)>>) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+// monadic lift
+fun @mlift-retire-drafts@10290[1,0,1,0] : forall<(e :: E)> (coordinator : (kokaine/reactive/internal/model/retirement-coordinator :: E -> V)<(e :: E)>, work : (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/retirement-work :: E -> V)<(e :: E)>>) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+pub fun retire-drafts[316,9,316,21] : forall<(e :: E)> (values : (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/trace :: E -> V)<(e :: E)>>) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+pub fun retire-drafts-now[324,9,324,25] : forall<(e :: E)> (values : (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/trace :: E -> V)<(e :: E)>>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+pub fun try-retire-scope-drafts[327,9,327,31] : forall<(e :: E)> (current : (kokaine/reactive/internal/model/continuation-scope :: E -> V)<(e :: E)>, values : (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/trace :: E -> V)<(e :: E)>>) -> (e :: E) (std/core/exn/error :: V -> V)<()>;
+pub fun try-retire-lifetime-drafts[331,9,331,34] : forall<(e :: E)> (owner : (kokaine/reactive/internal/model/lifetime-owner :: E -> V)<(e :: E)>, values : (std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/trace :: E -> V)<(e :: E)>>) -> (e :: E) (std/core/exn/error :: V -> V)<()>;
+pub fun record-draft[335,9,335,20] : forall<(e :: E)> (plane : (kokaine/reactive/internal/model/plane :: E -> V)<(e :: E)>, current : (kokaine/reactive/internal/model/trace :: E -> V)<(e :: E)>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> ();
+pub fun attempt-build[340,9,340,21] : forall<(e :: E)> (plane : (kokaine/reactive/internal/model/plane :: E -> V)<(e :: E)>, drafts : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),(std/core/types/list :: V -> V)<(kokaine/reactive/internal/model/trace :: E -> V)<(e :: E)>>>, action : () -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> (kokaine/reactive/internal/model/built-trace :: E -> V)<(e :: E)>) -> <(std/core/types/div :: X)|(e :: E)> (std/core/exn/error :: V -> V)<(kokaine/reactive/internal/model/built-trace :: E -> V)<(e :: E)>>;
+pub fun with-context[358,9,358,20] : forall<a,(e :: E),(e1 :: E)> (plane : (kokaine/reactive/internal/model/plane :: E -> V)<(e1 :: E)>, current : (std/core/types/maybe :: V -> V)<kokaine/reactive/internal/model/continuation-gate>, current-frame : (kokaine/reactive/internal/model/frame :: E -> V)<(e1 :: E)>, action : () -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a;
+pub fun with-current[352,9,352,20] : forall<a,(e :: E)> (plane : (kokaine/reactive/internal/model/plane :: E -> V)<(e :: E)>, current : (kokaine/reactive/internal/model/trace :: E -> V)<(e :: E)>, current-frame : (kokaine/reactive/internal/model/frame :: E -> V)<(e :: E)>, action : () -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> a;
+ 
+fun @kokaine-cache-phase[1,0,1,0] : () -> std/core/types/int;
+ 
+//------------------------------
+//#kki: external declarations
+ 
+ 
+//------------------------------
+//#kki: inline definitions
+ 
+//.inline-section
+fun @kokaine-cache-phase // inline size: 1
+  = fn(){ 0; };

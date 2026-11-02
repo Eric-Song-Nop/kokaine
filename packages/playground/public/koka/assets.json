@@ -1,28 +1,33 @@
 {
   "schemaVersion": 1,
-  "compilerVersion": "3.2.4",
-  "upstreamCommit": "c0f1a10a60b8644fd6f08dfcec654fa815c06e3f",
-  "browserReplCommit": "32fee7eda6397dee81f4752ff7cab4e4001d3eb2",
+  "compilerVersion": "3.2.9",
+  "upstreamCommit": "facb7932ce6871fdb063f762a304bd8238f35fba",
+  "buildCommit": "41c5ba15b9c14ea64b2af167cae80f2a41860369",
+  "releaseTag": "playground-koka-3.2.9-1",
+  "libraryArchive": {
+    "name": "koka-browser-lib.tar.gz",
+    "sha256": "af631c136f9aca5ceb3813b1f7b2a254b3aaf436a4b1d4cb4fa1765cd13ff0d2"
+  },
   "wasm": {
     "koka-playground.wasm": {
-      "bytes": 14759212,
-      "sha256": "e4c77ffd06391435865d7e6aef7d7ecabb211601dfa181e1c6b819633959c660"
+      "bytes": 14925680,
+      "sha256": "61a8afbffd217d5c53af9f7ab8f9d6325546efd3a58ef65cb5a13af2dc1e5bf8"
     },
     "koka-lsp.wasm": {
-      "bytes": 20303184,
-      "sha256": "ce950710f27fda0f325d9046885d525f3e87daf30d93be1d45058d556c6039c0"
+      "bytes": 20452309,
+      "sha256": "e551795d7758ec08acc811b428cd8faa1c037dbd05f82125714a3d958a24f9ad"
     },
     "koka-browser-repl.wasm": {
-      "bytes": 15154405,
-      "sha256": "5ee587122a58da95b4bbbaaee8d946ef3f2bec1c9da4a21d70fdb34e2ad80afd"
+      "bytes": 15321693,
+      "sha256": "33088e1a3e50cc1de11d2e9fdf7fd9bd49eaf591349b27ba18a318a257f88092"
     }
   },
   "runtime": {
-    "files": 414,
-    "jsonBytes": 8275820,
-    "gzipBytes": 1295186,
-    "sha256": "8d1499ff78105d2f087cc557a26bffca8422de0088b50f0fe5962fb409990726"
+    "files": 466,
+    "jsonBytes": 9207372,
+    "gzipBytes": 1372014,
+    "sha256": "27333490d7bf95cf992a7a74abe6e8722a713d686331c8daa9cb709047790004"
   },
-  "staticPrecompiledModules": 145,
+  "staticPrecompiledModules": 158,
   "kokainePrecompiledFiles": 80
 }
