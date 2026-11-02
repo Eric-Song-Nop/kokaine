@@ -922,6 +922,15 @@ with serve_project() as origin:
         assert scale_result["outstanding"] == 0, scale_result
         assert scale_result["owned"] == 0, scale_result
         assert scale_result["elapsed"] < 5_000, scale_result
+        # Host-turn cost locks. Fifty fetch-like promises settling in one
+        # macrotask resume in one coalesced microtask (one re-entry batch
+        # per completion); 12,000 scheduled actions share one microtask.
+        costs = scale_result["costs"]
+        assert costs["fanIn"]["value"] == 1_275, costs
+        assert costs["fanIn"]["microtasks"] == 1, costs
+        assert costs["fanIn"]["batches"] == 50, costs
+        assert costs["schedule"]["microtasks"] == 1, costs
+        assert costs["schedule"]["batches"] == 12_000, costs
 
         browser.close()
         assert not page_errors, "browser page errors:\n" + "\n".join(page_errors)

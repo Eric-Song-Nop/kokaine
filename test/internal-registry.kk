@@ -124,9 +124,25 @@ fun test-readonly-find-skips-detached_entries()
   val _ = last.take
   ()
 
+fun test-is-newest-tracks-the-live-head()
+  val target : registry<int> = new-registry()
+  val first = target.insert(1)
+  check(target.is-newest(first),"a sole entry is the newest")
+  val second = target.insert(2)
+  check(!target.is-newest(first) && target.is-newest(second),
+        "a later insertion becomes the newest")
+  val _ = second.take
+  check(target.is-newest(first),"unlinking the head exposes the previous entry")
+  val _ = first.take
+  check(!target.is-newest(first),"an unlinked entry is never the newest")
+  val third = target.insert(3)
+  val _ = target.seal-detach
+  check(!target.is-newest(third),"a detached entry is never the newest")
+
 pub fun main()
   test-removable-registrations-scale-linearly()
   test-seal-detaches-one-owned-snapshot()
   test-readonly-visit-preserves-registry-order()
   test-readonly-find-skips-detached_entries()
+  test-is-newest-tracks-the-live-head()
   println("internal-registry: all checks passed")

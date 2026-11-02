@@ -115,16 +115,73 @@ fun test-scheduled-action-uses-the-dispatcher()
         fn() hidden-store(observed,hidden-load(observed) + 1))
     )
   )
+  // Scheduling completes the task from setup, so the dispatcher sees exactly
+  // one turn. (It used to post a setup turn whose completion posted a second
+  // resumption turn; that extra turn ordered nothing the single turn does not.)
   check(hidden-load(turns).length == 1 && hidden-load(observed) == 0,
-        "scheduled host action posts its setup turn")
-  run-next(turns)
-  check(hidden-load(turns).length == 1 && hidden-load(observed) == 0,
-        "setup completion posts a separate resumption turn")
+        "scheduled host action posts exactly one turn")
   run-next(turns)
   check(hidden-load(turns).is-nil && hidden-load(observed) == 1,
-        "resumption executes the scheduled host action exactly once")
+        "that turn executes the scheduled host action exactly once")
   check(generation-async-outstanding() == 0,
         "scheduled host action releases its generation ownership")
+  root.dispose()
+
+// Scheduling is FIFO with other completions reported in program order, a
+// rejected dispatcher drops the action, and canceling its scope before the
+// turn runs revokes it.
+fun test-scheduled-action-order-and-revocation()
+  val turns : ref<global,list<() -> ui ()>> = hidden([])
+  val dispatcher = dispatcher-for(turns)
+  val log : ref<global,list<string>> = hidden([])
+  fun note(entry : string) : ui ()
+    hidden-store(log,hidden-load(log) ++ [entry])
+  val (root,()) : (root<<ui>>,()) = create-root fn(_root) ()
+
+  dispatch(root,fn()
+    run-async-with-dispatcher(root,dispatcher,fn()
+      async-schedule(fn() note("scheduled"))
+      val setup : await-setup<()> = fn(complete)
+        complete(Result(()))
+        Ok(fn() ())
+      no-await(setup,async-scope,"synchronous sibling",fn(_result)
+        note("sibling")
+      )
+      cancelation-scope(fn()
+        async-schedule(fn() note("revoked"))
+        cancel-outstanding()
+      )
+      // A scheduled action may still register under an already-canceled
+      // scope; canceling that scope again must claim it rather than skip
+      // the scan as an already-drained scope.
+      cancelation-scope(fn()
+        cancel-outstanding()
+        async-schedule(fn() note("late-revoked"))
+        cancel-outstanding()
+      )
+    )
+  )
+  check(hidden-load(turns).length == 4,
+        "every scheduled action and synchronous sibling posts one turn")
+  run-next(turns)
+  run-next(turns)
+  run-next(turns)
+  run-next(turns)
+  check(hidden-load(log) == ["scheduled","sibling"],
+        "scheduled actions run in program order with synchronous completions")
+  check(generation-async-outstanding() == 0,
+        "scheduled and revoked actions release ownership")
+
+  val rejecting = new-async-host-dispatcher(fn(_action) False)
+  dispatch(root,fn()
+    run-async-with-dispatcher(root,rejecting,fn()
+      async-schedule(fn() note("rejected"))
+    )
+  )
+  check(hidden-load(log) == ["scheduled","sibling"],
+        "a rejected dispatcher never runs the scheduled action")
+  check(generation-async-outstanding() == 0,
+        "a rejected scheduled action releases ownership")
   root.dispose()
 
 fun test-disposal-invalidates-posted-turn()
@@ -438,6 +495,7 @@ fun test-reused-async-scope-keeps-exact-frame-ownership()
 pub fun main()
   test-dispatcher-controls-generation-resumption()
   test-scheduled-action-uses-the-dispatcher()
+  test-scheduled-action-order-and-revocation()
   test-disposal-invalidates-posted-turn()
   test-dispatch-rejection-cancels-the-ready-task()
   test-dispatch-rejection-batches-finalizer-writes()
