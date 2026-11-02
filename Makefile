@@ -169,6 +169,8 @@ test-pocketjs-browser: test-pocketjs-bundle
 build-window-fixture:
 	$(DIST_KOKA) \
 		--buildname=window-event-lifecycle test/window-event-lifecycle.kk
+	$(DIST_KOKA) \
+		--buildname=window-monitor test/window-monitor.kk
 
 build-browser-fixtures: build-counter build-top-layer build-keyed
 	$(DIST_KOKA) \
