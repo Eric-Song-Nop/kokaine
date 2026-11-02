@@ -16,7 +16,7 @@ def main() -> int:
     async_bridge = (ROOT / "packages/pocketjs/js/async.js").read_text()
     guest = (ROOT / "packages/pocketjs/js/guest.js").read_text()
     manifest = json.loads((ROOT / "packages/pocketjs/package.json").read_text())
-    core_manifest = json.loads((ROOT / "package.json").read_text())
+    core_manifest = json.loads((ROOT / "packages/core/package.json").read_text())
 
     forbidden_modules = {
         "kokaine/html",
@@ -85,8 +85,8 @@ def main() -> int:
     }:
         raise AssertionError("package async subpath must expose its JS bridge and types")
 
-    core_files = [ROOT / "src/kokaine/reactive.kk"]
-    core_files.extend((ROOT / "src/kokaine/reactive").rglob("*.kk"))
+    core_files = [ROOT / "packages/core/src/kokaine/reactive.kk"]
+    core_files.extend((ROOT / "packages/core/src/kokaine/reactive").rglob("*.kk"))
     for source in core_files:
         if "import kokaine/pocket" in source.read_text():
             raise AssertionError(f"reactive core depends on Pocket renderer: {source}")

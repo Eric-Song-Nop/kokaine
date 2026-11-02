@@ -44,7 +44,7 @@ import kokaine/reactive/internal/handlers = kokaine/reactive/internal/handlers i
 //------------------------------
 //#kki: local imported aliases
  
-local alias kokaine/reactive/internal/model/disposer[91,1,91,40]<(e :: E)> :: E -> V = () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> () = 1;
+local alias kokaine/reactive/internal/model/disposer[110,1,110,40]<(e :: E)> :: E -> V = () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> () = 1;
 // Index into an evidence vector
 local alias std/core/hnd/ev-index[138,1,138,28] = std/core/types/ssize_t = 1;
 // An alias for pure effects: a pure function always returns the same result

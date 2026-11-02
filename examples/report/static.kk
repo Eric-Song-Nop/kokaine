@@ -34,9 +34,26 @@ fun abstract-card(index : string, heading : string, copy)
       copy()
 
 
+// A short English orientation for readers of the otherwise Chinese report.
+fun english-summary()
+  element("aside",attrs=[class("english-summary"),attr("lang","en"),
+                         aria("label","English summary")])
+    p(attrs=[class("kicker")])
+      text("English summary")
+    p
+      text("This executable report explains, for UI engineers, how Kokaine builds incremental UI from algebraic effects and continuations. Signal reads and writes and the HTML vocabulary are effects; a handler decides how each operation is interpreted. A tracked ")
+      inline-code("get")
+      text(" captures the exact synchronous suffix after that read, and a later change resumes only that suffix, so the code before the read is never replayed.")
+    p
+      text("The sections walk through that model with live labs: a data-flow trace, an atlas of the Koka features involved, a step-by-step scheduler with batching, dynamic dependencies, ownership and cleanup, a comparison with React, Vue, and Solid, and the embedded Continuation Lab. The page itself is one Kokaine view written in Koka, with no handwritten JavaScript.")
+    p
+      text("The body text is in Chinese; the code, labels, and diagrams are mostly language-neutral. For English reference documentation, see the Kokaine README and the docs/ directory in the repository.")
+
+
 pub fun render-abstract()
   section(attrs=[class("hero report-section"),id("abstract"),
                  data("section","00")])
+    english-summary()
     div(attrs=[class("hero__copy")])
       p(attrs=[class("kicker")])
         span("SELF-HOSTED",attrs=[class("live-pill")])
@@ -323,8 +340,8 @@ pub fun render-limits()
         reference("https://koka-lang.github.io/koka/doc/book.html#sec-fbip",
                   "Koka · Functional but in-place")
         reference("../architecture.md","Kokaine · Architecture")
-        reference("../../src/kokaine/reactive.kk","Kokaine · Reactive source")
-        reference("../../src/kokaine/html.kk","Kokaine · HTML DSL source")
+        reference("../../packages/core/src/kokaine/reactive.kk","Kokaine · Reactive source")
+        reference("../../packages/core/src/kokaine/html.kk","Kokaine · HTML DSL source")
       p("框架对比以各项目官方文档描述的基础模型为准；所有队列动画、工作范围和次数都是 semantic simulation，用于解释状态转换，不是 runtime instrumentation 或 benchmark。")
 
 

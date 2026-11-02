@@ -1,44 +1,16 @@
 {
-  "name": "@kokaine/core",
-  "version": "0.1.1",
-  "description": "A fine-grained UI runtime for Koka",
-  "license": "Apache-2.0",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/Eric-Song-Nop/kokaine.git"
-  },
-  "homepage": "https://github.com/Eric-Song-Nop/kokaine#readme",
-  "bugs": {
-    "url": "https://github.com/Eric-Song-Nop/kokaine/issues"
-  },
-  "publishConfig": {
-    "access": "public"
-  },
+  "name": "@kokaine/monorepo",
+  "private": true,
+  "description": "Workspace root for Kokaine; the runtime is packages/core (@kokaine/core).",
+  "license": "MIT",
   "type": "module",
-  "files": [
-    "src",
-    "README.md",
-    "LICENSE"
-  ],
-  "koka": {
-    "schemaVersion": 1,
-    "sources": [
-      "src"
-    ],
-    "compiler": ">=3.2.3 <3.3.0",
-    "targets": [
-      "jsweb"
-    ]
-  },
-  "workspaces": [
-    "packages/*"
-  ],
   "scripts": {
-    "test:cli": "npm test --workspace @kokaine/cli && npm test --workspace @kokaine/create",
-    "test": "npm run test:cli"
+    "test:cli": "pnpm --filter @kokaine/cli --filter @kokaine/create test",
+    "test:sidecar": "node --check packages/core/src/kokaine/dom-inline.js && node --check packages/core/src/kokaine/async/web-inline.js && node --check packages/core/src/kokaine/web/window-inline.js && node --test \"test/sidecar/*.test.mjs\"",
+    "test": "pnpm run test:cli && pnpm run test:sidecar"
   },
   "engines": {
-    "node": "^20.19.0 || >=22.12.0"
+    "node": ">=22.12.0"
   },
   "packageManager": "pnpm@11.20.0"
 }

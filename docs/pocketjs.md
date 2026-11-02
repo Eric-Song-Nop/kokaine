@@ -1,5 +1,11 @@
 # PocketJS backend feasibility
 
+> **Status: frozen at PocketJS 0.6.** This adapter targets `@pocketjs/framework`
+> `>=0.6.0 <0.7.0` (upstream is at 0.15) and is not being ported forward for
+> now. It keeps working against PocketJS 0.6 and its exact-checkout CI lane
+> runs weekly; new work should not depend on it. Porting to a current
+> PocketJS is welcome as a separate effort.
+
 Kokaine's PocketJS backend is experimental and currently targets
 [PocketJS 0.6.0](https://pocketjs.dev/docs/architecture/). In this document,
 "backend" means a UI renderer and native packaging path. PocketJS is **not** a

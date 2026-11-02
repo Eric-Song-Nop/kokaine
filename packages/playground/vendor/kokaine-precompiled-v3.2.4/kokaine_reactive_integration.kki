@@ -53,7 +53,7 @@ import kokaine/reactive/internal/model = kokaine/reactive/internal/model inline 
 //#kki: local imported aliases
  
 local alias kokaine/reactive/disposer[23,1,23,67]<(e :: E)> :: E -> V = ((kokaine/reactive/internal/model/disposer :: E -> V)<(e :: E)> == 1 () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ()) = 2;
-local alias kokaine/reactive/internal/model/disposer[91,1,91,40]<(e :: E)> :: E -> V = () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> () = 1;
+local alias kokaine/reactive/internal/model/disposer[110,1,110,40]<(e :: E)> :: E -> V = () -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> () = 1;
 // An alias for pure effects: a pure function always returns the same result
 // when called with the same arguments but may not terminate or raise an exception.
 local alias std/core/pure[55,1,55,26] :: E = <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/div :: X)> = 1;

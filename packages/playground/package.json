@@ -4,20 +4,25 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "assets": "pnpm run assets:koka && pnpm run assets:devtools && pnpm run assets:release",
     "assets:koka": "node scripts/sync-koka-assets.mjs",
+    "assets:koka:update": "node scripts/sync-koka-assets.mjs --update",
     "assets:release": "node scripts/stage-runtime-release.mjs",
-    "compile:workbench": "node scripts/compile-workbench.mjs",
-    "precompile:kokaine": "node scripts/smoke-wasm.mjs --update-kokaine-cache && npm run assets:koka",
     "assets:devtools": "node scripts/sync-devtools-assets.mjs",
-    "predev": "npm run assets:devtools && npm run assets:release && npm run compile:workbench",
+    "compile:workbench": "node scripts/compile-workbench.mjs",
+    "precompile:kokaine": "pnpm run assets:koka && node scripts/smoke-wasm.mjs --update-kokaine-cache && pnpm run assets:koka:update",
+    "predev": "pnpm run assets && pnpm run compile:workbench",
     "dev": "vite --host 127.0.0.1",
-    "prebuild": "npm run assets:devtools && npm run assets:release && npm run compile:workbench",
+    "prebuild": "pnpm run assets && pnpm run compile:workbench",
     "build": "tsc --noEmit && vite build",
     "postbuild": "node scripts/prune-stable-runtime.mjs",
     "preview": "vite preview --host 127.0.0.1",
+    "pretest:wasm": "pnpm run assets:koka",
     "test:wasm": "node scripts/smoke-wasm.mjs",
+    "pretest": "pnpm run assets",
     "test": "vitest run",
     "test:architecture": "node scripts/test-kokaine-architecture.mjs",
+    "pretypecheck": "pnpm run assets && pnpm run compile:workbench",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -42,6 +47,6 @@
     "vitest": "^4.1.10"
   },
   "engines": {
-    "node": "^20.19.0 || >=22.12.0"
+    "node": ">=22.12.0"
   }
 }

@@ -515,13 +515,15 @@ with serve_project() as origin:
                     selection.focusOffset === 2;
             }"""
         ), "fallback keyed move lost contenteditable selection"
+        # LIS placement keeps rows 4 and 5 in place for this reverse, so the
+        # unsafe probes go into row 0, which must move.
         page.evaluate(
             """() => {
                 const host = document.createElement('div');
                 const input = document.createElement('input');
                 host.id = 'keyed-closed-shadow-focus';
                 host.attachShadow({ mode: 'closed' }).append(input);
-                document.querySelector('#keyed-row-4').append(host);
+                document.querySelector('#keyed-row-0').append(host);
                 globalThis.__kokaineClosedShadowInput = input;
                 input.focus();
             }"""
@@ -553,7 +555,7 @@ with serve_project() as origin:
             """() => {
                 const host = globalThis.__createKokaineShadowEditor();
                 host.id = 'keyed-unsupported-shadow-selection';
-                document.querySelector('#keyed-row-4').append(host);
+                document.querySelector('#keyed-row-0').append(host);
                 const root = host.shadowRoot;
                 const editor = root.querySelector('strong');
                 editor.focus();
@@ -1465,6 +1467,135 @@ with serve_project() as origin:
                 "node => node.childNodes.length"
             ) == 0
         assert iframe.evaluate("document.body.childNodes.length") == 0
+
+        # LIS placement: count physical row moves on the keyed benchmark
+        # fixture (test/keyed-bench.kk). Only rows outside the longest
+        # increasing subsequence of retained rows move.
+        placement = browser.new_page()
+        placement_errors: list[str] = []
+        placement.on("pageerror", lambda error: placement_errors.append(str(error)))
+        placement_response = placement.goto(f"{origin}/test/")
+        assert placement_response is not None and placement_response.ok
+        placement.evaluate(
+            """async () => {
+                const host = document.createElement('div');
+                host.id = 'bench-root';
+                document.body.replaceChildren(host);
+                await import('/dist/test_keyed_dash_bench__main.mjs');
+                const list = () => document.querySelector('#bench-list');
+                const opening = node => node && node.nodeType === 8 &&
+                    node.data === 'kokaine:for-row';
+                globalThis.__placement = {
+                    keys: () => Array.from(
+                        list().querySelectorAll(':scope > li'),
+                        node => Number(node.dataset.key)),
+                    // Returns [ok, rows moved via moveBefore or a fallback
+                    // fragment insertBefore].
+                    apply(order) {
+                        const elementProto = Element.prototype;
+                        const nodeProto = Node.prototype;
+                        const move = Object.getOwnPropertyDescriptor(
+                            elementProto, 'moveBefore');
+                        const insert = Object.getOwnPropertyDescriptor(
+                            nodeProto, 'insertBefore');
+                        let rows = 0;
+                        Object.defineProperty(elementProto, 'moveBefore', {
+                            ...move,
+                            value(node, before) {
+                                if (this === list() && opening(node)) rows++;
+                                return move.value.call(this, node, before);
+                            }
+                        });
+                        Object.defineProperty(nodeProto, 'insertBefore', {
+                            ...insert,
+                            value(node, before) {
+                                if (this === list() && node.nodeType === 11 &&
+                                    node.childNodes.length > 2 &&
+                                    opening(node.firstChild)) rows++;
+                                return insert.value.call(this, node, before);
+                            }
+                        });
+                        try {
+                            const ok = globalThis.__kokaineKeyedBench
+                                .setOrder(order);
+                            return [ok, rows];
+                        } finally {
+                            Object.defineProperty(elementProto, 'moveBefore', move);
+                            Object.defineProperty(nodeProto, 'insertBefore', insert);
+                        }
+                    },
+                };
+            }"""
+        )
+        placement_rows = 100
+        identity = list(range(placement_rows))
+        assert placement.evaluate("o => globalThis.__placement.apply(o)", identity) == [True, 0]
+        for fallback in (False, True):
+            if fallback:
+                placement.evaluate(
+                    """() => Object.defineProperty(
+                        document.querySelector('#bench-list'), 'moveBefore',
+                        { configurable: true, value: undefined })"""
+                )
+            dragged = identity[1:] + [0]
+            assert placement.evaluate(
+                "o => globalThis.__placement.apply(o)", dragged
+            ) == [True, 1], "dragging the first row to the end must move one row"
+            assert placement.evaluate("globalThis.__placement.keys()") == dragged
+            assert placement.evaluate(
+                "o => globalThis.__placement.apply(o)", identity
+            ) == [True, 1], "dragging the last row to the front must move one row"
+            reversed_order = identity[::-1]
+            assert placement.evaluate(
+                "o => globalThis.__placement.apply(o)", reversed_order
+            ) == [True, placement_rows - 1], "a reverse must move n-1 rows"
+            assert placement.evaluate("globalThis.__placement.keys()") == reversed_order
+            assert placement.evaluate(
+                "o => globalThis.__placement.apply(o)", identity
+            ) == [True, placement_rows - 1]
+            assert placement.evaluate("globalThis.__placement.keys()") == identity
+
+        # A customized built-in whose prototype was reset is only visible to
+        # the serialised `is` value. The shallow inert-document copy that
+        # exposes it must not construct a custom element, and the move must
+        # still fail closed before any row moves.
+        constructed = placement.evaluate(
+            """() => {
+                globalThis.__kokaineCountedConstructions = 0;
+                customElements.define(
+                    'x-kokaine-counted-paragraph',
+                    class extends HTMLParagraphElement {
+                        constructor() {
+                            super();
+                            globalThis.__kokaineCountedConstructions++;
+                        }
+                    },
+                    { extends: 'p' }
+                );
+                const probe = document.createElement(
+                    'p', { is: 'x-kokaine-counted-paragraph' });
+                Object.setPrototypeOf(probe, HTMLParagraphElement.prototype);
+                probe.id = 'keyed-counted-paragraph';
+                document.querySelector('#bench-row-0').append(probe);
+                return globalThis.__kokaineCountedConstructions;
+            }"""
+        )
+        assert constructed == 1
+        assert placement.evaluate(
+            "o => globalThis.__placement.apply(o)", identity[1:] + [0]
+        ) == [False, 0], "an unmovable row must fail closed before any move"
+        assert placement.evaluate("globalThis.__placement.keys()") == identity
+        assert placement.evaluate("globalThis.__kokaineCountedConstructions") == 1, (
+            "keyed-move validation constructed a custom element"
+        )
+        # The same row may stay put while others move around it.
+        moved_around = [0] + identity[1:][::-1]
+        assert placement.evaluate(
+            "o => globalThis.__placement.apply(o)", moved_around
+        ) == [True, placement_rows - 2]
+        assert placement.evaluate("globalThis.__placement.keys()") == moved_around
+        assert placement_errors == [], f"uncaught browser errors: {placement_errors!r}"
+        placement.close()
 
         assert page_errors == [], f"uncaught browser errors: {page_errors!r}"
         assert console_errors == [], f"console errors: {console_errors!r}"

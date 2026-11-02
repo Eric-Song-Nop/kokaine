@@ -130,26 +130,26 @@ export function store(target, value) /* forall<a> (target : ref<global,a>, value
 }
  
 export function new_resume_queue() /* forall<a> () -> resume-queue<a> */  {
-  return { value: (Queue_state($std_core_types.Nil, $std_core_types.Nil, $std_core_types.Nil)) };
+  return cell(Queue_state($std_core_types.Nil, $std_core_types.Nil, $std_core_types.Nil));
 }
  
 export function new_delivery_guard() /* () -> delivery-guard */  {
-  return { value: ($std_core_types.Nothing) };
+  return cell($std_core_types.Nothing);
 }
  
 export function delivery_guard_fs_install(guard, dispose) /* (guard : delivery-guard, dispose : kokaine/async/effects/dispose-fn) -> () */  {
-  return ((guard).value = ($std_core_types.Just(dispose)));
+  return store(guard, $std_core_types.Just(dispose));
 }
  
 export function delivery_guard_fs_accept(guard) /* (guard : delivery-guard) -> () */  {
-  return ((guard).value = ($std_core_types.Nothing));
+  return store(guard, $std_core_types.Nothing);
 }
  
 export function delivery_guard_fs_abandon(guard) /* (guard : delivery-guard) -> ui () */  {
    
-  var current = guard.value;
+  var current = load(guard);
    
-  ((guard).value = ($std_core_types.Nothing));
+  store(guard, $std_core_types.Nothing);
   if (current === null) {
     return $std_core_types.Unit;
   }
@@ -160,12 +160,21 @@ export function delivery_guard_fs_abandon(guard) /* (guard : delivery-guard) -> 
  
 export function delivery_guard_fs_abandon_async(guard) /* (guard : delivery-guard) -> <kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue> () */  {
   return $kokaine_async_effects.async_host(function() {
-    return delivery_guard_fs_abandon(guard);
+     
+    var current = load(guard);
+     
+    store(guard, $std_core_types.Nothing);
+    if (current === null) {
+      return $std_core_types.Unit;
+    }
+    else {
+      return current.value();
+    }
   });
 }
  
 export function resume_queue_fs_has_value(queue) /* forall<a> (queue : resume-queue<a>) -> bool */  {
-  var _x5 = queue.value;
+  var _x5 = load(queue);
   return (_x5.front === null && _x5.back === null) ? false : true;
 }
  
@@ -173,10 +182,10 @@ export function resume_queue_fs_has_value(queue) /* forall<a> (queue : resume-qu
 // Remove the oldest buffered value. The two-list representation keeps host
 // enqueue O(1) while preserving browser-observed callback order.
 export function resume_queue_fs_try_take(queue) /* forall<a> (queue : resume-queue<a>) -> maybe<a> */  {
-  var _x6 = queue.value;
+  var _x6 = load(queue);
   if (_x6.front !== null) {
      
-    ((queue).value = (Queue_state(_x6.front.tail, _x6.back, _x6.waiters)));
+    store(queue, Queue_state(_x6.front.tail, _x6.back, _x6.waiters));
     return $std_core_types.Just(_x6.front.head);
   }
   else if (_x6.front === null && _x6.back === null) {
@@ -189,7 +198,7 @@ export function resume_queue_fs_try_take(queue) /* forall<a> (queue : resume-que
     }
     else {
        
-      ((queue).value = (Queue_state(_x7.tail, $std_core_types.Nil, _x6.waiters)));
+      store(queue, Queue_state(_x7.tail, $std_core_types.Nil, _x6.waiters));
       return $std_core_types.Just(_x7.head);
     }
   }
@@ -201,20 +210,20 @@ export function resume_queue_fs_try_take(queue) /* forall<a> (queue : resume-que
 // is scheduled but its owner retires first, the queued strand capability is
 // still available to the structured cancellation drain.
 export function resume_queue_fs_push_from_host(queue, value) /* forall<a> (queue : resume-queue<a>, value : a) -> ui () */  {
-  var _x8 = queue.value;
+  var _x8 = load(queue);
   if (_x8.waiters !== null) {
      
-    ((queue).value = (Queue_state(_x8.front, $std_core_types.Cons(value, _x8.back), _x8.waiters.tail)));
+    store(queue, Queue_state(_x8.front, $std_core_types.Cons(value, _x8.back), _x8.waiters.tail));
     return _x8.waiters.head();
   }
   else {
-    return ((queue).value = (Queue_state(_x8.front, $std_core_types.Cons(value, _x8.back), $std_core_types.Nil)));
+    return store(queue, Queue_state(_x8.front, $std_core_types.Cons(value, _x8.back), $std_core_types.Nil));
   }
 }
  
  
 // monadic lift
-export function resume_queue_fs__mlift_take_10128(queue, wild__) /* forall<a> (queue : resume-queue<a>, wild_ : ()) -> <kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue> a */  {
+export function resume_queue_fs__mlift_take_10076(queue, wild__) /* forall<a> (queue : resume-queue<a>, wild_ : ()) -> <kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue> a */  {
   var _x9 = $std_core_hnd._open_none1(resume_queue_fs_try_take, queue);
   if (_x9 !== null) {
     return _x9.value;
@@ -234,13 +243,11 @@ export function resume_queue_fs_take(queue) /* forall<a> (queue : resume-queue<a
   }
   else {
      
-    var x_10133 = $kokaine_async_effects.await0_noexn("structured resume", function(resume /* () -> ui () */ ) {
-        var _x11 = queue.value;
+    var x_10081 = $kokaine_async_effects.await0_noexn("structured resume", function(resume /* () -> ui () */ ) {
+        var _x11 = load(queue);
         if (_x11.front === null) {
           if (_x11.back === null) {
-             
-            var value_1_10049 = Queue_state(_x11.front, _x11.back, $std_core_list.append(_x11.waiters, $std_core_types.Cons(resume, $std_core_types.Nil)));
-            return ((queue).value = value_1_10049);
+            return store(queue, Queue_state(_x11.front, _x11.back, $std_core_list.append(_x11.waiters, $std_core_types.Cons(resume, $std_core_types.Nil))));
           }
           else {
             return resume();
@@ -252,7 +259,7 @@ export function resume_queue_fs_take(queue) /* forall<a> (queue : resume-queue<a
       });
     if ($std_core_hnd._yielding()) {
       return $std_core_hnd.yield_extend(function(wild__ /* () */ ) {
-        return resume_queue_fs__mlift_take_10128(queue, wild__);
+        return resume_queue_fs__mlift_take_10076(queue, wild__);
       });
     }
     else {
@@ -269,26 +276,26 @@ export function resume_queue_fs_take(queue) /* forall<a> (queue : resume-queue<a
  
  
 // monadic lift
-export function _mlift_route_awaits_10129(rcontext, wild___1) /* forall<a,e> (rcontext : hnd/resume-context<kokaine/async/effects/await-result<a>,<kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue|e>,<kokaine/async/effects/async-await,kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue|e>,()>, wild_@1 : ()) -> <kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue|e> () */  {
+export function _mlift_route_awaits_10077(rcontext, wild___1) /* forall<a,e> (rcontext : hnd/resume-context<kokaine/async/effects/await-result<a>,<kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue|e>,<kokaine/async/effects/async-await,kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue|e>,()>, wild_@1 : ()) -> <kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue|e> () */  {
   return rcontext($std_core_hnd.Deep($kokaine_async_effects.Cancel));
 }
  
  
 // monadic lift
-export function _mlift_route_awaits_10130(rcontext, wild___3) /* forall<a,e> (rcontext : hnd/resume-context<kokaine/async/effects/await-result<a>,<kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue|e>,<kokaine/async/effects/async-await,kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue|e>,()>, wild_@3 : ()) -> <kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue|e> () */  {
+export function _mlift_route_awaits_10078(rcontext, wild___3) /* forall<a,e> (rcontext : hnd/resume-context<kokaine/async/effects/await-result<a>,<kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue|e>,<kokaine/async/effects/async-await,kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue|e>,()>, wild_@3 : ()) -> <kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue|e> () */  {
   return rcontext($std_core_hnd.Deep($kokaine_async_effects.Cancel));
 }
  
  
 // monadic lift
-export function _mlift_route_awaits_10131(wild___5) /* forall<e> (wild_@5 : ()) -> <kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue|e> () */  {
+export function _mlift_route_awaits_10079(wild___5) /* forall<e> (wild_@5 : ()) -> <kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue|e> () */  {
   return $std_core_types.Unit;
 }
  
  
 // monadic lift
-export function _mlift_route_awaits_10132(action, _y_x10093) /* forall<e> (action : () -> <kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue|e> (), hnd/ev-index) -> <kokaine/async/effects/async-await,kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue|e> () */  {
-  return $std_core_hnd._mask_at(_y_x10093, true, action);
+export function _mlift_route_awaits_10080(action, _y_x10036) /* forall<e> (action : () -> <kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue|e> (), hnd/ev-index) -> <kokaine/async/effects/async-await,kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue|e> () */  {
+  return $std_core_hnd._mask_at(_y_x10036, true, action);
 }
  
  
@@ -297,17 +304,19 @@ export function _mlift_route_awaits_10132(action, _y_x10093) /* forall<e> (actio
 // The suffix is resumed only when the structured driver consumes the queue.
 export function route_awaits(queue, action) /* forall<e> (queue : resume-queue<(force-cancel : bool) -> <kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue|e> ()>, action : () -> <kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue|e> ()) -> <kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue|e> () */  {
    
-  var cancel_started = { value: false };
+  var cancel_started = $std_core_hnd._open_none1(cell, false);
   return $kokaine_async_effects.async_await_fs__handle($kokaine_async_effects._Hnd_async_await(3, function(m /* hnd/marker<<kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue|1390>,()> */ , ___wildcard_x598__16 /* hnd/ev<kokaine/async/effects/async-await> */ , x /* (kokaine/async/effects/await-setup<_1024>, kokaine/async/effects/async-scope, string) */ ) {
         return $std_core_hnd.yield_to(m, function(k /* (hnd/resume-result<kokaine/async/effects/await-result<_1024>,()>) -> <kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/async-ownership,kokaine/async/effects/discontinue|1390> () */ ) {
              
-            var rcontext_10163 = k;
+            var rcontext_10109 = k;
              
-            var delivery = { value: ($std_core_types.Nothing) };
+            var delivery = $std_core_hnd._open_none0(function() {
+              return cell($std_core_types.Nothing);
+            });
              
-            var _x_x3_10117 = $std_core_types._lp__plus__plus__rp_("structured: ", x.thd);
+            var _x_x3_10060 = $std_core_types._lp__plus__plus__rp_("structured: ", x.thd);
              
-            var x_0_10141 = $std_core_hnd._open_at4($std_core_hnd._evv_index($kokaine_async_effects.async_await_fs__tag), function(setup_0 /* kokaine/async/effects/await-setup<1311> */ , scope_0 /* kokaine/async/effects/async-scope */ , label_0 /* string */ , callback /* (kokaine/async/effects/await-result<1311>) -> ui () */ ) {
+            var x_0_10089 = $std_core_hnd._open_at4($std_core_hnd._evv_index($kokaine_async_effects.async_await_fs__tag), function(setup_0 /* kokaine/async/effects/await-setup<1311> */ , scope_0 /* kokaine/async/effects/async-scope */ , label_0 /* string */ , callback /* (kokaine/async/effects/await-result<1311>) -> ui () */ ) {
                 return $std_core_hnd._perform4($std_core_hnd._evv_at(0), $kokaine_async_effects.no_await_fs__select, setup_0, scope_0, label_0, callback);
               }, function(complete /* (kokaine/async/effects/await-result<1311>) -> ui () */ ) {
                 var _x12 = x.fst(complete);
@@ -316,74 +325,75 @@ export function route_awaits(queue, action) /* forall<e> (queue : resume-queue<(
                 }
                 else {
                    
-                  ((delivery).value = ($std_core_types.Just(_x12.value)));
+                  store(delivery, $std_core_types.Just(_x12.value));
                   return $std_core_types.Ok(function() {
-                    return delivery_guard_fs_abandon(delivery);
+                     
+                    var current = load(delivery);
+                     
+                    store(delivery, $std_core_types.Nothing);
+                    if (current === null) {
+                      return $std_core_types.Unit;
+                    }
+                    else {
+                      return current.value();
+                    }
                   });
                 }
-              }, x.snd, _x_x3_10117, function(result /* kokaine/async/effects/await-result<1311> */ ) {
+              }, x.snd, _x_x3_10060, function(result /* kokaine/async/effects/await-result<1311> */ ) {
                 return resume_queue_fs_push_from_host(queue, function(force_cancel /* bool */ ) {
                     if (result._tag === 3) {
                        
-                      ((cancel_started).value = true);
+                      $std_core_hnd._open_none2(store, cancel_started, true);
                        
-                      var x_1_10145 = $std_core_hnd._open1($std_core_vector.unvlist($std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_await_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_cancel_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_ioc_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_ownership_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.discontinue_fs__tag), $std_core_types.Nil)))))), function(guard_0 /* delivery-guard */ ) {
-                          return $kokaine_async_effects.async_host(function() {
-                            return delivery_guard_fs_abandon(guard_0);
-                          });
-                        }, delivery);
+                      var x_1_10091 = $std_core_hnd._open1($std_core_vector.unvlist($std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_await_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_cancel_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_ioc_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_ownership_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.discontinue_fs__tag), $std_core_types.Nil)))))), delivery_guard_fs_abandon_async, delivery);
                        
-                      var next_0_10146 = function(wild___1 /* () */ ) {
-                        return rcontext_10163($std_core_hnd.Deep($kokaine_async_effects.Cancel));
+                      var next_0_10092 = function(wild___1 /* () */ ) {
+                        return rcontext_10109($std_core_hnd.Deep($kokaine_async_effects.Cancel));
                       };
                       if ($std_core_hnd._yielding()) {
-                        return $std_core_hnd.yield_extend(next_0_10146);
+                        return $std_core_hnd.yield_extend(next_0_10092);
                       }
                       else {
-                        return next_0_10146(x_1_10145);
+                        return next_0_10092(x_1_10091);
                       }
                     }
                     else {
                       if (force_cancel) {
                          
-                        var _x_x1_1_10120 = cancel_started.value;
+                        var _x_x1_3_10065 = $std_core_hnd._open_none1(load, cancel_started);
                         var _x13 = $std_core_hnd._open_none1(function(b /* bool */ ) {
                             return (b) ? false : true;
-                          }, _x_x1_1_10120);
+                          }, _x_x1_3_10065);
                         if (_x13) {
                            
-                          ((cancel_started).value = true);
+                          $std_core_hnd._open_none2(store, cancel_started, true);
                            
-                          var x_2_10147 = $std_core_hnd._open1($std_core_vector.unvlist($std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_await_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_cancel_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_ioc_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_ownership_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.discontinue_fs__tag), $std_core_types.Nil)))))), function(guard_0_0 /* delivery-guard */ ) {
-                              return $kokaine_async_effects.async_host(function() {
-                                return delivery_guard_fs_abandon(guard_0_0);
-                              });
-                            }, delivery);
+                          var x_2_10093 = $std_core_hnd._open1($std_core_vector.unvlist($std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_await_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_cancel_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_ioc_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.async_ownership_fs__tag), $std_core_types.Cons($std_core_hnd._evv_index($kokaine_async_effects.discontinue_fs__tag), $std_core_types.Nil)))))), delivery_guard_fs_abandon_async, delivery);
                            
-                          var next_1_10148 = function(wild___3 /* () */ ) {
-                            return rcontext_10163($std_core_hnd.Deep($kokaine_async_effects.Cancel));
+                          var next_1_10094 = function(wild___3 /* () */ ) {
+                            return rcontext_10109($std_core_hnd.Deep($kokaine_async_effects.Cancel));
                           };
                           if ($std_core_hnd._yielding()) {
-                            return $std_core_hnd.yield_extend(next_1_10148);
+                            return $std_core_hnd.yield_extend(next_1_10094);
                           }
                           else {
-                            return next_1_10148(x_2_10147);
+                            return next_1_10094(x_2_10093);
                           }
                         }
                         else {
                            
                           $std_core_hnd._open_none1(function(guard_1 /* delivery-guard */ ) {
-                              return ((guard_1).value = ($std_core_types.Nothing));
+                              return store(guard_1, $std_core_types.Nothing);
                             }, delivery);
-                          return rcontext_10163($std_core_hnd.Deep(result));
+                          return rcontext_10109($std_core_hnd.Deep(result));
                         }
                       }
                       else {
                          
                         $std_core_hnd._open_none1(function(guard_2 /* delivery-guard */ ) {
-                            return ((guard_2).value = ($std_core_types.Nothing));
+                            return store(guard_2, $std_core_types.Nothing);
                           }, delivery);
-                        return rcontext_10163($std_core_hnd.Deep(result));
+                        return rcontext_10109($std_core_hnd.Deep(result));
                       }
                     }
                   });
@@ -405,14 +415,14 @@ export function route_awaits(queue, action) /* forall<e> (queue : resume-queue<(
       return _res;
     }, function() {
        
-      var x_5_10155 = $std_core_hnd._evv_index($kokaine_async_effects.async_await_fs__tag);
+      var x_5_10101 = $std_core_hnd._evv_index($kokaine_async_effects.async_await_fs__tag);
       if ($std_core_hnd._yielding()) {
-        return $std_core_hnd.yield_extend(function(_y_x10093 /* hnd/ev-index */ ) {
-          return $std_core_hnd._mask_at(_y_x10093, true, action);
+        return $std_core_hnd.yield_extend(function(_y_x10036 /* hnd/ev-index */ ) {
+          return $std_core_hnd._mask_at(_y_x10036, true, action);
         });
       }
       else {
-        return $std_core_hnd._mask_at(x_5_10155, true, action);
+        return $std_core_hnd._mask_at(x_5_10101, true, action);
       }
     });
 }

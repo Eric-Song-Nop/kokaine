@@ -761,6 +761,27 @@ main {
   font-size: 13px;
 }
 
+.english-summary {
+  position: relative;
+  z-index: 1;
+  grid-column: 1 / -1;
+  max-width: 920px;
+  padding: 20px 24px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--ink-2);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.english-summary p {
+  margin: 10px 0 0;
+}
+
+.english-summary p.kicker {
+  margin: 0;
+}
+
 .section-heading {
   position: relative;
   z-index: 1;
