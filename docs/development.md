@@ -44,7 +44,7 @@ From the repository root, the same development server is also available as:
 make serve-playground
 ```
 
-The first run downloads about 38 MiB of hash-pinned Koka browser assets into
+The first run downloads about 50 MiB of hash-pinned Koka browser assets into
 `~/.cache/kokaine/playground` (they are not tracked in git); later runs reuse
 that cache. The playground itself does not need a native Koka installation. Its workbench
 DOM, reactive state, and event handlers are authored in Koka and mounted with

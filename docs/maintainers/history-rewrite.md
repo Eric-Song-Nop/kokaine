@@ -15,17 +15,17 @@ and are no longer tracked at the tip of `main`:
 
 | Path | Why it can go |
 | --- | --- |
-| `packages/playground/public/koka/koka-playground.wasm` | downloaded from the pinned upstream Koka commit, SHA-256 pinned |
-| `packages/playground/public/koka/koka-lsp.wasm` | downloaded from the pinned upstream Koka commit, SHA-256 pinned |
-| `packages/playground/public/koka/koka-runtime.json.gz` | rebuilt from upstream sources plus `vendor/kokaine-precompiled-v3.2.4/`, SHA-256 pinned |
+| `packages/playground/public/koka/koka-playground.wasm` | downloaded from a pinned release asset, SHA-256 pinned |
+| `packages/playground/public/koka/koka-lsp.wasm` | downloaded from a pinned release asset, SHA-256 pinned |
+| `packages/playground/public/koka/koka-runtime.json.gz` | rebuilt from a pinned release asset plus `vendor/kokaine-precompiled-v<koka>/`, SHA-256 pinned |
 | `packages/playground/public/koka/precompiled/` | a duplicate of upstream + vendored modules; the served copy is derived at build time |
 | `packages/playground/public/devtools/` | copied from the `chii`/`chobitsu` npm devDependencies |
 
-**Do not remove** `packages/playground/public/koka/koka-browser-repl.wasm`
-(about 14.5 MiB, about 4 MiB packed). It is still tracked because it is built
-from a fork commit (`32fee7eda6397dee81f4752ff7cab4e4001d3eb2`) and has no
-upstream download. If it is later published as an immutable release asset and
-fetched by `sync-koka-assets.mjs`, add its path to the command below.
+`packages/playground/public/koka/koka-browser-repl.wasm` (about 14.5 MiB, about
+4 MiB packed) was kept by the 2026-11-02 run because it had no download then.
+Since the `playground-koka-3.2.9-1` release it is fetched by
+`sync-koka-assets.mjs` and untracked at the tip, but it is still in history: a
+future rewrite should add its path to the command below.
 
 Measured on a local clone with all branches (2026-11-02):
 

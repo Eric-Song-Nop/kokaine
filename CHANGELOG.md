@@ -2,6 +2,19 @@
 
 Versions are per package. Entries list the package and version they shipped in.
 
+## Unreleased
+
+### Changed
+- Playground: the compiler, language server, and REPL are now a Koka 3.2.9
+  browser build (was 3.2.4). They are built by this project from Koka v3.2.9 plus
+  the browser REPL commits and two compiler fixes, and published as files of the
+  `playground-koka-3.2.9-1` GitHub Release, because upstream builds its Playground
+  from `dev`, which reports 3.3.0 and is outside the supported range. See
+  `docs/maintainers/playground-compiler.md`.
+- Playground: `koka-browser-repl.wasm` is downloaded and hash-verified like the
+  other WASM programs instead of being tracked in git.
+  `KOKAINE_PLAYGROUND_ASSET_DIR` takes the assets from a local directory.
+
 ## @kokaine/core 0.2.0, @kokaine/cli 0.2.0, @kokaine/create 0.2.0
 
 ### Fixed
