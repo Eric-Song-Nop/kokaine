@@ -269,6 +269,22 @@ export function registry_registration_fs_take(registration) /* forall<a> (regist
   }
 }
  
+ 
+// Is `registration` live and the most recent live insertion in `target`?
+// Insertion prepends, so this holds exactly when its node is the head: the
+// pointer-to-pointer back link of the head node is the registry head cell.
+// Unlinking and re-inserting such an entry would leave every order unchanged.
+export function registry_fs_is_newest(target, registration) /* forall<a> (target : registry<a>, registration : registry-registration<a>) -> bool */  {
+   
+  var maybe_10020 = load(registration.registration_value);
+  if (maybe_10020 !== null) {
+    return Object.is((load(registration.registration_back)),(target.registry_head));
+  }
+  else {
+    return false;
+  }
+}
+ 
 export function snapshot_loop(values, collected) /* forall<a> (values : registry-link<a>, collected : list<a>) -> div list<a> */  { tailcall: while(1)
 {
   if (values === null) {
