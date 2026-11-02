@@ -75,7 +75,7 @@ fun cancellation-registration/cancellation-node[28,5,28,21] : forall<a> (^ @this
 pub fun cancellation-registration/@copy[27,3,27,27] : forall<a> (@this : (cancellation-registration :: V -> V)<a>, cancellation-node : (std/core/types/@optional :: V -> V)<(kokaine/internal/registry/registry-registration :: V -> V)<(cancellation-entry :: V -> V)<a>>>) -> (cancellation-registration :: V -> V)<a>;
 pub fun new-cancellation-supervisor[31,9,31,35] : forall<a> () -> (cancellation-supervisor :: V -> V)<a>;
 // monadic lift
-fun cancellation-supervisor/@mlift-register@10025[1,0,1,0] : forall<a> (@c-x10015 : (kokaine/internal/registry/registry-registration :: V -> V)<(cancellation-entry :: V -> V)<a>>) -> (cancellation-registration :: V -> V)<a>;
+fun cancellation-supervisor/@mlift-register@10021[1,0,1,0] : forall<a> (@c-x10015 : (kokaine/internal/registry/registry-registration :: V -> V)<(cancellation-entry :: V -> V)<a>>) -> (cancellation-registration :: V -> V)<a>;
 pub fun cancellation-supervisor/register[34,9,34,40] : forall<a> (supervisor : (cancellation-supervisor :: V -> V)<a>, claim : () -> (std/core/types/maybe :: V -> V)<a>) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>> (cancellation-registration :: V -> V)<a>;
 pub fun cancellation-registration/unregister[40,9,40,44] : forall<a> (registration : (cancellation-registration :: V -> V)<a>) -> std/core/types/bool;
 tail fun claim-cancellations[44,10,44,28] : forall<a> (entries : (std/core/types/list :: V -> V)<(cancellation-entry :: V -> V)<a>>, actions : (std/core/types/list :: V -> V)<a>) -> <(std/core/types/div :: X)> (std/core/types/list :: V -> V)<a>;

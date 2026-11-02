@@ -50,6 +50,10 @@ export function Bool_property(value) /* (value : bool) -> property-value */  {
 export function Int_property(value) /* (value : int) -> property-value */  {
   return { _tag: 3, value: value };
 }
+// type trusted-url
+export function Trusted_url(content) /* (content : string) -> trusted-url */  {
+  return content;
+}
 // type attribute
 export function Attribute(name, value) /* forall<e> (name : string, value : string) -> attribute<e> */  {
   return { _tag: 1, name: name, value: value };
@@ -68,6 +72,9 @@ export function Live_property(name, read) /* forall<e> (name : string, read : ()
 }
 export function Listener(name, action) /* forall<e> (name : string, action : callback) -> attribute<e> */  {
   return { _tag: 6, name: name, action: action };
+}
+export function Trusted_url_attribute(name, url) /* forall<e> (name : string, url : trusted-url) -> attribute<e> */  {
+  return { _tag: 7, name: name, url: url };
 }
 // type dialog-close-policy
 export const Dialog_close_any = 1; // dialog-close-policy
@@ -271,6 +278,9 @@ export function attribute_fs_name(attribute) /* forall<e> (attribute : attribute
   else if (attribute._tag === 5) {
     return attribute.name;
   }
+  else if (attribute._tag === 6) {
+    return attribute.name;
+  }
   else {
     return attribute.name;
   }
@@ -307,6 +317,12 @@ export function is_listener(attribute) /* forall<e> (attribute : attribute<e>) -
 }
  
  
+// Automatically generated. Tests for the `Trusted-url-attribute` constructor of the `:attribute` type.
+export function is_trusted_url_attribute(attribute) /* forall<e> (attribute : attribute<e>) -> bool */  {
+  return (attribute._tag === 7);
+}
+ 
+ 
 // Automatically generated. Retrieves the `content` constructor field of the `:trusted-html` type.
 export function trusted_html_fs_content(_this) /* (trusted-html) -> string */  {
   return _this;
@@ -320,6 +336,22 @@ export function trusted_html_fs__copy(_this, content) /* (trusted-html, content 
     var _x4 = _this;
   }
   return _x4;
+}
+ 
+ 
+// Automatically generated. Retrieves the `content` constructor field of the `:trusted-url` type.
+export function trusted_url_fs_content(_this) /* (trusted-url) -> string */  {
+  return _this;
+}
+ 
+export function trusted_url_fs__copy(_this, content) /* (trusted-url, content : ? string) -> trusted-url */  {
+  if (content !== undefined) {
+    var _x5 = content;
+  }
+  else {
+    var _x5 = _this;
+  }
+  return _x5;
 }
  
  
@@ -381,9 +413,185 @@ export function trusted_content(value_0) /* (value : trusted-html) -> string */ 
   return value_0;
 }
  
+ 
+// URL-valued attributes and properties reject executable and opaque schemes
+// such as `javascript:`, `vbscript:`, and non-image `data:` by default. Use
+// this only for a URL the application itself produced; the name keeps that
+// trust decision visible at the call site, like `unsafe-trusted-html`.
+export function unsafe_trusted_url(content) /* (content : string) -> trusted-url */  {
+  return content;
+}
+ 
+export function trusted_url_content(value_0) /* (value : trusted-url) -> string */  {
+  return value_0;
+}
+ 
+ 
+// Attribute and property names (case-insensitive) whose value a browser
+// navigates to, loads, or submits to.
+export function is_url_attribute(name_0) /* (name : string) -> bool */  {
+  var _x6 = $std_core_string.to_lower(name_0);
+  if (_x6 === "href") {
+    return true;
+  }
+  else if (_x6 === "src") {
+    return true;
+  }
+  else if (_x6 === "action") {
+    return true;
+  }
+  else if (_x6 === "formaction") {
+    return true;
+  }
+  else if (_x6 === "xlink:href") {
+    return true;
+  }
+  else if (_x6 === "data") {
+    return true;
+  }
+  else if (_x6 === "poster") {
+    return true;
+  }
+  else if (_x6 === "cite") {
+    return true;
+  }
+  else if (_x6 === "background") {
+    return true;
+  }
+  else if (_x6 === "ping") {
+    return true;
+  }
+  else {
+    return false;
+  }
+}
+ 
+export function is_url_ignorable(char) /* (char : char) -> bool */  {
+  if ((char === 0x0009)) {
+    return true;
+  }
+  else {
+    return ((char === 0x000A)) ? true : (char === 0x000D);
+  }
+}
+ 
+export function is_url_leading(char) /* (char : char) -> bool */  {
+  return $std_core_types._int_le(char,32);
+}
+ 
+export function url_scheme_loop(chars, acc) /* (chars : list<char>, acc : list<char>) -> maybe<string> */  { tailcall: while(1)
+{
+  if (chars === null) {
+    return $std_core_types.Nothing;
+  }
+  else if (chars !== null && chars.head === 0x003A) {
+    if (acc === null) {
+      return $std_core_types.Nothing;
+    }
+    else {
+      return $std_core_types.Just($std_core_string.to_lower($std_core_string.listchar_fs_string($std_core_list.reverse_acc($std_core_types.Nil, acc))));
+    }
+  }
+  else {
+    if (((chars.head) === 0x002F)) {
+      return $std_core_types.Nothing;
+    }
+    else {
+      if (((chars.head) === 0x003F)) {
+        return $std_core_types.Nothing;
+      }
+      else {
+        if (((chars.head) === 0x0023)) {
+          return $std_core_types.Nothing;
+        }
+        else {
+          {
+            // tail call
+            var _x7 = $std_core_types.Cons(chars.head, acc);
+            chars = chars.tail;
+            acc = _x7;
+            continue tailcall;
+          }
+        }
+      }
+    }
+  }
+}}
+ 
+ 
+// The scheme a browser would see: leading C0 controls and spaces are dropped
+// and tab/newline characters are ignored anywhere, as the URL parser does.
+export function url_scheme(value_0) /* (value : string) -> maybe<string> */  {
+   
+  var chars = $std_core_list.filter($std_core_list.drop_while($std_core_string.list(value_0), is_url_leading), function(c /* char */ ) {
+       
+      var b_10007 = is_url_ignorable(c);
+      return (b_10007) ? false : true;
+    });
+  return url_scheme_loop(chars, $std_core_types.Nil);
+}
+ 
+export function is_image_data_url(value_0) /* (value : string) -> bool */  {
+   
+  var chars = $std_core_list.filter($std_core_list.drop_while($std_core_string.list(value_0), is_url_leading), function(c /* char */ ) {
+       
+      var b_10008 = is_url_ignorable(c);
+      return (b_10008) ? false : true;
+    });
+  return (($std_core_string.to_lower($std_core_string.listchar_fs_string($std_core_list.take(chars, 11)))) === ("data:image/"));
+}
+ 
+export function is_safe_url_value(name_0, value_0) /* (name : string, value : string) -> bool */  {
+   
+  var b_10009 = is_url_attribute(name_0);
+  if (b_10009) {
+    var _x8 = url_scheme(value_0);
+    if (_x8 === null) {
+      return true;
+    }
+    else if (_x8 !== null && _x8.value === "http") {
+      return true;
+    }
+    else if (_x8 !== null && _x8.value === "https") {
+      return true;
+    }
+    else if (_x8 !== null && _x8.value === "mailto") {
+      return true;
+    }
+    else if (_x8 !== null && _x8.value === "tel") {
+      return true;
+    }
+    else if (_x8 !== null && _x8.value === "data") {
+       
+      var lower = $std_core_string.to_lower(name_0);
+      if ((lower === ("src"))) {
+        return is_image_data_url(value_0);
+      }
+      else {
+        if ((lower === ("poster"))) {
+          return is_image_data_url(value_0);
+        }
+        else {
+          return false;
+        }
+      }
+    }
+    else {
+      return false;
+    }
+  }
+  else {
+    return true;
+  }
+}
+ 
+export function unsafe_url_message(name_0) /* (name : string) -> string */  {
+  return $std_core_types._lp__plus__plus__rp_("unsafe URL scheme in ", $std_core_types._lp__plus__plus__rp_(name_0, $std_core_types._lp__plus__plus__rp_("; allowed are relative, http(s), mailto, tel, and data:image for src ", "(use unsafe-trusted-url for an application-produced URL)")));
+}
+ 
 export function is_name_tail_character(char) /* (char : char) -> bool */  {
-  var _x5 = $std_core_char.is_alpha_num(char);
-  if (_x5) {
+  var _x9 = $std_core_char.is_alpha_num(char);
+  if (_x9) {
     return true;
   }
   else {
@@ -402,19 +610,19 @@ export function is_name_tail_character(char) /* (char : char) -> bool */  {
 }
  
 export function begins_with_on(value_0) /* (value : string) -> bool */  {
-  var _x6 = $std_core_string.list($std_core_string.to_lower(value_0));
-  return (_x6 !== null && _x6.head === 0x006F && _x6.tail !== null && _x6.tail.head === 0x006E);
+  var _x10 = $std_core_string.list($std_core_string.to_lower(value_0));
+  return (_x10 !== null && _x10.head === 0x006F && _x10.tail !== null && _x10.tail.head === 0x006E);
 }
  
 export function is_valid_element_name(value_0) /* (value : string) -> bool */  {
-  var _x7 = $std_core_string.list(value_0);
-  if (_x7 === null) {
+  var _x11 = $std_core_string.list(value_0);
+  if (_x11 === null) {
     return false;
   }
   else {
-    var _x8 = $std_core_char.is_alpha(_x7.head);
-    if (_x8) {
-      return $std_core_list.all(_x7.tail, is_name_tail_character);
+    var _x12 = $std_core_char.is_alpha(_x11.head);
+    if (_x12) {
+      return $std_core_list.all(_x11.tail, is_name_tail_character);
     }
     else {
       return false;
@@ -426,31 +634,31 @@ export function is_valid_element_name(value_0) /* (value : string) -> bool */  {
 // Static `on*` attributes are rejected so executable behavior must cross the
 // typed Listener boundary instead of entering as a string.
 export function is_valid_attribute_name(value_0) /* (value : string) -> bool */  {
-  var _x9 = $std_core_string.list(value_0);
-  if (_x9 === null) {
+  var _x13 = $std_core_string.list(value_0);
+  if (_x13 === null) {
     return false;
   }
   else {
      
-    var _x10 = $std_core_string.list($std_core_string.to_lower(value_0));
-    var b_10005 = (_x10 !== null && _x10.head === 0x006F && _x10.tail !== null && _x10.tail.head === 0x006E);
-    if (b_10005) {
+    var _x14 = $std_core_string.list($std_core_string.to_lower(value_0));
+    var b_10010 = (_x14 !== null && _x14.head === 0x006F && _x14.tail !== null && _x14.tail.head === 0x006E);
+    if (b_10010) {
       return false;
     }
     else {
-      var _x10 = (($std_core_string.to_lower(value_0)) !== ("srcdoc"));
-      if (_x10) {
-        var _x11 = $std_core_char.is_alpha(_x9.head);
-        if (_x11) {
-          return $std_core_list.all(_x9.tail, is_name_tail_character);
+      var _x14 = (($std_core_string.to_lower(value_0)) !== ("srcdoc"));
+      if (_x14) {
+        var _x15 = $std_core_char.is_alpha(_x13.head);
+        if (_x15) {
+          return $std_core_list.all(_x13.tail, is_name_tail_character);
         }
         else {
-          if (((_x9.head) === 0x005F)) {
-            return $std_core_list.all(_x9.tail, is_name_tail_character);
+          if (((_x13.head) === 0x005F)) {
+            return $std_core_list.all(_x13.tail, is_name_tail_character);
           }
           else {
-            if (((_x9.head) === 0x003A)) {
-              return $std_core_list.all(_x9.tail, is_name_tail_character);
+            if (((_x13.head) === 0x003A)) {
+              return $std_core_list.all(_x13.tail, is_name_tail_character);
             }
             else {
               return false;
@@ -468,8 +676,8 @@ export function is_valid_attribute_name(value_0) /* (value : string) -> bool */ 
 export function is_valid_property_name(value_0) /* (value : string) -> bool */  {
    
   var lower = $std_core_string.to_lower(value_0);
-  var _x12 = is_valid_attribute_name(value_0);
-  if (_x12) {
+  var _x16 = is_valid_attribute_name(value_0);
+  if (_x16) {
     if ((lower !== ("innerhtml"))) {
       return ((lower !== ("outerhtml"))) ? (lower !== ("insertadjacenthtml")) : false;
     }
@@ -483,14 +691,14 @@ export function is_valid_property_name(value_0) /* (value : string) -> bool */  
 }
  
 export function is_valid_event_name(value_0) /* (value : string) -> bool */  {
-  var _x13 = $std_core_string.list(value_0);
-  if (_x13 === null) {
+  var _x17 = $std_core_string.list(value_0);
+  if (_x17 === null) {
     return false;
   }
   else {
-    var _x14 = $std_core_char.is_alpha(_x13.head);
-    if (_x14) {
-      return $std_core_list.all(_x13.tail, is_name_tail_character);
+    var _x18 = $std_core_char.is_alpha(_x17.head);
+    if (_x18) {
+      return $std_core_list.all(_x17.tail, is_name_tail_character);
     }
     else {
       return false;
@@ -526,8 +734,8 @@ export function emit_fs__select(hnd) /* forall<e,e1,a> (hnd : html<e,e1,a>) -> h
 // Call the `fun emit` operation of the effect `:html`
 export function emit(node) /* forall<e> (node : view<e>) -> (html<e>) () */  {
    
-  var ev_10328 = $std_core_hnd._evv_at(0);
-  return ev_10328.hnd._fun_emit(ev_10328.marker, ev_10328, node);
+  var ev_10333 = $std_core_hnd._evv_at(0);
+  return ev_10333.hnd._fun_emit(ev_10333.marker, ev_10333, node);
 }
  
  
@@ -568,196 +776,196 @@ export function keyed_spec_fs_keyed_children(_this) /* forall<e,a,b,c> (keyed-sp
  
  
 // monadic lift
-export function keyed_spec_fs__mlift_copy_10296(_c_x10180, _c_x10182, _this, keyed_compare, keyed_item_equals, keyed_key, _c_x10184) /* forall<e,a,b,c> (() -> kokaine/reactive/effects/signal-read a, forall<e1> (a, (b) -> e1 ()) -> e1 (), keyed-spec<e,a,b,c>, keyed-compare : ? ((c, c) -> order), keyed-item-equals : ? ((b, b) -> bool), keyed-key : ? ((b) -> c), (item : accessor<b>, index : accessor<int>) -> <html<e>,kokaine/reactive/effects/signal-read> ()) -> keyed-spec<e,a,b,c> */  {
+export function keyed_spec_fs__mlift_copy_10301(_c_x10185, _c_x10187, _this, keyed_compare, keyed_item_equals, keyed_key, _c_x10189) /* forall<e,a,b,c> (() -> kokaine/reactive/effects/signal-read a, forall<e1> (a, (b) -> e1 ()) -> e1 (), keyed-spec<e,a,b,c>, keyed-compare : ? ((c, c) -> order), keyed-item-equals : ? ((b, b) -> bool), keyed-key : ? ((b) -> c), (item : accessor<b>, index : accessor<int>) -> <html<e>,kokaine/reactive/effects/signal-read> ()) -> keyed-spec<e,a,b,c> */  {
   if (keyed_key !== undefined) {
-    var _x15 = keyed_key;
+    var _x19 = keyed_key;
   }
   else {
-    var _x15 = _this.keyed_key;
+    var _x19 = _this.keyed_key;
   }
   if (keyed_compare !== undefined) {
-    var _x16 = keyed_compare;
+    var _x20 = keyed_compare;
   }
   else {
-    var _x16 = _this.keyed_compare;
+    var _x20 = _this.keyed_compare;
   }
   if (keyed_item_equals !== undefined) {
-    var _x17 = keyed_item_equals;
+    var _x21 = keyed_item_equals;
   }
   else {
-    var _x17 = _this.keyed_item_equals;
+    var _x21 = _this.keyed_item_equals;
   }
-  return Keyed_spec(_c_x10180, _c_x10182, _x15, _x16, _x17, _c_x10184);
+  return Keyed_spec(_c_x10185, _c_x10187, _x19, _x20, _x21, _c_x10189);
 }
  
  
 // monadic lift
-export function keyed_spec_fs__mlift_copy_10297(_c_x10181) /* forall<e,a,b> ((a, (b) -> e ()) -> e ()) -> (forall<e> (a, (b) -> e ()) -> e ()) */  {
-  return _c_x10181;
+export function keyed_spec_fs__mlift_copy_10302(_c_x10186) /* forall<e,a,b> ((a, (b) -> e ()) -> e ()) -> (forall<e> (a, (b) -> e ()) -> e ()) */  {
+  return _c_x10186;
 }
  
  
 // monadic lift
-export function keyed_spec_fs__mlift_copy_10298(_c_x10180, _this, keyed_children, keyed_compare, keyed_item_equals, keyed_key, _c_x10182) /* forall<e,a,b,c> (() -> kokaine/reactive/effects/signal-read a, keyed-spec<e,a,b,c>, keyed-children : ? ((item : accessor<b>, index : accessor<int>) -> <html<e>,kokaine/reactive/effects/signal-read> ()), keyed-compare : ? ((c, c) -> order), keyed-item-equals : ? ((b, b) -> bool), keyed-key : ? ((b) -> c), forall<e1> (a, (b) -> e1 ()) -> e1 ()) -> keyed-spec<e,a,b,c> */  {
+export function keyed_spec_fs__mlift_copy_10303(_c_x10185, _this, keyed_children, keyed_compare, keyed_item_equals, keyed_key, _c_x10187) /* forall<e,a,b,c> (() -> kokaine/reactive/effects/signal-read a, keyed-spec<e,a,b,c>, keyed-children : ? ((item : accessor<b>, index : accessor<int>) -> <html<e>,kokaine/reactive/effects/signal-read> ()), keyed-compare : ? ((c, c) -> order), keyed-item-equals : ? ((b, b) -> bool), keyed-key : ? ((b) -> c), forall<e1> (a, (b) -> e1 ()) -> e1 ()) -> keyed-spec<e,a,b,c> */  {
    
-  function next_10332(_c_x10184) /* ((item : accessor<3584>, index : accessor<int>) -> <html<3582>,kokaine/reactive/effects/signal-read> ()) -> keyed-spec<3582,3583,3584,3585> */  {
+  function next_10337(_c_x10189) /* ((item : accessor<5314>, index : accessor<int>) -> <html<5312>,kokaine/reactive/effects/signal-read> ()) -> keyed-spec<5312,5313,5314,5315> */  {
     if (keyed_key !== undefined) {
-      var _x18 = keyed_key;
+      var _x22 = keyed_key;
     }
     else {
-      var _x18 = _this.keyed_key;
+      var _x22 = _this.keyed_key;
     }
     if (keyed_compare !== undefined) {
-      var _x19 = keyed_compare;
+      var _x23 = keyed_compare;
     }
     else {
-      var _x19 = _this.keyed_compare;
+      var _x23 = _this.keyed_compare;
     }
     if (keyed_item_equals !== undefined) {
-      var _x20 = keyed_item_equals;
+      var _x24 = keyed_item_equals;
     }
     else {
-      var _x20 = _this.keyed_item_equals;
+      var _x24 = _this.keyed_item_equals;
     }
-    return Keyed_spec(_c_x10180, _c_x10182, _x18, _x19, _x20, _c_x10184);
+    return Keyed_spec(_c_x10185, _c_x10187, _x22, _x23, _x24, _c_x10189);
   }
   if ($std_core_hnd._yielding()) {
-    return $std_core_hnd.yield_extend(next_10332);
+    return $std_core_hnd.yield_extend(next_10337);
   }
   else {
     if (keyed_children !== undefined) {
-      var _x18 = keyed_children;
+      var _x22 = keyed_children;
     }
     else {
-      var _x18 = _this.keyed_children;
+      var _x22 = _this.keyed_children;
     }
-    return next_10332(_x18);
+    return next_10337(_x22);
   }
 }
  
  
 // monadic lift
-export function keyed_spec_fs__mlift_copy_10299(_this, keyed_children, keyed_compare, keyed_item_equals, keyed_key, keyed_walk, _c_x10180) /* forall<e,e1,a,b,c> (keyed-spec<e1,a,b,c>, keyed-children : ? ((item : accessor<b>, index : accessor<int>) -> <html<e1>,kokaine/reactive/effects/signal-read> ()), keyed-compare : ? ((c, c) -> order), keyed-item-equals : ? ((b, b) -> bool), keyed-key : ? ((b) -> c), keyed-walk : ? (forall<e2> (a, (b) -> e2 ()) -> e2 ()), () -> kokaine/reactive/effects/signal-read a) -> keyed-spec<e1,a,b,c> */  {
+export function keyed_spec_fs__mlift_copy_10304(_this, keyed_children, keyed_compare, keyed_item_equals, keyed_key, keyed_walk, _c_x10185) /* forall<e,e1,a,b,c> (keyed-spec<e1,a,b,c>, keyed-children : ? ((item : accessor<b>, index : accessor<int>) -> <html<e1>,kokaine/reactive/effects/signal-read> ()), keyed-compare : ? ((c, c) -> order), keyed-item-equals : ? ((b, b) -> bool), keyed-key : ? ((b) -> c), keyed-walk : ? (forall<e2> (a, (b) -> e2 ()) -> e2 ()), () -> kokaine/reactive/effects/signal-read a) -> keyed-spec<e1,a,b,c> */  {
    
   if (keyed_walk !== undefined) {
-    var x_10340 = keyed_walk;
+    var x_10345 = keyed_walk;
   }
   else {
     if ($std_core_hnd._yielding()) {
-      var x_10340 = $std_core_hnd.yield_extend(function(_c_x10181 /* (3583, (3584) -> 3427 ()) -> 3427 () */ ) {
-        return _c_x10181;
+      var x_10345 = $std_core_hnd.yield_extend(function(_c_x10186 /* (5313, (5314) -> 5157 ()) -> 5157 () */ ) {
+        return _c_x10186;
       });
     }
     else {
-      var _x19 = _this.keyed_walk;
-      var x_10340 = _x19;
+      var _x23 = _this.keyed_walk;
+      var x_10345 = _x23;
     }
   }
   if ($std_core_hnd._yielding()) {
-    return $std_core_hnd.yield_extend(function(_c_x10182 /* forall<e> (3583, (3584) -> e ()) -> e () */ ) {
-      return keyed_spec_fs__mlift_copy_10298(_c_x10180, _this, keyed_children, keyed_compare, keyed_item_equals, keyed_key, _c_x10182);
+    return $std_core_hnd.yield_extend(function(_c_x10187 /* forall<e> (5313, (5314) -> e ()) -> e () */ ) {
+      return keyed_spec_fs__mlift_copy_10303(_c_x10185, _this, keyed_children, keyed_compare, keyed_item_equals, keyed_key, _c_x10187);
     });
   }
   else {
-    return keyed_spec_fs__mlift_copy_10298(_c_x10180, _this, keyed_children, keyed_compare, keyed_item_equals, keyed_key, x_10340);
+    return keyed_spec_fs__mlift_copy_10303(_c_x10185, _this, keyed_children, keyed_compare, keyed_item_equals, keyed_key, x_10345);
   }
 }
  
 export function keyed_spec_fs__copy(_this, keyed_read, keyed_walk, keyed_key, keyed_compare, keyed_item_equals, keyed_children) /* forall<e,a,b,c> (keyed-spec<e,a,b,c>, keyed-read : ? (() -> kokaine/reactive/effects/signal-read a), keyed-walk : ? (forall<e1> (a, (b) -> e1 ()) -> e1 ()), keyed-key : ? ((b) -> c), keyed-compare : ? ((c, c) -> order), keyed-item-equals : ? ((b, b) -> bool), keyed-children : ? ((item : accessor<b>, index : accessor<int>) -> <html<e>,kokaine/reactive/effects/signal-read> ())) -> keyed-spec<e,a,b,c> */  {
   if ($std_core_hnd._yielding()) {
-    return $std_core_hnd.yield_extend(function(_c_x10180 /* () -> kokaine/reactive/effects/signal-read 3583 */ ) {
-      return keyed_spec_fs__mlift_copy_10299(_this, keyed_children, keyed_compare, keyed_item_equals, keyed_key, keyed_walk, _c_x10180);
+    return $std_core_hnd.yield_extend(function(_c_x10185 /* () -> kokaine/reactive/effects/signal-read 5313 */ ) {
+      return keyed_spec_fs__mlift_copy_10304(_this, keyed_children, keyed_compare, keyed_item_equals, keyed_key, keyed_walk, _c_x10185);
     });
   }
   else {
      
     if (keyed_walk !== undefined) {
-      var x_0_10348 = keyed_walk;
+      var x_0_10353 = keyed_walk;
     }
     else {
       if ($std_core_hnd._yielding()) {
-        var x_0_10348 = $std_core_hnd.yield_extend(function(_c_x10181 /* (3583, (3584) -> 3427 ()) -> 3427 () */ ) {
-          return _c_x10181;
+        var x_0_10353 = $std_core_hnd.yield_extend(function(_c_x10186 /* (5313, (5314) -> 5157 ()) -> 5157 () */ ) {
+          return _c_x10186;
         });
       }
       else {
-        var _x19 = _this.keyed_walk;
-        var x_0_10348 = _x19;
+        var _x23 = _this.keyed_walk;
+        var x_0_10353 = _x23;
       }
     }
     if ($std_core_hnd._yielding()) {
-      return $std_core_hnd.yield_extend(function(_c_x10182 /* forall<e> (3583, (3584) -> e ()) -> e () */ ) {
+      return $std_core_hnd.yield_extend(function(_c_x10187 /* forall<e> (5313, (5314) -> e ()) -> e () */ ) {
         if (keyed_read !== undefined) {
-          var _x19 = keyed_read;
+          var _x23 = keyed_read;
         }
         else {
-          var _x19 = _this.keyed_read;
+          var _x23 = _this.keyed_read;
         }
-        return keyed_spec_fs__mlift_copy_10298(_x19, _this, keyed_children, keyed_compare, keyed_item_equals, keyed_key, _c_x10182);
+        return keyed_spec_fs__mlift_copy_10303(_x23, _this, keyed_children, keyed_compare, keyed_item_equals, keyed_key, _c_x10187);
       });
     }
     else {
       if ($std_core_hnd._yielding()) {
-        return $std_core_hnd.yield_extend(function(_c_x10184 /* (item : accessor<3584>, index : accessor<int>) -> <html<3582>,kokaine/reactive/effects/signal-read> () */ ) {
+        return $std_core_hnd.yield_extend(function(_c_x10189 /* (item : accessor<5314>, index : accessor<int>) -> <html<5312>,kokaine/reactive/effects/signal-read> () */ ) {
           if (keyed_read !== undefined) {
-            var _x20 = keyed_read;
+            var _x24 = keyed_read;
           }
           else {
-            var _x20 = _this.keyed_read;
+            var _x24 = _this.keyed_read;
           }
           if (keyed_key !== undefined) {
-            var _x21 = keyed_key;
+            var _x25 = keyed_key;
           }
           else {
-            var _x21 = _this.keyed_key;
+            var _x25 = _this.keyed_key;
           }
           if (keyed_compare !== undefined) {
-            var _x22 = keyed_compare;
+            var _x26 = keyed_compare;
           }
           else {
-            var _x22 = _this.keyed_compare;
+            var _x26 = _this.keyed_compare;
           }
           if (keyed_item_equals !== undefined) {
-            var _x23 = keyed_item_equals;
+            var _x27 = keyed_item_equals;
           }
           else {
-            var _x23 = _this.keyed_item_equals;
+            var _x27 = _this.keyed_item_equals;
           }
-          return Keyed_spec(_x20, x_0_10348, _x21, _x22, _x23, _c_x10184);
+          return Keyed_spec(_x24, x_0_10353, _x25, _x26, _x27, _c_x10189);
         });
       }
       else {
         if (keyed_read !== undefined) {
-          var _x24 = keyed_read;
+          var _x28 = keyed_read;
         }
         else {
-          var _x24 = _this.keyed_read;
+          var _x28 = _this.keyed_read;
         }
         if (keyed_key !== undefined) {
-          var _x25 = keyed_key;
+          var _x29 = keyed_key;
         }
         else {
-          var _x25 = _this.keyed_key;
+          var _x29 = _this.keyed_key;
         }
         if (keyed_compare !== undefined) {
-          var _x26 = keyed_compare;
+          var _x30 = keyed_compare;
         }
         else {
-          var _x26 = _this.keyed_compare;
+          var _x30 = _this.keyed_compare;
         }
         if (keyed_item_equals !== undefined) {
-          var _x27 = keyed_item_equals;
+          var _x31 = keyed_item_equals;
         }
         else {
-          var _x27 = _this.keyed_item_equals;
+          var _x31 = _this.keyed_item_equals;
         }
         if (keyed_children !== undefined) {
-          var _x28 = keyed_children;
+          var _x32 = keyed_children;
         }
         else {
-          var _x28 = _this.keyed_children;
+          var _x32 = _this.keyed_children;
         }
-        return Keyed_spec(_x24, x_0_10348, _x25, _x26, _x27, _x28);
+        return Keyed_spec(_x28, x_0_10353, _x29, _x30, _x31, _x32);
       }
     }
   }
@@ -773,14 +981,14 @@ export function internal_fs_pack_keyed_plan(read, walk, key, cmp, item_equals, c
  
  
 // monadic lift
-export function _mlift_collect_10300(node, nodes, _y_x10185) /* forall<h,e,e1> (node : view<e>, nodes : local-var<h,list<view<e>>>, list<view<e>>) -> <local<h>|e1> () */  {
-  return ((nodes).value = ($std_core_types.Cons(node, _y_x10185)));
+export function _mlift_collect_10305(node, nodes, _y_x10190) /* forall<h,e,e1> (node : view<e>, nodes : local-var<h,list<view<e>>>, list<view<e>>) -> <local<h>|e1> () */  {
+  return ((nodes).value = ($std_core_types.Cons(node, _y_x10190)));
 }
  
  
 // monadic lift
-export function _mlift_collect_10301(_y_x10187) /* forall<h,e,e1> (list<view<e>>) -> <local<h>|e1> list<view<e>> */  {
-  return $std_core_list.reverse_acc($std_core_types.Nil, _y_x10187);
+export function _mlift_collect_10306(_y_x10192) /* forall<h,e,e1> (list<view<e>>) -> <local<h>|e1> list<view<e>> */  {
+  return $std_core_list.reverse_acc($std_core_types.Nil, _y_x10192);
 }
  
 export function collect(action) /* forall<e,e1> (action : () -> <html<e>|e1> ()) -> e1 list<view<e>> */  {
@@ -788,29 +996,29 @@ export function collect(action) /* forall<e,e1> (action : () -> <html<e>|e1> ())
      
     var loc = { value: ($std_core_types.Nil) };
      
-    var res = html_fs__handle(_Hnd_html(1, $std_core_hnd.clause_tail1(function(node /* view<3963> */ ) {
+    var res = html_fs__handle(_Hnd_html(1, $std_core_hnd.clause_tail1(function(node /* view<5693> */ ) {
            
-          var x_10366 = ((loc).value);
+          var x_10371 = ((loc).value);
            
-          function next_10367(_y_x10185) /* (list<view<3963>>) -> <local<3953>|3964> () */  {
-            return ((loc).value = ($std_core_types.Cons(node, _y_x10185)));
+          function next_10372(_y_x10190) /* (list<view<5693>>) -> <local<5683>|5694> () */  {
+            return ((loc).value = ($std_core_types.Cons(node, _y_x10190)));
           }
           if ($std_core_hnd._yielding()) {
-            return $std_core_hnd.yield_extend(next_10367);
+            return $std_core_hnd.yield_extend(next_10372);
           }
           else {
-            return next_10367(x_10366);
+            return next_10372(x_10371);
           }
-        })), function(__w_l180_c12 /* () */ ) {
+        })), function(__w_l257_c12 /* () */ ) {
          
-        var x_0_10371 = ((loc).value);
+        var x_0_10376 = ((loc).value);
         if ($std_core_hnd._yielding()) {
-          return $std_core_hnd.yield_extend(function(_y_x10187 /* list<view<3963>> */ ) {
-            return $std_core_list.reverse_acc($std_core_types.Nil, _y_x10187);
+          return $std_core_hnd.yield_extend(function(_y_x10192 /* list<view<5693>> */ ) {
+            return $std_core_list.reverse_acc($std_core_types.Nil, _y_x10192);
           });
         }
         else {
-          return $std_core_list.reverse_acc($std_core_types.Nil, x_0_10371);
+          return $std_core_list.reverse_acc($std_core_types.Nil, x_0_10376);
         }
       }, action);
     return $std_core_hnd.prompt_local_var(loc, res);
@@ -819,71 +1027,71 @@ export function collect(action) /* forall<e,e1> (action : () -> <html<e>|e1> ())
  
  
 // monadic lift
-export function _mlift_view_10302(_y_x10192) /* forall<e,e1> (list<view<e>>) -> e1 view<e> */  {
-  if (_y_x10192 === null) {
+export function _mlift_view_10307(_y_x10197) /* forall<e,e1> (list<view<e>>) -> e1 view<e> */  {
+  if (_y_x10197 === null) {
     return Empty;
   }
-  else if (_y_x10192 !== null && _y_x10192.tail === null) {
-    return _y_x10192.head;
+  else if (_y_x10197 !== null && _y_x10197.tail === null) {
+    return _y_x10197.head;
   }
   else {
-    return Fragment(_y_x10192);
+    return Fragment(_y_x10197);
   }
 }
  
 export function view(action) /* forall<e,e1> (action : () -> <html<e>|e1> ()) -> e1 view<e> */  {
    
-  var x_10375 = collect(action);
+  var x_10380 = collect(action);
   if ($std_core_hnd._yielding()) {
-    return $std_core_hnd.yield_extend(function(_y_x10192 /* list<view<4016>> */ ) {
-      if (_y_x10192 === null) {
+    return $std_core_hnd.yield_extend(function(_y_x10197 /* list<view<5746>> */ ) {
+      if (_y_x10197 === null) {
         return Empty;
       }
-      else if (_y_x10192 !== null && _y_x10192.tail === null) {
-        return _y_x10192.head;
+      else if (_y_x10197 !== null && _y_x10197.tail === null) {
+        return _y_x10197.head;
       }
       else {
-        return Fragment(_y_x10192);
+        return Fragment(_y_x10197);
       }
     });
   }
   else {
-    if (x_10375 === null) {
+    if (x_10380 === null) {
       return Empty;
     }
-    else if (x_10375 !== null && x_10375.tail === null) {
-      return x_10375.head;
+    else if (x_10380 !== null && x_10380.tail === null) {
+      return x_10380.head;
     }
     else {
-      return Fragment(x_10375);
+      return Fragment(x_10380);
     }
   }
 }
  
  
 // monadic lift
-export function _mlift_nested_10303(node, nodes, _y_x10194) /* forall<h,e,e1> (node : view<e>, nodes : local-var<h,list<view<e>>>, list<view<e>>) -> <local<h>,html<e>|e1> () */  {
-  return ((nodes).value = ($std_core_types.Cons(node, _y_x10194)));
+export function _mlift_nested_10308(node, nodes, _y_x10199) /* forall<h,e,e1> (node : view<e>, nodes : local-var<h,list<view<e>>>, list<view<e>>) -> <local<h>,html<e>|e1> () */  {
+  return ((nodes).value = ($std_core_types.Cons(node, _y_x10199)));
 }
  
  
 // monadic lift
-export function _mlift_nested_10304(make, _y_x10196) /* forall<h,e,e1> (make : (list<view<e>>) -> view<e>, list<view<e>>) -> <local<h>,html<e>|e1> () */  {
+export function _mlift_nested_10309(make, _y_x10201) /* forall<h,e,e1> (make : (list<view<e>>) -> view<e>, list<view<e>>) -> <local<h>,html<e>|e1> () */  {
    
-  var final_nodes = $std_core_list.reverse_acc($std_core_types.Nil, _y_x10196);
+  var final_nodes = $std_core_list.reverse_acc($std_core_types.Nil, _y_x10201);
    
-  var _x_x1_10292 = $std_core_hnd._open_none1(make, final_nodes);
-  return $std_core_hnd._open_at1($std_core_hnd._evv_index(html_fs__tag), function(node_0 /* view<4283> */ ) {
+  var _x_x1_10297 = $std_core_hnd._open_none1(make, final_nodes);
+  return $std_core_hnd._open_at1($std_core_hnd._evv_index(html_fs__tag), function(node_0 /* view<6013> */ ) {
        
-      var ev_10379 = $std_core_hnd._evv_at(0);
-      return ev_10379.hnd._fun_emit(ev_10379.marker, ev_10379, node_0);
-    }, _x_x1_10292);
+      var ev_10384 = $std_core_hnd._evv_at(0);
+      return ev_10384.hnd._fun_emit(ev_10384.marker, ev_10384, node_0);
+    }, _x_x1_10297);
 }
  
  
 // monadic lift
-export function _mlift_nested_10305(children, _y_x10199) /* forall<h,e,e1> (children : () -> <html<e>|e1> (), hnd/ev-index) -> <html<e>,html<e>,local<h>|e1> () */  {
-  return $std_core_hnd._mask_at(_y_x10199, true, children);
+export function _mlift_nested_10310(children, _y_x10204) /* forall<h,e,e1> (children : () -> <html<e>|e1> (), hnd/ev-index) -> <html<e>,html<e>,local<h>|e1> () */  {
+  return $std_core_hnd._mask_at(_y_x10204, true, children);
 }
  
 export function nested(make, children) /* forall<e,e1> (make : (list<view<e>>) -> view<e>, children : () -> <html<e>|e1> ()) -> <html<e>|e1> () */  {
@@ -891,40 +1099,40 @@ export function nested(make, children) /* forall<e,e1> (make : (list<view<e>>) -
      
     var loc = { value: ($std_core_types.Nil) };
      
-    var res = html_fs__handle(_Hnd_html(1, $std_core_hnd.clause_tail1(function(node /* view<4283> */ ) {
+    var res = html_fs__handle(_Hnd_html(1, $std_core_hnd.clause_tail1(function(node /* view<6013> */ ) {
            
-          var x_10385 = ((loc).value);
+          var x_10390 = ((loc).value);
            
-          function next_10386(_y_x10194) /* (list<view<4283>>) -> <local<4273>,html<4283>|4284> () */  {
-            return ((loc).value = ($std_core_types.Cons(node, _y_x10194)));
+          function next_10391(_y_x10199) /* (list<view<6013>>) -> <local<6003>,html<6013>|6014> () */  {
+            return ((loc).value = ($std_core_types.Cons(node, _y_x10199)));
           }
           if ($std_core_hnd._yielding()) {
-            return $std_core_hnd.yield_extend(next_10386);
+            return $std_core_hnd.yield_extend(next_10391);
           }
           else {
-            return next_10386(x_10385);
+            return next_10391(x_10390);
           }
-        })), function(__w_l195_c12 /* () */ ) {
+        })), function(__w_l272_c12 /* () */ ) {
          
-        var x_0_10390 = ((loc).value);
+        var x_0_10395 = ((loc).value);
         if ($std_core_hnd._yielding()) {
-          return $std_core_hnd.yield_extend(function(_y_x10196 /* list<view<4283>> */ ) {
-            return _mlift_nested_10304(make, _y_x10196);
+          return $std_core_hnd.yield_extend(function(_y_x10201 /* list<view<6013>> */ ) {
+            return _mlift_nested_10309(make, _y_x10201);
           });
         }
         else {
-          return _mlift_nested_10304(make, x_0_10390);
+          return _mlift_nested_10309(make, x_0_10395);
         }
       }, function() {
          
-        var x_1_10392 = $std_core_hnd._evv_index(html_fs__tag);
+        var x_1_10397 = $std_core_hnd._evv_index(html_fs__tag);
         if ($std_core_hnd._yielding()) {
-          return $std_core_hnd.yield_extend(function(_y_x10199 /* hnd/ev-index */ ) {
-            return $std_core_hnd._mask_at(_y_x10199, true, children);
+          return $std_core_hnd.yield_extend(function(_y_x10204 /* hnd/ev-index */ ) {
+            return $std_core_hnd._mask_at(_y_x10204, true, children);
           });
         }
         else {
-          return $std_core_hnd._mask_at(x_1_10392, true, children);
+          return $std_core_hnd._mask_at(x_1_10397, true, children);
         }
       });
     return $std_core_hnd.prompt_local_var(loc, res);
@@ -932,22 +1140,22 @@ export function nested(make, children) /* forall<e,e1> (make : (list<view<e>>) -
 }
  
 export function container_tag(name_0, attributes, children) /* forall<e,e1> (name : string, attributes : list<attribute<e>>, children : () -> <html<e>|e1> ()) -> <html<e>|e1> () */  {
-  return nested(function(nodes /* list<view<4323>> */ ) {
+  return nested(function(nodes /* list<view<6053>> */ ) {
       return Element(name_0, attributes, nodes);
     }, children);
 }
  
 export function text_tag(name_0, content, attributes) /* forall<e> (name : string, content : string, attributes : list<attribute<e>>) -> (html<e>) () */  {
    
-  var ev_10394 = $std_core_hnd._evv_at(0);
-  return ev_10394.hnd._fun_emit(ev_10394.marker, ev_10394, Element(name_0, attributes, $std_core_types.Cons(Text(content), $std_core_types.Nil)));
+  var ev_10399 = $std_core_hnd._evv_at(0);
+  return ev_10399.hnd._fun_emit(ev_10399.marker, ev_10399, Element(name_0, attributes, $std_core_types.Cons(Text(content), $std_core_types.Nil)));
 }
  
 export function void_fs_element_empty(name_0, attrs) /* forall<e> (name : string, attrs : ? (list<attribute<e>>)) -> (html<e>) () */  {
    
-  var ev_10397 = $std_core_hnd._evv_at(0);
-  var _x29 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
-  return ev_10397.hnd._fun_emit(ev_10397.marker, ev_10397, Element(name_0, _x29, $std_core_types.Nil));
+  var ev_10402 = $std_core_hnd._evv_at(0);
+  var _x33 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
+  return ev_10402.hnd._fun_emit(ev_10402.marker, ev_10402, Element(name_0, _x33, $std_core_types.Nil));
 }
  
 export function fragment(children) /* forall<e,e1> (children : () -> <html<e>|e1> ()) -> <html<e>|e1> () */  {
@@ -956,35 +1164,35 @@ export function fragment(children) /* forall<e,e1> (children : () -> <html<e>|e1
  
 export function text(content) /* forall<e> (content : string) -> (html<e>) () */  {
    
-  var ev_10400 = $std_core_hnd._evv_at(0);
-  return ev_10400.hnd._fun_emit(ev_10400.marker, ev_10400, Text(content));
+  var ev_10405 = $std_core_hnd._evv_at(0);
+  return ev_10405.hnd._fun_emit(ev_10405.marker, ev_10405, Text(content));
 }
  
  
 // Static overloading lets static and live text share the plain `text` name.
 export function live_fs_text(read) /* forall<e> (read : () -> kokaine/reactive/effects/signal-read string) -> (html<e>) () */  {
    
-  var ev_10403 = $std_core_hnd._evv_at(0);
-  return ev_10403.hnd._fun_emit(ev_10403.marker, ev_10403, Live_text(read));
+  var ev_10408 = $std_core_hnd._evv_at(0);
+  return ev_10408.hnd._fun_emit(ev_10408.marker, ev_10408, Live_text(read));
 }
  
 export function emit_region(read) /* forall<e> (read : () -> kokaine/reactive/effects/signal-read view<e>) -> (html<e>) () */  {
    
-  var ev_10406 = $std_core_hnd._evv_at(0);
-  return ev_10406.hnd._fun_emit(ev_10406.marker, ev_10406, Region(read));
+  var ev_10411 = $std_core_hnd._evv_at(0);
+  return ev_10411.hnd._fun_emit(ev_10411.marker, ev_10411, Region(read));
 }
  
  
 // monadic lift
-export function _mlift_dynamic_10306(_y_x10212) /* forall<e> (list<view<e>>) -> kokaine/reactive/effects/signal-read view<e> */  {
-  if (_y_x10212 === null) {
+export function _mlift_dynamic_10311(_y_x10217) /* forall<e> (list<view<e>>) -> kokaine/reactive/effects/signal-read view<e> */  {
+  if (_y_x10217 === null) {
     return Empty;
   }
-  else if (_y_x10212 !== null && _y_x10212.tail === null) {
-    return _y_x10212.head;
+  else if (_y_x10217 !== null && _y_x10217.tail === null) {
+    return _y_x10217.head;
   }
   else {
-    return Fragment(_y_x10212);
+    return Fragment(_y_x10217);
   }
 }
  
@@ -992,27 +1200,27 @@ export function _mlift_dynamic_10306(_y_x10212) /* forall<e> (list<view<e>>) -> 
 // Dynamic structure reads signals and rebuilds just this region.
 export function dynamic(children) /* forall<e> (children : () -> <html<e>,kokaine/reactive/effects/signal-read> ()) -> (html<e>) () */  {
    
-  var ev_10409 = $std_core_hnd._evv_at(0);
-  return ev_10409.hnd._fun_emit(ev_10409.marker, ev_10409, Region(function() {
+  var ev_10414 = $std_core_hnd._evv_at(0);
+  return ev_10414.hnd._fun_emit(ev_10414.marker, ev_10414, Region(function() {
        
-      var x_0_10412 = collect(children);
+      var x_0_10417 = collect(children);
        
-      function next_10413(_y_x10212) /* (list<view<4564>>) -> kokaine/reactive/effects/signal-read view<4564> */  {
-        if (_y_x10212 === null) {
+      function next_10418(_y_x10217) /* (list<view<6294>>) -> kokaine/reactive/effects/signal-read view<6294> */  {
+        if (_y_x10217 === null) {
           return Empty;
         }
-        else if (_y_x10212 !== null && _y_x10212.tail === null) {
-          return _y_x10212.head;
+        else if (_y_x10217 !== null && _y_x10217.tail === null) {
+          return _y_x10217.head;
         }
         else {
-          return Fragment(_y_x10212);
+          return Fragment(_y_x10217);
         }
       }
       if ($std_core_hnd._yielding()) {
-        return $std_core_hnd.yield_extend(next_10413);
+        return $std_core_hnd.yield_extend(next_10418);
       }
       else {
-        return next_10413(x_0_10412);
+        return next_10418(x_0_10417);
       }
     }));
 }
@@ -1022,14 +1230,14 @@ export function dynamic(children) /* forall<e> (children : () -> <html<e>,kokain
 // values out of the backend-neutral HTML layer.
 export function keyed(plan) /* forall<e> (plan : keyed-plan<e>) -> (html<e>) () */  {
    
-  var ev_10415 = $std_core_hnd._evv_at(0);
-  return ev_10415.hnd._fun_emit(ev_10415.marker, ev_10415, Keyed_region(plan));
+  var ev_10420 = $std_core_hnd._evv_at(0);
+  return ev_10420.hnd._fun_emit(ev_10420.marker, ev_10420, Keyed_region(plan));
 }
  
 export function trusted(content) /* forall<e> (content : trusted-html) -> (html<e>) () */  {
    
-  var ev_10418 = $std_core_hnd._evv_at(0);
-  return ev_10418.hnd._fun_emit(ev_10418.marker, ev_10418, Raw_html(content));
+  var ev_10423 = $std_core_hnd._evv_at(0);
+  return ev_10423.hnd._fun_emit(ev_10423.marker, ev_10423, Raw_html(content));
 }
  
 export function attr(name_0, value_0) /* forall<e> (name : string, value : string) -> attribute<e> */  {
@@ -1046,19 +1254,19 @@ export function live_fs_attr(name_0, read) /* forall<e> (name : string, read : (
  
  
 // monadic lift
-export function live_string_fs__mlift_attr_10307(_y_x10217) /* (string) -> kokaine/reactive/effects/signal-read maybe<string> */  {
-  return $std_core_types.Just(_y_x10217);
+export function live_string_fs__mlift_attr_10312(_y_x10222) /* (string) -> kokaine/reactive/effects/signal-read maybe<string> */  {
+  return $std_core_types.Just(_y_x10222);
 }
  
 export function live_string_fs_attr(name_0, read) /* forall<e> (name : string, read : () -> kokaine/reactive/effects/signal-read string) -> attribute<e> */  {
   return Live_attribute(name_0, function() {
        
-      var x_10421 = read();
+      var x_10426 = read();
       if ($std_core_hnd._yielding()) {
-        return $std_core_hnd.yield_extend(live_string_fs__mlift_attr_10307);
+        return $std_core_hnd.yield_extend(live_string_fs__mlift_attr_10312);
       }
       else {
-        return $std_core_types.Just(x_10421);
+        return $std_core_types.Just(x_10426);
       }
     });
 }
@@ -1093,93 +1301,93 @@ export function on(name_0, action) /* forall<e> (name : string, action : callbac
  
  
 // monadic lift
-export function _mlift_on_write_10308(action, ev, _y_x10223) /* (action : (event) -> kokaine/reactive/effects/signal-write (), ev : event, hnd/ev-index) -> <exn,div,kokaine/reactive/effects/signal-write,kokaine/async/effects/async-ownership> () */  {
-  return $std_core_hnd._mask_at(_y_x10223, false, function() {
+export function _mlift_on_write_10313(action, ev, _y_x10228) /* (action : (event) -> kokaine/reactive/effects/signal-write (), ev : event, hnd/ev-index) -> <exn,div,kokaine/reactive/effects/signal-write,kokaine/async/effects/async-ownership> () */  {
+  return $std_core_hnd._mask_at(_y_x10228, false, function() {
       return $std_core_hnd._open_at1(1, action, ev);
     });
 }
  
  
 // monadic lift
-export function _mlift_on_write_10309(action, ev, _y_x10222) /* (action : (event) -> kokaine/reactive/effects/signal-write (), ev : event, hnd/ev-index) -> <kokaine/reactive/effects/signal-read,div,exn,kokaine/reactive/effects/signal-write,ui,kokaine/async/effects/async-ownership> () */  {
-  return $std_core_hnd._mask_at(_y_x10222, false, function() {
+export function _mlift_on_write_10314(action, ev, _y_x10227) /* (action : (event) -> kokaine/reactive/effects/signal-write (), ev : event, hnd/ev-index) -> <kokaine/reactive/effects/signal-read,div,exn,kokaine/reactive/effects/signal-write,ui,kokaine/async/effects/async-ownership> () */  {
+  return $std_core_hnd._mask_at(_y_x10227, false, function() {
        
-      var x_10425 = $std_core_hnd._evv_index($std_core_exn.exn_fs__tag);
+      var x_10430 = $std_core_hnd._evv_index($std_core_exn.exn_fs__tag);
       if ($std_core_hnd._yielding()) {
-        return $std_core_hnd.yield_extend(function(_y_x10223 /* hnd/ev-index */ ) {
-          return _mlift_on_write_10308(action, ev, _y_x10223);
+        return $std_core_hnd.yield_extend(function(_y_x10228 /* hnd/ev-index */ ) {
+          return _mlift_on_write_10313(action, ev, _y_x10228);
         });
       }
       else {
-        return _mlift_on_write_10308(action, ev, x_10425);
+        return _mlift_on_write_10313(action, ev, x_10430);
       }
     });
 }
  
  
 // monadic lift
-export function _mlift_on_write_10310(action, ev, _y_x10221) /* (action : (event) -> kokaine/reactive/effects/signal-write (), ev : event, hnd/ev-index) -> <kokaine/async/effects/discontinue,div,exn,kokaine/reactive/effects/signal-read,kokaine/reactive/effects/signal-write,ui,kokaine/async/effects/async-ownership> () */  {
-  return $std_core_hnd._mask_at(_y_x10221, false, function() {
+export function _mlift_on_write_10315(action, ev, _y_x10226) /* (action : (event) -> kokaine/reactive/effects/signal-write (), ev : event, hnd/ev-index) -> <kokaine/async/effects/discontinue,div,exn,kokaine/reactive/effects/signal-read,kokaine/reactive/effects/signal-write,ui,kokaine/async/effects/async-ownership> () */  {
+  return $std_core_hnd._mask_at(_y_x10226, false, function() {
        
-      var x_10427 = $std_core_hnd._evv_index($kokaine_reactive_effects.signal_read_fs__tag);
+      var x_10432 = $std_core_hnd._evv_index($kokaine_reactive_effects.signal_read_fs__tag);
       if ($std_core_hnd._yielding()) {
-        return $std_core_hnd.yield_extend(function(_y_x10222 /* hnd/ev-index */ ) {
-          return _mlift_on_write_10309(action, ev, _y_x10222);
+        return $std_core_hnd.yield_extend(function(_y_x10227 /* hnd/ev-index */ ) {
+          return _mlift_on_write_10314(action, ev, _y_x10227);
         });
       }
       else {
-        return _mlift_on_write_10309(action, ev, x_10427);
+        return _mlift_on_write_10314(action, ev, x_10432);
       }
     });
 }
  
  
 // monadic lift
-export function _mlift_on_write_10311(action, ev, _y_x10220) /* (action : (event) -> kokaine/reactive/effects/signal-write (), ev : event, hnd/ev-index) -> <kokaine/async/effects/async-ioc,kokaine/async/effects/discontinue,div,exn,kokaine/reactive/effects/signal-read,kokaine/reactive/effects/signal-write,ui,kokaine/async/effects/async-ownership> () */  {
-  return $std_core_hnd._mask_at(_y_x10220, false, function() {
+export function _mlift_on_write_10316(action, ev, _y_x10225) /* (action : (event) -> kokaine/reactive/effects/signal-write (), ev : event, hnd/ev-index) -> <kokaine/async/effects/async-ioc,kokaine/async/effects/discontinue,div,exn,kokaine/reactive/effects/signal-read,kokaine/reactive/effects/signal-write,ui,kokaine/async/effects/async-ownership> () */  {
+  return $std_core_hnd._mask_at(_y_x10225, false, function() {
        
-      var x_10429 = $std_core_hnd._evv_index($kokaine_async_effects.discontinue_fs__tag);
+      var x_10434 = $std_core_hnd._evv_index($kokaine_async_effects.discontinue_fs__tag);
       if ($std_core_hnd._yielding()) {
-        return $std_core_hnd.yield_extend(function(_y_x10221 /* hnd/ev-index */ ) {
-          return _mlift_on_write_10310(action, ev, _y_x10221);
+        return $std_core_hnd.yield_extend(function(_y_x10226 /* hnd/ev-index */ ) {
+          return _mlift_on_write_10315(action, ev, _y_x10226);
         });
       }
       else {
-        return _mlift_on_write_10310(action, ev, x_10429);
+        return _mlift_on_write_10315(action, ev, x_10434);
       }
     });
 }
  
  
 // monadic lift
-export function _mlift_on_write_10312(action, ev, _y_x10219) /* (action : (event) -> kokaine/reactive/effects/signal-write (), ev : event, hnd/ev-index) -> <kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/discontinue,div,exn,kokaine/reactive/effects/signal-read,kokaine/reactive/effects/signal-write,ui,kokaine/async/effects/async-ownership> () */  {
-  return $std_core_hnd._mask_at(_y_x10219, false, function() {
+export function _mlift_on_write_10317(action, ev, _y_x10224) /* (action : (event) -> kokaine/reactive/effects/signal-write (), ev : event, hnd/ev-index) -> <kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/discontinue,div,exn,kokaine/reactive/effects/signal-read,kokaine/reactive/effects/signal-write,ui,kokaine/async/effects/async-ownership> () */  {
+  return $std_core_hnd._mask_at(_y_x10224, false, function() {
        
-      var x_10431 = $std_core_hnd._evv_index($kokaine_async_effects.async_ioc_fs__tag);
+      var x_10436 = $std_core_hnd._evv_index($kokaine_async_effects.async_ioc_fs__tag);
       if ($std_core_hnd._yielding()) {
-        return $std_core_hnd.yield_extend(function(_y_x10220 /* hnd/ev-index */ ) {
-          return _mlift_on_write_10311(action, ev, _y_x10220);
+        return $std_core_hnd.yield_extend(function(_y_x10225 /* hnd/ev-index */ ) {
+          return _mlift_on_write_10316(action, ev, _y_x10225);
         });
       }
       else {
-        return _mlift_on_write_10311(action, ev, x_10431);
+        return _mlift_on_write_10316(action, ev, x_10436);
       }
     });
 }
  
  
 // monadic lift
-export function _mlift_on_write_10313(action, ev, _y_x10218) /* (action : (event) -> kokaine/reactive/effects/signal-write (), ev : event, hnd/ev-index) -> <kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/discontinue,div,exn,kokaine/reactive/effects/signal-read,kokaine/reactive/effects/signal-write,ui,kokaine/async/effects/async-ownership> () */  {
-  return $std_core_hnd._mask_at(_y_x10218, false, function() {
+export function _mlift_on_write_10318(action, ev, _y_x10223) /* (action : (event) -> kokaine/reactive/effects/signal-write (), ev : event, hnd/ev-index) -> <kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/discontinue,div,exn,kokaine/reactive/effects/signal-read,kokaine/reactive/effects/signal-write,ui,kokaine/async/effects/async-ownership> () */  {
+  return $std_core_hnd._mask_at(_y_x10223, false, function() {
        
-      var x_10433 = $std_core_hnd._evv_index($kokaine_async_effects.async_cancel_fs__tag);
+      var x_10438 = $std_core_hnd._evv_index($kokaine_async_effects.async_cancel_fs__tag);
       if ($std_core_hnd._yielding()) {
-        return $std_core_hnd.yield_extend(function(_y_x10219 /* hnd/ev-index */ ) {
-          return _mlift_on_write_10312(action, ev, _y_x10219);
+        return $std_core_hnd.yield_extend(function(_y_x10224 /* hnd/ev-index */ ) {
+          return _mlift_on_write_10317(action, ev, _y_x10224);
         });
       }
       else {
-        return _mlift_on_write_10312(action, ev, x_10433);
+        return _mlift_on_write_10317(action, ev, x_10438);
       }
     });
 }
@@ -1190,16 +1398,20 @@ export function _mlift_on_write_10313(action, ev, _y_x10218) /* (action : (event
 export function on_write(name_0, action) /* forall<e> (name : string, action : (event) -> kokaine/reactive/effects/signal-write ()) -> attribute<e> */  {
   return Listener(name_0, function(ev /* event */ ) {
        
-      var x_10435 = $std_core_hnd._evv_index($kokaine_async_effects.async_await_fs__tag);
+      var x_10440 = $std_core_hnd._evv_index($kokaine_async_effects.async_await_fs__tag);
       if ($std_core_hnd._yielding()) {
-        return $std_core_hnd.yield_extend(function(_y_x10218 /* hnd/ev-index */ ) {
-          return _mlift_on_write_10313(action, ev, _y_x10218);
+        return $std_core_hnd.yield_extend(function(_y_x10223 /* hnd/ev-index */ ) {
+          return _mlift_on_write_10318(action, ev, _y_x10223);
         });
       }
       else {
-        return _mlift_on_write_10313(action, ev, x_10435);
+        return _mlift_on_write_10318(action, ev, x_10440);
       }
     });
+}
+ 
+export function trusted_url_fs_attr(name_0, value_0) /* forall<e> (name : string, value : trusted-url) -> attribute<e> */  {
+  return Trusted_url_attribute(name_0, value_0);
 }
  
 export function id(value_0) /* forall<e> (value : string) -> attribute<e> */  {
@@ -1208,19 +1420,19 @@ export function id(value_0) /* forall<e> (value : string) -> attribute<e> */  {
  
  
 // monadic lift
-export function live_fs__mlift_id_10314(_y_x10233) /* (string) -> kokaine/reactive/effects/signal-read maybe<string> */  {
-  return $std_core_types.Just(_y_x10233);
+export function live_fs__mlift_id_10319(_y_x10238) /* (string) -> kokaine/reactive/effects/signal-read maybe<string> */  {
+  return $std_core_types.Just(_y_x10238);
 }
  
 export function live_fs_id(read) /* forall<e> (read : () -> kokaine/reactive/effects/signal-read string) -> attribute<e> */  {
   return Live_attribute("id", function() {
        
-      var x_10437 = read();
+      var x_10442 = read();
       if ($std_core_hnd._yielding()) {
-        return $std_core_hnd.yield_extend(live_fs__mlift_id_10314);
+        return $std_core_hnd.yield_extend(live_fs__mlift_id_10319);
       }
       else {
-        return $std_core_types.Just(x_10437);
+        return $std_core_types.Just(x_10442);
       }
     });
 }
@@ -1231,19 +1443,19 @@ export function $class(value_0) /* forall<e> (value : string) -> attribute<e> */
  
  
 // monadic lift
-export function live_fs__mlift_class_10315(_y_x10234) /* (string) -> kokaine/reactive/effects/signal-read maybe<string> */  {
-  return $std_core_types.Just(_y_x10234);
+export function live_fs__mlift_class_10320(_y_x10239) /* (string) -> kokaine/reactive/effects/signal-read maybe<string> */  {
+  return $std_core_types.Just(_y_x10239);
 }
  
 export function live_fs_class(read) /* forall<e> (read : () -> kokaine/reactive/effects/signal-read string) -> attribute<e> */  {
   return Live_attribute("class", function() {
        
-      var x_10439 = read();
+      var x_10444 = read();
       if ($std_core_hnd._yielding()) {
-        return $std_core_hnd.yield_extend(live_fs__mlift_class_10315);
+        return $std_core_hnd.yield_extend(live_fs__mlift_class_10320);
       }
       else {
-        return $std_core_types.Just(x_10439);
+        return $std_core_types.Just(x_10444);
       }
     });
 }
@@ -1254,19 +1466,19 @@ export function title(value_0) /* forall<e> (value : string) -> attribute<e> */ 
  
  
 // monadic lift
-export function live_fs__mlift_title_10316(_y_x10235) /* (string) -> kokaine/reactive/effects/signal-read maybe<string> */  {
-  return $std_core_types.Just(_y_x10235);
+export function live_fs__mlift_title_10321(_y_x10240) /* (string) -> kokaine/reactive/effects/signal-read maybe<string> */  {
+  return $std_core_types.Just(_y_x10240);
 }
  
 export function live_fs_title(read) /* forall<e> (read : () -> kokaine/reactive/effects/signal-read string) -> attribute<e> */  {
   return Live_attribute("title", function() {
        
-      var x_10441 = read();
+      var x_10446 = read();
       if ($std_core_hnd._yielding()) {
-        return $std_core_hnd.yield_extend(live_fs__mlift_title_10316);
+        return $std_core_hnd.yield_extend(live_fs__mlift_title_10321);
       }
       else {
-        return $std_core_types.Just(x_10441);
+        return $std_core_types.Just(x_10446);
       }
     });
 }
@@ -1275,21 +1487,25 @@ export function href(value_0) /* forall<e> (value : string) -> attribute<e> */  
   return Attribute("href", value_0);
 }
  
+export function trusted_fs_href(value_0) /* forall<e> (value : trusted-url) -> attribute<e> */  {
+  return Trusted_url_attribute("href", value_0);
+}
+ 
  
 // monadic lift
-export function live_fs__mlift_href_10317(_y_x10236) /* (string) -> kokaine/reactive/effects/signal-read maybe<string> */  {
-  return $std_core_types.Just(_y_x10236);
+export function live_fs__mlift_href_10322(_y_x10241) /* (string) -> kokaine/reactive/effects/signal-read maybe<string> */  {
+  return $std_core_types.Just(_y_x10241);
 }
  
 export function live_fs_href(read) /* forall<e> (read : () -> kokaine/reactive/effects/signal-read string) -> attribute<e> */  {
   return Live_attribute("href", function() {
        
-      var x_10443 = read();
+      var x_10448 = read();
       if ($std_core_hnd._yielding()) {
-        return $std_core_hnd.yield_extend(live_fs__mlift_href_10317);
+        return $std_core_hnd.yield_extend(live_fs__mlift_href_10322);
       }
       else {
-        return $std_core_types.Just(x_10443);
+        return $std_core_types.Just(x_10448);
       }
     });
 }
@@ -1300,19 +1516,19 @@ export function kind(value_0) /* forall<e> (value : string) -> attribute<e> */  
  
  
 // monadic lift
-export function live_fs__mlift_kind_10318(_y_x10237) /* (string) -> kokaine/reactive/effects/signal-read maybe<string> */  {
-  return $std_core_types.Just(_y_x10237);
+export function live_fs__mlift_kind_10323(_y_x10242) /* (string) -> kokaine/reactive/effects/signal-read maybe<string> */  {
+  return $std_core_types.Just(_y_x10242);
 }
  
 export function live_fs_kind(read) /* forall<e> (read : () -> kokaine/reactive/effects/signal-read string) -> attribute<e> */  {
   return Live_attribute("type", function() {
        
-      var x_10445 = read();
+      var x_10450 = read();
       if ($std_core_hnd._yielding()) {
-        return $std_core_hnd.yield_extend(live_fs__mlift_kind_10318);
+        return $std_core_hnd.yield_extend(live_fs__mlift_kind_10323);
       }
       else {
-        return $std_core_types.Just(x_10445);
+        return $std_core_types.Just(x_10450);
       }
     });
 }
@@ -1323,19 +1539,19 @@ export function name(value_0) /* forall<e> (value : string) -> attribute<e> */  
  
  
 // monadic lift
-export function live_fs__mlift_name_10319(_y_x10238) /* (string) -> kokaine/reactive/effects/signal-read maybe<string> */  {
-  return $std_core_types.Just(_y_x10238);
+export function live_fs__mlift_name_10324(_y_x10243) /* (string) -> kokaine/reactive/effects/signal-read maybe<string> */  {
+  return $std_core_types.Just(_y_x10243);
 }
  
 export function live_fs_name(read) /* forall<e> (read : () -> kokaine/reactive/effects/signal-read string) -> attribute<e> */  {
   return Live_attribute("name", function() {
        
-      var x_10447 = read();
+      var x_10452 = read();
       if ($std_core_hnd._yielding()) {
-        return $std_core_hnd.yield_extend(live_fs__mlift_name_10319);
+        return $std_core_hnd.yield_extend(live_fs__mlift_name_10324);
       }
       else {
-        return $std_core_types.Just(x_10447);
+        return $std_core_types.Just(x_10452);
       }
     });
 }
@@ -1346,19 +1562,19 @@ export function placeholder(value_0) /* forall<e> (value : string) -> attribute<
  
  
 // monadic lift
-export function live_fs__mlift_placeholder_10320(_y_x10239) /* (string) -> kokaine/reactive/effects/signal-read maybe<string> */  {
-  return $std_core_types.Just(_y_x10239);
+export function live_fs__mlift_placeholder_10325(_y_x10244) /* (string) -> kokaine/reactive/effects/signal-read maybe<string> */  {
+  return $std_core_types.Just(_y_x10244);
 }
  
 export function live_fs_placeholder(read) /* forall<e> (read : () -> kokaine/reactive/effects/signal-read string) -> attribute<e> */  {
   return Live_attribute("placeholder", function() {
        
-      var x_10449 = read();
+      var x_10454 = read();
       if ($std_core_hnd._yielding()) {
-        return $std_core_hnd.yield_extend(live_fs__mlift_placeholder_10320);
+        return $std_core_hnd.yield_extend(live_fs__mlift_placeholder_10325);
       }
       else {
-        return $std_core_types.Just(x_10449);
+        return $std_core_types.Just(x_10454);
       }
     });
 }
@@ -1369,69 +1585,69 @@ export function role(value_0) /* forall<e> (value : string) -> attribute<e> */  
  
  
 // monadic lift
-export function live_fs__mlift_role_10321(_y_x10240) /* (string) -> kokaine/reactive/effects/signal-read maybe<string> */  {
-  return $std_core_types.Just(_y_x10240);
+export function live_fs__mlift_role_10326(_y_x10245) /* (string) -> kokaine/reactive/effects/signal-read maybe<string> */  {
+  return $std_core_types.Just(_y_x10245);
 }
  
 export function live_fs_role(read) /* forall<e> (read : () -> kokaine/reactive/effects/signal-read string) -> attribute<e> */  {
   return Live_attribute("role", function() {
        
-      var x_10451 = read();
+      var x_10456 = read();
       if ($std_core_hnd._yielding()) {
-        return $std_core_hnd.yield_extend(live_fs__mlift_role_10321);
+        return $std_core_hnd.yield_extend(live_fs__mlift_role_10326);
       }
       else {
-        return $std_core_types.Just(x_10451);
+        return $std_core_types.Just(x_10456);
       }
     });
 }
  
 export function aria(label, value_0) /* forall<e> (label : string, value : string) -> attribute<e> */  {
    
-  var name_0_10041 = $std_core_types._lp__plus__plus__rp_("aria-", label);
-  return Attribute(name_0_10041, value_0);
+  var name_0_10046 = $std_core_types._lp__plus__plus__rp_("aria-", label);
+  return Attribute(name_0_10046, value_0);
 }
  
  
 // monadic lift
-export function live_fs__mlift_aria_10322(_y_x10241) /* (string) -> kokaine/reactive/effects/signal-read maybe<string> */  {
-  return $std_core_types.Just(_y_x10241);
+export function live_fs__mlift_aria_10327(_y_x10246) /* (string) -> kokaine/reactive/effects/signal-read maybe<string> */  {
+  return $std_core_types.Just(_y_x10246);
 }
  
 export function live_fs_aria(label, read) /* forall<e> (label : string, read : () -> kokaine/reactive/effects/signal-read string) -> attribute<e> */  {
   return Live_attribute($std_core_types._lp__plus__plus__rp_("aria-", label), function() {
        
-      var x_10453 = read();
+      var x_10458 = read();
       if ($std_core_hnd._yielding()) {
-        return $std_core_hnd.yield_extend(live_fs__mlift_aria_10322);
+        return $std_core_hnd.yield_extend(live_fs__mlift_aria_10327);
       }
       else {
-        return $std_core_types.Just(x_10453);
+        return $std_core_types.Just(x_10458);
       }
     });
 }
  
 export function data(label, value_0) /* forall<e> (label : string, value : string) -> attribute<e> */  {
    
-  var name_0_10043 = $std_core_types._lp__plus__plus__rp_("data-", label);
-  return Attribute(name_0_10043, value_0);
+  var name_0_10048 = $std_core_types._lp__plus__plus__rp_("data-", label);
+  return Attribute(name_0_10048, value_0);
 }
  
  
 // monadic lift
-export function live_fs__mlift_data_10323(_y_x10242) /* (string) -> kokaine/reactive/effects/signal-read maybe<string> */  {
-  return $std_core_types.Just(_y_x10242);
+export function live_fs__mlift_data_10328(_y_x10247) /* (string) -> kokaine/reactive/effects/signal-read maybe<string> */  {
+  return $std_core_types.Just(_y_x10247);
 }
  
 export function live_fs_data(label, read) /* forall<e> (label : string, read : () -> kokaine/reactive/effects/signal-read string) -> attribute<e> */  {
   return Live_attribute($std_core_types._lp__plus__plus__rp_("data-", label), function() {
        
-      var x_10455 = read();
+      var x_10460 = read();
       if ($std_core_hnd._yielding()) {
-        return $std_core_hnd.yield_extend(live_fs__mlift_data_10323);
+        return $std_core_hnd.yield_extend(live_fs__mlift_data_10328);
       }
       else {
-        return $std_core_types.Just(x_10455);
+        return $std_core_types.Just(x_10460);
       }
     });
 }
@@ -1442,19 +1658,19 @@ export function value(value_0) /* forall<e> (value : string) -> attribute<e> */ 
  
  
 // monadic lift
-export function live_fs__mlift_value_10324(_y_x10243) /* (string) -> kokaine/reactive/effects/signal-read property-value */  {
-  return String_property(_y_x10243);
+export function live_fs__mlift_value_10329(_y_x10248) /* (string) -> kokaine/reactive/effects/signal-read property-value */  {
+  return String_property(_y_x10248);
 }
  
 export function live_fs_value(read) /* forall<e> (read : () -> kokaine/reactive/effects/signal-read string) -> attribute<e> */  {
   return Live_property("value", function() {
        
-      var x_10457 = read();
+      var x_10462 = read();
       if ($std_core_hnd._yielding()) {
-        return $std_core_hnd.yield_extend(live_fs__mlift_value_10324);
+        return $std_core_hnd.yield_extend(live_fs__mlift_value_10329);
       }
       else {
-        return String_property(x_10457);
+        return String_property(x_10462);
       }
     });
 }
@@ -1465,19 +1681,19 @@ export function checked(value_0) /* forall<e> (value : bool) -> attribute<e> */ 
  
  
 // monadic lift
-export function live_fs__mlift_checked_10325(_y_x10244) /* (bool) -> kokaine/reactive/effects/signal-read property-value */  {
-  return Bool_property(_y_x10244);
+export function live_fs__mlift_checked_10330(_y_x10249) /* (bool) -> kokaine/reactive/effects/signal-read property-value */  {
+  return Bool_property(_y_x10249);
 }
  
 export function live_fs_checked(read) /* forall<e> (read : () -> kokaine/reactive/effects/signal-read bool) -> attribute<e> */  {
   return Live_property("checked", function() {
        
-      var x_10459 = read();
+      var x_10464 = read();
       if ($std_core_hnd._yielding()) {
-        return $std_core_hnd.yield_extend(live_fs__mlift_checked_10325);
+        return $std_core_hnd.yield_extend(live_fs__mlift_checked_10330);
       }
       else {
-        return Bool_property(x_10459);
+        return Bool_property(x_10464);
       }
     });
 }
@@ -1488,8 +1704,8 @@ export function disabled(value_0) /* forall<e> (value : bool) -> attribute<e> */
  
  
 // monadic lift
-export function live_fs__mlift_disabled_10326(_y_x10245) /* (bool) -> kokaine/reactive/effects/signal-read maybe<string> */  {
-  if (_y_x10245) {
+export function live_fs__mlift_disabled_10331(_y_x10250) /* (bool) -> kokaine/reactive/effects/signal-read maybe<string> */  {
+  if (_y_x10250) {
     return $std_core_types.Just("");
   }
   else {
@@ -1500,12 +1716,12 @@ export function live_fs__mlift_disabled_10326(_y_x10245) /* (bool) -> kokaine/re
 export function live_fs_disabled(read) /* forall<e> (read : () -> kokaine/reactive/effects/signal-read bool) -> attribute<e> */  {
   return Live_attribute("disabled", function() {
        
-      var x_10461 = read();
+      var x_10466 = read();
       if ($std_core_hnd._yielding()) {
-        return $std_core_hnd.yield_extend(live_fs__mlift_disabled_10326);
+        return $std_core_hnd.yield_extend(live_fs__mlift_disabled_10331);
       }
       else {
-        if (x_10461) {
+        if (x_10466) {
           return $std_core_types.Just("");
         }
         else {
@@ -1518,19 +1734,19 @@ export function live_fs_disabled(read) /* forall<e> (read : () -> kokaine/reacti
 export function popover(mode) /* forall<e> (mode : ? popover-mode) -> attribute<e> */  {
   if (mode !== undefined) {
     if (mode === 1) {
-      var _x30 = "auto";
+      var _x34 = "auto";
     }
     else if (mode === 2) {
-      var _x30 = "manual";
+      var _x34 = "manual";
     }
     else {
-      var _x30 = "hint";
+      var _x34 = "hint";
     }
   }
   else {
-    var _x30 = "auto";
+    var _x34 = "auto";
   }
-  return Attribute("popover", _x30);
+  return Attribute("popover", _x34);
 }
  
 export function popover_target(id_0) /* forall<e> (id : string) -> attribute<e> */  {
@@ -1539,15 +1755,15 @@ export function popover_target(id_0) /* forall<e> (id : string) -> attribute<e> 
  
 export function popover_target_action(action) /* forall<e> (action : popover-target-action) -> attribute<e> */  {
   if (action === 1) {
-    var _x31 = "toggle";
+    var _x35 = "toggle";
   }
   else if (action === 2) {
-    var _x31 = "show";
+    var _x35 = "show";
   }
   else {
-    var _x31 = "hide";
+    var _x35 = "hide";
   }
-  return Attribute("popovertargetaction", _x31);
+  return Attribute("popovertargetaction", _x35);
 }
  
  
@@ -1562,28 +1778,28 @@ export function autofocus() /* forall<e> () -> attribute<e> */  {
  
 export function dialog_closed_by(policy) /* forall<e> (policy : dialog-close-policy) -> attribute<e> */  {
   if (policy === 1) {
-    var _x32 = "any";
+    var _x36 = "any";
   }
   else if (policy === 2) {
-    var _x32 = "closerequest";
+    var _x36 = "closerequest";
   }
   else {
-    var _x32 = "none";
+    var _x36 = "none";
   }
-  return Attribute("closedby", _x32);
+  return Attribute("closedby", _x36);
 }
  
 export function on_click(action) /* forall<e> (action : (event) -> kokaine/reactive/effects/signal-write ()) -> attribute<e> */  {
   return Listener("click", function(ev /* event */ ) {
        
-      var x_10435 = $std_core_hnd._evv_index($kokaine_async_effects.async_await_fs__tag);
+      var x_10440 = $std_core_hnd._evv_index($kokaine_async_effects.async_await_fs__tag);
       if ($std_core_hnd._yielding()) {
-        return $std_core_hnd.yield_extend(function(_y_x10218 /* hnd/ev-index */ ) {
-          return _mlift_on_write_10313(action, ev, _y_x10218);
+        return $std_core_hnd.yield_extend(function(_y_x10223 /* hnd/ev-index */ ) {
+          return _mlift_on_write_10318(action, ev, _y_x10223);
         });
       }
       else {
-        return _mlift_on_write_10313(action, ev, x_10435);
+        return _mlift_on_write_10318(action, ev, x_10440);
       }
     });
 }
@@ -1591,20 +1807,20 @@ export function on_click(action) /* forall<e> (action : (event) -> kokaine/react
 export function on_input(action) /* forall<e> (action : (string) -> kokaine/reactive/effects/signal-write ()) -> attribute<e> */  {
   return Listener("input", function(ev /* event */ ) {
        
-      var x_10435 = $std_core_hnd._evv_index($kokaine_async_effects.async_await_fs__tag);
+      var x_10440 = $std_core_hnd._evv_index($kokaine_async_effects.async_await_fs__tag);
        
-      function next_10436(_y_x10218) /* (hnd/ev-index) -> <kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/discontinue,div,exn,kokaine/reactive/effects/signal-read,kokaine/reactive/effects/signal-write,ui,kokaine/async/effects/async-ownership> () */  {
-        return _mlift_on_write_10313(function(ev_0 /* event */ ) {
+      function next_10441(_y_x10223) /* (hnd/ev-index) -> <kokaine/async/effects/async-await,kokaine/async/effects/async-cancel,kokaine/async/effects/async-ioc,kokaine/async/effects/discontinue,div,exn,kokaine/reactive/effects/signal-read,kokaine/reactive/effects/signal-write,ui,kokaine/async/effects/async-ownership> () */  {
+        return _mlift_on_write_10318(function(ev_0 /* event */ ) {
             return action($std_core_hnd._open_none1(function(event /* event */ ) {
                 return event.value;
               }, ev_0));
-          }, ev, _y_x10218);
+          }, ev, _y_x10223);
       }
       if ($std_core_hnd._yielding()) {
-        return $std_core_hnd.yield_extend(next_10436);
+        return $std_core_hnd.yield_extend(next_10441);
       }
       else {
-        return next_10436(x_10435);
+        return next_10441(x_10440);
       }
     });
 }
@@ -1612,287 +1828,287 @@ export function on_input(action) /* forall<e> (action : (string) -> kokaine/reac
 export function on_change(action) /* forall<e> (action : (event) -> kokaine/reactive/effects/signal-write ()) -> attribute<e> */  {
   return Listener("change", function(ev /* event */ ) {
        
-      var x_10435 = $std_core_hnd._evv_index($kokaine_async_effects.async_await_fs__tag);
+      var x_10440 = $std_core_hnd._evv_index($kokaine_async_effects.async_await_fs__tag);
       if ($std_core_hnd._yielding()) {
-        return $std_core_hnd.yield_extend(function(_y_x10218 /* hnd/ev-index */ ) {
-          return _mlift_on_write_10313(action, ev, _y_x10218);
+        return $std_core_hnd.yield_extend(function(_y_x10223 /* hnd/ev-index */ ) {
+          return _mlift_on_write_10318(action, ev, _y_x10223);
         });
       }
       else {
-        return _mlift_on_write_10313(action, ev, x_10435);
+        return _mlift_on_write_10318(action, ev, x_10440);
       }
     });
 }
  
 export function block_fs_element(name_0, children, attrs) /* forall<e,e1> (name : string, children : () -> <html<e>|e1> (), attrs : ? (list<attribute<e>>)) -> <html<e>|e1> () */  {
-  return nested(function(nodes /* list<view<6067>> */ ) {
-      var _x33 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
-      return Element(name_0, _x33, nodes);
+  return nested(function(nodes /* list<view<7884>> */ ) {
+      var _x37 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
+      return Element(name_0, _x37, nodes);
     }, children);
 }
  
 export function string_fs_element(name_0, content, attrs) /* forall<e> (name : string, content : string, attrs : ? (list<attribute<e>>)) -> (html<e>) () */  {
    
-  var ev_10463 = $std_core_hnd._evv_at(0);
-  var _x34 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
-  return ev_10463.hnd._fun_emit(ev_10463.marker, ev_10463, Element(name_0, _x34, $std_core_types.Cons(Text(content), $std_core_types.Nil)));
+  var ev_10468 = $std_core_hnd._evv_at(0);
+  var _x38 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
+  return ev_10468.hnd._fun_emit(ev_10468.marker, ev_10468, Element(name_0, _x38, $std_core_types.Cons(Text(content), $std_core_types.Nil)));
 }
  
 export function block_fs_div(children, attrs) /* forall<e,e1> (children : () -> <html<e>|e1> (), attrs : ? (list<attribute<e>>)) -> <html<e>|e1> () */  {
-  return nested(function(nodes /* list<view<6131>> */ ) {
-      var _x35 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
-      return Element("div", _x35, nodes);
+  return nested(function(nodes /* list<view<7948>> */ ) {
+      var _x39 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
+      return Element("div", _x39, nodes);
     }, children);
 }
  
 export function string_fs_div(content, attrs) /* forall<e> (content : string, attrs : ? (list<attribute<e>>)) -> (html<e>) () */  {
    
-  var ev_10466 = $std_core_hnd._evv_at(0);
-  var _x36 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
-  return ev_10466.hnd._fun_emit(ev_10466.marker, ev_10466, Element("div", _x36, $std_core_types.Cons(Text(content), $std_core_types.Nil)));
+  var ev_10471 = $std_core_hnd._evv_at(0);
+  var _x40 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
+  return ev_10471.hnd._fun_emit(ev_10471.marker, ev_10471, Element("div", _x40, $std_core_types.Cons(Text(content), $std_core_types.Nil)));
 }
  
 export function block_fs_span(children, attrs) /* forall<e,e1> (children : () -> <html<e>|e1> (), attrs : ? (list<attribute<e>>)) -> <html<e>|e1> () */  {
-  return nested(function(nodes /* list<view<6195>> */ ) {
-      var _x37 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
-      return Element("span", _x37, nodes);
+  return nested(function(nodes /* list<view<8012>> */ ) {
+      var _x41 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
+      return Element("span", _x41, nodes);
     }, children);
 }
  
 export function string_fs_span(content, attrs) /* forall<e> (content : string, attrs : ? (list<attribute<e>>)) -> (html<e>) () */  {
    
-  var ev_10469 = $std_core_hnd._evv_at(0);
-  var _x38 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
-  return ev_10469.hnd._fun_emit(ev_10469.marker, ev_10469, Element("span", _x38, $std_core_types.Cons(Text(content), $std_core_types.Nil)));
+  var ev_10474 = $std_core_hnd._evv_at(0);
+  var _x42 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
+  return ev_10474.hnd._fun_emit(ev_10474.marker, ev_10474, Element("span", _x42, $std_core_types.Cons(Text(content), $std_core_types.Nil)));
 }
  
 export function block_fs_main_tag(children, attrs) /* forall<e,e1> (children : () -> <html<e>|e1> (), attrs : ? (list<attribute<e>>)) -> <html<e>|e1> () */  {
-  return nested(function(nodes /* list<view<6259>> */ ) {
-      var _x39 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
-      return Element("main", _x39, nodes);
+  return nested(function(nodes /* list<view<8076>> */ ) {
+      var _x43 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
+      return Element("main", _x43, nodes);
     }, children);
 }
  
 export function string_fs_main_tag(content, attrs) /* forall<e> (content : string, attrs : ? (list<attribute<e>>)) -> (html<e>) () */  {
    
-  var ev_10472 = $std_core_hnd._evv_at(0);
-  var _x40 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
-  return ev_10472.hnd._fun_emit(ev_10472.marker, ev_10472, Element("main", _x40, $std_core_types.Cons(Text(content), $std_core_types.Nil)));
+  var ev_10477 = $std_core_hnd._evv_at(0);
+  var _x44 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
+  return ev_10477.hnd._fun_emit(ev_10477.marker, ev_10477, Element("main", _x44, $std_core_types.Cons(Text(content), $std_core_types.Nil)));
 }
  
 export function block_fs_section(children, attrs) /* forall<e,e1> (children : () -> <html<e>|e1> (), attrs : ? (list<attribute<e>>)) -> <html<e>|e1> () */  {
-  return nested(function(nodes /* list<view<6323>> */ ) {
-      var _x41 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
-      return Element("section", _x41, nodes);
+  return nested(function(nodes /* list<view<8140>> */ ) {
+      var _x45 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
+      return Element("section", _x45, nodes);
     }, children);
 }
  
 export function string_fs_section(content, attrs) /* forall<e> (content : string, attrs : ? (list<attribute<e>>)) -> (html<e>) () */  {
    
-  var ev_10475 = $std_core_hnd._evv_at(0);
-  var _x42 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
-  return ev_10475.hnd._fun_emit(ev_10475.marker, ev_10475, Element("section", _x42, $std_core_types.Cons(Text(content), $std_core_types.Nil)));
+  var ev_10480 = $std_core_hnd._evv_at(0);
+  var _x46 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
+  return ev_10480.hnd._fun_emit(ev_10480.marker, ev_10480, Element("section", _x46, $std_core_types.Cons(Text(content), $std_core_types.Nil)));
 }
  
 export function block_fs_header(children, attrs) /* forall<e,e1> (children : () -> <html<e>|e1> (), attrs : ? (list<attribute<e>>)) -> <html<e>|e1> () */  {
-  return nested(function(nodes /* list<view<6387>> */ ) {
-      var _x43 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
-      return Element("header", _x43, nodes);
+  return nested(function(nodes /* list<view<8204>> */ ) {
+      var _x47 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
+      return Element("header", _x47, nodes);
     }, children);
 }
  
 export function string_fs_header(content, attrs) /* forall<e> (content : string, attrs : ? (list<attribute<e>>)) -> (html<e>) () */  {
    
-  var ev_10478 = $std_core_hnd._evv_at(0);
-  var _x44 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
-  return ev_10478.hnd._fun_emit(ev_10478.marker, ev_10478, Element("header", _x44, $std_core_types.Cons(Text(content), $std_core_types.Nil)));
+  var ev_10483 = $std_core_hnd._evv_at(0);
+  var _x48 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
+  return ev_10483.hnd._fun_emit(ev_10483.marker, ev_10483, Element("header", _x48, $std_core_types.Cons(Text(content), $std_core_types.Nil)));
 }
  
 export function block_fs_footer(children, attrs) /* forall<e,e1> (children : () -> <html<e>|e1> (), attrs : ? (list<attribute<e>>)) -> <html<e>|e1> () */  {
-  return nested(function(nodes /* list<view<6451>> */ ) {
-      var _x45 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
-      return Element("footer", _x45, nodes);
+  return nested(function(nodes /* list<view<8268>> */ ) {
+      var _x49 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
+      return Element("footer", _x49, nodes);
     }, children);
 }
  
 export function string_fs_footer(content, attrs) /* forall<e> (content : string, attrs : ? (list<attribute<e>>)) -> (html<e>) () */  {
    
-  var ev_10481 = $std_core_hnd._evv_at(0);
-  var _x46 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
-  return ev_10481.hnd._fun_emit(ev_10481.marker, ev_10481, Element("footer", _x46, $std_core_types.Cons(Text(content), $std_core_types.Nil)));
+  var ev_10486 = $std_core_hnd._evv_at(0);
+  var _x50 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
+  return ev_10486.hnd._fun_emit(ev_10486.marker, ev_10486, Element("footer", _x50, $std_core_types.Cons(Text(content), $std_core_types.Nil)));
 }
  
 export function block_fs_h1(children, attrs) /* forall<e,e1> (children : () -> <html<e>|e1> (), attrs : ? (list<attribute<e>>)) -> <html<e>|e1> () */  {
-  return nested(function(nodes /* list<view<6515>> */ ) {
-      var _x47 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
-      return Element("h1", _x47, nodes);
+  return nested(function(nodes /* list<view<8332>> */ ) {
+      var _x51 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
+      return Element("h1", _x51, nodes);
     }, children);
 }
  
 export function string_fs_h1(content, attrs) /* forall<e> (content : string, attrs : ? (list<attribute<e>>)) -> (html<e>) () */  {
    
-  var ev_10484 = $std_core_hnd._evv_at(0);
-  var _x48 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
-  return ev_10484.hnd._fun_emit(ev_10484.marker, ev_10484, Element("h1", _x48, $std_core_types.Cons(Text(content), $std_core_types.Nil)));
+  var ev_10489 = $std_core_hnd._evv_at(0);
+  var _x52 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
+  return ev_10489.hnd._fun_emit(ev_10489.marker, ev_10489, Element("h1", _x52, $std_core_types.Cons(Text(content), $std_core_types.Nil)));
 }
  
 export function block_fs_h2(children, attrs) /* forall<e,e1> (children : () -> <html<e>|e1> (), attrs : ? (list<attribute<e>>)) -> <html<e>|e1> () */  {
-  return nested(function(nodes /* list<view<6579>> */ ) {
-      var _x49 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
-      return Element("h2", _x49, nodes);
+  return nested(function(nodes /* list<view<8396>> */ ) {
+      var _x53 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
+      return Element("h2", _x53, nodes);
     }, children);
 }
  
 export function string_fs_h2(content, attrs) /* forall<e> (content : string, attrs : ? (list<attribute<e>>)) -> (html<e>) () */  {
    
-  var ev_10487 = $std_core_hnd._evv_at(0);
-  var _x50 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
-  return ev_10487.hnd._fun_emit(ev_10487.marker, ev_10487, Element("h2", _x50, $std_core_types.Cons(Text(content), $std_core_types.Nil)));
+  var ev_10492 = $std_core_hnd._evv_at(0);
+  var _x54 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
+  return ev_10492.hnd._fun_emit(ev_10492.marker, ev_10492, Element("h2", _x54, $std_core_types.Cons(Text(content), $std_core_types.Nil)));
 }
  
 export function block_fs_p(children, attrs) /* forall<e,e1> (children : () -> <html<e>|e1> (), attrs : ? (list<attribute<e>>)) -> <html<e>|e1> () */  {
-  return nested(function(nodes /* list<view<6643>> */ ) {
-      var _x51 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
-      return Element("p", _x51, nodes);
+  return nested(function(nodes /* list<view<8460>> */ ) {
+      var _x55 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
+      return Element("p", _x55, nodes);
     }, children);
 }
  
 export function string_fs_p(content, attrs) /* forall<e> (content : string, attrs : ? (list<attribute<e>>)) -> (html<e>) () */  {
    
-  var ev_10490 = $std_core_hnd._evv_at(0);
-  var _x52 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
-  return ev_10490.hnd._fun_emit(ev_10490.marker, ev_10490, Element("p", _x52, $std_core_types.Cons(Text(content), $std_core_types.Nil)));
+  var ev_10495 = $std_core_hnd._evv_at(0);
+  var _x56 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
+  return ev_10495.hnd._fun_emit(ev_10495.marker, ev_10495, Element("p", _x56, $std_core_types.Cons(Text(content), $std_core_types.Nil)));
 }
  
 export function block_fs_strong(children, attrs) /* forall<e,e1> (children : () -> <html<e>|e1> (), attrs : ? (list<attribute<e>>)) -> <html<e>|e1> () */  {
-  return nested(function(nodes /* list<view<6707>> */ ) {
-      var _x53 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
-      return Element("strong", _x53, nodes);
+  return nested(function(nodes /* list<view<8524>> */ ) {
+      var _x57 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
+      return Element("strong", _x57, nodes);
     }, children);
 }
  
 export function string_fs_strong(content, attrs) /* forall<e> (content : string, attrs : ? (list<attribute<e>>)) -> (html<e>) () */  {
    
-  var ev_10493 = $std_core_hnd._evv_at(0);
-  var _x54 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
-  return ev_10493.hnd._fun_emit(ev_10493.marker, ev_10493, Element("strong", _x54, $std_core_types.Cons(Text(content), $std_core_types.Nil)));
+  var ev_10498 = $std_core_hnd._evv_at(0);
+  var _x58 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
+  return ev_10498.hnd._fun_emit(ev_10498.marker, ev_10498, Element("strong", _x58, $std_core_types.Cons(Text(content), $std_core_types.Nil)));
 }
  
 export function block_fs_ul(children, attrs) /* forall<e,e1> (children : () -> <html<e>|e1> (), attrs : ? (list<attribute<e>>)) -> <html<e>|e1> () */  {
-  return nested(function(nodes /* list<view<6771>> */ ) {
-      var _x55 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
-      return Element("ul", _x55, nodes);
+  return nested(function(nodes /* list<view<8588>> */ ) {
+      var _x59 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
+      return Element("ul", _x59, nodes);
     }, children);
 }
  
 export function string_fs_ul(content, attrs) /* forall<e> (content : string, attrs : ? (list<attribute<e>>)) -> (html<e>) () */  {
    
-  var ev_10496 = $std_core_hnd._evv_at(0);
-  var _x56 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
-  return ev_10496.hnd._fun_emit(ev_10496.marker, ev_10496, Element("ul", _x56, $std_core_types.Cons(Text(content), $std_core_types.Nil)));
+  var ev_10501 = $std_core_hnd._evv_at(0);
+  var _x60 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
+  return ev_10501.hnd._fun_emit(ev_10501.marker, ev_10501, Element("ul", _x60, $std_core_types.Cons(Text(content), $std_core_types.Nil)));
 }
  
 export function block_fs_ol(children, attrs) /* forall<e,e1> (children : () -> <html<e>|e1> (), attrs : ? (list<attribute<e>>)) -> <html<e>|e1> () */  {
-  return nested(function(nodes /* list<view<6835>> */ ) {
-      var _x57 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
-      return Element("ol", _x57, nodes);
+  return nested(function(nodes /* list<view<8652>> */ ) {
+      var _x61 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
+      return Element("ol", _x61, nodes);
     }, children);
 }
  
 export function string_fs_ol(content, attrs) /* forall<e> (content : string, attrs : ? (list<attribute<e>>)) -> (html<e>) () */  {
    
-  var ev_10499 = $std_core_hnd._evv_at(0);
-  var _x58 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
-  return ev_10499.hnd._fun_emit(ev_10499.marker, ev_10499, Element("ol", _x58, $std_core_types.Cons(Text(content), $std_core_types.Nil)));
+  var ev_10504 = $std_core_hnd._evv_at(0);
+  var _x62 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
+  return ev_10504.hnd._fun_emit(ev_10504.marker, ev_10504, Element("ol", _x62, $std_core_types.Cons(Text(content), $std_core_types.Nil)));
 }
  
 export function block_fs_li(children, attrs) /* forall<e,e1> (children : () -> <html<e>|e1> (), attrs : ? (list<attribute<e>>)) -> <html<e>|e1> () */  {
-  return nested(function(nodes /* list<view<6899>> */ ) {
-      var _x59 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
-      return Element("li", _x59, nodes);
+  return nested(function(nodes /* list<view<8716>> */ ) {
+      var _x63 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
+      return Element("li", _x63, nodes);
     }, children);
 }
  
 export function string_fs_li(content, attrs) /* forall<e> (content : string, attrs : ? (list<attribute<e>>)) -> (html<e>) () */  {
    
-  var ev_10502 = $std_core_hnd._evv_at(0);
-  var _x60 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
-  return ev_10502.hnd._fun_emit(ev_10502.marker, ev_10502, Element("li", _x60, $std_core_types.Cons(Text(content), $std_core_types.Nil)));
+  var ev_10507 = $std_core_hnd._evv_at(0);
+  var _x64 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
+  return ev_10507.hnd._fun_emit(ev_10507.marker, ev_10507, Element("li", _x64, $std_core_types.Cons(Text(content), $std_core_types.Nil)));
 }
  
 export function block_fs_button(children, attrs) /* forall<e,e1> (children : () -> <html<e>|e1> (), attrs : ? (list<attribute<e>>)) -> <html<e>|e1> () */  {
-  return nested(function(nodes /* list<view<6963>> */ ) {
-      var _x61 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
-      return Element("button", _x61, nodes);
+  return nested(function(nodes /* list<view<8780>> */ ) {
+      var _x65 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
+      return Element("button", _x65, nodes);
     }, children);
 }
  
 export function string_fs_button(content, attrs) /* forall<e> (content : string, attrs : ? (list<attribute<e>>)) -> (html<e>) () */  {
    
-  var ev_10505 = $std_core_hnd._evv_at(0);
-  var _x62 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
-  return ev_10505.hnd._fun_emit(ev_10505.marker, ev_10505, Element("button", _x62, $std_core_types.Cons(Text(content), $std_core_types.Nil)));
+  var ev_10510 = $std_core_hnd._evv_at(0);
+  var _x66 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
+  return ev_10510.hnd._fun_emit(ev_10510.marker, ev_10510, Element("button", _x66, $std_core_types.Cons(Text(content), $std_core_types.Nil)));
 }
  
 export function block_fs_dialog(children, attrs) /* forall<e,e1> (children : () -> <html<e>|e1> (), attrs : ? (list<attribute<e>>)) -> <html<e>|e1> () */  {
-  return nested(function(nodes /* list<view<7027>> */ ) {
-      var _x63 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
-      return Element("dialog", _x63, nodes);
+  return nested(function(nodes /* list<view<8844>> */ ) {
+      var _x67 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
+      return Element("dialog", _x67, nodes);
     }, children);
 }
  
 export function string_fs_dialog(content, attrs) /* forall<e> (content : string, attrs : ? (list<attribute<e>>)) -> (html<e>) () */  {
    
-  var ev_10508 = $std_core_hnd._evv_at(0);
-  var _x64 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
-  return ev_10508.hnd._fun_emit(ev_10508.marker, ev_10508, Element("dialog", _x64, $std_core_types.Cons(Text(content), $std_core_types.Nil)));
+  var ev_10513 = $std_core_hnd._evv_at(0);
+  var _x68 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
+  return ev_10513.hnd._fun_emit(ev_10513.marker, ev_10513, Element("dialog", _x68, $std_core_types.Cons(Text(content), $std_core_types.Nil)));
 }
  
 export function block_fs_label(children, attrs) /* forall<e,e1> (children : () -> <html<e>|e1> (), attrs : ? (list<attribute<e>>)) -> <html<e>|e1> () */  {
-  return nested(function(nodes /* list<view<7091>> */ ) {
-      var _x65 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
-      return Element("label", _x65, nodes);
+  return nested(function(nodes /* list<view<8908>> */ ) {
+      var _x69 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
+      return Element("label", _x69, nodes);
     }, children);
 }
  
 export function string_fs_label(content, attrs) /* forall<e> (content : string, attrs : ? (list<attribute<e>>)) -> (html<e>) () */  {
    
-  var ev_10511 = $std_core_hnd._evv_at(0);
-  var _x66 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
-  return ev_10511.hnd._fun_emit(ev_10511.marker, ev_10511, Element("label", _x66, $std_core_types.Cons(Text(content), $std_core_types.Nil)));
+  var ev_10516 = $std_core_hnd._evv_at(0);
+  var _x70 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
+  return ev_10516.hnd._fun_emit(ev_10516.marker, ev_10516, Element("label", _x70, $std_core_types.Cons(Text(content), $std_core_types.Nil)));
 }
  
 export function block_fs_a(children, attrs) /* forall<e,e1> (children : () -> <html<e>|e1> (), attrs : ? (list<attribute<e>>)) -> <html<e>|e1> () */  {
-  return nested(function(nodes /* list<view<7155>> */ ) {
-      var _x67 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
-      return Element("a", _x67, nodes);
+  return nested(function(nodes /* list<view<8972>> */ ) {
+      var _x71 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
+      return Element("a", _x71, nodes);
     }, children);
 }
  
 export function string_fs_a(content, attrs) /* forall<e> (content : string, attrs : ? (list<attribute<e>>)) -> (html<e>) () */  {
    
-  var ev_10514 = $std_core_hnd._evv_at(0);
-  var _x68 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
-  return ev_10514.hnd._fun_emit(ev_10514.marker, ev_10514, Element("a", _x68, $std_core_types.Cons(Text(content), $std_core_types.Nil)));
+  var ev_10519 = $std_core_hnd._evv_at(0);
+  var _x72 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
+  return ev_10519.hnd._fun_emit(ev_10519.marker, ev_10519, Element("a", _x72, $std_core_types.Cons(Text(content), $std_core_types.Nil)));
 }
  
 export function void_fs_input(attrs) /* forall<e> (attrs : ? (list<attribute<e>>)) -> (html<e>) () */  {
    
-  var ev_10517 = $std_core_hnd._evv_at(0);
-  var _x69 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
-  return ev_10517.hnd._fun_emit(ev_10517.marker, ev_10517, Element("input", _x69, $std_core_types.Nil));
+  var ev_10522 = $std_core_hnd._evv_at(0);
+  var _x73 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
+  return ev_10522.hnd._fun_emit(ev_10522.marker, ev_10522, Element("input", _x73, $std_core_types.Nil));
 }
  
 export function void_fs_hr(attrs) /* forall<e> (attrs : ? (list<attribute<e>>)) -> (html<e>) () */  {
    
-  var ev_10520 = $std_core_hnd._evv_at(0);
-  var _x70 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
-  return ev_10520.hnd._fun_emit(ev_10520.marker, ev_10520, Element("hr", _x70, $std_core_types.Nil));
+  var ev_10525 = $std_core_hnd._evv_at(0);
+  var _x74 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
+  return ev_10525.hnd._fun_emit(ev_10525.marker, ev_10525, Element("hr", _x74, $std_core_types.Nil));
 }
  
 export function void_fs_br(attrs) /* forall<e> (attrs : ? (list<attribute<e>>)) -> (html<e>) () */  {
    
-  var ev_10523 = $std_core_hnd._evv_at(0);
-  var _x71 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
-  return ev_10523.hnd._fun_emit(ev_10523.marker, ev_10523, Element("br", _x71, $std_core_types.Nil));
+  var ev_10528 = $std_core_hnd._evv_at(0);
+  var _x75 = (attrs !== undefined) ? attrs : $std_core_types.Nil;
+  return ev_10528.hnd._fun_emit(ev_10528.marker, ev_10528, Element("br", _x75, $std_core_types.Nil));
 }

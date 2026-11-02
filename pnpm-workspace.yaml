@@ -1,6 +1,5 @@
 packages:
   - "packages/*"
+  - "examples/pocketjs"
 allowBuilds:
   core-js: true
-minimumReleaseAgeExclude:
-  - lucide-solid@1.25.0

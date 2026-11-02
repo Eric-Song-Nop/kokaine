@@ -51,6 +51,6 @@ fun run() : <ui,exn> ()
         "the dynamic read-only guard is restored after failure")
   root.dispose()
 
-fun main()
+pub fun main()
   run()
   println("publication effect: all checks passed")

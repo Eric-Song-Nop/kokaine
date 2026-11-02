@@ -25,7 +25,7 @@ The project configuration belongs in the root `package.json`:
   "kokaine": {
     "entry": "src/app/main.kk",
     "sources": ["src"],
-    "compiler": "3.2.3",
+    "compiler": "3.2.9",
     "target": "jsweb"
   }
 }

@@ -64,9 +64,9 @@ recursive effect type resource-park[21,1,22,26] <(e :: E),a> :: (E, V) -> V {
 //------------------------------
 //#kki: declarations
  
-fun cell[12,5,12,8] : forall<a> (value : a) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>;
-fun load[15,5,15,8] : forall<a> (value : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>) -> a;
-fun store[18,5,18,9] : forall<a> (target : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>, value : a) -> ();
+fun cell[12,14,12,17] : forall<a> (value : a) -> (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>;
+fun load[15,14,15,17] : forall<a> (value : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>) -> a;
+fun store[18,14,18,18] : forall<a> (target : (std/core/types/ref :: (H, V) -> V)<(std/core/types/global :: H),a>, value : a) -> ();
 // Automatically generated. Retrieves the `@cfc` constructor field of the `:resource-park` type.
 fun resource-park/@cfc[21,1,21,20] : forall<(e :: E),a> (^ @this : (resource-park :: (E, V) -> V)<(e :: E),a>) -> std/core/types/int;
 // runtime tag for the effect `:resource-park`
@@ -84,14 +84,14 @@ fip fun is-resource-done[27,3,27,15] : forall<(e :: E)> (^ resource-k : (resourc
 // Automatically generated. Tests for the `Resource-parked` constructor of the `:resource-k` type.
 fip fun is-resource-parked[28,3,28,17] : forall<(e :: E)> (^ resource-k : (resource-k :: E -> V)<(e :: E)>) -> std/core/types/bool;
 // monadic lift
-fun @mlift-run-finalizer@10037[1,0,1,0] : forall<(e :: E)> (finalizer : () -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> (), @y-x10019 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(resource-park :: (E, V) -> V)>,(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+fun @mlift-run-finalizer@10030[1,0,1,0] : forall<(e :: E)> (finalizer : () -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> (), @y-x10010 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(resource-park :: (E, V) -> V)>,(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
 fun run-finalizer[32,5,32,17] : forall<(e :: E)> (finalizer : () -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ()) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(resource-park :: (E, V) -> V)>,(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
 // monadic lift
-fun @mlift-capture-resource@10038[1,0,1,0] : forall<(e :: E)> (@pat : (resource-k :: E -> V)<(e :: E)>) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+fun @mlift-capture-resource@10031[1,0,1,0] : forall<(e :: E)> (@pat : (resource-k :: E -> V)<(e :: E)>) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
 // monadic lift
-fun @mlift-capture-resource@10039[1,0,1,0] : forall<(e :: E)> (finalizer : () -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> (), @y-x10022 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(resource-park :: (E, V) -> V)>,(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+fun @mlift-capture-resource@10032[1,0,1,0] : forall<(e :: E)> (finalizer : () -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> (), @y-x10013 : std/core/hnd/ev-index) -> <(std/core/types/handled :: ((E, V) -> V) -> X)<(resource-park :: (E, V) -> V)>,(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
 // monadic lift
-fun @mlift-capture-resource@10040[1,0,1,0] : forall<(e :: E)> (wild_@0 : ()) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(resource-park :: (E, V) -> V)>|(e :: E)> (resource-k :: E -> V)<(e :: E)>;
+fun @mlift-capture-resource@10033[1,0,1,0] : forall<(e :: E)> (wild_@0 : ()) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>,(std/core/types/handled :: ((E, V) -> V) -> X)<(resource-park :: (E, V) -> V)>|(e :: E)> (resource-k :: E -> V)<(e :: E)>;
 pub fun capture-resource[38,9,38,24] : forall<(e :: E)> (finalizer : () -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ()) -> (resource-k :: E -> V)<(e :: E)>;
 fun claim-resource[55,5,55,18] : forall<(e :: E)> (resource : (resource-k :: E -> V)<(e :: E)>) -> (std/core/types/maybe :: V -> V)<() -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ()>;
 // Internal observability for ownership tests. This reports whether an aliased
@@ -99,6 +99,8 @@ fun claim-resource[55,5,55,18] : forall<(e :: E)> (resource : (resource-k :: E -
 // that continuation is allowed to run.
 pub fun resource-retains-finalizer[67,9,67,34] : forall<(e :: E)> (resource : (resource-k :: E -> V)<(e :: E)>) -> std/core/types/bool;
 pub fun finalize-resource[72,9,72,25] : forall<(e :: E)> (resource : (resource-k :: E -> V)<(e :: E)>) -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ();
+// monadic lift
+fun @mlift-discard-resource@10034[1,0,1,0] : forall<(e :: E)> (@c-x10023 : (std/core/types/maybe :: V -> V)<() -> <(std/core/types/div :: X),(std/core/types/handled :: ((E, V) -> V) -> X)<(std/core/exn/exn :: (E, V) -> V)>|(e :: E)> ()>) -> std/core/types/bool;
 // Explicit unregistration consumes the capability without entering its
 // parked finalizer. This is intentionally distinct from retirement: callers
 // can prove that a detached cleanup can never be observed again.

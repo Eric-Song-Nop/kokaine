@@ -44,9 +44,9 @@ a Pocket-specific view algebra and Pocket's native bundle pipeline. See
 
 ## Module boundaries
 
-The public module, `src/kokaine/reactive.kk`, exposes opaque roots, signals,
+The public module, `packages/core/src/kokaine/reactive.kk`, exposes opaque roots, signals,
 and memos. Host-facing capabilities live in
-`src/kokaine/reactive/integration.kk`. Implementations are split by
+`packages/core/src/kokaine/reactive/integration.kk`. Implementations are split by
 responsibility:
 
 | Module | Responsibility |
@@ -106,7 +106,12 @@ retains a full calculation action after bootstrap.
 
 The continuation capabilities are also not affine. A live read trace may be
 invalidated and resumed on many turns; after failure, the same capability
-remains pending for retry when replacing an existing generation. State and
+remains pending for retry when replacing an existing generation. On the effect
+plane a failed ticket leaves the run queue for a per-plane quarantine, so
+unrelated work behind it still drains in the same flush, and the first failure
+is rethrown once the queue is empty. The quarantined ticket is re-admitted
+when one of its own inputs is invalidated, or behind the runnable work at an
+explicit `update` boundary. State and
 generation gates prevent an invalid or concurrent resume. Only the initial
 bootstrap closure is consumed exactly once, and its initial failure retires the
 scope rather than replaying it.
@@ -574,7 +579,11 @@ An await parks only its suffix and returns from the initiating reactive turn.
 Even a synchronously reported setup result is queued by the selected dispatcher,
 so every continuation after an await enters a fresh reactive batch through the
 captured generation. Web selects a microtask queue; Pocket selects a
-mount-scoped FIFO flushed during virtual frames. Before that retained callback
+mount-scoped FIFO flushed during virtual frames. The Web dispatcher is one
+process-wide `host-turn-coalescer`: turns accepted before its next drain share
+one microtask and still run in acceptance order, each in its own re-entry
+batch. A turn accepted while a drain runs posts a fresh microtask, so it lands
+exactly where an uncoalesced post would relative to host work queued meanwhile. Before that retained callback
 runs, the Async adapter closes the complete turn through its rank-2
 `host-turn-runner`. A dispatcher rejection atomically claims and cancels the
 Ready task instead of retaining a continuation that can no longer run.
@@ -588,8 +597,12 @@ won is returned to setup code and invoked immediately.
 
 Tasks in one active lexical `async-scope` share a registry-backed cancellation
 supervisor and one lifetime cleanup registration. Normal completion claims
-Ready, unlinks its cancellation registration in O(1), and detaches the empty
-supervisor before re-entry. Cancellation or lifetime retirement instead:
+Ready and unlinks its cancellation registration in O(1). An emptied supervisor
+stays attached while the resumed suffix runs and is detached when it returns,
+unless the suffix awaited again in the same scope and frame. Such an await
+reuses it only while its owner cleanup is still the frame's newest finalizer
+and it is still the family's newest supervisor, i.e. exactly where a rebuilt
+supervisor would be registered; otherwise it is detached and rebuilt. Cancellation or lifetime retirement instead:
 
 1. seals and detaches the supervisor registry;
 2. claims every sibling task state;

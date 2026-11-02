@@ -12,7 +12,7 @@ test("creates a complete npm-compatible Kokaine project", async (t) => {
   await createProject(target);
   const manifest = JSON.parse(await readFile(path.join(target, "package.json"), "utf8"));
   assert.equal(manifest.name, "my-app");
-  assert.equal(manifest.kokaine.compiler, "3.2.3");
+  assert.equal(manifest.kokaine.compiler, "3.2.9");
   assert.equal(manifest.scripts.dev, "kokaine dev");
   assert.ok((await readdir(path.join(target, "src", "app"))).includes("main.kk"));
   const editorConfig = JSON.parse(await readFile(path.join(target, "koka.json"), "utf8"));

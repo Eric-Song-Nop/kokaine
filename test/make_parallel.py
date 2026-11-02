@@ -23,6 +23,7 @@ BROWSER_APP_SOURCES = [
 ]
 BROWSER_FIXTURE_SOURCES = [
     "test/dom-errors.kk",
+    "test/dom-namespaces.kk",
     "test/dom-lifecycle.kk",
     "test/dom-range-safety.kk",
     "test/dom-mount-rollback.kk",
@@ -30,10 +31,12 @@ BROWSER_FIXTURE_SOURCES = [
     "test/dom-event-continuation.kk",
     "test/dom-top-layer.kk",
     "test/dom-keyed.kk",
+    "test/keyed-bench.kk",
     "test/dom-async-runtime.kk",
     "test/async-resource.kk",
     "test/async-owner-registration.kk",
     "test/async-runtime-scale.kk",
+    "test/dom-perf-mount.kk",
 ]
 BROWSER_BUILD_SOURCES = [*BROWSER_APP_SOURCES, *BROWSER_FIXTURE_SOURCES]
 REPORT_SOURCE = "examples/report.kk"

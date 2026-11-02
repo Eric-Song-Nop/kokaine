@@ -18,7 +18,7 @@ REPORT_ENTRY = ROOT / "examples" / "report.kk"
 REPORT_MODULES = ROOT / "examples" / "report"
 COUNTER_ENTRY = ROOT / "examples" / "counter.kk"
 COUNTER_MODULES = ROOT / "examples" / "counter"
-BROWSER_ADAPTER = ROOT / "src" / "kokaine" / "web" / "window.kk"
+BROWSER_ADAPTER = ROOT / "packages" / "core" / "src" / "kokaine" / "web" / "window.kk"
 
 
 class ShellParser(HTMLParser):
